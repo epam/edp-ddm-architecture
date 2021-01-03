@@ -1,0 +1,159 @@
+= Виклик реєстру зовнішньою системою: Отримання JWT-токена у Keycloak
+:toc:
+:toc-title: ЗМІСТ
+:experimental:
+:example-caption: Приклад
+:important-caption: ВАЖЛИВО
+:note-caption: ПРИМІТКА
+:tip-caption: ПІДКАЗКА
+:warning-caption: ПОПЕРЕДЖЕННЯ
+:caution-caption: УВАГА
+:example-caption: Example
+:figure-caption: Figure
+:table-caption: Table
+:appendix-caption: Appendix
+:toclevels: 5
+:sectnums:
+:sectnumlevels: 5
+:sectanchors:
+:sectlinks:
+:partnums:
+
+== Загальний опис
+
+Щоб отримати доступ до реєстру на Платформі, зовнішня система має отримати спеціальний токен доступу -- JWT-токен. Він призначений для подальшої авторизації зовнішніх систем при взаємодії з реєстрами, що розгорнуті в межах Платформи.
+
+Токен доступу, або JWT-токен, видається сервісом керування ідентифікацією та доступом Keycloak. Для отримання токена необхідно виконати API-запит до відповідного ендпоінту `/token` у Keycloak API.
+
+TIP: На цій сторінці ми розглянемо емуляцію отримання JWT-токена із Keycloak за допомогою інструмента Postman.
+
+== Налаштування клієнта у сервісі Keycloak
+
+. Увійдіть до консолі адміністратора *Keycloak*.
++
+image:registry-admin/external-integration/api-publish/get-token/get-jwt-token-postman-1.png[]
+
+. Перейдіть до реалму `-external-system`.
++
+[TIP]
+====
+* `-external-system` -- назва реалму
+* `mdtu-ddm-edp-cicd-lowcode-dev-dev` -- назва оточення з реєстром, до якого відноситься реалм.
+====
++
+image:registry-admin/external-integration/api-publish/get-token/get-jwt-token-postman-2.png[]
++
+NOTE: У системі передбачено 4 типи реалмів для кожного реєстру. Реалм `-external-system` призначений для інтеграції зовнішніх систем (_детальніше про реалми та їх призначення -- див. xref:admin:user-management-auth/keycloak-create-users.adoc[]_).
+
+. Відкрийте розділ *Clients*. Знайдіть обліковий запис клієнта *Trembita invoker* та увійдіть до налаштувань.
++
+TIP: *Client* -- зовнішня система, що доступатиметься до реєстру на Платформі.
++
+image:registry-admin/external-integration/api-publish/get-token/get-jwt-token-postman-3.png[]
++
+IMPORTANT: Клієнт *Trembita invoker* створюється автоматично оператором Keycloak при розгортанні реєстру. Облікові дані цього клієнта необхідно використовувати для всіх зовнішніх систем, яким потрібен доступ до реєстру на Платформі.
+
+. Перейдіть до меню *_Settings > Client ID_* та скопіюйте ідентифікатор клієнта -- `trembita-invoker`.
++
+image:registry-admin/external-integration/api-publish/get-token/get-jwt-token-postman-4.png[]
++
+IMPORTANT: Ідентифікатор `client_id` потрібен зовнішній системі у запиті на отримання JWT-токена із Keycloak API.
+
+. Переконайтеся, що встановлений протокол взаємодії з клієнтом -- `openid-connect`.
++
+NOTE: Параметр `openid-connect` використовується як частина ендпоінту `/protocol/openid-connect/token` при відправленні запита на отримання JWT-токена.
++
+image:registry-admin/external-integration/api-publish/get-token/get-jwt-token-postman-4-1.png[]
+
+. Перейдіть до меню *_Credentials > Secret_* та скопіюйте секрет, згенерований для цього клієнта.
++
+image:registry-admin/external-integration/api-publish/get-token/get-jwt-token-postman-5.png[]
++
+IMPORTANT: Секрет `client_secret` потрібен зовнішній системі у запиті на отримання JWT-токена із Keycloak API. Він генерується автоматично оператором Keycloak при розгортанні реєстру. Формат секрету -- `UUID`.
+
+== Отримання JWT-токена доступу до реєстру
+
+Після одержання даних в інтерфейсі адміністратора Keycloak, сформуйте запит для отримання токена доступу до реєстру. Це можна зробити за допомогою *Postman* -- інструмента для тестування та розробки API.
+
+. Завантажте застосунок *Postman* з офіційного джерела за посиланням: https://www.postman.com/downloads/[], або використовуйте його вебверсію.
+
+. Відкрийте додаток та створіть новий запит. Для цього натисніть `Create a request`.
++
+image:registry-admin/external-integration/api-publish/get-token/get-jwt-token-postman-6.png[]
+
+. Сформуйте запит:
+* Визначте HTTP-метод -- `POST`.
+* Вкажіть параметри шляху (ендпоінт).
++
+.Параметри шляху (ендпоінт)
+====
+----
+https://<server-name>/auth/realms/<keycloak-realm>/protocol/openid-connect/token
+----
+* Замість `<server-name>` підставте назву сервера.
+* Замість `<keycloak-realm>` підставте назву реалму в Keycloak.
+====
+
+* Введіть параметри тіла запита.
++
+.Приклад. Тіло запита у форматі JSON
+====
+[source,json]
+----
+{
+    "grant_type": "client_credentials",
+    "client_id": "trembita-invoker",
+    "client_secret": "<client_secret>"
+}
+----
+====
+. Натисніть `Send`, щоб надіслати запит.
++
+image:registry-admin/external-integration/api-publish/get-token/get-jwt-token-postman-7.png[]
+
+. У відповідь API-сервіс повертає об'єкт із JWT-токеном у закодованому вигляді, а також додаткові атрибути.
++
+IMPORTANT: У відповіді повертається список ролей, які передбачені для клієнта `trembita-invoker` в Keycloak. JWT-токен можливо отримати лише для одного клієнта за раз.
++
+image:registry-admin/external-integration/api-publish/get-token/get-jwt-token-postman-8.png[]
++
+.Тіло відповіді від API-сервісу
+====
+[source,json]
+----
+{
+    "access_token": "eyJhbGciOiJSUzI1NiIsInR5cCIgOiAiSldUIiwia2lkIiA6ICJxdk4walJlNzJJNzBwQl9rdjBWVkZHR0lWSk50OF9mN3AtdzhKRHE2SlZvIn0.eyJleHAiOjE2NTcyOTUzMjUsImlhdCI6MTY1NzI5NTAyNSwianRpIjoiNDY5NDA3MDYtMzQ0MS00ZWMyLWJmNDUtYzhiYWRjZGM3ZDIyIiwiaXNzIjoiaHR0cHM6Ly9wbGF0Zm9ybS1rZXljbG9hay5hcHBzLmNpY2QyLm1kdHUtZGRtLnByb2plY3RzLmVwYW0uY29tL2F1dGgvcmVhbG1zL21kdHUtZGRtLWVkcC1jaWNkLWxvd2NvZGUtZGV2LWRldi1leHRlcm5hbC1zeXN0ZW0iLCJzdWIiOiI0YTYyMmY0Yy1hOGE4LTQ5M2UtOGQ4ZS03MjMyNGJlODEwZGMiLCJ0eXAiOiJCZWFyZXIiLCJhenAiOiJ0cmVtYml0YS1pbnZva2VyIiwiYWNyIjoiMSIsImFsbG93ZWQtb3JpZ2lucyI6WyIiXSwicmVhbG1fYWNjZXNzIjp7InJvbGVzIjpbInRyZW1iaXRhLWludm9rZXIiXX0sInNjb3BlIjoicHJvZmlsZSBlbWFpbCIsImVkcnBvdSI6IjAiLCJlbWFpbF92ZXJpZmllZCI6ZmFsc2UsImNsaWVudEhvc3QiOiI4NS4yMjMuMjA5LjE4IiwiY2xpZW50SWQiOiJ0cmVtYml0YS1pbnZva2VyIiwiZHJmbyI6IjAiLCJmdWxsTmFtZSI6ItCh0LXRgNCy0ZbRgdC90LjQuSDQutC-0YDQuNGB0YLRg9Cy0LDRhyDQotGA0LXQvNCx0ZbRgtC4IiwicHJlZmVycmVkX3VzZXJuYW1lIjoic2VydmljZS1hY2NvdW50LXRyZW1iaXRhLWludm9rZXIiLCJjbGllbnRBZGRyZXNzIjoiODUuMjIzLjIwOS4xOCJ9.uhf6GZFd9fc1IDehIlo9kspsOPxxLSqtsOTAmUt3cneMZFs77AE-Ew7UoirLUfy0kmjfGy0tfcG1gj2nM6EXmAW1_XDCvHB_ygM-NnkS8B_FkgoIdcB5XkBWQ2HrE0YnSN5QnOWMkgi2dtYkubgd3g37__46-2Uxeg6l-OVYjdDEQ_kEa2rrGl9ckYLflZgM_-PKG3XxvXuJjuKuC2GqLGF-ngpWg_S672pwIqqr0li20JjXYdpO-jtEqPMKU6pckBwmkAWsiO6lmz2b9XUe0i2nWECsChA9IHmgds1UgCjxtp0KoToqAwcbNhXgdyh8hOI0WCNig56dSWc3sAoDmw",
+    "expires_in": 300,
+    "refresh_expires_in": 0,
+    "token_type": "Bearer",
+    "not-before-policy": 0,
+    "scope": "profile email"
+}
+----
+====
++
+[NOTE]
+====
+* Термін дії -- 300 секунд.
+* Тип токена -- `bearer`.
+====
++
+[TIP]
+====
+Для зручності можна розкодувати токен доступу у формат JSON та перевірити, для якого клієнта та реалму видано токен. Для цього скористайтеся інструментом https://jwt.io/[].
+
+На виході отримаємо наступний об'єкт:
+[source,json]
+----
+{
+"realm_access": {
+    "roles": [
+      "trembita-invoker"
+    ]
+  }
+}
+----
+
+У нашому випадку надано доступ до реалму `mdtu-ddm-edp-cicd-lowcode-dev-dev-external-system` відповідного реєстру, для ролі `trembita-invoker`. Ця роль визначена в обліковому записі клієнта `trembita-invoker` в Keycloak.
+====
+

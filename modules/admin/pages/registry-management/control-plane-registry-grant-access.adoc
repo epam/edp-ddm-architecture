@@ -1,0 +1,175 @@
+= Налаштування доступу до реєстрів в адміністративній панелі Control Plane
+// use these attributes to translate captions and labels to the document's language
+// more information: https://asciidoctor.org/docs/user-manual/#customizing-labels
+// table of contents title
+:toc-title: ЗМІСТ
+:toc:
+:experimental:
+:example-caption: Приклад
+:important-caption: ВАЖЛИВО
+:note-caption: ПРИМІТКА
+:tip-caption: ПІДКАЗКА
+:warning-caption: ПОПЕРЕДЖЕННЯ
+:caution-caption: УВАГА
+// captions for specific blocks
+:figure-caption: Figure
+:table-caption: Table
+// caption for the appendix
+:appendix-caption: Appendix
+// how many headline levels to display in table of contents?
+:toclevels: 5
+// https://asciidoctor.org/docs/user-manual/#sections-summary
+// turn numbering on or off (:sectnums!:)
+:sectnums:
+// enumerate how many section levels?
+:sectnumlevels: 5
+// show anchors when hovering over section headers
+:sectanchors:
+// render section headings as self referencing links
+:sectlinks:
+// number parts of a book
+:partnums:
+
+== Загальний опис
+
+Налаштування доступу між реєстрами відбувається в адміністративній панелі керування кластером та реєстрами *Control Plane*.
+
+Адміністратор може налаштувати доступ до даних реєстру (master) для інших реєстрів, що розгорнуті на цій Платформі, або для зовнішніх систем (clients). Для цього в master-реєстрі за запитом буде створено окремого користувача реєстру-клієнта, від імені якого здійснюватиметься доступ до master-реєстру.
+
+Процес формування запита про надання доступу можна умовно поділити на такі етапи: ::
+
+. Формування запита про надання доступу до реєстру в адміністративній панелі *Control Plane*.
+
+. Проходження процедури перевірки коду та підтвердження запита в системі рецензування коду *Gerrit*.
+
+. Контроль за виконанням збірки коду в *Jenkins*.
+
+[CAUTION]
+====
+Окрім надання доступу до реєстру в адмін-консолі Control Plane, адміністратор регламенту має також відкрити доступ до відповідних представлень та REST API реєстру на рівні моделі даних (_детальну інструкцію ви можете переглянути на сторінці xref:registry-develop:data-modeling/data/physical-model/rest-api-view-access-to-registry.adoc[]_).
+====
+
+[#create-access-request]
+== Формування запита про надання доступу до реєстру в адміністративній панелі Control Plane
+
+Щоб створити запит про надання доступу до реєстру, необхідно виконати наступні кроки:
+
+. Увійдіть до адміністративної панелі керування кластером та реєстрами *Control Plane*.
++
+image:infrastructure/cluster-mgmt/update-cluster-mgmt-01.png[]
+
+. Відкрийте меню _Реєстри_.
+. Увійдіть до налаштувань реєстру.
++
+image:registry-management/registry-grant-access/cp-registry-grant-access-1.png[]
+. Перейдіть до секції _Доступ до реєстрів Платформи та зовнішніх систем_ і натисніть `+ Надати доступ`.
++
+image:registry-management/registry-grant-access/cp-registry-grant-access-2.png[]
+
+. Оберіть тип системи, для якої потрібно надати доступ:
++
+TIP: Це може бути як реєстр, розгорнутий на Платформі, так і зовнішня система (реєстр).
++
+* Оберіть опцію _Внутрішній реєстр платформи_. З випадного списку оберіть реєстр, для якого необхідно відкрити доступ.
++
+NOTE: Якщо реєстру немає в переліку -- його потрібно створити заздалегідь (_детальніше -- за xref:registry-management/control-plane-create-registry.adoc[посиланням]_).
++
+image:registry-management/registry-grant-access/cp-registry-grant-access-3.png[]
+
+* Оберіть опцію _Зовнішня система_ та введіть назву системи.
++
+TIP: Допустимі символи: `"a-z"`, `0-9`, `"-"`. Назва не може перевищувати довжину у 32 символи. Назва повинна починатись і закінчуватися символами латинського алфавіту або цифрами.
++
+image:registry-management/registry-grant-access/cp-registry-grant-access-4.png[]
++
+NOTE: Пароль буде створено автоматично. Його можна буде перевірити після налагодження доступу до master-реєстру.
+
+. Натисніть `Надати`, щоб сформувати запит.
++
+В результаті буде сформовано запит про надання доступу. Він набуде статусу виконання _"В обробці"_.
++
+IMPORTANT: Неможливо виконати 2 і більше запитів про надання доступу підряд. Кожен запит має бути перевірений та підтверджений уповноваженою особою, і тільки після цього можливо сформувати наступний запит. Тобто запити формують та підтверджують по одному.
++
+image:registry-management/registry-grant-access/cp-registry-grant-access-5.png[]
++
+Далі відбудеться передача змін (`git push`) до репозиторію Gerrit для подальшої перевірки коду та підтвердження змін (_детальніше -- див. у розділі xref:#request-confirmation[]_).
+
+[#note-examples-access-operations]
+[NOTE]
+====
+Є також можливість заблокувати, розблокувати доступ до реєстру або повністю його скасувати. Механізм формування запитів на блокування, розблокування або скасування є ідентичним до механізму надання доступу.
+
+.Приклад. Блокування доступу до реєстру для іншого реєстру на Платформі
+image:registry-management/registry-grant-access/cp-registry-grant-access-9.png[]
+
+.Приклад. Розблокування доступу до реєстру для іншого реєстру на Платформі
+image:registry-management/registry-grant-access/cp-registry-grant-access-10.png[]
+
+.Приклад. Скасування доступу до реєстру для іншого реєстру на Платформі
+image:registry-management/registry-grant-access/cp-registry-grant-access-11.png[]
+====
+
+[#request-confirmation]
+== Підтвердження запита в системі рецензування коду Gerrit
+
+Після успішного створення запита про надання доступу до реєстру в інтерфейсі Control Plane, необхідно пройти процедуру перевірки коду в системі Gerrit. Для цього виконайте наступні кроки:
+
+. Відкрийте консоль керування кластером у *Control Plane*.
+. Перейдіть до секції _Запити на оновлення_. Попередньо сформований запит буде доступний за посиланням і матиме статус `*NEW*`.
+. Перейдіть до інтерфейсу *Gerrit* за відповідним посиланням.
++
+image:registry-management/registry-grant-access/cp-registry-grant-access-6.png[]
+
+. Виконайте перевірку коду та підтвердьте внесення змін (`git merge`) до `master`-гілки репозиторію.
++
+image:registry-management/registry-grant-access/cp-registry-grant-access-7.png[]
++
+Підтверджений запит на створення доступу у секції _Запити на оновлення_ набуде статусу `*MERGED*`.
++
+image:registry-management/registry-grant-access/cp-registry-grant-access-8.png[]
++
+У секції _Доступ до реєстрів платформи та зовнішніх систем_ відображатиметься статус доступу -- _"Активний"_.
++
+image:registry-management/registry-grant-access/cp-registry-grant-access-12.png[]
++
+За фактом злиття змін до `master`-гілки репозиторію у Gerrit, відбудеться автоматичний запуск процесу збірки внесених змін інструментом Jenkins.
+
+== Контроль за виконанням збірки коду інструментом Jenkins
+
+Після успішного надходження змін до `master`-гілки репозиторію в Gerrit, необхідно переконатися, що Jenkins-pipeline `Master-Build-registry-regulations` запустився й успішно завершився. Для цього виконайте наступні кроки:
+
+. Відкрийте консоль керування кластером у *Control Plane*.
+. Перейдіть до секції _Конфігурація_ -> _CI_.
+. Перейдіть до інтерфейсу *Jenkins* за відповідним посиланням.
++
+image:registry-management/registry-grant-access/cp-registry-grant-access-13.png[]
+
+. Дочекайтеся виконання всіх кроків збірки `Master-Build-registry-regulations`.
++
+image:registry-management/registry-grant-access/cp-registry-grant-access-14.png[]
+
+[IMPORTANT]
+====
+Після успішної збірки зміни набувають чинності.
+====
+
+== Зміна пароля доступу до реєстру
+
+Після формування запита про надання доступу, система автоматично генерує пароль доступу до реєстру.
+
+Пароль зберігається до сховища секретів Vault. Іконку згенерованого пароля можна побачити в інтерфейсі Control Plane.
+
+image:registry-management/registry-grant-access/cp-registry-grant-access-15.png[]
+
+Також пароль зберігається у зашифрованому вигляді до Keycloak для подальшої аутентифікації реєстрів та зовнішніх систем, а також перевірки створеного секрету у Vault.
+
+Якщо необхідно змінити пароль доступу: ::
+. xref:#note-examples-access-operations[Скасуйте старий доступ] для реєстру або зовнішньої системи. Для цього перейдіть до секції _Доступ для реєстрів Платформи та зовнішніх систем_ та натисніть `Скасувати доступ`.
++
+image:registry-management/registry-grant-access/cp-registry-grant-access-11.png[]
+
+. Надайте доступ повторно. Тобто сформуйте та підтвердьте новий xref:#create-access-request[запит про надання доступу].
++
+image:registry-management/registry-grant-access/cp-registry-grant-access-2.png[]
++
+В результаті старий пароль буде анульовано, а новий пароль згенерується автоматично.

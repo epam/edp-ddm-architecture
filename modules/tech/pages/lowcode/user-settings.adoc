@@ -1,0 +1,244 @@
+= Управління налаштуваннями користувача
+
+Налаштування користувача зберігаються у фабриці даних та можуть бути змінені користувачем в процесі
+роботи одним з наведених засобів:
+
+* xref:tech:lowcode/citizen-onboarding.adoc[Процес онбордингу]
+* Кабінет людини/громадянина
+* Бізнес-процеси регламенту
+
+[NOTE]
+ Детальніше про структуру налаштувань можна дізнатися за xref:tech:lowcode/user-channel-settings.adoc[Управління каналами зв'язку користувача].
+
+== Робота з налаштуваннями через бізнес-процеси
+
+=== Конектори
+
+Для роботи з налаштуваннями через бізнес-процеси використовуються відповідні розширення-конектори:
+
+* Конектор для читання налаштувань - *userSettingsConnectorReadDelegate*. Має наступні параметри:
+** X-Access-Token - токен користувача від імені якого виконується запит на читання налаштувань
+** Result variable - змінна бізнес-процесу, в яку буде записано відповідь від сервісу налаштувань
+* Конектор для збереження налаштувань - *userSettingsConnectorUpdateDelegate*. Має наступні параметри:
+** X-Access-Token - токен користувача від імені якого виконується запит на зміну налаштування
+** Result variable - змінна бізнес-процесу, в яку буде записано відповідь від сервісу налаштувань
+** Payload - налаштування які потрібно зберегти згідно з xref:tech:lowcode/user-channel-settings.adoc[контрактом].
+
+Адреса *settings-api* задається в конфігурації сервісу виконання бізнес-процесів.
+
+.Приклад конфігурації (application.yml):
+[source, yaml]
+----
+user-settings-service-api:
+  url: http://user-settings-service-api:8080
+  ....
+----
+
+[NOTE]
+ За замовчуванням відносна адреса сервісу налаштувань не буде змінюватись для різних інсталяцій Платформи.
+
+[plantuml]
+----
+@startuml
+
+actor "Людина/Чиновник" as person
+participant "Кабінет людини/\nчиновника" as ui
+participant "Kong API\nGateway" as kong
+participant "Сервіс управління\nзадачами користувача" as user_task_mng
+participant "Сервіс виконання\nбізнес-процесів" as bpms
+participant "Settings API" as settings_api
+participant "Ceph" as ceph
+
+== Перегляд налаштувань ==
+
+person -> ui : Виконання задачі\nПерегляд налаштувань
+activate ui
+ui -> kong: Виконання задачі\nПерегляд налаштувань\nПараметри:\nІдентифікатор сесії Kong
+activate kong
+kong -> user_task_mng: Виконання задачі\nПерегляд налаштувань\nПараметри:\nAccess Token
+activate user_task_mng
+user_task_mng -> bpms: Виконання задачі\nПерегляд налаштувань\nПараметри:\nAccess Token
+activate bpms
+bpms -> bpms: Зберегти Access Token\nвиконавця задачі
+bpms --> bpms: Виконання інших\nкроків бізнес-процесу
+
+group Конектор для читання налаштувань
+bpms -> bpms: Зчитати Access Token
+bpms -> settings_api: Запит GET /settings\nПараметри:\nAccess Token
+activate settings_api
+settings_api -> bpms: Налаштування користувача
+deactivate settings_api
+end
+
+bpms -> ceph: Зберегти налаштування\nдля відображення
+bpms -> user_task_mng: Задача з формою\nдля відображення\nналаштувань
+deactivate bpms
+user_task_mng -> ceph: Запит на отримання\nналаштувань\nдля відображення
+activate ceph
+ceph -> user_task_mng: Налаштування користувача
+deactivate ceph
+user_task_mng -> kong: Задача з формою\nдля відображення\nналаштувань
+deactivate user_task_mng
+kong -> ui: Задача з формою\nдля відображення\nналаштувань
+deactivate kong
+ui -> person: Задача з формою\nдля відображення\nналаштувань
+deactivate ui
+
+== Оновлення налаштувань ==
+
+person -> ui : Виконання задачі\nОновлення налаштувань\nПараметри:\nНові налаштування
+activate ui
+ui -> kong: Виконання задачі\nОновлення налаштувань\nПараметри:\nНові налаштування\nІдентифікатор сесії Kong
+activate kong
+kong -> user_task_mng: Виконання задачі\nОновлення налаштувань\nПараметри:\nНові налаштування\nAccess Token
+activate user_task_mng
+user_task_mng -> ceph: Збереження налаштувань
+user_task_mng -> bpms: Виконання задачі\nОновлення налаштувань\nПараметри:\nAccess Token
+activate bpms
+bpms -> bpms: Зберегти Access Token\nвиконавця задачі
+bpms --> bpms: Виконання інших\nкроків бізнес-процесу
+bpms -> ceph: Отримання налаштувань
+activate ceph
+ceph -> bpms: Нові налаштування користувача
+deactivate ceph
+
+group Конектор для оновлення налаштувань
+bpms -> bpms: Зчитати Access Token
+bpms -> settings_api: Запит PUT /settings\nПараметри:\nAccess Token\nНові налаштування
+end
+
+bpms -> user_task_mng: Наступна задача\nв рамках бізнес-процесу
+deactivate bpms
+user_task_mng -> kong: Наступна задача\nв рамках бізнес-процесу
+deactivate user_task_mng
+kong -> ui: Наступна задача\nв рамках бізнес-процесу
+deactivate kong
+ui -> person: Наступна задача\nв рамках бізнес-процесу
+deactivate ui
+
+@enduml
+----
+
+[NOTE]
+ Наведена діаграма послідовності є прикладом використання конекторів в рамках бізнес-процесу.
+
+=== JUEL функція
+
+Ще одна можливість яка надається платформою для роботи з налаштуваннями є спеціальна *JUEL-функція*
+_settings()_ яка доступна розробнику бізнес-процесу при моделюванні. Функція може бути використана
+виключно в read-only режимі та не може змінити налаштування. Для зміни потрібно використовувати
+відповідний <<Конектори, конектор>>
+
+Функція _settings()_ може бути використана:
+
+* Як частина https://docs.camunda.org/manual/latest/user-guide/process-engine/expression-language/[Camunda Expression Language (EL)]
+* У Groovy скриптах бізнес-процесу
+
+[NOTE]
+ Кожен виклик функції _settings()_ призводить до HTTP-виклику API фабрики даних.
+
+==== Контракт
+|===
+|Return Type |Method |Example
+
+|<<UserSettings>>
+|settings(<<UserDto>> dto)
+|_settings_(_completer_('user-task-input'))
+_settings_(_initiator_())
+|===
+
+[NOTE]
+_completer()_ та _initiator()_ є іншими JUEL функціями, які повертають UserDto як результат
+виконання
+
+==== Опис структур
+===== UserSettings
+|===
+|Назва |Схема |Коментар
+
+|*settingsId*
+|string
+|Унікальний ідентифікатор налаштувань в системі
+
+|*email*
+|string
+|Електронна пошта людини
+
+|*phone*
+|string
+|Телефон людини
+
+|*communicationIsAllowed*
+|boolean
+|Дозвіл на використання контактних даних для сповіщень
+|===
+
+
+===== UserDto
+|===
+|Назва |Схема |Коментар
+
+|*username*
+|string
+|Ім'я користувача
+
+|*accessToken*
+|string
+|Токен користувача
+
+|*jwtClaimsDto*
+|JwtClaimsDto
+|Поле для роботи зі змістом токену, як з об'єктом
+
+|===
+
+== Робота з налаштуваннями через кабінет
+
+Перегляд та зміна налаштувань користувача є однією з функцій кабінету чиновника/громадянина та може
+бути використаний без запуску бізнес-процесу.
+Для роботи з налаштуваннями через кабінет використовуються методи фабрики даних:
+
+* GET /settings - для читання поточних налаштувань
+* PUT /settings - для оновлення налаштувань користувача
+
+[NOTE]
+Детальніше про контракт взаємодії можна дізнатися за xref:tech:lowcode/user-channel-settings.adoc[посиланням].
+
+Методи роботи з налаштуваннями доступні через Kong API Gateway та вимагають автентифікації користувача.
+
+Робота з налаштуваннями виконується лише для поточного користувача, який виконав вхід у систему.
+Зміна налаштувань іншого користувача неможлива за дизайном
+
+[plantuml]
+----
+@startuml
+
+actor "Людина/Чиновник" as person
+participant "Кабінет людини/чиновника" as ui
+participant "Kong API Gateway" as kong
+participant "Settings API" as api
+
+== Перегляд налаштувань ==
+person -> ui: Запит сторінки\nз налаштуваннями
+ui -> kong: Запит GET /settings\n(ідентифікатор сесії Kong)
+kong -> api: Запит GET /settings\n(Access Token)
+api --> kong: Налаштування\nкористувача
+kong --> ui: Налаштування\nкористувача
+ui --> person: Сторінка\nз налаштуваннями
+
+== Оновлення налаштувань ==
+person -> ui: Нові налаштування
+ui -> kong: Запит PUT /settings\n(ідентифікатор сесії Kong,\nНові налаштування)
+kong -> api: Запит PUT /settings\n(Access Token,\nНові налаштування)
+api --> kong: ОК
+kong --> ui: ОК
+ui --> person: ОК
+
+@enduml
+----
+
+////
+== Відкриті питання до сторінки
+
+* Додати посилання на загальну архітектуру JUEL-функцій
+////

@@ -1,0 +1,244 @@
+= Дизайн моделювання зовнішніх інтеграційних розширень на інші реєстри
+
+== Призначення
+При моделюванні та виконанні бізнес-процесів необхідно мати можливість читати дані з зовнішніх реєстрів через інтеграцію з системою електронної взаємодії державних електронних інформаційних ресурсів "Трембіта".
+
+.Сценарії взаємодії
+* Користувач стартує бізнес-процес, далі відображається форма задачі, яка попередньо заповнена бізнес-даними з зовнішнього реєстру.
+* Користувач стартує бізнес-процес, який використовує дані з іншого реєстру для оркестрації самого процесу та виконання системних функцій.
+* Користувач стартує бізнес-процес, який використовує дані з іншого реєстру для валідації введених даних.
+
+image::lowcode/trembita-integration-context-deagram.svg[]
+
+== Базові принципи реалізації вимог
+* Мати можливість читати дані з зовнішніх реєстрів через інтеграцію з системою електронної взаємодії державних електронних інформаційних ресурсів "Трембіта".
+* Використання частини бізнес-даних  з зовнішніх реєстрів для оркестрації бізнес-процесу - отримувати та маркувати змінні як "transient".
+* Використовувати делегати розширення для маскування деталей взаємодії з зовнішніми реєстрами.
+
+== Діаграма розгортання
+
+image::lowcode/integration-trembita.svg[]
+
+== Діаграма класів
+Діаграма класів на прикладі інтеграції з ЄДР.
+[plantuml,soap-connectors,svg]
+----
+@startuml
+abstract class WebServiceGatewaySupport
+class EdrRegistryClient extends WebServiceGatewaySupport {
+  get(EdrRegistryGetRequestBody): EdrRegistryGetResponseBody
+  exist(EdrRegistryExistRequestBody): EdrRegistryExistResponseBody
+}
+class RegistryClientsConfig {
+  marshaller(): Jaxb2Marshaller
+  edrRegistryClient() EdrRegistryClient
+}
+
+class EdrRegistryGetConnectorDelegate #back:lightgreen;line:green;text:black {
+  EdrRegistryClient client
+  execute(DelegateExecution)
+}
+class EdrRegistryExistConnectorDelegate #back:lightgreen;line:green;text:black {
+  EdrRegistryClient client
+  execute(DelegateExecution)
+}
+
+class EdrRegistryGetRequestBody #back:lightblue;line:blue;text:black
+class EdrRegistryGetResponseBody #back:lightblue;line:blue;text:black
+class EdrRegistryExistRequestBody #back:lightblue;line:blue;text:black
+class EdrRegistryExistResponseBody #back:lightblue;line:blue;text:black
+
+note top of EdrRegistryExistResponseBody
+  Generated classes based on WSDL
+end note
+
+EdrRegistryGetConnectorDelegate --> EdrRegistryClient : uses
+EdrRegistryExistConnectorDelegate --> EdrRegistryClient : uses
+EdrRegistryClient --> EdrRegistryGetRequestBody : uses
+EdrRegistryClient --> EdrRegistryGetResponseBody : uses
+EdrRegistryClient --> EdrRegistryExistRequestBody : uses
+EdrRegistryClient --> EdrRegistryExistResponseBody : uses
+RegistryClientsConfig --> EdrRegistryClient : configures
+
+@enduml
+----
+
+Генерація класів контракту на базі WSDL файлів відбувається за допомогою плагіна:
+[source,xml]
+----
+<plugin>
+        <groupId>org.jvnet.jaxb2.maven2</groupId>
+        <artifactId>maven-jaxb2-plugin</artifactId>
+        <version>${plugin.version}</version>
+        <executions>
+          <execution>
+            <goals>
+              <goal>generate</goal>
+            </goals>
+          </execution>
+        </executions>
+        <configuration>
+          <schemaLanguage>WSDL</schemaLanguage>
+          <generatePackage>${generate.package}</generatePackage>
+          <schemaDirectory>${project.basedir}/src/main/resources/wsdl</schemaDirectory>
+          <schemaIncludes>
+            <include>edp-registry.wsdl</include>
+            <include>bar-registry.wsdl</include>
+            ....
+          </schemaIncludes>
+        </configuration>
+</plugin>
+----
+
+[TIP]
+Якщо при пасрсингу та генерації класів виникла помилка конфлікту імен, можна додати як русурс
+визначення зовнішнього прив'язувального(binding) XML, приклад(edr-binding.xjb):
+[source,xml]
+----
+<jaxb:bindings
+  xmlns:jaxb="http://java.sun.com/xml/ns/jaxb"
+  xmlns:s="http://www.w3.org/2001/XMLSchema"
+  version="1.0">
+
+  <jaxb:bindings schemaLocation="file:edr-registry.wsdl" node=".//s:element[@name='<your-filed-name>']">
+    <jaxb:factoryMethod name="_<your-filed-name>"/>
+  </jaxb:bindings>
+
+</jaxb:bindings>
+
+----
+
+.WSDL файли будуть знаходитися у VCS сервіса як ресурси:
+[source]
+----
+${project.basedir}/src/main/resources/wsdl
+----
+
+== Приклад делегата
+Для кожного реєстру буде створено типові делегати.
+Приклад використаня делегата:
+
+image::lowcode/soap-integration-delegate-example.PNG[]
+
+== Діаграма послідовності
+Приклад інтеграції при виконанні задачі бізнес процесу, який змодельовано таким чином, що при оркестрації процесу необхідно перевірити дані з іншого реєстру:
+[plantuml,completeTaskIntegrationWithTrembita,svg]
+----
+@startuml
+participant "officer-portal" as client  order 10
+participant "user-task-managment" as usertaskmanagment order 20
+participant "ceph" as ceph  order 30
+participant "bpms" as bpms order 40
+participant "ШБО" as trembita order 40
+skinparam responseMessageBelowArrow true
+
+title Виконання задачі, що потребує додаткової інформації з іншого реєстру
+  client -> usertaskmanagment : Виконати задачу:\nідентифікатор задачі, дані форми
+  activate usertaskmanagment
+  usertaskmanagment -> ceph : Зберегти дані форми <formData>
+  ceph -> usertaskmanagment : 200 OK, Дані форми збережені
+  usertaskmanagment -> bpms : Виконати задачу:\nідентифікатор задачі, дані форми
+  activate bpms
+  bpms -> bpms : Виконання бізнес процесу
+  bpms -> ceph : Взяти дані форми зі сховища за ключем
+  activate ceph
+  ceph -> bpms : 200 OK, дані форми
+  deactivate ceph
+  bpms -> trembita : Перевірити дані користувачва в іншому реєстрі:\n <soapRequestBody>
+  activate trembita
+  trembita -> bpms : 200 OK, Дані знайдено, валідація пройшла успішно
+  deactivate trembita
+  bpms -> bpms : Виконання бізнес процесу
+  bpms -> usertaskmanagment : Задача виконана, 204 No content
+  deactivate bpms
+  usertaskmanagment -> client : Задача виконана, 204 No content
+  deactivate usertaskmanagment
+@enduml
+----
+
+== Необхідні параметри
+|===
+|Параметр |Тип |Необхідність |Опис
+
+|trembita-exchange-gateway.registries.<registry-name>.url
+|string
+|required
+|Адреса до ШБО
+
+|trembita-exchange-gateway.registries.<registry-name>.userId
+|string
+|required
+|Ідентифікатор особи користувача, за ініціативою якого сформовано повідомлення-запит
+
+|trembita-exchange-gateway.registries.<registry-name>.protocol-version
+|string
+|required
+|Внутрішня версія протоколу обміну
+
+|trembita-exchange-gateway.registries.<registry-name>.service.x-road-instance
+|string
+|required
+|Ідентифікатор середовища СЕВДЕІР
+
+|trembita-exchange-gateway.registries.<registry-name>.service.member-class
+|string
+|required
+|Ідентифікатор класу учасника
+
+|trembita-exchange-gateway.registries.<registry-name>.service.member-code
+|string
+|required
+|Ідентифікатор учасника СЕВДЕІР
+
+|trembita-exchange-gateway.registries.<registry-name>.service.subsystem-code
+|string
+|required
+|Ідентифікатор інформаційної системи (підсистеми), яку представляє веб-сервіс, що отримує запит
+
+|trembita-exchange-gateway.registries.<registry-name>.client.x-road-instance
+|string
+|required
+|Ідентифікатор середовища СЕВДЕІР
+
+|trembita-exchange-gateway.registries.<registry-name>.client.member-class
+|string
+|required
+|Ідентифікатор класу учасника
+
+|trembita-exchange-gateway.registries.<registry-name>.client.member-code
+|string
+|required
+|Ідентифікатор учасника СЕВДЕІР
+
+|trembita-exchange-gateway.registries.<registry-name>.client.subsystem-code
+|string
+|required
+|Ідентифікатор інформаційної системи (підсистеми), яку представляє веб-клієнт, що виконує запит
+
+|===
+
+<registry-name> - назва реєстру, яка буде використовуватися spring для ін'єкції параметрів до клієнта реєстру. Наприклад: *edr-registry*
+
+Приклад конфігурації в application.yml сервіса:
+[source, yaml]
+----
+trembita-exchange-gateway:
+  registries:
+    edr-registry:
+      trembita-url: http://localhost:8080
+      user-id: MDTUDDM
+      protocol-version: 4.0
+      authorization-token: token #custom field
+      client:
+        x-road-instance: CLIENT-TEST
+        member-class: GOV
+        member-code: 666777666
+        subsystem-code: GOV_test
+      service:
+        x-road-instance: EDR-TEST
+        member-class: GOV
+        member-code: 11115888
+        subsystem-code: EDR_test
+      bar-registry:
+        ....
+----

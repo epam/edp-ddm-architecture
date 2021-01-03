@@ -1,0 +1,728 @@
+= Завдання 2. Моделювання структур бази даних реєстру
+:sectanchors:
+:sectnums:
+:sectnumlevels: 5
+:toc:
+:toclevels: 5
+:toc-title: ЗМІСТ
+
+== Мета завдання
+
+Виконання цього завдання має на меті: ::
+
+* Навчити моделювати структури бази даних.
+* Навчити розробляти XML-шаблони Liquibase для розгортання структур у базі даних реєстру.
+* Навчити створювати критерії пошуку у БД (Search Conditions) для інтеграції фабрики даних із бізнес-процесами.
+
+== Завдання
+
+Створити структуру бази даних для збереження й обробки інформації із сертифікації лабораторій відповідно до наступної логічної моделі даних:
+
+image:registry-develop:study-project/task-2/task-2-1-logical-model.png[]
+
+[#physical-data-model-actions-plan]
+== План розробки фізичної моделі даних
+
+. Визначити первинні ключі для кожної із сутностей.
+. Визначити вторинні ключі, якщо вони є в сутності.
+. Визначити обов'язкові поля.
+. Визначити поля або комбінацію полів, що мають унікальні значення.
+. Визначити назву таблиць та полів латиницею.
+
+== Створення таблиць і зв'язків між ними
+
+* Використовуючи інформацію, визначену у xref:physical-data-model-actions-plan[плані розробки фізичної моделі даних], та відповідний XML-шаблон, поданий нижче, створіть _порожній_ файл _createTables.xml_
+
+TIP: Використовуйте готовий файл _link:{attachmentsdir}/study-project/task-2/xml-temp/createTables.xml[createTables.xml]_ як приклад.
+
+* Скопіюйте метадані із шаблону XML-файлу, поданого нижче, та додайте до свого файлу як є, без змін.
+
+.Приклад. Шаблон XML-файлу
+
+[source,xml]
+----
+<?xml version="1.0" encoding="UTF-8"?>
+
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xmlns:ext="http://www.liquibase.org/xml/ns/dbchangelog-ext"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.2.xsd
+        http://www.liquibase.org/xml/ns/dbchangelog-ext https://<link to central Nexus>/nexus/repository/extensions/com/epam/digital/data/platform/liquibase-ext-schema/<latest>/liquibase-ext-schema-<latest>.xsd">
+
+</databaseChangeLog>
+----
+
+[IMPORTANT]
+====
+* Змінну `<link to central Nexus>` необхідно змінити на шлях до Nexus-сервера центральних компонентів.
+
+* Змінну `<latest>` необхідно змінити на версію. Наприклад, `1.4.0-RC.14`.
+====
+
+IMPORTANT: Кожен файл із розширенням _.xml_ має містити системну інформацію зверху, всередині тегу `<databaseChangeLog>`.
+
+[TIP]
+====
+Альтернативно використовуйте шаблон _link:{attachmentsdir}/study-project/task-2/xml-temp/main-liquibase.xml[main-liquibase.xml]_ із Gerrit-репозиторію як приклад для копіювання метаданих.
+
+Файл _main-liquibase.xml_ виконує функції індексу та через директиву `<include>` встановлює посилання до інших XML-шаблонів, необхідних для розгортання структур даних.
+====
+
+[#tables-creation-order]
+=== Порядок створення таблиць
+
+Змініть порядок наборів змін (`changeSet`) у файлі _createTable.xml_ таким чином, щоб таблиці, що мають зовнішні посилання до інших таблиць, створювались після тих, до яких вони посилаються. Тобто таблиці з лабораторіями мають створюватись після таблиць «КОАТУУ» та «Тип Власності».
+
+*Розташуйте набори змін для розгортання таблиць у наступному порядку:*
+
+. «КОАТУУ»;
+. «Тип Власності»;
+. «Лабораторія»;
+. «Статус Співробітника»;
+. «Кадровий Склад».
+
+[#create-laboratory-table]
+=== Створення таблиці «Лабораторія»
+
+NOTE: На прикладі таблиці «Лабораторія» розглянемо процес створення changeSets в рамках розгортання фізичної моделі даних.
+
+На цьому етапі необхідно створити нову таблицю із назвою «Лабораторія». Етап передбачає виконання наступних кроків:
+
+Створюємо changeSet::
+На цьому кроці необхідно створити changeSet -- набір атомарних змін в Liquibase.
+
+У файлі _createTable.xml_, всередині тегу `<databaseChangeLog>`, після метаданих, додайте тег `<changeSet>`.
+
+.Обов'язкові атрибути
+[options="header"]
+|=================
+| Атрибут | Значення
+| `id`
+| Наприклад, `"table laboratory"`
+| `author`
+| ваші ПІБ
+|=================
+
+В результаті отримуємо наступну структуру:
+
+[source,xml]
+----
+<databaseChangeLog>
+...
+...
+    <changeSet id="table laboratory" author="Сидоренко Іван Петрович">
+    </changeSet>
+</databaseChangeLog>
+----
+
+Додаємо коментар::
+_Бажано, але не обов'язково_, всередині тегу `<changeSet>` додати тег `<comment>` з коментарем, що буде пояснювати, які саме зміни впроваджує цей changeSet.
+
+В результаті розширюємо нашу структуру наступним чином:
+
+[source,xml]
+----
+<databaseChangeLog>
+...
+...
+    <changeSet id="table laboratory" author="Сидоренко Іван Петрович">
+        <comment>Створюємо таблицю laboratory</comment>
+    </changeSet>
+</databaseChangeLog>
+----
+
+Додаємо тег createTable::
+На цьому кроці необхідно створити *порожню* таблицю.
+
+Всередині тегу `<changeSet>` додайте тег `<createTable>` із назвою таблиці «Лабораторія» латиницею.
+
+.Обов'язкові атрибути
+[options="header"]
+|=================
+| Атрибут | Значення
+| `tableName`
+| `"laboratory"`
+| `ext:historyFlag`
+| `"true"`
+|=================
+
+В результаті розширюємо нашу структуру наступним чином:
+
+[source,xml]
+----
+<databaseChangeLog>
+...
+...
+    <changeSet id="table laboratory" author="Сидоренко Іван Петрович">
+        <comment>Створюємо таблицю laboratory</comment>
+        <createTable tableName="laboratory" ext:historyFlag="true">
+        </createTable>
+    </changeSet>
+</databaseChangeLog>
+----
+
+[CAUTION]
+====
+В рамках процесу верифікації регламенту, флаг `historyFlag` зі значенням `true` вимагатиметься для всіх тегів `createTable`. Тому при створенні таблиці необхідно вказувати відповідне значення `historyFlag="true"`.
+
+Таким чином, буде додатково згенерована історична таблиця, і для кожної з таблиць буде згенеровано свій специфічний набір службових полів.
+====
+
+Додаємо тег column::
+На цьому кроці необхідно зазначити стовпці, що міститиме таблиця.
+
+Для кожного поля, що було визначено для таблиці «Лабораторія» у xref:physical-data-model-actions-plan[плані розробки фізичної моделі даних], всередині тегу `<createTable>` додайте тег `<column>`, зазначивши назву стовпця та тип даних, що зберігатимуться.
+
+.Атрибути
+[options="header"]
+|=================
+| Атрибут | Значення
+| `name`
+| Назва стовпця
+| `type`
+| Тип даних
+
+Наприклад, `"INT"`.
+|=================
+
+В результаті розширюємо нашу структуру наступним чином:
+
+[source,xml]
+----
+<databaseChangeLog>
+...
+...
+    <changeSet id="table laboratory" author="Сидоренко Іван Петрович">
+        <comment>Створюємо таблицю laboratory</comment>
+        <createTable tableName="laboratory" ext:historyFlag="true">
+            <column name="<назва стовпця>" type="<тип даних>">
+            </column>
+        </createTable>
+    </changeSet>
+</databaseChangeLog>
+----
+
+[CAUTION]
+====
+* Для змінної `<назва стовпця>` введіть назву стовпця латиницею.
+* Для змінної `<тип даних>` зазначте тип даних.
+====
+
+Додаємо тег constraints::
+
+На цьому кроці необхідно зазначити обмеження для кожного стовпця таблиці.
+
+* Для стовпця, визначеного як первинний ключ, додайте підлеглий тег `<constraints>` із наступними атрибутами:
+
+.Атрибути
+[options="header"]
+|=================
+| Атрибут | Значення
+| `nullable`
+| `"false"`
+| `primaryKey`
+| `"true"`
+|`primaryKeyName`
+| Наприклад, `"pk_laboratory_id"`.
+
+Тип даних стовпця: `UUID`
+
+_Назва первинного ключа має бути унікальною._
+|`defaultValueComputed`
+| `"uuid_generate_v4()"`
+
+_Значення ключа за замовчуванням._
+|=================
+
+[CAUTION]
+====
+Атрибут `nullable="false"` вимагається для всіх стовпців, що, відповідно до бізнес-логіки, не допускають нульових значень.
+
+Рекомендовано використовувати тип `UUID` для всіх ключів таблиць і функцію `uuid_generate_v4()` як значення за замовчуванням. Ця функція згенерує  випадкове числове значення (_див. https://www.uuidgenerator.net/version4_).
+====
+
+* Для всіх зовнішніх посилань додайте тег `<constraints>` з атрибутами `foreignKeyName`, `referencedTableName` та `referencedColumnNames`, зазначивши в них унікальну назву зовнішнього ключа, таблиці та стовпця, до яких вони посилаються:
+
+.Атрибути
+[options="header"]
+|=================
+| Атрибут | Значення
+| `foreignKeyName`
+| `"fk_<Унікальна назва зовнішнього ключа>"`
+| `referencedTableName`
+| `"<Назва таблиці, до якої посилається зовнішній ключ>"`
+| `referencedColumnNames`
+| `"<Назва стовпця таблиці, до якого посилається зовнішній ключ>"`
+|=================
+
+NOTE: На початку значення атрибута `foreignKeyName` додайте відповідний префікс `fk_`, що вказуватиме на зв'язок із зовнішньою таблицею.
+
+CAUTION: При додаванні зовнішніх ключів, зверніть увагу на xref:tables-creation-order[порядок створення таблиць].
+
+*В результаті отримуємо наступну структуру:*
+
+.Приклад. ChangeSet із тегом для створення таблиці `laboratory`
+[source,xml]
+----
+<databaseChangeLog>
+...
+...
+    <changeSet id="table laboratory" author="Сидоренко Іван Петрович">
+        <comment>Створюємо таблицю laboratory</comment>
+        <createTable tableName="laboratory" ext:historyFlag="true">
+            <column name="<назва стовпця>" type="UUID">
+                <constraints nullable="false"
+                             primaryKey="true"
+                             primaryKeyName="pk_laboratory_id"/>
+            </column>
+            <column name="name" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="ownership_id" type="UUID">
+                <constraints nullable="false"
+                             foreignKeyName="fk_laboratory_ownership"
+                             referencedTableName="ownership"
+                             referencedColumnNames="ownership_id"/>
+            </column>
+        </createTable>
+    </changeSet>
+</databaseChangeLog>
+----
+
+[CAUTION]
+====
+Для всіх полів, що мають містити лише унікальний набір значень, додайте тег `*<constraints*>` з атрибутами `unique="true"` та `uniqueConstraintName` (опціонально):
+
+.Приклад. Створення таблиці з обмеженням `unique`
+[source,xml]
+----
+<changeSet id="table ownership" author="registry owner">
+        <createTable tableName="ownership" ext:historyFlag="true" remarks="Довідник форм власності">
+            <column name="ownership_id" type="UUID" defaultValueComputed="uuid_generate_v4()">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="pk_ownership_id"/>
+            </column>
+            <column name="code" type="TEXT" remarks="Код">
+                <constraints nullable="false"/>
+            </column>
+            <column name="name" type="TEXT" remarks="Назва">
+                <constraints nullable="false" unique="true"/>
+            </column>
+        </createTable>
+    </changeSet>
+----
+
+У випадку, коли декілька полів мають складати унікальне значення, після тегу `<createTable>` додайте тег `<addUniqueConstraint>`, зазначивши в атрибуті `tableName` назву таблиці, на яку накладається обмеження, а в атрибуті `columnNames` -- перелік полів, що у комбінації мають бути унікальними.
+
+.Приклад. Створення таблиці з тегом `<addUniqueConstraint>`
+[source,xml]
+----
+<createTable>
+...
+...
+</createTable>
+<addUniqueConstraint tableName="laboratory" columnNames="name,edrpou"/>
+----
+
+====
+
+=== Створення таблиці «КОАТУУ»
+
+За аналогією до пункту xref:create-laboratory-table[Створення таблиці «Лабораторія»], створіть таблицю із назвою «КОАТУУ»:
+
+. В кінець тегу `<databaseChangeLog>` файлу _createTable.xml_ додайте тег `<changeSet>`, що визначає набір змін.
+. Всередині тегу `<changeSet>` додайте тег `<createTable>` із назвою таблиці «КОАТУУ» латиницею (наприклад, `"koatuu"`).
+. Додайте теги `<column>` для кожного стовпця таблиці «КОАТУУ», визначеної у пункті xref:physical-data-model-actions-plan[План розробки фізичної моделі даних].
+. У тегу `<constraints>` визначте первинний ключ таблиці, а також всі обов'язкові поля.
+
+=== Створення таблиці «Тип Власності»
+
+За аналогією до пункту xref:create-laboratory-table[Створення таблиці «Лабораторія»], створіть таблицю із назвою «Тип Власності»:
+
+. В кінець тегу `<databaseChangeLog>` файлу _createTable.xml_ додайте тег `<changeSet>`, що визначає набір змін.
+. Всередині тегу `<changeSet>` додайте тег `<createTable>` із назвою таблиці «Тип Власності» латиницею (наприклад, `"ownership"`).
+. Додайте теги `<column>` для кожного стовпця таблиці «Тип Власності», визначеної в пункті xref:physical-data-model-actions-plan[План розробки фізичної моделі даних].
+. У тегу `<constraints>` визначте первинний ключ таблиці, а також всі обов'язкові поля.
+
+=== Створення таблиці «Статус Співробітника»
+
+За аналогією до пункту xref:create-laboratory-table[Створення таблиці «Лабораторія»], створіть таблицю із назвою «Статус Співробітника»:
+
+. В кінець тегу `<databaseChangeLog>` файлу _createTable.xml_ додайте тег `<changeSet>`, що визначає набір змін.
+. Всередині тегу `<changeSet>` додайте тег `<createTable>` із назвою таблиці «Статус Співробітника» латиницею (наприклад, `"staff_status"`).
+. Додайте теги `<column>` для кожного стовпця таблиці «Статус Співробітника», визначеної у пункті xref:physical-data-model-actions-plan[Розробка фізичної моделі даних].
+. У тегу `<constraints>` визначте первинний ключ таблиці, а також всі обов'язкові поля.
+
+=== Створення таблиці «Кадровий склад»
+
+За аналогією до пункту xref:create-laboratory-table[Створення таблиці «Лабораторія»], створіть таблицю із назвою «Кадровий склад»:
+
+. В кінець тегу `<databaseChangeLog>` файлу _createTable.xml_ додайте тег `<changeSet>`, що визначає набір змін.
+. Всередині тегу `<changeSet>` додайте тег `<createTable>` із назвою таблиці «Кадровий Склад» латиницею (наприклад, `"staff"`).
+. Додайте теги `<column>` для кожного стовпця таблиці «Кадровий Склад», визначеної у пункті xref:physical-data-model-actions-plan[План розробки фізичної моделі даних].
+. У тегу `<constraints>` визначте первинний ключ таблиці, всі зовнішні посилання до інших таблиць, а також всі обов'язкові поля.
+
+== Створення критеріїв пошуку для інтеграції з формами бізнес-процесів
+
+*Критерії пошуку (Search Conditions)* – спеціальні об'єкти, що використовуються формами та бізнес-процесами для отримання набору даних з однієї або декількох таблиць реєстру.
+
+*На рівні бази даних вони реалізовуються через представлення (views)*, визначені SQL-запитом до однієї або декількох таблиць.
+
+Для створення критеріїв пошуку *використовується тег* `*<ext:createSearchCondition>*`, розроблений в рамках розширення інструмента створення та керування фізичною моделлю даних Liquibase на Платформі реєстрів.
+
+.Приклад. XML-шаблон використання тегу для створення Критерію Пошуку в БД
+[source,xml]
+----
+<changeSet author="registry owner" id="SearchCondition">
+    <ext:createSearchCondition name="SearchCondition" limit="1">
+        <ext:table name="table_one" alias="to">
+            <ext:column name="name" alias="to_name"/>
+            <ext:column name="type" searchType="equal"/>
+            <ext:function name="count" alias="cnt" columnName="uuid"/>
+        </ext:table>
+        <ext:table name="table_two" alias="tt">
+            <ext:column name="name" alias="tt_name"/>
+            <ext:column name="code" searchType="contains"/>
+            <ext:function name="sum" alias="sm" columnName="code"/>
+        </ext:table>
+        <ext:join type="left">
+            <ext:left alias="to">
+                <ext:column name="name"/>
+            </ext:left>
+            <ext:right alias="tt">
+                <ext:column name="name"/>
+            </ext:right>
+        </ext:join>
+        <ext:where>
+            <ext:condition tableAlias="to" columnName="type" operator="eq" value="'char'">
+                <ext:condition logicOperator="or" tableAlias="to" columnName="type" operator="eq" value="'text'"/>
+            </ext:condition>
+            <ext:condition logicOperator="and" tableAlias="tt" columnName="code" operator="similar" value="'{80}'"/>
+        </ext:where>
+    </ext:createSearchCondition>
+</changeSet>
+----
+
+* *Створіть* для критеріїв пошуку *окремий файл* _createSearchConditions.xml_ з того ж шаблону, що і _createTable.xml_.
+
+TIP: Використовуйте готовий файл _link:{attachmentsdir}/study-project/task-2/xml-temp/createSearchConditions.xml[createSearchConditions.xml]_ як приклад.
+
+* За аналогією до таблиць, створіть наступні критерії пошуку в окремих наборах змін (changeSet).
+
+=== Пошук області в таблиці «КОАТУУ»
+
+* Використовується бізнес-процесом: *Додавання лабораторії.*
+* Назва критерію пошуку: *koatuu_obl_contains_name.*
+* Пошук за полем: *name*, тип пошуку: *contains.*
+* Сортування за полем: *name*, напрямок: *asc.*
+
+.Приклад. ХМL-шаблон для створення критерію пошуку
+
+[source,xml]
+----
+<changeSet author="registry owner" id="create SC koatuu_obl_contains_name">
+    <ext:createSearchCondition name="koatuu_obl_contains_name">
+        <ext:table name="koatuu" alias="k">
+            <ext:column name="koatuu_id"/>
+            <ext:column name="code"/>
+            <ext:column name="name" sorting="asc" searchType="contains"/>
+        </ext:table>
+        <ext:where>
+            <ext:condition tableAlias="k" columnName="type" operator="eq" value="'О'"/>
+        </ext:where>
+    </ext:createSearchCondition>
+</changeSet>
+----
+
+.Вихідний SQL-запит на базі XML-шаблону
+[source,sql]
+----
+SELECT k.koatuu_id,
+       k.code,
+       k.name
+  FROM koatuu k
+ WHERE k.type = 'О'::text
+ ORDER BY k.name;
+----
+
+=== Пошук населеного пункту за назвою та кодом області в таблиці «КОАТУУ»
+
+* Використовується бізнес-процесом: *Додавання лабораторії.*
+* Назва критерію пошуку: *koatuu-np-starts-with-name-by-obl.*
+* Пошук за полем: *name*, тип пошуку: *startWith.*
+* Пошук за полем: *level1*, тип пошуку: *equal.*
+* Сортування за полем: *name*, напрямок: *asc.*
+
+.Приклад. ХМL-шаблон для створення критерію пошуку
+[source,xml]
+----
+<changeSet author="registry owner" id="create SC koatuu_np_starts_with_name_by_obl">
+    <ext:createSearchCondition name="koatuu_np_starts_with_name_by_obl" limit="100">
+        <ext:table name="koatuu" alias="np">
+            <ext:column name="koatuu_id"/>
+            <ext:column name="name" searchType="startsWith" sorting="asc"/>
+            <ext:column name="level1" searchType="equal"/>
+        </ext:table>
+        <ext:table name="koatuu" alias="rn">
+            <ext:column name="name" alias="name_rn"/>
+        </ext:table>
+        <ext:join type="left">
+            <ext:left alias="np">
+                <ext:column name="level2"/>
+            </ext:left>
+            <ext:right alias="rn">
+                <ext:column name="code"/>
+            </ext:right>
+            <ext:condition logicOperator="and" tableAlias="rn" columnName="type" operator="eq" value="'Р'"/>
+        </ext:join>
+        <ext:where>
+        <ext:condition tableAlias="np" columnName="type" operator="eq" value="'НП'"/>
+        </ext:where>
+    </ext:createSearchCondition>
+</changeSet>
+----
+
+.Вихідний SQL-запит на базі XML-шаблону
+[source,sql]
+----
+SELECT np.koatuu_id,
+       np.name,
+       np.level1,
+       rn.name AS name_rn
+  FROM koatuu np
+         LEFT JOIN koatuu rn ON np.level2 = rn.code AND rn.type = 'Р'::text
+ WHERE np.type = 'НП'::text
+ ORDER BY np.name;
+----
+
+=== Пошук типу власності за назвою в таблиці «Тип Власності»
+
+* Використовується бізнес-процесом: *Додавання лабораторії.*
+* Назва критерію пошуку: *ownership-contains-name.*
+* Пошук за полем: *name*, тип пошуку: *contains.*
+* Сортування за полем: *name*, напрямок: *asc.*
+
+.Приклад. ХМL-шаблон для створення критерію пошуку
+[source,xml]
+----
+<changeSet author="registry owner" id="create SC ownership_contains_name">
+    <ext:createSearchCondition name="ownership_contains_name">
+        <ext:table name="ownership" alias="o">
+            <ext:column name="ownership_id"/>
+            <ext:column name="code"/>
+            <ext:column name="name" sorting="asc" searchType="contains"/>
+        </ext:table>
+    </ext:createSearchCondition>
+</changeSet>
+----
+
+.Вихідний SQL-запит на базі XML-шаблону
+[source,sql]
+----
+SELECT o.ownership_id,
+       o.code,
+       o.name
+  FROM ownership o
+ ORDER BY o.name;
+----
+
+=== Пошук лабораторій за назвою або кодом ЄДРПОУ в таблиці «Лабораторія»
+
+* Використовується бізнес-процесом: *Додавання лабораторії.*
+* Назва критерію пошуку: *laboratory-equal-edrpou-name-count.*
+* Пошук за полем: *edrpou*, тип пошуку: *equal.*
+* Пошук за полем: *name*, тип пошуку: *equal.*
+
+.Приклад. ХМL-шаблон для створення критерію пошуку
+[source,xml]
+----
+<changeSet author="registry owner" id="searchCondition laboratory_equal_edrpou_name_count">
+<comment>CREATE search condition laboratory_equal_edrpou_name_count</comment>
+    <ext:createSearchCondition name="laboratory_equal_edrpou_name_count">
+        <ext:table name="laboratory">
+            <ext:function name="count" alias="cnt" columnName="laboratory_id"/>
+            <ext:column name="edrpou" searchType="equal"/>
+            <ext:column name="name" searchType="equal"/>
+        </ext:table>
+    </ext:createSearchCondition>
+</changeSet>
+----
+
+.Вихідний SQL-запит на базі XML-шаблону
+[source,sql]
+----
+SELECT laboratory.edrpou,
+       laboratory.name,
+       count(laboratory.laboratory_id) AS cnt
+  FROM laboratory
+ GROUP BY laboratory.edrpou,
+       laboratory.name;
+----
+
+=== Пошук співробітника за іменем у таблиці «Кадровий Склад»
+
+* Використовується бізнес-процесом: *Додавання персоналу.*
+* Назва критерію пошуку: *staff-contains-name.*
+* Пошук за полем: *name*, тип пошуку: *contains.*
+* Сортування за полем: *name*, напрямок: *asc.*
+
+.Приклад. ХМL-шаблон для створення критерію пошуку
+[source,xml]
+----
+<changeSet author="registry owner" id="searchCondition staff_contains_name">
+<comment>CREATE search condition staff_contains_name</comment>
+    <ext:createSearchCondition name="staff_contains_name">
+        <ext:table name="staff_status" alias="s">
+            <ext:column name="staff_status_id"/>
+            <ext:column name="name" sorting="asc" searchType="contains"/>
+        </ext:table>
+    </ext:createSearchCondition>
+</changeSet>
+----
+
+.Вихідний SQL-запит на базі XML-шаблону
+[source,sql]
+----
+SELECT s.staff_status_id,
+       s.name
+  FROM staff_status s
+ ORDER BY s.name;
+----
+
+== Первинне завантаження даних
+
+Для правильного наповнення та оперування даними реєстру, таблиці-довідники повинні містити дані. Їх _завантаження можливе до початку роботи самого реєстру_ через виклик спеціальної функції бази даних. Виклик функції можливий через відповідний Liquibase-тег – *`<sql>`*.
+
+.Приклад XML-шаблону з набором змін для початкового завантаження даних
+[source,xml]
+----
+<property name="dataLoadPath" value="/tmp/data-load/"/>
+<changeSet author="registry owner" id="load data to dictionaries">
+    <sql dbms="postgresql" endDelimiter=";" splitStatements="true" stripComments="true">
+        CALL p_load_table_from_csv('staff_status','${dataLoadPath}dict_status_spivrobitnyka.csv', array['code','name','constant_code'], array['name','constant_code']);
+        CALL p_load_table_from_csv('ownership','${dataLoadPath}dict_formy_vlasnosti.csv', array['code','name']);
+
+<!--
+Функція використовується в рамках Реєстру атестованих лабораторій для первинного завантаження довідника КОАТУУ. Не передбачається подальше використання довідника КОАТУУ при розгортанні моделі даних.
+
+Приклад:
+
+        CALL p_load_table_from_csv(
+        'koatuu'
+        ,'${dataLoadPath}dict_koatuu.csv'
+        , array['code','category','name']
+        , array['code','category','name'
+        ,'level1::substring(code,1,2)||''00000000'''
+        ,'level2::substring(code,1,5)||''00000'''
+        ,'type::CASE WHEN code ~ ''[0-9]{2}0{8}'' AND code !~ ''(80|85)0{8}'' THEN ''О''
+        WHEN code ~ ''[0-9]{2}2[0-9]{2}0{5}'' AND code !~ ''[0-9]{2}20{7}'' THEN ''Р''
+        WHEN coalesce(category, ''Р'') != ''Р''
+        OR code IN (SELECT DISTINCT substring(code,1,5)||''00000'' FROM koatuu_csv k2 WHERE category = ''Р'') AND category IS NULL
+        OR code ~ ''(80|85)0{8}'' THEN ''НП''
+        ELSE NULL END']
+        );
+-->
+    </sql>
+</changeSet>
+----
+
+NOTE: Функція використовується в рамках Реєстру атестованих лабораторій для первинного завантаження довідника КОАТУУ. Не передбачається подальше використання довідника КОАТУУ при розгортанні моделі даних.
+
+. Створіть файл _populateDictionaries.xml_ із того ж шаблону, що і _createTables.xml._
+
+TIP: Використовуйте готовий файл _link:{attachmentsdir}/study-project/task-2/xml-temp/populateDictionaries.xml[populateDictionaries.xml]_ як приклад.
+
+[start=2]
+. Додайте окремий тег `<changeSet>` із набором змін.
+. Всередині тегу `<changeSet>` додайте тег `<sql>` з атрибутом `dbms="postgresql"`.
+. Всередині тегу `<sql>` додайте виклики функції `p_load_table_from_csv()` для кожної таблиці довідника. +
+
+.Приклад. Вхідні параметри функції
+[source,xml]
+----
+CALL p_load_table_from_csv('research','${dataLoadPath}dict_typy_doslidzhen.csv', array['code','research_type'], array['research_type']);
+----
+
+[TIP]
+====
+де:
+
+* `'staff_status'` = `'p_table_name'` -- назва таблиці в базі даних, до якої завантажуватимуться дані;
+* `${dataLoadPath}dict_status_spivrobitnyka.csv` = `'p_file_name'` -- повний шлях до файлу з даними.
+* `array['code','name','constant_code']` = `p_table_columns` -- масив з переліком полів csv-файлу;
+* `array['name','constant_code']` = `p_target_table_columns` -- масив з переліком полів для завантаження до цільової таблиці.
+====
+
+[CAUTION]
+====
+Назви полів, що зазначені у параметрі `p_table_columns`, можуть не відповідати назвам у файлі -- вони можуть бути використані у наступному параметрі `p_target_table_columns` для трансформації даних.
+====
+
+[CAUTION]
+====
+Назви полів з параметра `p_target_table_columns` мають відповідати переліку з параметра `p_table_columns` (якщо поля таблиці повністю відповідають полям у файлі, цей параметр можна не вказувати).
+====
+
+[NOTE]
+====
+Після внесення змін до моделі даних в Gerrit-репозиторії, всі файли з папки _data-model/data-load_ копіюються до папки _/tmp/data-load_ на сервері бази даних. Тому шлях до файлу повинен виглядати наступним чином: _/tmp/data-load/<назва файлу>.csv_, де:
+
+* _<назва файлу>_ -- безпосередньо назва .csv-файлу з даними (*_див. приклад ХML-шаблону вище_*).
+====
+
+_В результаті отримуємо 3 виклики функцій_, що завантажують дані до таблиць-довідників із наступних файлів:
+
+[options="header"]
+|===
+|*Довідник* |*Файл з даними*
+|КОАТУУ (_опціонально_) | _link:{attachmentsdir}/study-project/task-2/csv-dict/dict_koatuu_workshop.csv[dict_koatuu_workshop.csv]_
+|Тип Власності |_link:{attachmentsdir}/study-project/task-2/csv-dict/dict_formy_vlasnosti.csv[dict_formy_vlasnosti.csv]_
+|Статус Співробітника |_link:{attachmentsdir}/study-project/task-2/csv-dict/dict_status_spivrobitnyka.csv[dict_status_spivrobitnyka.csv]_
+|===
+
+== Застосування розробленої моделі до бази даних
+
+Платформа використовує файл *_main-liquibase.xml_* як основний для розгортання моделі даних реєстру.
+
+NOTE: Всі набори змін, що будуть включені до файлу _main-liquibase.xml_, застосуються в базі даних.
+
+Для включення набору змін із файлів, створених протягом минулих кроків, використовується тег `*<include>*` з атрибутом `*file*`, що вказує шлях до XML-файлу. Поточною директорією для Liquibase є коренева папка Gerrit-репозитарію --  тому шлях до файлів має наступний вигляд: _data-model/*.xml_.
+
+. Створіть файл _main-liquibase.xml_ із того ж шаблону, що і _createTable.xml_.
+
+TIP: Використовуйте готовий шаблон _link:{attachmentsdir}/study-project/task-2/xml-temp/main-liquibase.xml[main-liquibase.xml]_ із Gerrit-репозиторію як приклад.
+
+[start=2]
+. Додайте тег `<include>` для кожного з файлів, створених протягом минулих етапів, зазначивши шлях до файлу в атрибуті `file`.
+
+.Приклад вставки файлу в XML-шаблоні
+[source,xml]
+----
+<include file="data-model/createTables.xml"/>
+----
+
+[start=3]
+. Покладіть файли XML до папки _data-model_ Gerrit-репозиторію.
+. Файли з даними скопіюйте до папки _data-model/data-load_.
+
+[TIP]
+====
+Всього має вийти _7 файлів_ для розгортання моделі даних та первинного наповнення БД:
+
+4 файли із шаблонами XML: ::
+** link:{attachmentsdir}/study-project/task-2/xml-temp/createTables.xml[_createTables.xml_]
+** link:{attachmentsdir}/study-project/task-2/xml-temp/createSearchConditions.xml[_createSearchConditions.xml_]
+** link:{attachmentsdir}/study-project/task-2/xml-temp/populateDictionaries.xml[_populateDictionaries.xml_]
+** link:{attachmentsdir}/study-project/task-2/xml-temp/main-liquibase.xml[_main-liquibase.xml_]
+3 файли CSV із довідниками для первинного наповнення: ::
+** link:{attachmentsdir}/study-project/task-2/csv-dict/dict_formy_vlasnosti.csv[_dict_formy_vlasnosti.csv_]
+** link:{attachmentsdir}/study-project/task-2/csv-dict/dict_status_spivrobitnyka.csv[_dict_status_spivrobitnyka.csv_]
+** link:{attachmentsdir}/study-project/task-2/csv-dict/dict_koatuu_workshop.csv[_dict_koatuu_workshop.csv_]
+====
+
+[start=5]
+. Змініть версію регламенту у файлі _settings.yaml_, що розміщується у кореневій папці Gerrit-репозитарію.
+. Застосуйте зміни до Gerrit (`commit`, `push`).
+. Виконайте процедуру рецензування коду вашого коміту (Code Review). У разі відсутності відповідних прав, зверніться до відповідальної особи.
+. Дочекайтеся виконання Jenkins-pipeline *registry-regulations*.
+

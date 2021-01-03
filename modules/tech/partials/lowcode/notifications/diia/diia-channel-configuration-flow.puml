@@ -1,0 +1,99 @@
+@startuml
+skinparam shadowing false
+skinparam DatabaseBackgroundColor white
+skinparam DatabaseBorderColor #2688d4
+skinparam QueueBackgroundColor white
+skinparam QueueBorderColor #2688d4
+skinparam NoteBackgroundColor white
+skinparam NoteBorderColor #2688d4
+skinparam EntityBackgroundColor white
+skinparam EntityBorderColor #2688d4
+skinparam ControlBackgroundColor white
+skinparam ControlBorderColor #2688d4
+skinparam ActorBackgroundColor white
+
+skinparam sequence {
+    ArrowColor #2688d4
+    ActorBorderColor #2688d4
+    LifeLineBorderColor #2688d4
+    ParticipantBorderColor #2688d4
+    ParticipantBackgroundColor white
+    BoxBorderColor #2688d4
+    BoxBackgroundColor white
+}
+
+actor "Адміністратор \nплатформи" as platform_admin
+participant "Control Plane \nConsole \n**(control-plane)**" as control_plane
+
+entity "OpenShift \n'control-plane' \nnamespace" as openshift_control_plane_namespace
+
+box Platform Jenkins
+  control "Пайплайн створення реєстру" as registry_creation_pipeline
+end box
+
+entity "OpenShift \n'<registry>' \nnamespace" as openshift_registry_namespace
+participant "Сервіс нотифікацій \nкористувачів \n**(notification-service)**" as notification_service
+
+platform_admin -> control_plane: Створення / Редагування конфігурації реєстру
+activate control_plane
+  control_plane -> control_plane: Внесення даних підключення до сервісу Дія
+  note left
+    "notifications.diia.url": '<external-diia-url>'
+    "notifications.diia.partner.token": '<partner-token>'
+  end note
+
+  control_plane -> control_plane: Формування даних для створення ConfigMap\n**<registry_name>-notification-service-diia-channel-configuration**
+  control_plane -> openshift_control_plane_namespace: Створення ConfigMap\n**<registry_name>-notification-service-diia-channel-configuration**
+  note left
+    "notifications.diia.url": '<external-diia-url>'
+  end note
+
+  control_plane -> control_plane: Формування даних для створення Secret\n**<registry_name>-notification-service-diia-channel-configuration**
+  control_plane -> openshift_control_plane_namespace: Створення Secret\n**<registry_name>-notification-service-diia-channel-configuration**
+  note left
+    "notifications.diia.partner.token": '<partner-token>'
+  end note
+
+control_plane -> registry_creation_pipeline: Запуск пайплайну створення реєстру
+deactivate control_plane
+
+activate registry_creation_pipeline
+  == Підготовка налаштувань підключення до Дії для реєстру ==
+  registry_creation_pipeline -> openshift_control_plane_namespace: Експорт ConfigMap\n**<registry_name>-notification-service-diia-channel-configuration**
+  registry_creation_pipeline -> registry_creation_pipeline: Формування даних для створення ConfigMap\n**notification-service-diia-channel-configuration**
+  registry_creation_pipeline -> openshift_registry_namespace: Створення ConfigMap\n**notification-service-diia-channel-configuration**
+  registry_creation_pipeline -> openshift_control_plane_namespace: Видалення ConfigMap\n**<registry_name>-notification-service-diia-channel-configuration**
+
+  == Підготовка налаштувань підключення до Дії (Secret) для реєстру ==
+  registry_creation_pipeline -> openshift_control_plane_namespace: Експорт Secret\n**<registry_name>-notification-service-diia-channel-configuration**
+  registry_creation_pipeline -> registry_creation_pipeline: Формування даних для створення Secret\n**notification-service-diia-channel-configuration**
+  registry_creation_pipeline -> openshift_registry_namespace: Створення Secret\n**notification-service-diia-channel-configuration**
+  registry_creation_pipeline -> openshift_control_plane_namespace: Видалення Secret\n**<registry_name>-notification-service-diia-channel-configuration**
+
+  == Налаштування доступу до Дії для сервісів реєстру ==
+  registry_creation_pipeline -> openshift_registry_namespace: Створення Istio ServiceEntry для зовнішнього сервісу Дія
+  note left
+    apiVersion: networking.istio.io/v1alpha3
+    kind: ServiceEntry
+    metadata:
+      name: diia-external-service
+    spec:
+      hosts:
+      - <notifications.diia.url>
+      location: MESH_EXTERNAL
+      ports:
+      - number: 443
+        name: https
+        protocol: TLS
+      resolution: DNS
+  end note
+  registry_creation_pipeline -> openshift_registry_namespace: Обмеження доступу до ServiceEntry \nзовнішнього сервісу Дія тільки для **notification-service**
+
+== Застосування налаштувань до сервісів реєстру ==
+registry_creation_pipeline -> notification_service: Рестарт сервісу **notification-service**
+notification_service -> openshift_registry_namespace: Читання ConfigMap та  Secret\n**notification-service-diia-channel-configuration**
+registry_creation_pipeline --> platform_admin
+
+deactivate registry_creation_pipeline
+
+@enduml

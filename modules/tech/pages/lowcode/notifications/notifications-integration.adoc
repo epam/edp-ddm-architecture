@@ -1,0 +1,54 @@
+= Інтеграція з сервісом повідомлень
+
+== Загальний опис підходу до інтеграції
+
+Задля запобігання блокування основного потоку виконання використовується принцип розділення публікації події про необхідність виконання операції від фактичного її виконання з використанням _publish-subscribe_ підходу, реалізованому за допомогою _Kafka_. З повним переліком, налаштуваннями та структурами об'єктів подій можна ознайомитись xref:tech:lowcode/notifications/notifications-design.adoc#_kafka_топіки_запитів_на_відправку_повідомлень_користувачам[за посиланням].
+
+[TIP]
+Для спрощення інтеграції реалізовано окрему бібліотеку _ddm-starter-notifications_, яка надає Java API для публікації запитів на відправлення повідомлень.
+
+.Приклад налаштувань сервісу для публікації подій через Kafka-топік (на прикладі використання *ddm-starter-kafka* бібліотеки)
+[source, yaml]
+----
+data-platform:
+  kafka:
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      custom-config:
+        "[enable.idempotence]": true
+    topic-properties:
+      creation:
+        enabled: true
+        timeout-in-seconds: 60
+      retention:
+        default-in-days: 7
+        num-partitions: 1
+        replication-factor: 1
+    error-handler:
+      initial-interval: 1500
+      max-elapsed-time: 6000
+      multiplier: 2
+    topics:
+      "user-notifications": "user-notifications"
+----
+
+== Приклади інтеграції згідно сценаріїв використання
+
+=== Інтеграція механізмів відправлення повідомлень у _Сервіс виконання бізнес-процесів_
+
+image::lowcode/notifications/notifications-starter.svg[]
+
+В основу рішення покладено використання Camunda-концепції _Java Delegate_ для виконання операцій по відправці повідомлень з бізнес-процесу. Спрощення досвіду моделювання реалізовано за допомогою окремих  xref:tech:lowcode/notifications/notifications-modelling.adoc#_моделювання_бізнес_процесів_з_відправленням_повідомлень_користувачам[типових розширень].
+
+[plantuml, bp-notification-flow, svg]
+----
+include::partial$lowcode/notifications/bpm/bp-notification-flow.puml[]
+----
+
+=== Інтеграція механізмів відправлення повідомлень для службового використання сервісами реєстру
+
+[plantuml, upstream-notification-flow, svg]
+----
+include::partial$lowcode/notifications/general/upstream-notification-flow.puml[]
+----

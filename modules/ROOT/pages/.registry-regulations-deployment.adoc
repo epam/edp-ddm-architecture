@@ -1,0 +1,267 @@
+== Розгортання регламенту
+Розгортання системи відбувається на підставі одного або декількох регламентів.
+
+=== Структура регламенту
+
+[plantuml]
+----
+@startsalt
+{
+{T
++ <&folder> registry-regulations-catalogue
+
+++ <&folder> bpmn
++++ <&file> process.bpmn
++++ ...
+
+++ <&folder> dmn
++++ <&file> validation-rule.dmn
++++ ...
+
+++ <&folder> forms
++++ <&file> form.json
+++++ ...
+
+++ <&folder>data-model
++++ <&folder> changeLog
++++ <&file> model.xml
++++ <&file> settings.yaml
+
+++ <&folder> reports
++++ <&file> report.json
++++ ...
+}
+}
+@endsalt
+----
+
+*bpmn* - папка з бізнес процесами +
+*dmn* - валідаційні правила +
+*forms* - користувацькі форми +
+*data-model* - папка яка влючає в себе дані для розгортання БД та API +
+*changeLog* - папка з Liquibase файлами які описують БД +
+*main.xml* - файл з якого буде створюватись БД (підключення файлів з changeLog) +
+*settings.yaml* - додаткові налаштування для розгортання моделі даних +
+*reports* - папка для шаблонів звітів
+
+=== Сценарії використання
+
+==== Створення реестру
+Розгортання системи на підставі завантаженого регламенту.
+
+==== Внесення критичних змін
+Внесення критичних змін має супруводжуватись обов'зковим збільшенням версії в її другому розряді.
+До критичних змін можна віднести будь які зміни до моделі даних та бізнес процесів.
+
+==== Внесення незначинх змін
+При внесенні навіть незначних змін версія має бути збільшена в своєму третьому розряді. Незначними змінами вважаються ті для внесення яких не потрібно рестарт сервісів.
+
+=== CI/CD
+
+image::deployment-pipeline.svg[]
+
+=== Registry regulation pipeline
+Кроки можна розділити на службові та породжуючі. Всі службові кроки - є обов'язковими для виконання. Породжуючі - кроки які відповідальні за розгортання/внесення змін до компонентів можуть бути пропущені, якщо змін вносити не треба. +
+
+[plantuml, preparation, svg]
+----
+@startuml
+title Підготовчі кроки
+skinparam monochrome true
+
+left to right direction
+
+rectangle "Checkout" as checkout
+rectangle "Зчитування змін\nу репозиторії\nреєстру" as getChanges
+rectangle "Валідація\nконфігураційних\nфайлів" as validation
+rectangle "Штатне\nвимкнення\nсервісів" as shutdown
+rectangle "Створення\nрезервної\nкопії" as backup
+rectangle "Створення\nролей БД\nдля Redash" as redashRoles
+rectangle "Створення\nсніппетів\nдля Redash" as redashSnippets
+
+checkout --> getChanges
+getChanges --> validation
+validation --> shutdown
+shutdown --> backup
+backup --> redashRoles
+redashRoles --> redashSnippets
+
+@enduml
+----
+
+[plantuml, deployment, svg]
+----
+@startuml
+title Розгортання системи
+skinparam monochrome true
+
+left to right direction
+
+
+rectangle "Розгортання\n моделі даних" as createDatafactory
+rectangle "Розгортання\n бізнес процесів" as createBpmn
+rectangle "Створення\n правил" as createDmn
+rectangle "Створення\n форм" as createForms
+rectangle "Створення\n звітів" as createReports
+rectangle "Запуск автотестів" as autotest
+
+createDatafactory --> createBpmn
+createBpmn --> createDmn
+createDmn --> createForms
+createForms --> createReports
+createReports --> autotest
+@enduml
+----
+
+[plantuml, error, svg]
+----
+@startuml
+title Обробка помилок
+skinparam monochrome true
+
+left to right direction
+
+
+rectangle "Розгортання\n моделі даних" as stepExample
+rectangle "..." as abstractStep
+rectangle "Запуск автотестів" as autotest
+rectangle "Відновлення стану\n з резервної копії" as rollback
+
+
+stepExample -[dashed]-> rollback: помилка виконання
+abstractStep -[dashed]-> rollback: помилка виконання
+autotest -[dashed]-> rollback: тести не пройшли
+@enduml
+----
+
+==== Зчитування змін у репозиторії реєстру
+Після клонування репозиторія реєстру відбувається перевірка файлів регламенту на наявність внесених змін.
+
+==== Валідація конфігураційних файлів
+Перевірка відповідності завантаженого регламенту схемам та правилам. +
+Наприклад: відповідність зміни версії до типу внесенних змін.
+
+==== Розгортання моделі даних
+Оскільки розгортання моделі даних являє собою складний процес, то його створення винесено в окремий pipeline (див. *Розгортання моделі даних та дата сервісів*)
+
+==== Автотести
+Не перевіряють логіку бізнес процесів чи комунікацію між компонентами системи. Основна задача таких тестів - перевірити чи всі компоненти стартували успішно.
+
+==== Розгортання моделі даних та дата сервісів
+[plantuml, datamodel, svg]
+----
+@startuml
+title Розгортання моделі даних
+skinparam monochrome true
+
+rectangle "Checkout" as checkout
+rectangle "Ініціалізація\nкомпонентів\nреєстру" as initRegistry
+rectangle "Створення\nсхеми БД" as createSchema
+rectangle "Створення\nпроєктів дата\nсервісів" as createProjects
+rectangle "Створення\nпайплайнів" as createPipelines
+rectangle "Клонування\nпроєктів" as cloneProjects
+rectangle "Генерування\nкоду проєктів" as generateProjects
+rectangle "Вивантаження\nкоду проєктів" as commitProjects
+rectangle "Білд коду\nпроєктів" as buildProjects
+rectangle "Деплой дата\nсервісів" as deployProjects
+
+checkout -> initRegistry
+initRegistry -> createSchema
+createSchema -> createProjects
+createProjects -> createPipelines
+createPipelines --> cloneProjects
+cloneProjects -l-> generateProjects
+generateProjects -l-> commitProjects
+commitProjects -l-> buildProjects
+buildProjects -l-> deployProjects
+@enduml
+----
+
+==== Ініціалізація компонентів реєстру
+Ініціалізація компонентів, необхідних для розгортання регламенту (Citus, Redash, Keycloak і т.д.).
+
+==== Створення схеми БД
+Встановлення схеми бази даних регламенту засобами бібліотеки Liquibase.
+
+==== Створення проєктів дата сервісів
+Створення проєктів у реєстровому Gerrit для зберігання згенерованого коду дата сервісів.
+
+==== Створення пайплайнів
+Створення пайплайнів дата сервісів у реєстровому Jenkins.
+
+==== Клонування проєктів
+Клонування проєктів із реєстрового Gerrit-а на Jenkins агент.
+
+==== Генерування коду проєктів
+Генерування коду дата сервісів у склоновані проєкти.
+
+==== Вивантаження коду проєктів
+Вивантаження згенерованого коду в реєстровий Gerrit.
+
+==== Білд коду проєктів
+Запуск білд пайплайнів дата сервісів. Результатом роботи пайплайнів є зібрані артифакти дата сервісів, що вивантажуються в реєстровий Nexus, а також Docker імеджі (що містять артифакти та всі залежності), які вивантажуються в реєстровий Nexus Docker Registry.
+
+==== Деплой дата сервісів
+Розгортання Helm charts дата сервісів у реєстровому неймспейсі засобами Helm на основі Docker імеджів, отриманих в результаті роботи білд пайплайнів.
+
+==== Видалення регламенту
+Пайплайн розгортання дата моделі, а також пайплайни розгортання дата сервісів мають відповідні Delete-release пайплайни для видалення. Запуск cleanup-job тригерить запуск цих пайплайнів. В результаті усі дата компоненти повністю видаляються, БД реєстру очищається, пайплайн розгортання реєстру (як і пайплайн розгортання дата моделі) перестворюється.
+
+[plantuml, deleteRelease, svg]
+----
+@startuml
+title Процес видалення
+skinparam monochrome true
+
+rectangle "checkout" as checkout
+rectangle "Ініціалізація\nкомпонентів\nреєстру" as initRegistry
+rectangle "Запуск\nDelete-release\nпайплайнів" as cleanupTrigger
+rectangle "Видалення\nкомпоненту\nmodel" as modelComponent
+rectangle "Видалення\nкомпоненту\nrest-api" as restComponent
+rectangle "Видалення\nкомпоненту\nkafka-api" as kafkaComponent
+rectangle "Видалення\nкомпоненту\nsoap-api" as soapComponent
+rectangle "Видалення registry-regulations" as deleteRegistryRegulations
+rectangle "Відновлення registry-regulations" as recreateRegistryRegulations
+
+checkout -> initRegistry
+initRegistry -> cleanupTrigger
+cleanupTrigger -d-> modelComponent
+cleanupTrigger -d-> restComponent
+cleanupTrigger -d-> kafkaComponent
+cleanupTrigger -d-> soapComponent
+modelComponent -d-> deleteRegistryRegulations
+restComponent -d-> deleteRegistryRegulations
+kafkaComponent -d-> deleteRegistryRegulations
+soapComponent -d-> deleteRegistryRegulations
+deleteRegistryRegulations -d-> recreateRegistryRegulations
+@enduml
+----
+
+==== Історія змін даних
+[plantuml, historyExcerptor, svg]
+----
+@startuml
+title Генерування витягів історії змін даних
+skinparam monochrome true
+
+rectangle "Ініціалізація\nкомпонентів\nреєстру" as initRegistry
+rectangle "Валідація\nвведених даних" as dataValidation
+rectangle "checkout" as checkout
+rectangle "Створення\nOpenShift job" as createExcerptorJob
+rectangle "Генерування\nвитягу" as getHistoryReport
+
+initRegistry -> dataValidation
+dataValidation -> checkout
+checkout -> createExcerptorJob
+createExcerptorJob -> getHistoryReport
+@enduml
+----
+
+==== Валідація введених даних
+Перевірка того, що введена назва таблиці існує в БД, перевірка формату введеного UUID таблиці.
+
+==== Створення OpenShift job
+Створення OpenShift job для генерування витягу на основі введених назви та UUID таблиці.
+
+==== Генерування витягу
+Створення витягу історії змін даних і прикріплення до Jenkins пайплайна лінки для можливості завантаження витягу у форматі PDF.

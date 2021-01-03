@@ -1,0 +1,204 @@
+= Права доступу до аналітичних даних
+
+:sectnums:
+:sectanchors:
+
+== Загальний опис
+Одним з елементів механізму розмежування прав доступу до даних аналітичної БД є визначення переліку представлень (**views**), доступних для кожної зі створених аналітичних ролей в бази даних.
+
+Цей перелік визначається моделювальником даних через додатковий XML-шаблон для Liquibase (_див. секцію xref:xml-templates[XML-шаблони] цього документа_).
+
+== Передумови
+Для видачі або відкликання прав запита даних із представлень для певної ролі, мають виконуватися наступні умови:
+
+* Команда має виконуватись лише на аналітичній БД (`context="sub"`).
+* Роль, для якої надається доступ, має існувати на рівні аналітичної бази даних.
+* Представлення, доступ до якого надається, має існувати на рівні аналітичної бази даних.
+
+Порушення цих передумов генеруватиме помилку.
+
+[#xml-templates]
+== XML-шаблони
+
+Наступна конструкція надаватиме право запита даних із представлень `registry_data_v` та `registry_info_v` для ролі `analytics_officer_level_1`, а також заборонятиме доступ до цих самих представлень для ролі `analytics_officer_level_2`.
+
+.Приклад XML-шаблону для зміни прав доступу для аналітичних ролей:
+[source, xml]
+----
+<changeSet author="registry owner" id="grant/revoke analytics rights" context="sub">
+    <ext:grant>
+        <ext:role name="analytics_officer_level_1">
+            <ext:view name="registry_data"/>
+            <ext:view name="registry_info"/>
+        </ext:role>
+    </ext:grant>
+    <ext:revoke>
+        <ext:role name="analytics_officer_level_2">
+            <ext:view name="registry_data"/>
+            <ext:view name="registry_info"/>
+        </ext:role>
+    </ext:revoke>
+</changeSet>
+----
+Результатом виконання зазначеного шаблону Liquibase є згенерований нижче SQL-синтаксис, що містить DCL-оператори для визначення доступу до даних.
+
+.Приклад згенерованого SQL-синтаксису для зміни прав доступу для аналітичних ролей:
+[source, xml]
+
+[source, sql]
+----
+GRANT SELECT ON registry_data_v TO analytics_officer_level_1;
+GRANT SELECT ON registry_info_v TO analytics_officer_level_1;
+
+REVOKE SELECT ON registry_data_v FROM analytics_officer_level_2;
+REVOKE SELECT ON registry_info_v FROM analytics_officer_level_2;
+----
+
+TIP: За детальною інформацією щодо створення моделі даних за допомогою шаблонів Liquibase зверніться до сторінки xref:data-modeling/data/physical-model/liquibase-changes-management-sys-ext.adoc[Створення сценаріїв побудови фізичної моделі даних реєстру за допомогою функціональних розширень Liquibase].
+
+=== Теги доступу до всіх представлень
+
+Якщо певна роль потребує доступу до всіх наявних аналітичних представлень, то за допомогою тегів `grantAll` та `revokeAll` є можливість надати та анулювати права на запит всіх даних, присутніх у представленнях репліки БД.
+
+NOTE: *[red]##_Важливо!##* Ці теги вимагають застосування атрибута `runAlways` зі значенням `"true"` (`runAlways="true"`) на рівні changeset Liquibase. Якщо задати значення `false`, то тег не спрацює, і, в результаті, повернеться помилка. Якщо не встановити жодного значення для атрибута, то буде використане значення за замовчуванням, що також призведе до помилки_.
+
+.Приклад XML-шаблону для надання прав доступу до всіх аналітичних даних:
+[source, xml]
+----
+<changeSet author="registry owner" id="grant all" context="sub" runAlways="true">
+    <ext:grantAll>
+        <ext:role name="analytics_officer_level_1"/>
+    </ext:grantAll>
+    <ext:revokeAll>
+        <ext:role name="analytics_officer_level_2"/>
+    </ext:revokeAll>
+</changeSet>
+----
+
+Така конструкція має виконати DCL-оператори надання прав запита даних по кожному з представлень, що існують в аналітичній БД, для ролі `analytics_officer_level_1` і анулювання таких прав для ролі `analytics_officer_level_2`.
+
+
+=== Налаштування розмежування доступу до звітів Redash
+
+Для розмежування доступу до звітів Redash між ролями користувачів потрібно, щоб звіти та запити, мали унікальні назви (`name`).
+
+Якщо надати доступ декільком ролям до звітів з однаковими назвами звіту або запиту, то в результаті одна з ролей переміститься до архіву і більше не буде показуватися в _redash-viewer_, а для іншої ролі звіт буде відображено.
+
+Так відбувається саме через механізм оновлення звітів:
+
+. Перед публікацією звіту знаходиться його попередня версія у базі за його назвою і архівується.
+
+. Далі публікується оновлений звіт.
+
+Пошук старого звіту проходить незалежно від ролі, для якої повинен бути опублікований новий звіт.
+
+[NOTE]
+====
+Приклад: ::
+Припустимо, що для ролі `"officer_level_1"` додається новий звіт `"registry_data"`, хоча у ролі `"officer_level_2"` звіт з такою самою назвою вже існує. То для ролі `"officer_level_2"` звіт зникне (архівується, наче, це стара версія) і публікується новий звіт для ролі `"officer_level_1"`.
+====
+
+Приклад структури каталогу звітів `reports` з розмежуванням доступів до звітів за ролями представлено нижче.
+[plantuml, structure, svg]
+----
+@startsalt
+{
+{T
+
+++= <&folder> <b>reports</b>
++++ <&folder> officer-level-1
+++++ <&folder> queries
+++++++ <&file> queries.json
++++++ <&file> test1.json
++++++ <&file> test2.json
+
++++ <&folder> officer-level-2
+++++ <&folder> queries
+++++++ <&file> queries.json
++++++ <&file> test1.json
++++++ <&file> test2.json
++++++ <&file> test3.json
+
++++ <&folder> role-3
+++++ <&folder> queries
+++++++ <&file> queries.json
++++++ <&file> test4.json
++++++ <&file> test5.json
++++++ <&file> test6.json
+
+++ <&folder> <b>roles</b>
++++ <&file> citizen.yaml
++++ <&file> officer.yaml
+}
+}
+@endsalt
+----
+
+[TIP]
+====
+* *officer-level-1, officer-level-2, role-3* -- назва ролі, що зазначена в налаштуваннях файлів `citizen`/`officer.yaml` директорії `roles`;
+
+* *test1, test2, test3* -- назва звіту Redash, де в налаштуваннях самого файлу параметр `name` містить назву звіту (в прикладі `registry_data`) та назву запиту в параметрі `query` → `name` (в прикладі `View all report registry_data`).
++
+.Приклад:
+[source, json]
+----
+{
+  "id": 3,
+  "name": "registry_data",
+  "slug": "test",
+  "created_at": "2022-07-07T10:57:27.718",
+  "updated_at": "2022-07-07T10:57:54.956",
+  "tags": [],
+  "widgets": [
+    {
+      "text": "",
+      "options": {
+        "parameterMappings": {},
+        "isHidden": false,
+        "position": {
+          "autoHeight": true,
+          "sizeX": 3,
+          "sizeY": 32,
+          "maxSizeY": 1000,
+          "maxSizeX": 6,
+          "minSizeY": 1,
+          "minSizeX": 2,
+          "col": 0,
+          "row": 0
+        }
+      },
+      "width": 1,
+      "dashboard_id": 3,
+      "visualization_id": null,
+      "visualization": {
+        "query_id": null,
+        "name": "Table",
+        "type": "TABLE",
+        "description": "",
+        "options": {},
+        "query": {
+          "id": 9,
+          "data_source_id": 1,
+          "name": "View all report registry_data",
+          "query": "select * from registry.report_koatuu_test1_v;",
+          "description": null,
+          "options": {
+            "parameters": []
+          },
+          "draft": false
+        }
+      }
+    }
+  ],
+  "options": null,
+  "is_draft": false
+}
+----
+
+* *citizen.yaml, officer.yaml* -- файли з переліком ролей для користувачів реєстру.
+====
+
+Додаткову інформацію щодо доступу до даних та розмежування прав ви можете переглянути за посиланням:
+
+* xref:registry-develop:data-modeling/reports/data-analytical-reports-creation.adoc#_доступ_до_даних_та_розмежування_прав[Доступ до даних та розмежування прав]

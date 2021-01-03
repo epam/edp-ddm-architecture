@@ -1,0 +1,99 @@
+= Розмежування прав доступу до бізнес-процесів для зовнішніх клієнтів
+
+Даний документ розширює загальний
+xref:lowcode/trembita/consumers.adoc[дизайн по роботі з зовнішніми клієнтами] в контексті автентифікації
+зовнішніх клієнтів у сервісі *bp-webservice-gateway* та розмежування прав на ініціювання бізнес-процесів
+
+== Базові принципи
+* Бізнес-процеси що можуть бути викликані зовнішнім клієнтом мають розмежування прав на ініціювання
+* Виконання авторизаційних правил на старт бізнес-процесу відбувається у Сервісі виконання бізнес-процесів
+за загальним механізмом в системі. Детальніше -- xref:lowcode/registry-authz.adoc[за посиланням].
+* Права доступу до бізнес-процесів для зовнішніх клієнтів є частиною регламенту
+* Ідентифікація зовнішнього клієнта та отримання авторизаційного токена відбувається у сервісі
+*bp-webservice-gateway*
+
+== Взаємодія компонентів системи
+На даній діаграмі зображені сценарії з реєстрації нового зовнішнього клієнта, налаштування авторизаціних
+правил та обробкою запиту з ШБО Трембіта.
+
+=== Загальний процес реєстрації зовнішнього клієнта
+
+[plantuml, trembita_auth, svg]
+----
+include::partial$lowcode/trembita/consumers-registration.puml[]
+----
+
+=== Реєстрація зовнішнього клієнта у сервісі вхідних зовнішніх інтеграцій
+
+[plantuml, trembita_auth, svg]
+----
+include::partial$lowcode/trembita/consumers-authz.puml[]
+----
+
+=== Конфігурація карти доступу
+
+* Конфігурація карти доступу налаштовується за загальними правилами визначеними в системі
+* Для налаштування використовується окремий файл *bp-auth/external-system.yaml*
+* В якості ролі могуть бути використані загальна роль *trembita-invoker* чи специфічна для сервіс
+аккаунту
+* Додатково для цієї ролі повинні бути налаштовані авторизаційні правила для викликів Фабрики Даних
+
+.Приклад файлу конфігурації карти доступу
+[source, yaml]
+----
+authorization:
+  realm: external-system
+  process_definitions:
+    - process_definition_id: add-lab # Унікальний ідентифікатор бізнес-процесу
+      roles:
+        - trembita_invoker
+    - process_definition_id: update-lab
+      roles:
+        - external-system-role-berdyansk-rtg
+----
+
+=== Конфігурація зовнішніх клієнтів для сервісу
+
+* Оновлення конфігурації для сервісу відбувається протягом проходження пайплайну публікацій змін
+* Конфігурація зовнішніх клієнтів зберігається в *OpenShift ConfigMap* з назвою _bp-webservice-gateway-consumers_
+* Згенеровані паролі для зовнішніх клієнтів зберігаються в *OpenShift Secret* з назвою
+_bp-webservice-gateway-consumers_
+* Для інтеграції ресурсів *OpenShift* у контекст застосунку використовується бібліотека
+*spring-cloud-kubernetes-config*
+* Після оновлення відповідних конфігурацій в ресурсах *OpenShift* пайплайн публікацій змін ініціює
+рестарт сервісу для отримання актуальних значень конфігурацій
+
+.Канонічний вигляд структури *OpenShift ConfigMap* _bp-webservice-gateway-consumers_
+[source, yaml]
+----
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: bp-webservice-gateway-consumers
+data:
+  application.yaml: |-
+    trembita:
+      consumers:
+        drrp: # name
+          description: Державний реєстр речових прав на нерухоме майно
+          subsystemCode: 6_MJU_DRRP_cons
+          memberClass: GOV
+          memberCode: 00015622
+        berdyansk-rtg: # name
+          description: РТГ Бердянської територіальної громади
+          subsystemCode: 63_BerdyanskRTG_cons
+          memberClass: GOV
+          memberCode: 02140805
+----
+
+.Канонічний вигляд структури *OpenShift Secret* _bp-webservice-gateway-consumers_
+[source, yaml]
+----
+kind: Secret
+apiVersion: v1
+metadata:
+  name: bp-webservice-gateway-consumers
+data:
+  trembita.consumers.drrp.keycloakClientSecret: afa87cf2-8925-47b3-a1d2-c64aaec9e319
+  trembita.consumers.berdyansk-rtg.keycloakClientSecret: 5140eb60-7fdd-44ff-8c3c-fd8060e635a4
+----

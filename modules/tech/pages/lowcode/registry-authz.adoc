@@ -1,0 +1,106 @@
+== Налаштування прав доступу до бізнес-процесів регламенту
+
+Система надає можливість налаштовувати права доступу до окремих бізнес-процесів на рівні ролей, які є доступні в регламенті.
+
+=== Структура файлів
+Карта доступу до бізнес-процесів є частиною регламенту та зберігається у директорії з назвою *bp-auth*.
+Права доступу налаштовуються окремо для кожного реалму:
+
+* *officer.yml* - для чиновників
+* *citizen.yml* - для громадян
+* *external-system.yml* - для зовнішніх клієнтів. Детальніше про ролі зовнішніх клієнтів --
+xref:lowcode/trembita/consumers.adoc[за посиланням].
+
+[NOTE]
+При моделюванні карти доступу можуть використатись як регламентні, так
+і системні ролі. Детальніше про ролі можна ознайомитися xref:lowcode/auth.adoc[за посиланням].
+
+[plantuml]
+----
+@startsalt
+{
+{T
++ <&folder> registry-regulations
+++ <&folder> bpmn
+++ <&folder> dmn
+++ ...
+
+++ <&folder> bp-auth
++++ <&file> officer.yml
++++ <&file> citizen.yml
++++ <&file> external-system.yml
+}
+}
+@endsalt
+----
+[source, yaml]
+----
+authorization:
+  realm: 'officer'
+  process_definitions:
+    - process_definition_id: 'add-lab'
+      process_name: 'Створення лабораторії'
+      process_description: 'Регламент для створення лабораторій'
+      roles:
+        - officer-first-rank
+    - process_definition_id: 'update-lab'
+      process_name: 'Оновлення даних про лабораторію'
+      process_description: 'Регламент для оновлення даних про лабораторію'
+      roles:
+        - officer-first-rank
+        - officer-second-rank
+----
+=== Опис структури елементів конфігурації
+==== Authorization
+|===
+|Назва |Схема |Коментар
+
+|*realm*
+|string
+|Реалм до якого застосовується конфігурація. Генерується при розгортанні системи, не змінюється
+
+|*process_definitions*
+|<<<Process Definition>>> array
+|Перелік описів бізнес-процесів до яких налаштовується авторизація
+|===
+
+==== Process Definition
+|===
+|Назва |Схема |Коментар
+
+|*process_definition_id*
+|string
+|Ідентифікатор опису бізнес-процесу. (Process ID у файлі bpmn відповідного бізнес-процесу)
+
+|*process_name* (_optional_)
+|string
+|Назва бізнес-процесу. Виключно для зручності читання файлу конфігурації.
+
+|*process_description* (_optional_)
+|string
+|Опис бізнес-процесу. Виключно для зручності читання файлу конфігурації.
+
+|*roles*
+|<string> array
+|Перелік ролей бізнес-процесів, які мають доступ до бізнес-процесу.
+|===
+
+=== Публікація змін
+Права доступу до бізнес-процесів підпадають під загальні правила роботи з регламентом реєстру
+в контексті відстеження та публікації змін. Тобто, у разі наявності змін до файлів доступу до
+бізнес-процесів регламенту (*bp-auth/officer.yml*, *bp-auth/citizen.yml*, *bp-auth/external-system.yml*)
+пайплайн публікації
+змін до регламенту буде запущений. В рамках виконання пайплайну крок *create-permissions-business-process* відповідає
+за публікацію змін до прав доступу. При успішному проходженні цього кроку система буде мати
+налаштування прав доступу відповідно до змісту файлів.
+
+[NOTE]
+ Для налаштування прав доступу на рівні Camunda використовується
+https://gitbud.epam.com/mdtu-ddm/low-code-platform/platform/backend/utilities/camunda-auth-cli[camunda-auth-cli].
+
+=== Діаграма послідовності публікації змін
+
+[plantuml]
+----
+include::partial$lowcode/publish-registry-authz.puml[]
+----

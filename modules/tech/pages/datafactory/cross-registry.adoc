@@ -1,0 +1,230 @@
+= Міжреєстрова взаємодія без Трембіта
+
+Задля зменшення надлишкового використання обчислювальних потужностей, зовнішнього трафіка та часу відповді при інтеграції між реєстрами без використання Трембіта.
+Виділяється три сценарії використання інтероперабельності реєстрів.
+
+* За умови що реєстри належать одному клієнту, є спорідненими (Група реєстрів)
+* Реєстри знаходяться на одній платформі належать різним клієнтам (Інтеграція на рівні платформи)
+* Інтеграція з сторонніми системами
+
+== Група реєстрів
+
+Для реєстрів, що належать до одного клієнта використовується додатково створений спільний `realm` але окремі `client` в
+Keycloak для Kong. Спільний `realm` використовується як `identity provider` для `realm`-ів реєстрів цієї групи, тобто створення користувачів, керування ролями відбувається в спільному груповому  `realm`-і, а не в  `realm`-ах окремих реєстрів. Таким чином забезпечується можливість створення спільних користувачів і таким же чином забезпечується можливість доступу до даних через API.
+Конфігурація та вибір `realm` відбувається на рівні розгортання реєстру в Control Plane через абстракцію `RegistryGroup`. Будь-який реєстр може належати тільки до однієї групи. Створений реєстр не може бути включений до групи
+
+RegistryGroup - являє собою окремий K8s ресурс який зберігає в собі комбінацію назв `realm`-ів.
+
+image::datafactory/regestry-group.svg[]
+
+== Інтеграція на рівні платформи
+
+image::datafactory/cross-platform-deployment.svg[]
+
+
+=== Загальний опис
+*Реєстр клієнт* - реєстр який використовує дані з іншого реєстру. +
+*Реєстр тримач даних* (цільовий реєстр) -  реєстр який надає доступ до даних які зберігаються у ньому.
+
+==== Інтеграція на рівні кабінетів
+Інтеграція відбувається через окремий ресурс Kong реєстру клієнта. Аутентифікація проводиться через OIDC plugin у відповідних реалмах реєстру клієнта.
+
+
+==== Інтеграція на рівні бізнес процесів
+Виклик бізнес процесу іншого реєстру можливий тільки з бізнес процесу реєстру клієнта.
+
+=== Моделювання
+
+==== Реєстр тримач даних
+Надання доступу до існуючих `searchConditions` здійснюється за допомогою тега `exposeSearchCondition` на підставі якого генерується карта доступів в Istio VirtualService-і
+
+[plantuml, dm-structure, svg]
+----
+@startsalt
+{
+{T
++ <&folder> registry-regulations
+++ <&folder> bpmn
+++ <&folder> dmn
+++ ...
+
+++ <&folder> data-model
++++ <&file> data-model.xml
++++ ...
+}
+}
+@endsalt
+----
+[source,xml]
+----
+<ext:exposeSearchCondition name="search-condition-name" trembita="true" platform="true" externalSystem="true"/>
+----
+
+Надання доступу до бізнес процесів відбувається по аналогії з xref:tech:lowcode/trembita/consumers.adoc[інтеграції з Трембіта] на підставі якої конфігурується карта доступів в Istio VirtualService-і
+
+[plantuml, bp-structure, svg]
+----
+@startsalt
+{
+{T
++ <&folder> registry-regulations
+++ <&folder> bpmn
+++ <&folder> dmn
+++ ...
+
+++ <&folder> bp-external-systems (ex.bp-trembita)
++++ <&file> platform.yml
++++ <&file> trembita.yml
++++ ...
+}
+}
+@endsalt
+----
+
+[plantuml, user-creation, svg]
+----
+skinparam monochrome true
+skinparam ParticipantPadding 50
+skinparam BoxPadding 10
+autonumber
+
+actor "Адміністратор безпеки" as admin
+
+
+
+participant "Control plain" as cp
+participant "Jenkins" as jenkins
+participant "Keycloak" as key
+participant "Hashicorp Vault\n платформи" as vault
+
+'user -> gerrit: перелік систем (їх кодів)
+'jenkins -> gerrit: pipeline публікації
+'jenkins -> jenkins: створення параметрів входу\nдля кожної системи
+'jenkins -> vault: збереження параметрів входу
+'return
+
+'key --> jenkins
+
+admin -> cp: створення користувача \nз вказанням реєстру клієнта (codebase)
+
+cp -> jenkins: запуск пайплайна
+jenkins -> key: створення сервісний акаунт \nв external realm реєстру тримачі даних
+return
+jenkins -> vault: збереження параметрів входу для сервісного акаунту
+return
+jenkins -> cp: зміна статусу користувача
+cp -> admin:
+----
+
+==== Реєстр клієнт даних
+
+
+Для побудови інтеграції необхідно на бізнес процесі або на формі кабінету зробити запит до `platform gateway`
+
+.Кабінет
+[source]
+----
+http://registry-url/api/integration/data-factory/{master-registry}/{search-condition}
+----
+registry-url - публічний URL реєстру
+
+.Бізнес процес
+[source]
+----
+http://platform-gateway/data-factory/{master-registry}/{search-condition}
+----
+platform-gateway - внутрішне DNS ім'я Platform Gateway реєстру клієнта
+
+=== Загальний flow
+
+[plantuml, flow, svg]
+----
+skinparam monochrome true
+skinparam ParticipantPadding 50
+skinparam BoxPadding 10
+autonumber
+actor "Користувач \nреєстра" as user
+box "Реєстр клієнт"
+participant "Kong API Gateway" as kong
+participant "Platform Gateway" as gate
+end box
+'box "Центральна компонента"
+'participant "Hashicorp Vault" as vault
+'end box
+box "Цільовий реєстр"
+participant "REST API\n цільового реєстру" as target
+end box
+
+user -> kong: запит з браузера користувача
+autonumber stop
+kong -> kong: перевірка сесії\nу реалмі
+autonumber resume
+kong -> gate: запит до шлюзу
+gate -> gate: створення\nзапиту до\nцільового реєстру
+autonumber stop
+gate -> target: запит до\nцільового реєстру
+
+return дані реєстру
+gate --> kong
+kong --> user
+
+----
+
+
+.1 Приклад запиту з браузера користувача
+[source]
+----
+GET /api/integration/mon-school/get-available-schools HTTP/1.2
+...
+Client: MON-CHILD
+Cookie: session=gyMTQk_shwcQxQ6WqBXtmw...
+Cookie: session2=gyMTQk_shwcQxQ6WqBXtmw...
+Cookie: session3=gyMTQk_shwcQxQ6WqBXtmw...
+...
+----
+
+
+
+.2 Приклад запиту до gateway
+[source]
+----
+GET /api/integration/mon-school/get-available-schools HTTP/1.2
+...
+Client: MON-CHILD
+x-access-token: JWT token
+...
+----
+
+
+.3 Формування запиту до цільового реєстру
+[plantuml, , svg]
+----
+skinparam monochrome true
+participant "Kong" as kong
+participant "Platform Gateway" as gate
+participant "REST API\n цільового реєстру" as rest
+participant "Keycloak" as key
+participant "Hashicorp Vault" as val
+
+kong -> gate: запит до іншого реєстру
+gate -> val:  пошук відповідного сервісного акаунту для реєстру клієнта
+alt користувача для реєстру знайдено
+return параметри входу
+else користувача не знайдено
+val --> gate: параметрів входу не знайдено
+gate --> kong: доступ заборонено
+end
+gate -> key: отримання токена відповідного сервіс акаунта
+return JWT токен
+gate -> gate: заміна access-токена
+gate -> rest: запит до дата фабрики
+return дані
+gate --> kong: відповідь з реєстру
+----
+
+.Platform Gateway
+Platform Gateway - є окремим компонентом на основі Spring Cloud Gateway з вбудованими фільтрами для динамічної підміни JWT токенів в залежності від вхідних параметрів запиту.
+
+== Інтеграція з сторонніми системами
+Створення користувача, виставлення бізнес процесів та точок інтеграції Дата Фабрики відбувається за тим самим принципом, що і для інтеграції на рівні платформи.
+Відмінність полягає в тому, що аутентифікація і ротація токенів покладається на систему, а аутентифікація запитів на Kong проводиться за допомогою JWT plugin замість OIDC plugin-a.

@@ -1,0 +1,452 @@
+= Типові інтеграційні конектори до інших реєстрів
+:toc:
+:toc-title: ЗМІСТ
+:toclevels: 5
+:sectnums:
+:sectnumlevels: 5
+:sectanchors:
+
+== Загальний опис
+
+Взаємодія з реєстрами, що знаходяться поза межами Платформи, можлива завдяки шлюзу безпечного обміну даними (ШБО) "Трембіта".
+
+ШБО "Трембіта" є захищеним інтерфейсом для електронної взаємодії між державними системами, який розгортається в межах Платформи реєстрів як сервіс і дозволяє використовувати власні ресурси для отримання інформації із зовнішніх систем.
+
+Для виклику зовнішніх сервісів через ШБО "Трембіта", на Платформі реєстрів розроблено типові інтеграційні розширення-конектори, що дозволяють комунікувати через інтерфейс ШБО із зовнішніми сервісами за протоколом SOAP.
+
+Кожний конектор є делегатом, який використовується у бізнес-процесах для отримання даних із реєстрів поза межами Платформи.
+
+WARNING: Наразі функціонування розроблених конекторів можливе лише з використанням серверів-заглушок, що імітують живе з'єднання.
+
+[CAUTION]
+====
+Щоб мати змогу використовувати розроблені на Платформі SOAP-інтеграційні конектори до зовнішніх сервісів та отримувати інформацію від інших реєстрів через ШБО "Трембіта", необхідно попередньо виконати конфігурації на рівні регламенту реєстру.
+
+За детальною інформацією зверніться до сторінки xref:registry-admin/external-integration/api-call/trembita/external-services-connection-config.adoc[].
+====
+
+== Встановлення типових розширень-конекторів
+
+Налаштування розширень-конекторів відбувається у застосунку **Camunda Modeler**. Перед початком роботи переконайтеся, що виконано всі передумови, описані у розділі xref:registry-develop:bp-modeling/bp/bp-element-templates-installation-configuration.adoc#business-process-modeler-extensions-installation[Встановлення каталогу типових розширень до бізнес-процесів].
+
+[#edr]
+== Розширення-конектори для отримання даних з ЄДР
+
+Для спрощення моделювання бізнес-процесів розроблені типові інтеграційні конектори для отримання інформації з ЄДРfootnote:[**ЄДР** -- Єдиний державний реєстр юридичних осіб, фізичних осіб-підприємців та громадських формувань.], налаштування яких відбувається на схемах бізнес-процесів у додатку **Camunda Modeler**.
+
+Наразі імплементовано 2 типи конекторів для отримання даних із ЄДР: ::
+
+. Інтеграційний конектор `searchSubject` -- призначений для отримання інформації про суб'єкт за кодом ЄДРПОУ або РНОКПП (раніше -- ІПН).
+. Інтеграційний конектор `subjectDetails` -- призначений для отримання деталізованої інформації про суб'єкт за ID.
+
+=== Отримання інформації за суб'єктом в ЄДР
+
+Розширення *Search Subjects Edr Registry* -- делегат для виклику зовнішнього SOAP-сервісу для отримання даних Свідоцтва про народження за вказаними серією і номером Свідоцтва, та датою народження, який налаштовується за допомогою розробленого однойменного шаблону *Search Subjects Edr Registry* (_searchSubjectsEdrRegistryConnectorDelegate.json_).
+
+[WARNING]
+====
+Передумови ::
+
+Перед налаштуванням шаблону в Сamunda Modeler переконайтеся, що папка із застосунком _resources_ -> _element-templates_ містить файл _searchSubjectsEdrRegistryConnectorDelegate.json_.
+====
+
+. Відкрийте **Service Task**.
+. На панелі налаштувань справа натисніть `Open Catalog` та оберіть шаблон *Search Subjects Edr Registry* зі списку.
++
+image:registry-develop:bp-modeling/ext-integration/connectors/edr/element-template-settings-01.png[]
+. Налаштуйте обраний шаблон:
+
+* У полі `Name` вкажіть назву задачі. Наприклад, `Пошук інформації за суб'єктом в ЄДР`
+* У полі `Authorization token` зазначте токен для доступу до СЕВ ДЕІР "Трембіта". Наприклад, `{token}`.
++
+NOTE: `Authorization token` надається постачальником сервісу (в нашому випадку -- ЄДР), який є іншим учасником СЕВ ДЕІР "Трембіта".
+
+* У полі `Code` введіть код (ЄДРПОУ або РНОКПП) для пошуку в ЄДР. Наприклад, `88888888`.
+* У полі `Result variable` зазначте назву вихідного параметру, до якого буде записано відповідь від сервісу. Наприклад, `response`.
+
++
+image:registry-develop:bp-modeling/ext-integration/connectors/edr/element-template-settings-1.png[]
+
+=== Отримання деталізованої інформації за суб'єктом в ЄДР
+
+Розширення *Get Subject Detail Edr Registry* -- делегат для виклику зовнішнього SOAP-сервісу для отримання даних Свідоцтва про народження за вказаними серією і номером Свідоцтва, та датою народження, який налаштовується за допомогою розробленого однойменного шаблону *Get Subject Detail Edr Registry* (subjectDetailEdrRegistryConnectorDelegate.json_).
+
+[WARNING]
+====
+Передумови ::
+
+Перед налаштуванням шаблону в Сamunda Modeler переконайтеся, що папка із застосунком _resources_ -> _element-templates_ містить файл _subjectDetailEdrRegistryConnectorDelegate.json_.
+====
+
+. Відкрийте **Service Task**.
+. На панелі налаштувань справа натисніть `Open Catalog` та оберіть шаблон *Get Subject Detail Edr Registry* зі списку.
++
+image:registry-develop:bp-modeling/ext-integration/connectors/edr/element-template-settings-02.png[]
+
+. Налаштуйте обраний шаблон:
+
+* У полі `Name` вкажіть назву задачі. Наприклад, `Пошук деталізованої інформації за суб'єктом в ЄДР`.
+* У полі `Authorization token` зазначте токен для доступу до СЕВ ДЕІР "Трембіта". Наприклад, `{token}`.
++
+NOTE: `Authorization token` надається постачальником сервісу (в нашому випадку -- ЄДР), який є іншим учасником СЕВ ДЕІР "Трембіта".
+
+* У полі `Id` зазначте унікальний ідентифікатор суб'єкта для пошуку в ЄДР. Наприклад, `{subject_id}`.
+* У полі `Result variable` зазначте назву вихідного параметру, до якого буде записано відповідь від сервісу. Наприклад, `response`.
+
++
+image:registry-develop:bp-modeling/ext-integration/connectors/edr/element-template-settings-2.png[]
+
+=== Приклади використання у бізнес-процесі
+
+Розглянемо ситуацію, коли у бізнес-процесі необхідно перевірити статус суб'єкта в ЄДР.
+
+Для цього у процесі необхідно налаштувати інтеграційний конектор для пошуку суб'єкта з ЄДР (в нашому випадку відповідь буде записано до змінної `responseEDR`).
+
+image:registry-develop:bp-modeling/ext-integration/connectors/edr/element-template-settings-3.png[]
+
+.Приклад відповіді від сервісу
+====
+[source,json]
+----
+    {
+    "name": "active user",
+    "code": "77777777",
+    "id": 213123,
+    "state": "ACTIVE"
+    }
+----
+
+Відповідь містить параметр `state`, що має значення `"ACTIVE"`.
+Далі на шлюзі відбувається перевірка:
+
+NOTE: Якщо `state` має значення `SUSPENDED` або `CANCELLED`, то бізнес-процес видає валідаційну помилку.
+====
+
+.Приклад налаштування гілки
+====
+----
+${responseEdr.value.responseBody.elements().get(0).prop('state').value().equals('SUSPENDED') || responseEdr.responseBody.elements().get(0).prop('state').value().equals('CANCELED')}
+----
+
+image:registry-develop:bp-modeling/ext-integration/connectors/edr/element-template-settings-4.png[]
+
+NOTE: Якщо `state` не дорівнює `SUSPENDED` або `CANCELLED`, то відбудеться подальше виконання процесу.
+====
+
+.Приклад налаштування гілки
+====
+----
+${!responseEdr.value.responseBody.elements().get(0).prop('state').value().equals('SUSPENDED') && !responseEdr.value.responseBody.elements().get(0).prop('state').value().equals('CANCELED')}
+----
+
+image:registry-develop:bp-modeling/ext-integration/connectors/edr/element-template-settings-5.png[]
+====
+
+[#extension-conectory_for_retrieving_data_from_DRACS]
+== Розширення-конектори для отримання даних із ДРАЦС
+
+Для спрощення моделювання бізнес-процесів розроблено типові інтеграційні конектори для отримання інформації із ДРАЦСfootnote:[*ДРАЦС* -- Державна реєстрація актів цивільного стану.], налаштування яких відбувається на схемах бізнес-процесів у додатку **Camunda Modeler**.
+
+Наразі імплементовано 2 типи конекторів для отримання даних із ДРАЦС: ::
+
+. Типове інтеграційне розширення-конектор до SOAP-сервісу ДРАЦС для отримання даних Свідоцтва про народження за вказаними серією і номером Свідоцтва, та датою народження -- `GetCertByNumRoleBirthDate`.
+
+. Типове інтеграційне розширення-конектор до SOAP-сервісу ДРАЦС для отримання даних Свідоцтва про народження за вказаними серією і номером Свідоцтва, та ПІБ -- `GetCertByNumRoleNames`.
+
+=== Отримання даних Свідоцтва про народження за вказаними серією і номером Свідоцтва, та датою народження
+
+Розширення *Get Certificate By Birthdate* -- делегат для виклику зовнішнього SOAP-сервісу для отримання даних Свідоцтва про народження за вказаними серією і номером Свідоцтва, та датою народження, який налаштовується за допомогою розробленого однойменного шаблону *Get Certificate By Birthdate* (_getCertificateByBirthdateDracsRegistryDelegate.json_).
+
+[WARNING]
+====
+Передумови ::
+
+Перед налаштуванням шаблону в Сamunda Modeler переконайтеся, що папка із застосунком _resources_ -> _element-templates_ містить файл _getCertificateByBirthdateDracsRegistryDelegate.json_.
+====
+
+. Відкрийте **Service Task**.
+. На панелі налаштувань справа натисніть `Open Catalog` та оберіть шаблон *Get Certificate By Birthdate* зі списку.
++
+image:bp-modeling/ext-integration/connectors/dracs/get-certificate-dracs-1.png[]
+. Налаштуйте обраний шаблон:
+* У полі `Name` вкажіть назву задачі. Це може бути призначення сервісної задачі. Наприклад, `Отримати дані зі Свідоцтва про народження`.
+* У полі `Certificate Number` вкажіть номер сертифіката. Наприклад, `218727`.
+* У полі `Certificate Serial` вкажіть серію сертифіката. Наприклад, `IV-AM`.
++
+TIP: Актуальний формат номера свідоцтва та серію можна перевірити за https://minjust.gov.ua/dep/ddr/svidotstva-pro-narodjennya[посиланням].
+* У полі `Role` вкажіть роль `CHILD`.
++
+NOTE: Наразі Платформа реєстрів підтримує отримання даних виключно для ролі `CHILD`. Тобто із сервісу ДРАЦС можна отримати виключно дані дитини із сертифіката Свідоцтва про народження. Всі інші передбачені ДРАЦС ролі не підтримуються.
+* У полі `Birth Year` введіть рік народження дитини. Наприклад, `2021`.
+* У полі `Birth Month` вкажіть місяць народження дитини. Наприклад, `10`.
+* У полі `Birth Day` вкажіть день народження дитини. Наприклад, `21`.
+* У полі `Result variable` вкажіть результівну змінну, до якої необхідно записати відповідь від сервісу -- `response`.
++
+TIP: Приклад відповіді можна подивитися у розділі xref:#dracs-api-implementation[]
++
+
+image:bp-modeling/ext-integration/connectors/dracs/get-certificate-dracs-3.png[]
+
+=== Отримання даних Свідоцтва про народження за вказаними серією і номером Свідоцтва, та ПІБ
+
+Розширення *Get Certificate By Name* -- делегат для виклику зовнішнього SOAP-сервісу для отримання даних за вказаними серією і номером Свідоцтва, та ПІБ, який налаштовується за допомогою розробленого однойменного шаблону *Get Certificate By Name* (_getCertificateByNameDracsRegistryDelegate.json_).
+
+[WARNING]
+====
+Передумови ::
+
+Перед налаштуванням шаблону в Сamunda Modeler переконайтеся, що папка із застосунком _resources_ -> _element-templates_ містить файл _getCertificateByNameDracsRegistryDelegate.json_.
+====
+
+. Відкрийте **Service Task**.
+. На панелі налаштувань справа натисніть `Open Catalog` та оберіть шаблон *Get Certificate By Name* зі списку.
++
+image:bp-modeling/ext-integration/connectors/dracs/get-certificate-dracs-2.png[]
+. Налаштуйте обраний шаблон:
+* У полі `Name` вкажіть назву задачі. Це може бути призначення сервісної задачі. Наприклад, `Отримати дані зі Свідоцтва про народження`.
+* У полі `Certificate Number` вкажіть номер сертифіката. Наприклад, `218727`.
+* У полі `Certificate Serial` вкажіть серію сертифіката. Наприклад, `IV-AM`.
++
+TIP: Актуальний формат номера свідоцтва та серію можна перевірити за https://minjust.gov.ua/dep/ddr/svidotstva-pro-narodjennya[посиланням].
+* У полі `Role` вкажіть роль `CHILD`.
++
+NOTE: Наразі Платформа реєстрів підтримує отримання даних виключно для ролі `CHILD`. Тобто із сервісу ДРАЦС можна отримати виключно дані дитини із сертифіката Свідоцтва про народження. Всі інші передбачені ДРАЦС ролі не підтримуються.
+* У полі `Name` введіть ім'я дитини. Наприклад, `Павло`.
+* У полі `Surname` прізвище дитини. Наприклад, `Сидоренко`.
+* У полі `Patronymic` по батькові дитини. Наприклад, `Іванович`.
+* У полі `Result variable` вкажіть результівну змінну, до якої необхідно записати відповідь від сервісу -- `response`.
++
+TIP: Приклад відповіді можна подивитися у розділі xref:#dracs-api-implementation[]
++
+image:bp-modeling/ext-integration/connectors/dracs/get-certificate-dracs-4.png[]
+
+[#dracs-api-implementation]
+=== Імплементація на рівні API
+
+При налаштуванні шаблонів делегата у бізнес-процесі, делегати формують запити у форматі XML і за протоколом SOAP надсилають їх відповідним сервісам ДРАЦС.
+
+.Приклад SOAP-запита до API-сервісу GetCertByNumRoleBirthDate згідно з контрактом
+[%collapsible]
+====
+[source,xml]
+----
+<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">
+  <s:Header>
+    ...
+  </s:Header>
+  <s:Body xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+    <CeServiceRequest xmlns="http://tempuri.org/">
+      <ByParam>3</ByParam>
+      <CertNumber>218727</CertNumber>
+      <CertSerial>IV-AM</CertSerial>
+      <DateBirth>2021-21-10T00:00:00</DateBirth>
+      <Name xsi:nil="true" />
+      <Patronymic xsi:nil="true" />
+      <Role>1</Role>
+      <Surname xsi:nil="true" />
+    </CeServiceRequest>
+  </s:Body>
+</s:Envelope>
+
+----
+====
+
+.Приклад SOAP-запита до API-сервісу GetCertByNumRoleNames згідно з контрактом
+[%collapsible]
+====
+[source,xml]
+----
+<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">
+  <s:Header>
+    ...
+  </s:Header>
+  <s:Body xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+    <CeServiceRequest xmlns="http://tempuri.org/">
+      <ByParam>4</ByParam>
+      <CertNumber>218727</CertNumber>
+      <CertSerial>IV-AM</CertSerial>
+      <DateBirth xsi:nil="true" />
+      <Name>Павло</Name>
+      <Patronymic>Іванович</Patronymic>
+      <Role>1</Role>
+      <Surname>Сидоренко</Surname>
+    </CeServiceRequest>
+  </s:Body>
+</s:Envelope>
+
+----
+====
+
+.Приклад відповіді від API згідно з контрактом для обох сервісів ДРАЦС
+[%collapsible]
+====
+[source,json]
+----
+{
+   "certificate":[
+      {
+         "certStatus":1,
+         "certRepeat":0,
+         "certSerial":"IV-AM",
+         "certNumber":"218727",
+         "certSerialNumber":null,
+         "certOrg":null,
+         "certDate":null,
+         "arOrg":null,
+         "arNumb":null,
+         "arComposeDate":null,
+         "childSurname":"Сидоренко",
+         "childName":"Павло",
+         "childPatronymic":"Іванович",
+         "childBirthdate":null,
+         "fatherSurname":null,
+         "fatherName":null,
+         "fatherPatronymic":null,
+         "fatherCitizenship":null,
+         "fatherCitizenshipAnother":null,
+         "motherSurname":null,
+         "motherName":null,
+         "motherPatronymic":null,
+         "motherCitizenship":null,
+         "motherCitizenshipAnother":null,
+         "oldSurname":null,
+         "oldName":null,
+         "oldPatronymic":null,
+         "newSurname":null,
+         "newName":null,
+         "newPatronymic":null,
+         "dateOfBirth":null,
+         "placeofBirth":null,
+         "husbandOldSurname":null,
+         "husbandSurname":null,
+         "husbandName":null,
+         "husbandPatronymic":null,
+         "husbandCitizenship":null,
+         "husbandBirthdate":null,
+         "husbandPlaceofBirth":null,
+         "wifeOldSurname":null,
+         "wifeSurname":null,
+         "wifeName":null,
+         "wifePatronymic":null,
+         "wifeCitizenship":null,
+         "wifeBirthdate":null,
+         "wifePlaceOfBirth":null
+      }
+   ]
+}
+----
+NOTE: Параметри зі значенням `null` не використовуються.
+====
+
+== Розширення-конектор для отримання даних з ЄІБДВПО
+
+Для спрощення моделювання бізнес-процесів розроблено типовий інтеграційний конектор для обміну інформацією з ЄІБДВПОfootnote:[**ЄІБДВПО** -- Єдиній інформаційній базі даних про внутрішньо переміщених осіб.], налаштування якого відбувається на схемах бізнес-процесів у додатку *Camunda Modeler*.
+
+_Наразі імплементовано 1 тип конектора для обміну даними з ЄІБДВПО:_
+
+* Типове інтеграційне розширення-конектор до SOAP-сервісу ЄІБДВПО для отримання інформації за довідкою внутрішньо перміщеної особи -- `idpExchangeServiceRegistryConnector`.
+
+=== Отримання інформації за довідкою внутрішньо перміщеної особи (ВПО)
+
+Розширення *Idp Exchange Service Registry Connector* -- делегат для виклику зовнішнього SOAP-сервісу для отримання даних за довідкою внутрішньо перміщеної особи (ВПО), який налаштовується за допомогою розробленого однойменного шаблону *Idp Exchange Service Registry Connector* (_idpExchangeServiceRegistryConnector.json_).
+
+[WARNING]
+====
+Передумови ::
+
+Перед налаштуванням шаблону в Сamunda Modeler переконайтеся, що папка із застосунком _resources_ -> _element-templates_ містить файл _idpExchangeServiceRegistryConnector.json_.
+====
+
+. Відкрийте Service Task.
+
+. На панелі налаштувань справа натисніть Open Catalog та оберіть шаблон *Idp Exchange Service Registry Connector* зі списку.
+
++
+image:registry-develop:bp-modeling/ext-integration/connectors/eibdvpo/get-vpo-eibdvpo-01.png[]
+
+. Налаштуйте обраний шаблон:
+
+* У полі `Name` вкажіть назву задачі. Це може бути призначення сервісної задачі. Наприклад, `Idp Exchange Service Registry`.
+* У полі `Url` вкажіть шлях до сервісу. Наприклад, `/idp/getCertificateByGUID/${submission('FORM_IDP_INPUT').formData.prop('uid').value()}`.
+* У полі `Metgod` вкажіть HTTP-спосіб взаємодії з сервісом `GET` або `POST`.
+* У полі `Body`, у разі використання методу `POST`, вкажіть тіло запиту. Наприклад, `${submission('FORM_IDP_INPUT').formData}`.
+* У полі `Result variable` вкажіть результівну змінну, до якої необхідно записати відповідь від сервісу -- `response`.
+
++
+image:registry-develop:bp-modeling/ext-integration/connectors/eibdvpo/get-vpo-eibdvpo-02.png[]
+
+=== Імплементація на рівні API
+
+При налаштуванні шаблонів делегата у бізнес-процесі, делегати формують запити у форматі XML і за протоколом SOAP надсилають їх відповідним сервісам ЄІБДВПО.
+
+.Приклад SOAP-запита до API-сервісу IDPexchangeService згідно з контрактом:
+[%collapsible]
+====
+* запит за РНОКПП:
++
+[source, json]
+----
+{
+"method": "GET",
+"url": "/idp/getCertificateByRNOKPP/3333333333",
+"body": null
+}
+----
+* запит за UID (унікальний ідентифікатор довідки в реєстрі ВПО):
++
+[source, json]
+----
+{
+"method": "GET",
+"url": "/idp/getCertificateByGUID/79cefcce20028d82fc1d6dda6a498da2",
+"body": null
+}
+----
+====
+
+.Приклад відповіді від API-сервісу IDPexchangeService згідно з контрактом:
+[%collapsible]
+====
+[source, json]
+----
+{
+  "person": {
+    "idpSurname": "ІВАНОВ",
+    "idpName": "ІВАН",
+    "idpPatronymic": "ІВАНОВИЧ",
+    "birthDate": "01.01.1979 00.00.00.000",
+    "birthPlace": "хутір Ізбушенка, Луганської області",
+    "RNOKPP": "3333333333",
+    "gender": "Жінка",
+    "documentType": "1",
+    "documentSerie": "ЕК",
+    "documentNumber": "633666",
+    "documentDate": "13.11.1997 00.00.00.000",
+    "documentIssuer": "Артемівським РВЛМУУМВС укр. в Луг. обл.",
+    "regAddress": "ЛУГАНСЬКА ОБЛАСТЬ/М.ЛУГАНСЬК ЛУГАНСЬК ВУЛ.ПОГРАНИЧНА буд.0",
+    "factAddress": "М.БАХМУТ ДОНЕЦЬКА ОБЛ. ВУЛ. МИРУ буд. 00 кв. 00",
+    "certificateNumber": "1419-69164",
+    "certificateDate": "02.09.2015 00.00.00.000",
+    "certificateIssuer": "М.БАХМУТ ДОНЕЦЬКА ОБЛ.",
+    "certificateState": "знята з обліку",
+    "UID": "f895ad5fbbe66605979afb7e18847c1b"
+  },
+  "accompanied": []
+}
+----
+====
+
+[TIP]
+====
+У разі необхідності використання окремого параметру(наприклад, idpSurname) при моделюванні бізнес-процесу, можливе використання наступного скрипту:
+[source, groovy]
+----
+def serviceResponse = response.responseBody.elements().get(0)
+serviceResponse.prop('person').prop('idpSurname')
+
+
+accompanied.each{
+    it ...
+}
+----
+====

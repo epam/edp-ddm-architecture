@@ -1,0 +1,80 @@
+= Формування витягів
+
+== Контекст
+
+image::datafactory/excerpt-context.drawio.svg[]
+
+== Структури даних
+
+=== Структури БД
+
+*excerpt_template* - таблиця заповнюється шаблонами витягів на етапі розгортання регламенту, у разі співпадіння імен та не співпадіння контрольної суми  оновлюється тіло шаблону. +
+*excerpt_record* - таблиця записів генерації витягів та статусу. +
+
+[plantuml]
+----
+@startuml Структура даних
+skinparam Monochrome true
+
+
+map "excerpt_template" as templates {
+    id => [UUID] ідентифікатор запиту
+    template_name => [String] назва шаблону
+    template => [String] текст шаблону
+    creted_at => [Timestamp] створено запит
+    updated_at => [Timestamp] оновлений запит
+    checksum => [String] контрольна сума шаблону витягу
+
+}
+
+map "excerpt_record" as record {
+    id => [UUID] ідентифікатор запиту
+    status => [String] статус генерації витягу
+    status_details => [String] Деталі у разі помилки
+    keycloak_id => [String] ідентифікатор користувача
+    checksum => [String] чексума витягу
+    excerpt_key => [String] ключ від Ceph
+    created_at => [Timestamp] створено запит
+    updated_at => [Timestamp] оновлений запит
+    signature_required => [Boolean] чи потрібно накладати системний підпис
+    x-source-system  => [String] значення заголовків
+    x-source-application => [String] значення заголовків
+    x-source-business-process => [String] значення заголовків
+    x-source-business-activity => [String] значення заголовків
+}
+@enduml
+----
+=== Користувачі БД
+
+*excerpt_service_user* - має право на створення записів у таблиці excerpt_record. +
+*excerpt_worker_user* - право на оновлення та вибірку записів в таблиці excerpt_record. +
+
+=== Структура події генерації витягу
+[plantuml]
+----
+@startuml Структура даних
+skinparam Monochrome true
+
+map "Event" as event {
+    record_id => [UUID] ідентифікатор запису
+    excerpt_data => [json] дані які використовуються для заповнення витягу
+    excerpt_name => [String] назва шаблону
+}
+@enduml
+----
+== Сервіси
+=== Excerpt Service
+Надає інтерфейси має три основні ендпоінти для взаємодії:
+
+*Доступні з бізнес процесів*
+
+- запис на створення витягу
+- перевірка статусу витягу
+
+*Доступні ззовні через Kong*
+
+- отримання витягу по ідентифікатору
+
+=== Excerpt Worker
+
+Java додаток який забезпечує  Exactly-Once обробку подій на генерацію витягів та зберігання їх в Ceph бакет.

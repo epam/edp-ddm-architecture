@@ -1,0 +1,162 @@
+:toc-title: ЗМІСТ
+:toc: auto
+:toclevels: 5
+:experimental:
+:important-caption:     ВАЖЛИВО
+:note-caption:          ПРИМІТКА
+:tip-caption:           ПІДКАЗКА
+:warning-caption:       ПОПЕРЕДЖЕННЯ
+:caution-caption:       УВАГА
+:example-caption:           Приклад
+:figure-caption:            Зображення
+:table-caption:             Таблиця
+:appendix-caption:          Додаток
+:sectnums:
+:sectnumlevels: 5
+:sectanchors:
+:sectlinks:
+:partnums:
+
+= Відправка повідомлень користувачам через електронну пошту
+
+== Передумови
+
+Наразі платформа підтримує відправлення електронних повідомлень з використанням SMTP-протоколу для комунікації та однієї з наступних опцій налаштувань поштового сервера, залежно від вимог реєстру:
+
+* Поштовий сервер платформи;
+* Зовнішній поштовий сервер.
+
+Попередньо необхідно виконати налаштування каналів зв'язку для відправки повідомлень користувачам реєстру.
+
+[NOTE]
+====
+Детальну інформацію щодо налаштування відправки повідомлень можна отримати за посиланнями:
+
+* xref:registry-develop:registry-admin/config-smtp-server.adoc[]
+* xref:admin:installation/internal-smtp-server-setup.adoc[]
+====
+
+Відправка повідомлень системою можлива лише зареєстрованим користувачам.
+
+== Налаштування шаблону повідомлення
+
+Для реалізаціії функціональності відправки email-повідомлень користувачам кабінету через електронну пошту, необхідно створити шаблон повідомлення, що буде використовуватися при моделюванні бізнес-процесу.
+
+Шаблон повідомлення необхідно створити у розмітці HTML за допомогою технології шаблонізації Apache FreeMarker (розширення файлів _.ftlh_ та _.ftl_ для HTML та текстових документів відповідно).
+
+[NOTE]
+====
+Детальну інформацію щодо Apache FreeMarker можливо отримати за посиланням:
+
+* https://freemarker.apache.org/
+====
+
+Для забезпечення вимог щодо підтримки відправлення повідомлень користувачам, структуру регламенту розширено додатковою директорією _<registry-regulation>/notifications_. Типовий шаблон поштового повідомлення має наступну структуру:
+
+[plantuml, email-notification-structure, svg]
+----
+@startsalt
+{
+{T
++ <&folder> registry-regulation
+++ ...
+++ <&folder> notifications
++++ <&folder> email
+++++ <&folder> <b><template-directory></b>
++++++ <&folder> css
+++++++ <&file> style.css
++++++ <&folder> images
+++++++ <&file> image.jpg
+++++++ <&file> ...
++++++ <&file> notification.ftlh
+++++ ...
+}
+}
+@endsalt
+----
+
+- _``<template-directory>``_ -- директорія з ресурсами шаблону, яка має унікальне ім'я для заданого каналу зв'язку;
+
+- _``<template-directory>/css/style.css``_ -- "єдиний CSS-файл стилів, які використовуються в HTML-документі (Приклад: _<link rel="stylesheet" href="css/style.css">_);
+
+- _``<template-directory>/images/*.*``_ -- перелік файлів зображень, які використовуються в HTML-документі (Приклад: _<img src="images/image.jpg">_);
+
+- _``<template-directory>/notification.ftlh``_ -- HTML-документ шаблону для подальшої генерації тіла повідомлення.
+
+image:registry-develop:registry-admin/e-mail-notification/e-mail-notification-01.png[]
+
+//Шаблон має відповідати загальній стилізації реалізованих кабінетів користувачів Платформи та стайл-гайдів додатку "Дія".
+
+== Моделювання бізнес-процесів
+
+Розглядаються два основних сценарії моделювання відправки повідомлень у межах моделювання бізнес-процесів:
+
+* xref:#send-user-notification[відправка повідомлень одному користувачу];
+* xref:#send-many-user-notifications[відправка повідомлень багатьом користувачам].
+
+[#send-user-notification]
+=== Відправлення повідомлень одному користувачу
+
+Для моделювання бізнес-процесу використовується типове розширення для задач на відправлення повідомлення (Send Task) -- *Send User Notification*.
+
+Розширення *Send User Notification* -- делегат для відправлення повідомлень отримувачам послуг електронною поштою, з використанням заданого шаблону в HTML-вигляді.
+
+[NOTE]
+====
+Перед налаштуванням шаблону в Сamunda Modeler переконайтеся, що папка із застосунком _resources → element-templates_ містить _sendUserNotification.json_
+====
+
+Для налаштування шаблону виконайте наступні кроки:
+
+. Створіть *Send Task*.
++
+image:registry-develop:registry-admin/e-mail-notification/e-mail-notification-02.png[]
+
+. На панелі налаштувань справа натисніть кнопку `Open Catalog` та оберіть шаблон (template) делегата -- *Send User Notification*. Для підтвердження натисніть `Apply`.
++
+image:registry-develop:registry-admin/e-mail-notification/e-mail-notification-03.png[]
+
+. Виконайте подальші налаштування:
+
+* У полі `name` вкажіть назву задачі (наприклад, `Відправка email користувачу`).
+
+* У полі `Recipient` вкажіть унікальний ідентифікатор -- `<username>` отримувача повідомлення (наприклад, `${initiator().userName}`).
+
+* У полі `Subject` вкажіть текстову назву теми повідомлення (наприклад, `Email successfully generated`).
+
+* У полі `Notification message template` -- вкажіть унікальну назву _FreeMarker_-шаблону для формування тіла повідомлення, яка відповідає назві директорії шаблону відповідно до структури _<registry-regulation>/notifications/<channel>/<template_name>/*.*_ (наприклад, `add-lab-template`).
+
+* У полі `Notification template model` -- вкажіть набір даних для генерації тіла повідомлення на базі шаблону (наприклад, `${templateModel}`).
+
+[#send-many-user-notifications]
+=== Відправка повідомлень багатьом користувачам
+
+Для відправлення повідомлень багатьом користувачам моделювання бізнес-процесу відбувається за аналогією з xref:#send-user-notification[моделюванням бізнес-процесу відправки повідомлення одному користувачу], за виключенням використання функції мультиекземпляра (Multi Instance). Ця функція дозволяє виконати одночасне відправлення повідомлень усім зазначеним користувачам із масиву.
+
+image:registry-develop:registry-admin/e-mail-notification/e-mail-notification-07.png[]
+
+* у полу `Collection` -- вказується масив користувачів;
+* у полі `Element Variable` -- зазначається локальна змінна екземпляра під заданим іменем.
+
+Процес відправки повідомлення не блокує основний потік виконання бізнес-процесу та виконується асинхронно.
+
+[NOTE]
+====
+Детальніше ознайомитися з функцією Multi Instance ви можете за посиланням:
+
+* https://docs.camunda.io/docs/0.26/reference/bpmn-workflows/multi-instance/[Multi-Instance]
+====
+
+
+=== Пов'язані делегати для отримання користувачів
+
+З метою отримання списку користувачів (отримувачів послуг) для відправки їм повідомлень, доступне типове розширення для сервісних задач:
+
+* Делегат `getCitizenUsersByAttributesFromKeycloak` -- використовується для пошуку користувачів Кабінету отримувачів послуг у Keycloak за їх атрибутами.
+
+[NOTE]
+====
+Детальну інформацію щодо налаштування делегата можна отримати за посиланням:
+
+* xref:registry-develop:bp-modeling/bp/bp-element-templates-installation-configuration.adoc#get-citizen-users-by-attributes-from-keycloak[Пошук отримувачів послуг у Keycloak за їх атрибутами]
+====

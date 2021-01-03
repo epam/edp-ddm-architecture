@@ -1,0 +1,812 @@
+= Перелік розширених тегів Liquibase
+//Розширення функціональності Liquibase через зовнішній модуль Liquibase DDM Extension
+:toc:
+:toc-title: ЗМІСТ
+:toclevels: 5
+:sectnums:
+:sectnumlevels: 5
+:sectanchors:
+
+== Загальний опис
+
+Через складні вимоги до архітектури Платформи, використання стандартної функціональності Liquibase не покриває всі потреби при роботі зі структурою даних.
+
+Функціональність Liquibase було розширено за допомогою зовнішнього модуля `**liquibase-ddm-ext**`.
+
+До розширення функціональності додатку Liquibase відносяться модулі, які забезпечують роботу з додатковими тегами (в термінології Liquibase -- _change types_) XML-шаблону Liquibase, що відповідають за:
+
+- xref:#createTable[створення таблиць з підтримкою історичності даних];
+- xref:#createDomain [створення/видалення користувацьких даних (Domain)];
+- xref:#ENUM[створення/видалення користувацьких типів даних (Type)];
+- xref:#createSimpleSearchCondition[створення/видалення простого критерію пошуку (Simple Search Condition)];
+- xref:#createSearchCondition[створення/видалення критерію пошуку (Search Condition)];
+- xref:#createMany2Many[створення типу зв'язку "багато до багатьох" (many-to-many)];
+- xref:#createAnalyticsView[створення аналітичного представлення на репліці (Analytics View)];
+- xref:#createCompositeEntity[збереження декількох сутностей в рамках однієї транзакції (Composite Entity)];
+- xref:#partialUpdate[генерація ендпоінтів для зміни окремих частин сутності (partial Update)];
+- xref:#grantAll[видача/видалення прав ролі ена всі аналітичні представлення (grantAll/revokeAll)].
+
+
+TIP: Для прикладу, повний перелік розширених тегів з їх параметрами зберігається в
+xsd-схемі за https://nexus.apps.envone.dev.registry.eua.gov.ua/nexus/repository/extensions/com/epam/digital/data/platform/liquibase-ext-schema/1.5.0-SNAPSHOT.74/liquibase-ext-schema-1.5.0-SNAPSHOT.74.xsd[посиланням].
+
+[#createTable]
+== Теги створення таблиць
+
+Назва change type: `<createTable>` `<ext:historyFlag>` ::
+
+Цей тег надає можливість створити таблицю або дві таблиці:
+
+- з історичними даними;
+- із поточними даними.
+
+._Приклад XML-схеми_
+[%collapsible]
+====
+[source, XML]
+----
+<createTable tableName="pd_subject_role" ext:historyFlag="true">
+    <column name="role_id" type="BIGINT">
+        <constraints nullable="false" primaryKey="true" primaryKeyName="pk_pd_subject_role"/>
+    </column>
+    <column name="role_name" type="TEXT">
+        <constraints nullable="false"/>
+    </column>
+</createTable>
+----
+====
+
+CAUTION: В рамках процесу верифікації регламенту, флаг `historyFlag` зі значенням `true` вимагатиметься для всіх тегів `createTable`. Тому при створенні таблиці необхідно вказувати відповідне значення `historyFlag="true"`. Таким чином буде додатково згенерована історична таблиця, і для кожної з таблиць буде згенеровано свій специфічний набір службових полів.
+
+TIP: За детальною інформацією щодо створення таблиць зверніться до секції xref:data-modeling/data/physical-model/liquibase-changes-management-sys-ext.adoc#create-table-hst[Схема моделювання таблиць та функція підтримки історичності] відповідного документа.
+
+== Керування критеріями пошуку
+
+[#createSimpleSearchCondition]
+=== Тег створення простого критерію пошуку
+
+Назва change type: `<createSimpleSearchCondition>` ::
+
+Цей тег надає можливість створити простий критерій пошуку, а саме створити для однієї таблиці відбиток даних (view) та індекс за вказаним полем пошуку.
+
+._Приклад XML-схеми_
+[%collapsible]
+====
+[source, XML]
+----
+<ext:createSimpleSearchCondition
+name="pd_processing_consent_simple" indexing="like:text" limit="all">
+    <ext:table name="pd_processing_consent" alias="c" searchColumn="person_full_name"/>
+</ext:createSimpleSearchCondition>
+----
+====
+
+WARNING: Якщо вказати створення індексу без вказання поля пошуку, то буде згенерована помилка.
+
+TIP: За детальною інформацією щодо створення простого критерію пошуку зверніться до секції xref:data-modeling/data/physical-model/liquibase-changes-management-sys-ext.adoc#create-sc-simple[XML-шаблон дизайну простого критерію пошуку (Сценарій 1)] відповідного документа.
+
+[#createSearchCondition]
+=== Тег створення критерію пошуку
+
+Назва change type: `<createSearchCondition>` ::
+
+Цей тег надає можливість створити критерій пошуку, який створює відбиток даних (`view`) за декількома таблицями та зв'язками між ними.
+
+[CAUTION]
+====
+Тег може також створювати індекси для кожного поля пошуку. Для цього використовуйте додатковий атрибут `indexing` зі значенням `true` в рамках тегу `<createSearchCondition>` відповідно до наступної схеми:
+
+[source,xml]
+----
+<xsd:attribute name="indexing" type="xsd:boolean" use="optional"/>
+----
+====
+
+
+._Приклад XML-схеми_
+[%collapsible]
+====
+[source, XML]
+----
+<ext:createSearchCondition name="search_condition" limit="1" indexing="true">
+    <ext:table name="table_one" alias="to">
+        <ext:column name="name" alias="to_name" searchType="equal"/>
+        <ext:column name="type"/>
+        <ext:function name="count" alias="cnt" columnName="uuid"/>
+    </ext:table>
+    <ext:table name="table_two" alias="tt">
+        <ext:column name="name" alias="tt_name"/>
+        <ext:column name="code"/>
+    </ext:table>
+    <ext:join type="left">
+        <ext:left alias="to">
+             <ext:column name="name"/>
+     </ext:left>
+        <ext:right alias="tt">
+            <ext:column name="name"/>
+        </ext:right>
+    </ext:join>
+    <ext:where>
+        <ext:condition tableAlias="to" columnName="type"  operator="eq" value="'char'">
+            <ext:condition logicOperator="or" tableAlias="to"
+columnName="type" operator="eq" value="'text'"/>
+        </ext:condition>
+        <ext:condition logicOperator="and" tableAlias="tt" columnName="code" operator="similar" value="'{80}'"/>
+    </ext:where>
+ </ext:createSearchCondition>
+----
+====
+
+[WARNING]
+====
+* Якщо вказати створення індексу без вказання поля пошуку, то буде згенерована помилка.
+
+* Перший тег `<ext:condition>` в умові `<ext:where>` не повинен містити атрибуту `logicOperator`, всі інші теги `<ext:condition>` — повинні.
+
+* Перший тег `<ext:condition>`, як і всі інші, в умові `<ext:join>` повинен містити атрибут `logicOperator`.
+
+* Атрибут `logicOperator` приймає значення _and_ і _or_.
+
+* Якщо тег `<ext:condition>` вкладений в інший, то вони обгортаються дужками.
+====
+
+[ext-where-operator-values]
+Оператор `<ext:where>` приймає наступні значення: ::
++
+[options="header"]
+|=======================================================================
+|Значення| Пояснення                       |Символ (Unicode)| Коментар
+|`eq`      |**eq**uals                       |=               |
+|`ne`      |**n**ot **e**qual                |<>              |
+|`gt`      |**g**reater **t**han             |>               |
+|`ge`      |**g**reater than or **e**quals to|>=              |
+|`lt`      |**l**ess **t**han                |<               |
+|`le`      |**l**ess than or **e**quals to   |<=              |
+|`in`      |                                 |                |
+|`notIn`   |                                 |                |
+|`isNull`  |is null                          |                |Якщо значення (value) = `true`, то перевірка колонки _is null_; якщо значення (value) = `false`, то перевірка колонки _is not null_.
+|`similar` |similar                          |~               |
+|=======================================================================
+
+* Value - якщо потрібно передати текстове значення, то потрібно це значення обгорнути в одинарні лапки;
+* `<ext:function>` — дозволяє використовувати агрегатні функції (`min()`, `max()`, `avg()`, `count()`, `sum()`), при цьому поля таблиці, які використовуються в цих функціях, вилучаються з виводу (`SELECT`). Всі інші поля включаються в групування (`GROUP BY`).
+
+[#search-type-attribute-values]
+Атрибут типу пошуку `*searchType*` приймає наступні значення: ::
+
+* `equal` -- повертає значення, що мають точну відповідність (дорівнюють) заданим.
++
+[%collapsible]
+._Приклад XML-схеми_
+====
+[source, xml]
+----
+<ext:createSearchCondition name="search_condition">
+        <ext:table name="table_one">
+            <ext:column name="name" alias="to_name" searchType="equal"/>
+            <ext:column name="type"/>
+            <ext:function name="count" alias="cnt" columnName="uuid"/>
+        </ext:table>
+</ext:createSearchCondition>
+----
+====
+* `startsWith` -- повертає значення зі вказаним префіксом, тобто значення, які "починаються із" заданої умови.
++
+[%collapsible]
+._Приклад XML-схеми_
+====
+[source, xml]
+----
+<ext:createSearchCondition name="pd_consent_subject_name_startswith">
+    <ext:table name="pd_processing_consent_subject">
+        <ext:column name="consent_id" fetchType="entity" />
+        <ext:column name="scan_copy" />
+        <ext:column name="legal_entity_name" sorting="asc" searchType="startsWith" />
+        <ext:column name="consent_subject_id"/>
+    </ext:table>
+</ext:createSearchCondition>
+----
+====
+* `contains` -- повертає значення, які мають збіги із вказаним значенням умови у будь-якому місці рядка (на початку, в середині, в кінці тощо).
++
+[%collapsible]
+._Приклад XML-схеми_
+====
+[source, xml]
+----
+<ext:createSearchCondition name="SearchCondition" limit="1">
+    <ext:table name="table_two" alias="tt">
+        <ext:column name="name" alias="tt_name"/>
+        <ext:column name="code" searchType="contains"/>
+        <ext:function name="sum" alias="sm" columnName="code"/>
+    </ext:table>
+</ext:createSearchCondition>
+----
+====
+* `in` -- повертає значення, що мають точну відповідність (дорівнюють) заданим значенням у масиві -- майже те ж саме, що й "equal", але множинний.
++
+[%collapsible]
+._Приклад XML-схеми_
+====
+[source, xml]
+----
+<ext:createSearchCondition name="findInAge">
+    <ext:table name="user">
+        <ext:column name="firstName" returning="true"/>
+        <ext:column name="lastName" returning="true"/>
+        <ext:column name="age" searchType="in"/>
+    </ext:table>
+</ext:createSearchCondition>
+----
+
+----
+https://..../findInAge?age=18,21,42
+----
+====
+* `between` -- повертає значення, що мають приналежність до заданого діапазону значень (в межах "з"-"по").
++
+[%collapsible]
+._Приклад XML-схеми_
+====
+[source, xml]
+----
+<ext:createSearchCondition name="findBetweenAge">
+    <ext:table name="user">
+        <ext:column name="firstName" returning="true"/>
+        <ext:column name="lastName" returning="true"/>
+        <ext:column name="age" searchType="between"/>
+    </ext:table>
+</ext:createSearchCondition>
+----
+
+----
+https://..../findBetweenAge?ageFrom=18&ageTo=42
+----
+====
+////
+[options="header"]
+|=======================================================================
+|Значення| Опис
+|`equal`|Повертає значення, що мають точну відповідність (дорівнюють) заданим
+|`startsWith`|Повертає значення із вказаним префіксом, тобто значення, які "починаються із" заданої умови
+|`contains`|Повертає значення, які мають збіги із вказаним значенням умови у будь-якому місці рядка (на початку, в середині, в кінці тощо)
+|`in`|Повертає значення, що мають точну відповідність (дорівнюють) заданим значенням у масиві, майже те ж саме, що і "equal", але множинний
+|`between`|Повертає значення, що мають приналежність до заданого діапазону значень (в межах "з"-"по")
+|=======================================================================
+////
+[TIP]
+====
+За детальною інформацією щодо сценаріїв використання критеріїв пошуку зверніться до наступних секцій відповідного документа:
+
+- xref:data-modeling/data/physical-model/liquibase-changes-management-sys-ext.adoc#create-sc-uc2[XML-шаблон дизайну критерію пошуку (Сценарій 2)];
+- xref:data-modeling/data/physical-model/liquibase-changes-management-sys-ext.adoc#create-sc-uc3[XML-шаблон дизайну критерію пошуку (Сценарій 3)];
+- xref:data-modeling/data/physical-model/liquibase-changes-management-sys-ext.adoc#create-sc-uc4[XML-шаблон дизайну критерію пошуку (Сценарій 4)];
+
+====
+
+[#dropSearchCondition]
+=== Тег видалення критерію пошуку
+
+Назва change type: `<dropSearchCondition>` ::
+
+Цей тег надає можливість видалити критерій пошуку.
+
+._Приклад XML-схеми_
+[%collapsible]
+====
+[source, XML]
+----
+<ext:dropSearchCondition name="search_condition"/>
+----
+====
+
+[TIP]
+====
+За детальною інформацією щодо сценарію використання видалення критерію пошуку у секцій xref:data-modeling/data/physical-model/liquibase-changes-management-sys-ext.adoc#delete-sc[XML-шаблон видалення критерію пошуку]. відповідного документа.
+====
+
+[#exposeSearchCondition]
+=== Тег визначення точок інтеграції з іншими реєстрами, зовнішніми системами та ШБО "Trembita"
+
+Назва change type: `<exposeSearchCondition>` ::
+
+Цей тег надає можливість визначити точки інтеграції з іншими реєстрами, зовнішніми системами та ШБО "Trembita".
+
+._Приклад XML-схеми_
+[%collapsible]
+====
+[source, XML]
+----
+<ext:exposeSearchCondition name="viewForDrop" platform="true" externalSystem="true" trembita="false"/>
+----
+====
+
+Тег приймає 4 атрибути: ::
+
+* `name` -- назва критерію пошуку (search condition);
+* `platform` -- для надання доступу до представлень та REST API реєстру для іншого реєстру на Платформі;
+* `externalSystem` -- для надання доступу до представлень та REST API реєстру для зовнішньої системи;
+* `trembita` -- Надання доступу до представлень реєстру для сервісів-учасників СЕВ ДЕІР через інтерфейс ШБО "Трембіта" за протоколом SOAP.
+
+== Керування користувацькими типами даних
+
+[#ENUM]
+=== Тег створення перелічувального типу даних (ENUM)
+
+Назва change type: `<createType> <ext:asEnum>` ::
+
+Цей тег надає можливість створити перелічувальний тип даних (ENUM).
+
+._Приклад XML-схеми_
+[%collapsible]
+====
+[source, XML]
+----
+<ext:createType name="type_gender">
+    <ext:asEnum>
+        <ext:label translation="Жіноча">FEMALE</ext:label>
+        <ext:label translation="Чоловіча">MALE</ext:label>
+    </ext:asEnum>
+</ext:createType>
+----
+====
+
+[#Composite]
+=== Тег створення композитного типу даних (Composite)
+
+Назва change type: `<createType> <ext:composite>` ::
+
+Цей тег надає можливість створити композитний тип даних (Composite).
+
+._Приклад XML-схеми_
+[%collapsible]
+====
+[source, XML]
+----
+<ext:createType name="field_access_type">
+    <ext:composite>
+        <ext:column name="masked_value" type="TEXT" collation="uk_UA.utf8"/>
+        <ext:column name="opened" type="BOOLEAN"/>
+         <ext:column name="private" type="BOOLEAN"/>
+        <ext:column name="confidential" type="BOOLEAN"/>
+        <ext:column name="secret" type="BOOLEAN"/>
+        <ext:column name="service" type="BOOLEAN"/>
+    </ext:composite>
+ </ext:createType>
+----
+====
+
+TIP: За детальною інформацією щодо створення типу даних `ENUM` та `Composite` зверніться до секції xref:data-modeling/data/physical-model/liquibase-changes-management-sys-ext.adoc#create-type-enum-composite[Cхема створення типів даних ENUM та Composite] відповідного документа.
+
+[#dropType]
+=== Тег видалення типу даних
+
+Назва change type: `<dropType>` ::
+
+Цей тег надає можливість видалити тип даних.
+
+._Приклад XML-схеми_
+[%collapsible]
+====
+[source, XML]
+----
+<ext:dropType name=" type_gender"/>
+----
+====
+
+[#createDomain]
+=== Тег створення користувацького типу даних з перевіркою на певні умови
+
+Назва change type: `<createDomain>` ::
+
+Цей тег надає можливість створити користувацький тип даних з перевіркою на певні умови.
+
+._Приклад XML-схеми_
+[%collapsible]
+====
+[source, XML]
+----
+<ext:createDomain name="dn_passport_num"
+dataType="CHAR(8)">
+    <ext:constraint implementation="NOT NULL"/>
+    <ext:constraint name="passport_number_chk"
+implementation="CHECK (VALUE ~ '^[АВЕІКМНОРСТХ]{2}[0-9]{6}$)"/>
+</ext:createDomain>
+----
+====
+
+TIP: За детальною інформацією щодо створення типу даних `Domain` зверніться до секції xref:data-modeling/data/physical-model/liquibase-changes-management-sys-ext.adoc#create-type-domain[Схема створення типу даних Domain] відповідного документа.
+
+=== Тег видалення користувацького типу даних
+
+[#dropDomain]
+Назва change type: `<dropDomain>` ::
+
+Цей тег надає можливість видалити користувацький тип даних.
+
+._Приклад XML-схеми_
+[%collapsible]
+====
+[source, XML]
+----
+<ext:dropDomain name=" dn_passport_num"/>
+----
+====
+
+[#createMany2Many]
+== Створення типу зв'язку "Багато до багатьох"
+
+Назва change type: `<createMany2Many>` ::
+
+Цей тег надає можливість створити особливий тип зв'язку "Багато до багатьох", що виконує наступні функції:
+
+- створює відбиток даних (view), розгортаючи масив у рядки;
+- створює індекс.
+
+._Приклад XML-схеми_
+[%collapsible]
+====
+[source, XML]
+----
+<ext:createMany2Many
+    mainTableName="table1"
+    mainTableKeyField="column_id"
+    referenceTableName="table2"
+    referenceKeysArray="columns"/>
+----
+_де “columns” має тип "UUID[ ]" -"Масив ідентифікаторів"_
+====
+
+TIP: За детальною інформацією щодо створення зв'язків між таблицями зверніться до розділу xref:data-modeling/data/physical-model/liquibase-changes-management-sys-ext.adoc#create-many2many[Схема моделювання зв'язків між сутностями в БД] відповідного документа.
+
+[#createCompositeEntity]
+== Збереження декількох сутностей в рамках однієї транзакції
+
+Назва change type: `<createCompositeEntity>` ::
+
+Цей тег надає можливість зберегти декілька сутностей в рамках однієї транзакції.
+
+._Приклад XML-схеми_
+[%collapsible]
+====
+[source, XML]
+----
+<ext:createCompositeEntity name="nested_tables">
+    <ext:nestedEntity table="table_one">
+        <ext:link column="two_column_id" entity="table_two"/>
+    </ext:nestedEntity>
+    <ext:nestedEntity name="tableTwo" table="table_two">
+         <ext:link column="three_column_id" entity="table_three"/>
+     </ext:nestedEntity>
+     <ext:nestedEntity name="tableThree" table="table_three"/>
+</ext:createCompositeEntity>
+----
+====
+
+[#partialUpdate]
+== Генерація ендпоінтів для часткового оновлення сутності в БД
+
+Назва change type: `<partialUpdate>` ::
+
+Цей тег надає можливість генерувати ендпоінти для зміни окремих частин сутності.
+
+._Приклад XML-схеми_
+[%collapsible]
+====
+[source, XML]
+----
+<partialUpdate table="table_name">
+    <column>column_name1</column>
+    <column>column_name2</column>
+    <column>column_name3</column>
+</partialUpdate>
+----
+====
+
+== Керування аналітичними представленнями
+
+[#createAnalyticsView]
+=== Тег створення аналітичного представлення
+
+Назва change type: `<createAnalyticsView>` ::
+
+Цей тег надає можливість створити аналітичні представлення на репліці.
+
+._Приклад XML-схеми_
+[%collapsible]
+====
+[source, XML]
+----
+<ext:createAnalyticsView name="report_table_name">
+    <ext:table name="table_name">
+        <ext:column name="column1"/>
+         <ext:column name=" column2"/>
+    </ext:table>
+</ext:createAnalyticsView>
+----
+====
+
+[#dropAnalyticsView]
+=== Тег видалення аналітичного представлення
+Назва change type: `<dropAnalyticsView>` ::
+
+Цей тег надає можливість видалити аналітичні представлення на репліці.
+
+._Приклад XML-схеми_
+[%collapsible]
+====
+[source, XML]
+----
+<ext:dropAnalyticsView name="report_table_name"/>
+----
+====
+
+[#createAnalyticsIndex]
+=== Тег створення індексу
+
+Назва change type: `<createAnalyticsIndex>` ::
+
+Цей тег надає можливість створити індекс _лише_ на репліці.
+
+._Приклад XML-схеми_
+[%collapsible]
+====
+[source, XML]
+----
+<ext:createAnalyticsIndex tableName="table" indexName="idx_table__column">
+    <column name="column"/>
+</ext:createAnalyticsIndex>
+----
+====
+
+== Керування правами доступу до аналітичних даних
+
+TIP: За детальною інформацією щодо прав доступу до аналітичних даних зверніться до розділу xref:registry-develop:data-modeling/reports/data-analytical-data-access-rights.adoc[Права доступу до аналітичних даних] відповідного документа.
+
+=== Тег надання доступу до всіх аналітичних представлень
+
+[#grantAll]
+Назва change type: `<grantAll>` ::
+
+Цей тег надає можливість доступу до всіх аналітичних представлень для певної ролі.
+
+._Приклад XML-схеми_
+[%collapsible]
+====
+[source, XML]
+----
+<ext:grantAll>
+    <ext:role name="analytics_officer"/>
+</ext:grantAll>
+----
+====
+
+[#revokeAll]
+=== Тег видалення доступу до всіх аналітичних представлень
+
+Назва change type: `<revokeAll>` ::
+
+Цей тег надає можливість видаляти права доступу до всіх аналітичних представлень для певної ролі.
+
+._Приклад XML-схеми_
+[%collapsible]
+====
+[source, XML]
+----
+<ext:revokeAll>
+    <ext:role name="analytics_officer"/>
+</ext:revokeAll>
+
+----
+====
+
+[#grant]
+=== Тег надання доступу до окремого аналітичного представлення
+
+Назва change type: `<grant>` ::
+
+Цей тег надає можливість доступу до окремого аналітичного представлення для певної ролі.
+
+._Приклад XML-схеми_
+[%collapsible]
+====
+[source, XML]
+----
+<ext:grant>
+	<ext:role name="analytics_officer">
+		<ext:view name="report_pd_processing_consent"/>
+	</ext:role>
+	<ext:role name="analytics_officer">
+		<ext:view name="report_pd_processing_consent"/>
+	</ext:role>
+</ext:grant>
+----
+====
+
+[#revoke]
+=== Тег видалення доступу до окремого аналітичного представлення
+
+Назва change type: `<revoke>` ::
+
+Цей тег надає можливість видаляти права доступу до окремого аналітичного представлення для певної ролі.
+
+._Приклад XML-схеми_
+[%collapsible]
+====
+[source, XML]
+----
+<ext:revoke>
+	<ext:role name="analytics_officer">
+		<ext:view name="report_pd_processing_consent"/>
+	</ext:role>
+</ext:revoke>
+----
+====
+
+== Використання вкладених структур в таблицях БД реєстру за вказаним параметром
+
+=== Тег використання вкладених структур
+
+Назва change type: `<tableReadParameters>` ::
+
+Цей тег надає можливість моделювати вкладені структури в таблицях БД реєстру за вказаним параметром.
+
+[NOTE]
+====
+Для використання у критеріях пошуку (search conditions) додано атрибут `fetchType`. Його зазначають для колонки, що містить масив даних.
+
+Застосовується для двох типів зв'язку:
+
+* Колонок, в яких визначено тип зв`яку "Багато до багатьох" (Many2Many);
+
+* Колонок, в яких є зовнішній ключ (foreign key) до іншої таблиці.
+
+Атрибут `fetchType` приймає наступні значення:
+
+* `id` -- отримати ідентифікатори (поведінка за замовчуванням);
+* `entity` -- отримати інформацію з таблиці, до якої налаштовано посилання.
+====
+
+._Приклад XML-схеми з тегом <tableReadParameters>_
+[%collapsible]
+====
+[source, XML]
+----
+<ext:tableReadParameters table="person_type_vpo">
+    <ext:column name="consents" fetchType="entity"/>
+</ext:tableReadParameters>
+----
+====
+
+._Приклад XML-схеми з атрибутом fetchType_
+[%collapsible]
+====
+[source, XML]
+----
+<ext:createSearchCondition name="vpo_person_equals_id_with_fetch_type_person">
+    <ext:table name="vpo_person_many_types">
+        <ext:column name="consent_id" fetchType="entity" />
+        <ext:column name="scan_copy" />
+        <ext:column name="legal_entity_name" sorting="asc" searchType="startsWith" />
+        <ext:column name="consent_subject_id"/>
+    </ext:table>
+</ext:createSearchCondition>
+----
+====
+
+.Використання тегу <tableReadParameters> та атрибуту _fetchType_ при моделюванні даних
+====
+* `Таблиця 1` має зв'язок many2many з `Таблицею 2`.
+* `Таблиця 1` має колонку з масивом id (зовнішні ключі до `Таблиці 2`).
+* Відповідь при запиті до ресурсу з `Таблиці 1` повинна мати у полі з посиланнями до `Таблиці 2` інформацію, відповідну до записів з `Таблиці 2`.
+
+.Таблиця 1
+[source,json]
+----
+{
+   "vpoId":"57152fa5-742c-4b1e-bd53-acc36524cc2d",
+   "vpoLastName":"Петренко",
+   "vpoFirstName":"Петро",
+   "vpoSecondName":"Іванович",
+   "personTypes":[
+      "2d89ffea-118c-4be9-9fa0-c3007991c811",
+      "0d756563-d6a4-46fe-a0c8-ddf4a935ec35"
+   ]
+}
+----
+
+.Таблиця 2
+[source,json]
+----
+[
+   {
+      "constantCode":"1100",
+      "name":"Багатодітна сім'я'",
+      "personTypeVpoId":"2d89ffea-118c-4be9-9fa0-c3007991c811"
+   },
+   {
+      "constantCode":"1200",
+      "name":"Діти",
+      "personTypeVpoId":"0d756563-d6a4-46fe-a0c8-ddf4a935ec35"
+   }
+]
+----
+
+
+.Приклад створення критерію пошуку `vpo_person_type_contains_name`
+[source,xml]
+----
+<changeSet author="registry owner" id="create SC vpo_person_equals_id_person_with_fetch_many_types">
+    <ext:createSearchCondition name="vpo_person_equals_id_person_with_fetch_many_types">
+        <ext:table name="vpo_person_many_types">
+            <ext:column name="vpo_person_many_id" searchType="equal"/>
+            <ext:column name="vpo_first_name" />
+            <ext:column name="vpo_last_name"/>
+            <ext:column name="vpo_second_name"/>
+            <ext:column name="person_types" fetchType="entity"/>
+        </ext:table>
+    </ext:createSearchCondition>
+</changeSet>
+----
+
+.Приклад створення таблиці з fetchType
+[source,xml]
+----
+<changeSet id="table t_person_table_many2many_fetch_id" author="registry owner">
+    <createTable tableName="t_person_table_many2many_fetch_id" ext:isObject="true" ext:historyFlag="true" remarks="VPO">
+        <column name="id"  type="UUID" defaultValueComputed="uuid_generate_v4()" remarks="Ідентифікатор vpo">
+            <constraints nullable="false" primaryKey="true" primaryKeyName="pk_t_person_table_many2many_fetch_id"/>
+        </column>
+        <column name="name" type="TEXT" remarks="iм'я">
+            <constraints nullable="false"/>
+        </column>
+        <column name="person_types" type="UUID[]" remarks="Масив id"/>
+    </createTable>
+    <ext:createMany2Many mainTableName="t_person_table_many2many_fetch_id"
+                         mainTableKeyField="id"
+                         referenceTableName="person_type_vpo"
+                         referenceKeysArray="person_types"/>
+    <ext:tableReadParameters table="t_person_table_many2many_fetch_id">
+        <ext:column name="person_types" fetchType="entity"/>
+    </ext:tableReadParameters>
+</changeSet>
+----
+
+.Приклад результат виконання запита за замовчуванням (search conditions або resource)
+[source,json]
+----
+{
+   "vpoId":"57152fa5-742c-4b1e-bd53-acc36524cc2d",
+   "vpoLastName":"Петренко",
+   "vpoFirstName":"Петро",
+   "vpoSecondName":"Іванович",
+   "personTypes":[
+      "2d89ffea-118c-4be9-9fa0-c3007991c811",
+      "0d756563-d6a4-46fe-a0c8-ddf4a935ec35"
+   ]
+}
+----
+
+.Приклад результат виконання запита з атрибутом fetchType (search conditions або resource)
+[source,json]
+----
+{
+   "vpoId":"57152fa5-742c-4b1e-bd53-acc36524cc2d",
+   "vpoLastName":"Петренко",
+   "vpoFirstName":"Петро",
+   "vpoSecondName":"Іванович",
+   "personTypes":[
+      {
+         "id":"2d89ffea-118c-4be9-9fa0-c3007991c811",
+         "constantCode":"1100",
+         "name":"Багатодітна сім'я'"
+      },
+      {
+         "id":"0d756563-d6a4-46fe-a0c8-ddf4a935ec35",
+         "constantCode":"1200",
+         "name":"Діти"
+      }
+   ]
+}
+----
+====

@@ -1,0 +1,113 @@
+= Створення резервної копії (backup) центральних компонентів та їх відновлення (restore)
+:sectnums:
+:sectanchors:
+
+////
+
+NOT APPLICABLE FOR THE TARGET CLUSTER
+
+== Передумови
+* Перейдіть за посиланням https://github.com/vmware-tanzu/velero/releases/tag/v1.6.0 та завантажте відповідну версію `velero CLI`
+* Відкрийте Git Bash та створіть у директорії користувача папку `bin`
+
+[source,bash]
+----
+$ ls -la | grep bin
+----
+* Покладіть завантажений velero CLI в папку bin
+* Перевірте що velero встановлений вірно за допомогою команди
+----
+$ velero
+----
+
+////
+
+== Бекап центральних компонентів (резервне копіювання)
+
+Адміністратор Платформи має можливість створити резервну копію центральних компонентів, що буде збережена до захищеного сховища бекапів (для прикладу, Minio).
+
+*Для цього необхідно виконати наступні кроки:*
+
+* Виконайте логін до OpenShift відповідного кластера.
+* Скопіюйте команду для логіна – на вкладці профайлу користувача натисніть кнопку `Copy Login Command`:
+
+image:admin:backup-restore/central/backup-restore-central-copy-login-command.png[]
+
+* Після переадресації на сторінку показу токена, натисніть на посилання `Display Token`:
+
+image:admin:backup-restore/central/backup-restore-oauth-display-token.png[]
+
+* Скопіюйте токен доступу до **OpenShift** відповідного кластера, куди буде виконане резервне копіювання:
+
+image:admin:backup-restore/central/backup-restore-openshift-token.png[]
+
+* Відкрийте **Git Bash**, вставте скопійований токен та натисніть `Enter`:
+
+[source,bash]
+----
+$ oc login --token=sha256~NyHYErh_JwJQаааааyIfmbbE-UY_Y3s_diQG422v9Rw --server=https://api.backup.mdtu-ddm.projects.epam.com:6443
+----
+
+* Для перевірки наявних резервних копій, виконайте наступну команду:
+
+[source,bash]
+----
+$ velero get backups
+----
+
+* Для створення нової резервної копії, виконайте наступну команду:
+
+[source,bash]
+----
+$ velero backup create control-plane-nexus-release1-4-backup-28-10 --include-namespaces control-plane-nexus --ttl 120h
+----
+
+TIP: де: +
+- `control-plane-nexus-release1-4-backup-28-10` -- назва папки у сховищі, де зберігатиметься резервна копія (для зручності вказана назва кластера та дата створення бекапу); +
+- `control-plane-nexus` -- назва центрального компонента, для якого буде виконане резервне копіювання; +
+- `--ttl 120h` -- час зберігання резервної копії.
+
+* Для перевірки того, що резервна копія успішно створена,  виконайте таку команду:
+
+[source,bash]
+----
+$ velero backup get
+----
+image:admin:backup-restore/central/backup-restore-central-get.png[]
+
+TIP: де: +
+- Status `New` -- запит на створення копії новий і знаходиться в черзі. +
+- Status `InProgress` -- копія в процесі створення. +
+- Status `Completed` -- копія створена.
+
+////
+Створені резервні копії центральних компонентів можна також перевірити у *Minio Console* у розділі *Buckets*
+
+image:admin:backup-restore/central/backup-restore-minio.png[]
+////
+
+=== Видалення резервної копії зі сховища
+
+Для видалення резервної копії, виконайте наступну команду:
+
+[source,bash]
+----
+$ velero backup delete control-plane-nexus-release1-4-backup-28-10
+----
+
+TIP: де `control-plane-nexus-release1-4-backup-28-10` -- назва резервної копії, яку необхідно видалити.
+
+== Відновлення центральних компонентів (Restore)
+
+CAUTION: Перед виконанням процесу відновлення центральних компонентів переконайтеся, що створена їх резервна копія та ці компоненти видалені.
+
+Для того, щоб відновити центральний компонент, для якого була створена його резервна копія, виконайте наступну команду:
+
+[source,bash]
+----
+$ velero restore control-plane-nexus --from-backup control-plane-nexus-backup-25-10
+----
+
+TIP: де: +
+- `control-plane-nexus` -- назва центрального компонента, який буде відновлюватись; +
+- `backup control-plane-nexus-backup-25-10` -- назва папки у сховищі, де зберігається резервна копія, і з якої буде відновлюватися центральний компонент.

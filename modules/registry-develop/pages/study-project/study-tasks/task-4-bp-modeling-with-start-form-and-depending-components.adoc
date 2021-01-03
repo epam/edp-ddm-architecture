@@ -1,0 +1,512 @@
+= Завдання 4. Моделювання бізнес-процеса зі стартовою формою та залежними компонентами на формах
+:toc:
+:toclevels: 5
+:toc-title: ЗМІСТ
+:sectanchors:
+:sectnums:
+
+== Мета завдання
+
+Виконання цього завдання має на меті: ::
+
+* Навчити моделювати бізнес-процес, який має стартову форму.
+* Навчити моделювати форми з залежними компонентами та компонентом Edit-grid.
+
+== Передумови
+
+Перед проходженням завдання необхідно виконати наступні передумови:
+
+* xref:registry-develop:bp-modeling/bp/bp-element-templates-installation-configuration.adoc#business-process-modeler-extensions-installation[Встановіть додаток Camunda Modeler і типові розширення до нього].
+* xref:registry-develop:bp-modeling/forms/bp-modeling-forms-general-description.adoc[Ознайомтеся із компонентами FormIO для моделювання форм].
+
+== Процес виконання завдання
+
+[#bp-modeling]
+=== Моделювання бізнес-процесу
+
+[TIP]
+====
+На етапі моделювання бізнес-процесу необхідно створити та зберегти відповідну BPMN-діаграму.
+
+Використовуйте файл _link:{attachmentsdir}/study-project/task-4/bp-schema/add-personnel.bpmn[add-personnel.bpmn]_ із готовою схемою бізнес-процесу для прикладу.
+====
+
+==== Етапи моделювання бізнес-процесу
+
+В рамках цього завдання моделювальник має створити бізнес-процес, що складається з таких етапів:
+
+. xref:#create-pool-bp[Створення пулу для бізнес-процесу].
+. xref:#create-start-event[Створення початкової події].
+. xref:#create-script-task-changes-to-record[Створення скрипт задачі "Підготовка зміних для отримання запису"].
+. xref:#create-service-task-search-result[Створення сервісної задачі "Пошук даних про лабораторію"].
+. xref:#create-script-task-data-to-display[Cтворення скрипт задачі "Підготовка даних документа для показу (transient var)"].
+. xref:#create-user-task-add-staff-details[Створення користувацької задачі "Додати дані про кадри"].
+. xref:#create-user-task-sign-data[Створення користувацької задачі "Підписати дані КЕП"].
+. xref:#create-task-script-data-signing[Cтворення скрипт задачі "Підготовка даних для запису (transient var)"].
+. xref:#create-service-task-save-data[Створення сервісної задачі "Зберегти дані в Дата фабрику"].
+. xref:#create-service-task-set-bp-result[Створення сервісної задачі "Встановити результат БП"].
+. xref:#create-finish-event[Створення кінцевої події].
+
+CAUTION: *Важливо!* Після проходження всіх етапів, не забудьте зберегти змодельовану схему бізнес-процесу до відповідної папки з регламентом реєстру
+
+[#create-pool-bp]
+==== Створення пулу для бізнес-процесу
+
+Найперше, *змоделюйте пул для бізнес-процесу*. Для цього виконайте наступні кроки:
+
+* Відкрийте додаток *Camunda Modeler* та створіть нову діаграму BPMN. Для цього у лівому верхньому куті натисніть меню *File* -> *New File* -> *BPMN Diagram*.
+
+* На панелі інструментів, зліва, знайдіть елемент *Create pool/Participant*, перетягніть його до панелі моделювання та заповніть у розділі *General* наступні поля відповідними значеннями:
+
+** у полe `Name` введіть `Внесення даних в кадровий склад`;
+** у полe `Process id` введіть `add-personnel`;
+** у полі `Process name` вкажіть `Внесення даних в кадровий склад`:
+
+image:registry-develop:study-project/task-4/task-4-1-bp.png[]
+
+[#create-start-event]
+==== Створення початкової події
+
+*Створіть початкову подію*. Для цього виконайте наступні кроки:
+
+* На панелі інструментів, зліва, знайдіть елемент (коло) *CreateStartEvent* та перетягніть його до панелі моделювання.
+
+* На панелі налаштувань, справа,у розділі *General* заповніть наступні параметри відповідними значеннями:
+** у поле `Id` введіть `start_event`;
+** у поле `Name` введіть `Початок процесу`;
+** у поле `Initiator` введіть `initiator`:
+
+image:registry-develop:study-project/task-4/task-4-2-bp.png[]
+
+* У розділі *Forms* у поле `Form key` введіть `shared-search-lab`:
+
+image:registry-develop:study-project/task-4/task-4-3-bp.png[]
+
+[#create-script-task-changes-to-record]
+==== Створення скрипт задачі "Підготовка зміних для отримання запису"
+
+Заповніть наступні поля:
+
+* `Id` - `extractLabIdFromFormActivity`;
+* `Name` - `Підготовка зміних для отримання запису`;
+* `Script Format` - `groovy`;
+* `Script Type` - `InlineScript`.
+
+====
+
+.`Script`
+[%collapsible]
+======
+  submission('start_event').formData.prop('laboratory').prop('laboratoryId').value()
+======
+====
+
+image:registry-develop:study-project/task-4/task-4-4-bp.png[]
+
+[#create-service-task-search-result]
+==== Створення сервісної задачі "Пошук даних про лабораторію"
+
+Далі необхідно *створити сервісну задачу (Service Task) для пошуку даних про лабораторію*. Для цього виконайте наступні кроки:
+
+Вкажіть тип задачі, натиснувши іконку ключа та обравши з меню пункт *Service Task*.
+
+* Натисніть `Open Catalog`, оберіть шаблон *Read entity from data factory*  та натисніть `Apply` для підтвердження;
+* Заповніть наступні поля:
+** у поле `Id` введіть `searchLabInDataFactoryActivity`
+** у полі `Name` має бути вказано `Пошук даних про лабораторію`;
+** у полі `Resource` - laboratory;
+** у полі `Resource id` - `$\{laboratoryId}`;
+** у полі `X-Access-Token` - `${initiator().accessToken}`;
+** у полі `Result Variable` - `labResponse`:
+
+image:registry-develop:study-project/task-4/task-4-5-bp.png[]
+
+
+[#create-script-task-data-to-display]
+==== Cтворення скрипт задачі "Підготовка даних документа для показу (transient var)"
+
+* Заповніть наступні поля:
+** у поле `Id` введіть `extractAddPersonnelFormPrepopulationActivity`;
+** у полі `Name` має бути вказано `Підготовка даних документа для показу (transient var)`;
+** `Script Format` - `groovy`;
+** `Script Type` - `InlineScript`;
+
+====
+
+.`Script`
+[%collapsible]
+======
+    var name = labResponse.responseBody.prop('name').value()
+    var edrpou = labResponse.responseBody.prop('edrpou').value()
+    var cephData = ['edrpou':edrpou,'name':name]
+
+    execution.removeVariable('payload')
+    set_transient_variable('payload', S(cephData, 'application/json'))
+======
+====
+
+image:registry-develop:study-project/task-4/task-4-6-bp.png[]
+
+[#create-user-task-add-staff-details]
+==== Створення користувацької задачі "Додати дані про кадри"
+
+* Вкажіть тип задачі, натиснувши іконку ключа та обравши з меню пункт *User Form*.
+
+* натисніть `Open Catalog`, оберіть шаблон *User Form* та натисніть `Apply` для підтвердження;
+* заповніть наступні поля:
+** `Id` - `addPersonnelFormActivity`;
+** `Name` - `Додати дані про кадри`;
+** `Form key` - `add-personnel-bp-add-personnel`;
+** `Assignee` - `$\{initiator}`;
+** `Form data pre-population` - `$\{payload}`:
+
+image:registry-develop:study-project/task-4/task-4-7-bp.png[]
+
+[#create-user-task-sign-data]
+==== Створення користувацької задачі "Підписати дані КЕП"
+
+* Вкажіть тип задачі, натиснувши іконку ключа та обравши з меню пункт *User Form*.
+
+* натисніть `Open Catalog`, оберіть шаблон *Officer Sign Task* та натисніть `Apply` для підтвердження;
+* заповніть наступні поля:
+** `Id` - `signPersonnelFormActivity`;
+** `Name` - `Підписати дані КЕП`;
+** `Form key` - `add-personnel-bp-sign-personnel`;
+** `Assignee` - `$\{initiator}`;
+** `Form data pre-population` - `${submission('addPersonnelFormActivity').formData}`:
+
+image:registry-develop:study-project/task-4/task-4-8-bp.png[]
+
+[#create-task-script-data-signing]
+==== Створення скрипт задачі для підготовки даних для запису (transient var)
+
+Заповніть наступні поля:
+
+* `Id` - `convertSignFormDataToDataFactoryFormatActivity`;
+* `Name` - `Підготовка даних для запису (transient var)`;
+* `Script Format` - `groovy`;
+* `Script Type` - `InlineScript`;
+
+====
+
+.`Script`
+[%collapsible]
+======
+        def personnelGrid = submission('signPersonnelFormActivity').formData.prop('personnelGrid').elements()
+
+        for (var personnel : personnelGrid) {
+
+        personnel.prop("laboratoryId", laboratoryId)
+
+        personnel.prop("staffStatusId", personnel.prop("staffStatus").prop("staffStatusId").value())
+
+        personnel.deleteProp("staffStatus")
+
+        if (personnel.hasProp('hygienistCertificateFile') && !personnel.prop('hygienistCertificateFile').elements().isEmpty()) {
+        def hygienistCertificateFile = personnel.prop('hygienistCertificateFile').elements().first()
+        } else {
+        personnel.prop('hygienistCertificateFile', null as String)
+        }
+
+        if (personnel.hasProp('ordersFile') && !personnel.prop('ordersFile').elements().isEmpty()) {
+        def ordersFile = personnel.prop('ordersFile').elements().first()
+        personnel.prop('ordersFile', ordersFile)
+        } else {
+          personnel.prop('ordersFile', null as String)
+        }
+
+        if (personnel.hasProp('hireStaffFile') && !personnel.prop('hireStaffFile').elements().isEmpty()) {
+        def hireStaffFile = personnel.prop('hireStaffFile').elements().first()
+        } else {
+        personnel.prop('hireStaffFile', null as String)
+        }
+
+        }
+
+        execution.removeVariable('dataPayload')
+        set_transient_variable('dataPayload', S(personnelGrid.toString()))
+======
+====
+
+image:registry-develop:study-project/task-4/task-4-9-bp.png[]
+
+[#create-service-task-save-data]
+==== Створення сервісної задачі "Зберегти дані в Дата фабрику".
+
+* Створіть нову сервісну задачу "Зберегти дані в Дата фабрику", натиснувши іконку ключа та обравши з меню пункт *Service Task*.
+* Натисніть `Open Catalog`, оберіть шаблон *Batch creation of entities in data factory* та натисніть `Apply` для підтвердження;
+* Заповніть поля:
+** `Id` - `createStaffInDataFactoryActivity`;
+** `Name` - `Зберегти дані в Дата фабрику`;
+** `Resource` - `staff`;
+** `Payload` - `$\{dataPayload}`;
+** `X-Access-Token` - `${completer('signPersonnelFormActivity').accessToken}`;
+** `X-Digital-Signature source` - `${sign_submission('signPersonnelFormActivity').signatureDocumentId}`;
+** `Result Variable` - `response`:
+
+image:registry-develop:study-project/task-4/task-4-10-bp.png[]
+
+[#create-service-task-set-bp-result]
+==== Створення сервісної задачі "Встановити результат БП".
+
+* Створіть нову сервісну задачу "Встановити результат БП", натиснувши іконку ключа та обравши з меню пункт *Service Task*.
+* Натисніть `Open Catalog`, оберіть шаблон *Define business process status* та натисніть `Apply` для підтвердження;
+* Заповніть поля:
+** `Id` - `defineBusinessProcessStatusActivity`;
+** `Name` - `Результат виконання "Дані про кадровий склад внесені"`;
+** `Status` - `Дані про кадровий склад внесені`:
+
+image:registry-develop:study-project/task-4/task-4-11-bp.png[]
+
+[#create-finish-event]
+==== Створення кінцевої події
+
+Заповніть кінцеву подію:
+
+`Name` - `Дані внесені`.
+
+
+[#forms-modeling]
+=== Моделювання форм
+
+[TIP]
+====
+На етапі моделювання форм необхідно створити та прив'язати JSON-форми до попередньо змодельованих задач в рамках бізнес-процесу.
+
+Форми прив'язуються до бізнес-процесів за службовою назвою.
+
+Використовуйте файли _link:{attachmentsdir}/study-project/task-4/bp-forms/add-personnel-bp-add-personnel.json[add-personnel-bp-add-personnel.json]_ , _link:{attachmentsdir}/study-project/task-4/bp-forms/add-personnel-bp-sign-personnel.json[add-personnel-bp-sign-personnel.json]_ та _link:{attachmentsdir}/study-project/task-4/bp-forms/shared-search-lab.json[shared-search-lab.json]_ зі змодельованими формами для прикладу.
+====
+
+[#form-edit-grid]
+==== Моделювання однакових сутностей на формах за допомогою Edit Grid
+
+Найперше, необхідно *створити форму для внесення даних* користувачем. Для цього виконайте наступні кроки:
+
+* Увійдіть до застосунку *Кабінет адміністратора регламентів*.
+
+image::registry-develop:bp-modeling/forms/admin-portal-form-modeling-step-1.png[]
+
+* Перейдіть до розділу *Моделювання UI-форм*.
+
+image:registry-develop:bp-modeling/forms/admin-portal-form-modelling-step-2.png[]
+
+* Щоб створити нову форму для бізнес-процесу, натисніть кнопку `Створити нову форму`:
+
+image:registry-develop:bp-modeling/forms/admin-portal-form-modelling-step-4.png[]
+
+* У вікні, що відкрилося, вкажіть назву відповідної користувацької задачі -- xref:#create-user-task-add-staff-details[`Додати дані про кадри`] в полі `Бізнес-назва форми`.
+* Заповніть поле `Службова назва форми` значенням `add-personnel-bp-add-personnel`.
+* За допомогою *Edit Grid* на формі можливо додавати та редагувати однотипні дані.
+* З панелі зліва перетягніть компонент *Edit Grid* до панелі моделювання та виконайте наступні налаштування:
+** на вкладці *Display* заповніть поле `Label` значенням `Додати інформацію про кадри`:
+
+image:registry-develop:study-project/task-4/task-4-12-forms.png[]
+
+** на вкладці *Templates* заповніть поля:
+*** `Add another text` - `Додати`;
+*** `Save Row Text` - `Внести запис`;
+*** `Remove Row Text` - `Видалити запис`:
+
+image:registry-develop:study-project/task-4/task-4-13-forms.png[]
+
+** на вкладці *API* заповніть поле `Property Name` значенням `personnelGrid`;
+** натисніть кнопку `Save` для збереження змін:
+
+image:registry-develop:study-project/task-4/task-4-14-forms.png[]
+
+* Наповніть Edit Grid компонентами: з панелі зліва перетягніть компонент *Textfield* в поле компонента *Edit Grid* та виконайте наступні налаштування:
+** на вкладці *Display* заповніть поле `Label` значенням `Прізвище, ім'я, по батькові`:
+
+image:registry-develop:study-project/task-4/task-4-15-forms.png[]
+
+** на вкладці *API* заповніть поле `Property Name` значенням `fullName`;
+** натисніть кнопку `Save` для збереження змін:
+
+image:registry-develop:study-project/task-4/task-4-16-forms.png[]
+
+* З панелі зліва перетягніть компонент *Checkbox* в поле компонента *Edit Grid* та виконайте наступні налаштування:
+** на вкладці *Display* заповніть поле `Label` значенням `Лікар з гігієни праці`:
+
+image:registry-develop:study-project/task-4/task-4-17-forms.png[]
+
+** на вкладці *API* заповніть поле `Property Name` значенням `hygienistFlag`;
+** натисніть кнопку `Save` для збереження змін:
+
+image:registry-develop:study-project/task-4/task-4-18-forms.png[]
+
+==== Налаштування відображення компоненту в залежності від значення іншого компонента
+
+* З панелі зліва перетягніть компонент *Day* в поле компонента *Edit Grid* та виконайте наступні налаштування для отримання інформації з довідника:
+** на вкладці *Display* заповніть поле `Label` значенням `Дата проходження спеціалізації`:
+
+image:registry-develop:study-project/task-4/task-4-19-forms.png[]
+
+** на вкладці *API* заповніть поле `Property Name` значенням `specializationDate`:
+
+image:registry-develop:study-project/task-4/task-4-20-forms.png[]
+
+** на вкладці *Conditional* заповніть поля:
+
+*** `This component should Display:` - `True`;
+*** `When the form component:` - `Лікар з гігієни  праці (personnel.Grid.hygienistFlag)`;
+*** `Has the value:` - `true`.
+
+* Це означає, що компонент буде відображений тільки при значенні компонента `Лікар з гігієни  праці (personnel.Grid.hygienistFlag)` - `true`:
+
+image:registry-develop:study-project/task-4/task-4-21-forms.png[]
+
+** натисніть кнопку `Save` для збереження змін.
+
+[TIP]
+====
+Компонент  *Day* використовується виключно до релізу платформи 1.4. Після переходу на платформу версії 1.4 потрібно використовувати компонент *Date/Time*
+====
+
+** Аналогічно до попереднього пункта перетягніть та налаштуйте компоненти на формі:
+
+*** Компонент - *Radio*:
+**** на вкладці *Display* заповніть поле `Label` значенням `Трудові відносини`;
+**** на вкладці *Data* - *Values* заповніть поле `Label` значенням `Основне місце роботи`, а поле `Value` - `true`;
+**** на вкладці *Data* - *Values* заповніть поле `Label` значенням `Сумісництво`, а поле `Value` - `false`;
+**** на вкладці *API* заповніть поле `Property Name` значенням `fullTimeFlag`;
+*** Компонент - *Number*:
+**** на вкладці *Display* заповніть поле `Label` значенням `Ставка`;
+**** на вкладці *Validation* заповніть поле `Maximum value` значенням `1`;
+**** на вкладці *API* заповніть поле `Property Name` значенням `salary`;
+*** Компонент - *Day*:
+**** на вкладці *Display* заповніть поле `Label` значенням `Дата зміни статусу`;
+**** на вкладці *API* заповніть поле `Property Name` значенням `dismissalDate`.
+
+З панелі зліва перетягніть компонент *Select* в поле компонента Edit Grid та налаштуте компонент для отримання інформації з довідника:
+
+* на вкладці *Display* заповніть поле `Label` значенням ` Статус співробітника`;
+
+* на вкладці *Data* заповніть поля:
+
+** `Data Source Type` - `URL`;
+** `Data Source URL` - `/officer/api/data-factory/staff-contains-name`, де
+*** `/officer` - вказує, що до довідника буде запит з кабінету посадової особи,
+*** `/api/data-factory/` - вказує шлях до дата-фабрики
+*** `staff-contains-name` - назва search condition для отримання даних з довідника областей, який був змодельований та доданий у репозиторій;
+** `Value Property` - `staffStatusId`;
+** `Item Template` - `<span>{{ item.name }}</span>`,  де `name` - назва параметру, що повертає search condition та буде відображений на формі:
+
+image:registry-develop:study-project/task-4/task-4-22-forms.png[]
+
+image:registry-develop:study-project/task-4/task-4-23-forms.png[]
+
+* на вкладці *API* заповніть поле `Property Name` значенням `staffStatus`;
+
+* натисніть кнопку `Save` для збереження змін.
+
+З панелі зліва перетягніть компонент *Checkbox* в поле компонента Edit Grid та налаштуте компонент:
+
+* на вкладці *Display* заповніть поле `Label` значенням `Строковий трудовий договір`;
+* на вкладці *API* заповніть поле `Property Name` значенням `fixedTermContractFlag`;
+* натисніть кнопку `Save` для збереження змін:
+
+image:registry-develop:study-project/task-4/task-4-24-forms.png[]
+
+image:registry-develop:study-project/task-4/task-4-25-forms.png[]
+
+З панелі зліва перетягніть компонент *Day* в поле компонента *Edit Grid* та виконайте наступні налаштування:
+** на вкладці *Display* заповніть поле `Label` значенням `Дата закінчення строкового договору`:
+
+image:registry-develop:study-project/task-4/task-4-26-forms.png[]
+
+** на вкладці *API* заповніть поле `Property Name` значенням `contractEndDate`:
+
+image:registry-develop:study-project/task-4/task-4-27-forms.png[]
+
+** на вкладці *Conditional* заповніть поля:
+
+*** `This component should Display:` - `True`;
+*** `When the form component:` - `Строковий трудовий договір (personnelGrid.fixedTermContractFlag)`;
+*** `Has the value:` - `true`.
+
+* Це означає, що компонент буде відображений тільки при значенні компонента `Строковий трудовий договір (personnelGrid.fixedTermContractFlag)` - `true`.
+** натисніть кнопку `Save` для збереження змін:
+
+image:registry-develop:study-project/task-4/task-4-28-forms.png[]
+
+* З панелі зліва перетягніть компоненти *Textfield* *ПОЗА* межами компонента *Edit Grid* та виконайте наступні налаштування:
+** Компонент 1 - Textfield:
+*** на вкладці *Display* заповніть:
+**** поле `Label` значенням `Повна назва лабораторії або ПІБ ФОП`;
+**** чекбокс `Disabled` - `true`
+*** на вкладці *API* заповніть поле `Property Name` значенням `name`;
+** Компонент 2 - Textfield:
+*** на вкладці *Display* заповніть:
+**** поле `Label` значенням `Код ЄДРПОУ або РНОКПП`;
+**** чекбокс `Disabled` - `true`
+*** на вкладці *API* заповніть поле `Property Name` значенням `edrpou`;
+** Ці поля будуть заповнені даними з бізнес-процеса.
+
+
+
+
+* Збережіть форму, натиснувши кнопку `Створити форму` у правому верхньому куті:
+
+image:registry-develop:study-project/task-4/task-4-29-forms.png[]
+
+[#form-data-signing]
+==== Створення форми для підпису даних
+
+Після завершення попереднього кроку та створення форми для внесення даних, *створіть* ще одну *форму для підпису даних*.
+
+Для цього *скопіюйте* попередньо змодельовану форму, натиснувши **іконку копіювання** -- це дозволить створити форму із готового шаблону.
+
+
+image:registry-develop:study-project/task-4/task-4-30-forms.png[]
+
+*Налаштуйте параметри форми*:
+
+* введіть назву користувацької задачі `Підписати відомості про кадровий склад` в полі `Бізнес-назва форми`;
+* заповніть поле `Службова назва форми` значенням `add-personnel-bp-sign-personnel`;
+
+* В усіх компонентах:
+
+** на вкладці *Display* встановіть прапорець для параметра *Disabled*;
+** Натисніть кнопку `Save` для збереження змін.
+
+==== Збереження змодельованих форм бізнес-процесу
+
+* Збережіть форму, натиснувши кнопку `Створити форму` у правому верхньому куті.
+
+* Завантажте форми, натиснувши *іконку завантаження*, та помістіть їх до регламентної папки *_forms_* проєкту в локальному Gerrit-репозиторії.
+image:registry-develop:study-project/task-4/task-4-31-forms.png[]
+
+[#bp-access]
+=== Моделювання доступу до бізнес-процесу
+
+[TIP]
+====
+На цьому етапі необхідно надати доступ до бізнес-процесу із Кабінету посадової особи.
+
+Параметри доступу налаштовуються у конфігураційному файлі, що має назву _link:{attachmentsdir}/study-project/task-4/bp-access/officer.yml[officer.yml]_.
+====
+
+Створіть файл _officer.yml_ та зазначте в ньому наступні параметри:
+
+[source,yaml]
+----
+authorization:
+  realm: 'officer'
+  process_definitions:
+    - process_definition_id: 'add-personnel'
+      process_name: 'Внесення даних в кадровий склад'
+      process_description: 'Внесення даних в кадровий склад'
+      roles:
+        - officer
+----
+
+==== Збереження файлу з налаштування доступу
+
+Збережіть файл _officer.yml_ до регламентної папки *_bp-auth_* проєкту в локальному Gerrit-репозиторії.
+
+== Завантаження файлів регламенту до віддаленого репозиторію Gerrit
+
+Для успішного розгортання бізнес-процесу, форм, а також застосування правильних налаштувань доступу до бізнес-процесу у цільовому середовищі, адміністратор регламенту має завантажити збережені локально файли регламенту реєстру до віддаленого сховища коду Gerrit.
+
+Для цього виконайте кроки з інструкції xref:registry-develop:registry-admin/regulations-deploy/registry-admin-deploy-regulation.adoc[].
