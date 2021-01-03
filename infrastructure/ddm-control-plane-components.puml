@@ -1,0 +1,73 @@
+@startuml
+
+package "DDM platform Install" as ddm_platrom_install{
+  [Denovo OKD Install] as denovo_okd_install
+  [DDM CP Helm] as ddm_cp_helm
+}
+ddm_cp_helm -down-> ddm_cp_install: creates uber helmfile or chart and publish it to Nexus or Chart Museum as an archive
+
+package "DDM Control Plane (CP) install" as ddm_cp_install {
+  [DDM CP Edp Operators] as ddm_cp_edp_operators
+  note top of ddm_cp_edp_operators
+    Helm contains:
+      -keycloak-operator
+      -EDP Keycloak Realm
+      -jenkins-operator
+      -gerrit-operator
+      -codebase-operator
+      -reconcile-operator
+  end note
+  [DDM CP Applicaiton] as ddm_cp_app
+  note top of ddm_cp_app
+    Helm contains:
+      -EDP Admin Console CR for ddm control plane
+  end note
+  [DDM CP Gerrit] as ddm_gerrit
+  note top of ddm_gerrit
+    Helm contains:
+      -EDP Gerrit CR
+      -EDP GitServer CR
+      -EDP Codebase CR for cluser-manaegment
+  end note
+  [DDM CP Jenkins] as ddm_jenkins
+  note top of ddm_jenkins
+    Helm contains:
+      -EDP Jenkins CR
+      -EDP JenkinsScript CR
+      -Job Provisioner ConfigMap
+  end note
+}
+
+package "Infra Components" as infra_components {
+  [logging]
+  [storage]
+  [monitoring]
+  [network-security]
+  [service-mesh]
+  [user-management]
+  [backup-management]
+}
+
+denovo_okd_install -[hidden]down-> ddm_cp_install
+ddm_gerrit -down-> infra_components : collects all helm charts into one folder with concrete versions,\nwhich should be converted to repository """cluster-management"""  in a template folder
+
+package "Registry Components" as registry_components {
+  [keycloak-operator]
+  [jenkins-operator]
+  [gerrit-operator]
+  [kong]
+  [kafka]
+  [citus]
+  [low-code-components]
+}
+
+ddm_gerrit -down-> registry_components : collects all helm charts into one folder with concrete versions,\nwhich should be converted to repository """regitstry-tenant-template"""
+
+package "Registry Regulations" as registry_regulations {
+  [registry-regulation-template]
+}
+
+ddm_gerrit -down-> registry_regulations : creates repository """regitstry-regulations-template"""
+
+
+@enduml

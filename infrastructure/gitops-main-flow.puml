@@ -1,0 +1,76 @@
+@startuml
+actor "Розробник платформи" as devops order 10
+participant "gitbud.epam.com " as gitbud  order 30
+participant "Інфра EDP Jenkins" as infra_jenkins  order 40
+participant "Інфра OKD кластер" as infra_cluster  order 50
+participant "CICD Docker Registry" as cicd_docker_registry  order 60
+participant "CICD Nexus" as cicd_nexus  order 70
+participant "CICD OKD кластер " as cicd_cluster  order 80
+
+autonumber
+
+group Розробка інфра компоненту
+  devops -> gitbud: "Commit до інсталяцйії або конфігурації компоненту в Infra branch"
+  activate gitbud
+    gitbud -> infra_jenkins: "Запуск CI джоби для тестування та\n застосування зміни"
+    activate infra_jenkins
+      infra_jenkins -> infra_jenkins: "Валідація"
+      infra_jenkins -> infra_cluster: "Застосування змін"
+      infra_jenkins -> infra_jenkins: "Тестування"
+      gitbud <-- infra_jenkins: "Тегування коміту згідно EDP версіонування"
+    deactivate infra_jenkins
+    devops <-- gitbud: "Розуміння, що зміни можна переносити у master гілку"
+  deactivate gitbud
+  devops -> gitbud: "Merge змін в master гілку "
+  activate gitbud
+    gitbud -> infra_jenkins: "Запуск CI джоби для тестування та\n застосування зміни"
+    activate infra_jenkins
+      infra_jenkins -> infra_jenkins: "Валідація"
+      gitbud <-- infra_jenkins: "Тегування коміту згідно EDP версіонування"
+    deactivate infra_jenkins
+    devops <-- gitbud: "Версія компонента для формування DDM CP Gerrit"
+  deactivate gitbud
+end
+
+group Збірка інсталяції для цільового кластеру
+  devops -> gitbud: "Commit конкретних версій Infra та Registry компенентів в DDM CP Gerrit"
+  activate gitbud
+    gitbud -> infra_jenkins: "Запуск CI джоби для DDM CP Gerrit"
+    activate infra_jenkins
+      infra_jenkins -> infra_jenkins: "Створення репозиторію """cluster-management""""
+      infra_jenkins -> infra_jenkins: "Створення репозиторію """registry-tenant-template""""
+      infra_jenkins -> infra_jenkins: "Створення репозиторію """registry-regulations-template""""
+      infra_jenkins -> infra_jenkins: "Створення Gerrit docker image з репозиторіями, створеними вище"
+      infra_jenkins -> cicd_docker_registry: "Публікація Gerrit docker image"
+      gitbud <-- infra_jenkins: "Тегування коміту згідно EDP версіонування"
+    deactivate infra_jenkins
+    devops <-- gitbud: "Версія Gerrit Docker Image для формування інсталяційного пакету"
+  deactivate gitbud
+  devops -> gitbud: "Commit конкретних версій компенентів у DDM CP Helm репозиторій"
+  activate gitbud
+  gitbud -> infra_jenkins: "Запуск CI джоби для первірки helm DDM Control Plane"
+    activate infra_jenkins
+      infra_jenkins -> infra_jenkins: "Створення helmfile на базі репозиторіїв з групи """DDM Control Plane (CP) install""""
+      infra_jenkins -> cicd_nexus: "Публікація архіву з інсталяцією"
+      gitbud <-- infra_jenkins: "Тегування коміту згідно EDP версіонування"
+    deactivate infra_jenkins
+    devops <-- gitbud: "Версія інсталяційного пакету, що можна скачати у Nexus"
+  deactivate gitbud
+end
+
+
+opt Застосування змын до CICD кластер з cicd branch
+  devops -> gitbud: "Commit до інсталяцйії або конфігурації компоненту в CICD branch"
+  activate gitbud
+    gitbud -> infra_jenkins: "Запуск CI джоби для тестування та\n застосування зміни"
+    activate infra_jenkins
+      infra_jenkins -> infra_jenkins: "Валідація"
+      infra_jenkins -> cicd_cluster: "Застосування змін"
+      infra_jenkins -> infra_jenkins: "Тестування"
+      gitbud <-- infra_jenkins: "Тегування коміту згідно EDP версіонування"
+    deactivate infra_jenkins
+    devops <-- gitbud: "Зміни застосовані до CICD кластеру"
+  deactivate gitbud
+end
+
+@enduml
