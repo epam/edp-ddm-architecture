@@ -11,3 +11,4 @@
 * [Діаграма взаємодії компонентів платформи](/infrastructure/ddm-control-plane-components.puml)
 * [Діаграма послідовностей по розробці централізованих компонентів платформи та пакету для інсталяції](/infrastructure/gitops-main-flow.puml)
 * [Діаграма послідовностей встановлення платформи](/infrastructure/ddm-platform-install.puml)
+* [Діаграма послідовностей створення реэстру за допомогою Control Plane](/infrastructure/ddm-registry-creation-details.puml)
