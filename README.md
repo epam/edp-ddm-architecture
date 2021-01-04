@@ -1,2 +1,13 @@
 # Архітектурні діаграми
 В даному репозиторію зеберігаються усі важливі діаграми в [PlantUml](https://plantuml.com/) форматі 
+
+##Як переглядати діаграми:
+Є декілька варіантів:
+* [Plugin Chrome](https://chrome.google.com/webstore/detail/plantuml-viewer/legbfeljfbjgfifnkmpoajgpgejojooj?hl=ru)
+* [Plugin Idea](https://plugins.jetbrains.com/plugin/7017-plantuml-integration)
+* [Remote server](http://www.plantuml.com/plantuml/uml/SyfFKj2rKt3CoKnELR1Io4ZDoSa70000)
+
+##Наявні діаграми:
+* [Діаграма взаємодії компонентів платформи](/infrastructure/ddm-control-plane-components.puml)
+* [Діаграма послідовностей по розробці централізованих компонентів платформи та пакету для інсталяції](/infrastructure/gitops-main-flow.puml)
+* [Діаграма послідовностей встановлення платформи](/infrastructure/ddm-platform-install.puml)
