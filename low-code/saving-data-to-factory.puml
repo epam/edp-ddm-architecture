@@ -7,6 +7,8 @@ participant "Сервіс перевірки\nцифрового підпису"
 participant "Ceph" as ceph  order 60
 participant "Camunda" as bmps_service  order 70
 participant "Data Rest API" as data_rest  order 80
+participant "Kafka" as kafka order 90
+participant "Data Kafka API" as data_kafka_api order 100
 
 title Збереження даних у дата фабрику
 
@@ -22,28 +24,38 @@ group Підпис форми
       gateway -> gateway: Перевірка авторизації (правильного JWT)
       gateway -> user_task_management: Проксування запиту
       activate user_task_management
-        user_task_management -> digital_sign_service: Перевірка підпису
+        user_task_management -> digital_sign_service: Перевірка консистентності body, signed hash, JWT
         activate digital_sign_service
-        return  публічні сертифікати ЕЦП
-        user_task_management -> user_task_management: Формування об'єкту з: body, сертифікати підпису, підпис, JWT
+        return  валідність підпису
+        user_task_management -> user_task_management: Формування об'єкту з: body, підпис, JWT
         user_task_management -> ceph: Збереження сформованного об'єкту
         activate ceph
         return  ключ
-        user_task_management -> bmps_service: Збереження змінної з ключом
-        user_task_management -> bmps_service: Переведення БП в наступний стан
+        user_task_management -> bmps_service: Завершення user task з ключем отриманнам з Ceph
         activate bmps_service
           bmps_service -> ceph: Читання об'єкту по ключу
           activate ceph
           return  об'єкт
-          bmps_service -> bmps_service: Формування запиту до потрібного APІ
-          bmps_service -> data_rest: Виклик Rest API та передача: body, сертифікати підпису, підпис, JWT
+          bmps_service -> bmps_service: Формування запиту до потрібного Data Rest APІ
+          bmps_service -> data_rest: Виклик Rest API через Istio та передача: body, підпис, JWT
           activate data_rest
-            data_rest -> data_rest: Перевірка авторизації (правильного JWT)
-            data_rest -> digital_sign_service: Перевірка підпису
+            data_rest -> digital_sign_service: Перевірка консистентності body, signed hash, JWT
+            activate digital_sign_service
+            return  публічні сертифікати ЕЦП для аудиту (у майбутньому)
             data_rest -> data_rest: Валідація формату даних (у майбутньому)
             data_rest -> data_rest: Збереження виклику до аудиту (у майбутньому)
-            data_rest -> data_rest: Збереження даних
-          return результат збереження
+            data_rest -> kafka: Збереження даних
+            activate kafka
+            return
+            kafka <- data_kafka_api: Вичитування даних
+            activate data_kafka_api
+              data_kafka_api -> data_kafka_api: Перевірка JWT на базі підгруженого сертифікату з KeyCloak (у майбутньому)
+              data_kafka_api -> digital_sign_service: Перевірка консистентності body, signed hash, JWT
+              activate digital_sign_service
+              return  публічні сертифікати ЕЦП
+              data_kafka_api -> data_kafka_api: Збереження даних
+              kafka <-- data_kafka_api: Підтвердження про читання
+            deactivate data_kafka_api
         return наступний wait state
 
       return
