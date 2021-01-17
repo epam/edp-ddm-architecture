@@ -26,7 +26,7 @@ group Підпис форми
       activate user_task_management
         user_task_management -> digital_sign_service: Перевірка консистентності body, signed hash, JWT
         activate digital_sign_service
-        return  валідність підпису
+        return валідність підпису
         user_task_management -> user_task_management: Формування об'єкту з: body, підпис, JWT
         user_task_management -> ceph: Збереження сформованного об'єкту
         activate ceph
@@ -36,6 +36,13 @@ group Підпис форми
           bmps_service -> ceph: Читання об'єкту по ключу
           activate ceph
           return  об'єкт
+          opt Трансформація даних форми до контакту Data API
+            bmps_service -> bmps_service: Трансформація об'єкту
+            bmps_service -> digital_sign_service: Передача нового об'єкту на підпис
+            activate digital_sign_service
+              digital_sign_service -> digital_sign_service: Підпис ключем адмінестратора (системним)
+            return hash підпису
+          end
           bmps_service -> bmps_service: Формування запиту до потрібного Data Rest APІ
           bmps_service -> data_rest: Виклик Rest API через Istio та передача: body, підпис, JWT
           activate data_rest
@@ -44,7 +51,7 @@ group Підпис форми
             return  публічні сертифікати ЕЦП для аудиту (у майбутньому)
             data_rest -> data_rest: Валідація формату даних (у майбутньому)
             data_rest -> data_rest: Збереження виклику до аудиту (у майбутньому)
-            data_rest -> kafka: Збереження даних
+            data_rest -> kafka: Збереження даних (body, signed hash, jwt)
             activate kafka
             return
             kafka <- data_kafka_api: Вичитування даних
