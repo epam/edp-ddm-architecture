@@ -24,7 +24,7 @@ group Підпис форми
       gateway -> gateway: Перевірка авторизації (правильного JWT)
       gateway -> user_task_management: Проксування запиту
       activate user_task_management
-        user_task_management -> digital_sign_service: Перевірка консистентності body, signed hash, JWT
+        user_task_management -> digital_sign_service: Перевірка консистентності body, signed hash з сертифікатами, JWT
         activate digital_sign_service
         return валідність підпису
         user_task_management -> user_task_management: Формування об'єкту з: body, підпис, JWT
@@ -42,13 +42,16 @@ group Підпис форми
             activate digital_sign_service
               digital_sign_service -> digital_sign_service: Підпис ключем адмінестратора (системним)
             return hash підпису
+            bmps_service -> ceph: зберегти новий об'єкт з підписом
+          activate ceph
+          return  ключ
           end
           bmps_service -> bmps_service: Формування запиту до потрібного Data Rest APІ
-          bmps_service -> data_rest: Виклик Rest API через Istio та передача: body, підпис, JWT
+          bmps_service -> data_rest: Виклик Rest API через Istio:  body та  хедери з посиланням на Ceph derived and original,  хедер JWT
           activate data_rest
             data_rest -> digital_sign_service: Перевірка консистентності body, signed hash, JWT
             activate digital_sign_service
-            return  публічні сертифікати ЕЦП для аудиту (у майбутньому)
+            return
             data_rest -> data_rest: Валідація формату даних (у майбутньому)
             data_rest -> data_rest: Збереження виклику до аудиту (у майбутньому)
             data_rest -> kafka: Збереження даних (body, signed hash, jwt)
