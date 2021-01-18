@@ -1,26 +1,28 @@
 @startuml
 actor "Адміністратор платформи" as admin  order 10
 participant "Helm-installer" as installer  order 20
-participant "CotrolPlane componenets" as cp  order 30
+participant "CotrolPlane components" as cp  order 30
 participant "Cluster-management helm in Gerrit" as gerrit  order 40
 participant "Gitops Job Jenkins" as jenkins  order 50
 participant "Ceph" as ceph  order 60
 participant "Keycloak" as keycloak  order 70
-participant "Інші компненти" as other  order 80
+participant "Інші компоненти" as other  order 80
 
 title Детальна інсталяція платформи
 autonumber
 
 admin -> installer: запускає інсталлер
 activate installer
-  installer -> cp: встановлює всі компненти з EMPTY-DIR без інтеграції з KeyCloak
+  installer -> cp: встановлює всі компоненти з EMPTY-DIR без інтеграції з KeyCloak
+  activate cp
+    cp -> jenkins: встановлює jenkins
+    cp -> gerrit: встановлює image з clustermanagement repo
+    activate gerrit
+      gerrit -> gerrit: інціалізує clustermanagement repo з helm
+    return
   return
+return
 activate cp
-  cp -> gerrit: встановлює image з clustermanagement repo
-  activate gerrit
-    gerrit -> gerrit: інціалізує clustermanagement repo з helm
-  return
-  cp -> jenkins: встановлює jenkins
   activate jenkins
     cp -> jenkins: створює gitops job для clustermanagement
     cp -> jenkins: запускає gitops job для clustermanagement
@@ -30,13 +32,12 @@ activate cp
     jenkins -> keycloak: встановлює
     jenkins -> other: встановлює
     jenkins -> cp: переводить всі EPMTY_DIR на Ceph
-  return
+  deactivate jenkins
   cp -> keycloak: створює realm для Control Plane
   activate keycloak
   return
   cp -> cp: інтегрується всі компоненти з keycloak
-
- return
+deactivate cp
 
 
 @enduml
