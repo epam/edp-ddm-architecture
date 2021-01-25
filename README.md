@@ -12,3 +12,21 @@
 * [Діаграма послідовностей по розробці централізованих компонентів платформи та пакету для інсталяції](/infrastructure/gitops-main-flow.puml)
 * [Діаграма послідовностей встановлення платформи](/infrastructure/ddm-platform-install.puml)
 * [Діаграма послідовностей створення реэстру за допомогою Control Plane](/infrastructure/ddm-registry-creation-details.puml)
+
+# Antora
+
+Інсталяція 
+
+```bash
+npm i -g @antora/cli @antora/site-generator-default asciidoctor-plantuml
+```
+
+Аутентифікація для приватних репозиторіїв 
+
+```bash
+git config --global credential.helper store && \
+  echo -n 'Repository URL: ' && read REPLY && \
+  git ls-remote -h $REPLY > /dev/null
+```
+
+Див. офіційну документацію [інсталяція](https://docs.antora.org/antora/2.3/install/install-antora/) та [аутентифікація для приватних репозиторіїв](https://docs.antora.org/antora/2.3/playbook/private-repository-auth/)
