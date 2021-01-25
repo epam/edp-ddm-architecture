@@ -1,0 +1,276 @@
+== Помилки 
+
+=== Помилки аутентифікації чи авторизації
+
+|===
+||
+
+a| 
+[plantuml]
+----
+ @startuml
+
+skinparam monochrome true
+
+box "Low-Code" 
+    participant "Business service" as low
+end box
+
+box "Data Factory"
+    participant "REST API" as rest
+end box
+
+box "Platform"
+    database "Ceph" as ceph
+end box
+
+
+low -> rest : request
+alt request
+rest -X rest: JWT parsing error 
+else
+rest -X rest: no signature header
+else
+rest -> ceph: get signature
+ceph --X rest: Not found
+end
+rest -> low : 401
+@enduml
+----
+a| 
+Generic response from ControllerAdvice. No details or reason why it happened. +
+
+* No header
+* No object in Ceph
+
+
+a| 
+[plantuml]
+----
+ @startuml
+
+skinparam monochrome true
+
+box "Low-Code" 
+    participant "Business service" as low
+end box
+
+box "Data Factory"
+    participant "REST API" as rest
+    queue "Kafka" as kafka
+    participant "Kafka API" as kapi
+end box
+
+box "Platform"
+    database "Ceph" as ceph
+end box
+
+
+low -> rest : request
+rest -> kafka : request
+kapi -> kafka : read message
+alt request
+kapi -X kapi: JWT parsing error 
+else
+kapi -X kapi: no signature header
+else
+kapi -> ceph: get signature
+ceph --X kapi: Not found
+end
+kapi --> kafka : message with error code
+rest --> kafka : read response
+rest --> low : 401
+@enduml
+----
+a| 
+Response from controller 401. +
+a| 
+[plantuml]
+----
+@startuml
+skinparam monochrome true
+
+box "Low-Code" 
+participant "Business service" as low
+end box
+
+box "Data Factory"
+    participant "REST API" as rest
+    queue "Kafka" as kafka
+    participant "Kafka API" as kapi
+end box
+
+box "Platform"
+
+participant "КЕП Сервіс" as kep
+end box
+
+low -> rest: request
+rest -> kafka: request
+kapi -> kafka: read
+alt 
+kapi -> kep: validate
+kep --X kapi: invalid
+else 
+kapi -X kep: unavailable \n error
+end
+kapi --> kafka: response with error code
+rest --> kafka: read response
+rest --> low: 401 
+@enduml
+----
+a| It's should be a very corner case. 
+
+* Unstable КЕП Сервіс
+* Fraud (send message directly to Kafka)
+
+a| 
+[plantuml]
+----
+@startuml
+skinparam monochrome true
+
+box "Low-Code" 
+participant "Business service" as low
+end box
+
+box "Data Factory"
+    participant "REST API" as rest
+end box
+
+box "Platform"
+participant "КЕП Сервіс" as kep
+end box
+
+low -> rest: request
+alt 
+rest -> kep: validate signature
+kep --X rest: invalid signature
+else 
+rest -X kep: error calling KEP
+end
+rest --> low : 401
+@enduml
+----
+a| On KEP unavailable or runtime error it still will be 401 
+|===
+
+=== Внутрішні помилки сервера
+
+[frame="none"]
+|===
+||
+a|
+[plantuml]
+----
+@startuml
+
+skinparam monochrome true
+
+box "Low-Code" 
+    participant "Business service" as low
+end box
+
+box "Data Factory"
+    participant "REST API" as rest
+    queue "Kafka" as kafka
+end box
+
+low -> rest : request
+rest -> kafka : send message
+rest --> kafka: no response
+rest --> low: 500 Generic
+@enduml
+----
+a| 
+Generic response from ControllerAdvice. No details or reason why it happened. +
+_Can_ be separated from other errors, but why?
+
+a|
+[plantuml]
+----
+@startuml
+
+skinparam monochrome true
+
+box "Low-Code" 
+    participant "Business service" as low
+end box
+
+box "Data Factory"
+    participant "REST API" as rest
+end box
+
+
+low -> rest : request
+rest -X rest : runtime error
+rest --> low: 500 Generic
+@enduml
+----
+a| 
+Generic response from ControllerAdvice. No details or reason why it happened. +
+a| 
+[plantuml]
+----
+@startuml
+skinparam monochrome true
+
+box "Low-Code" 
+    participant "Business service" as low
+end box
+
+box "Data Factory"
+    participant "REST API" as rest
+    queue "Kafka" as kafka
+    participant "Kafka API" as kapi
+    database "DB" as db
+end box
+
+low -> rest: request
+rest -> kafka: request
+kapi -> kafka: read
+alt DB error
+kapi -x db: call procedure
+else
+kapi -x kapi: result set processing
+end
+kapi --> kafka: response 
+rest --> kafka: read
+rest --> low: 500
+@enduml
+----
+a| 
+Exception with some meaningfully but generic info. +
+
+* No header
+* No object in Ceph
+|===
+
+=== Валідаційні
+
+[frame="none"]
+|===
+||
+
+a| 
+[plantuml]
+----
+@startuml
+skinparam monochrome true
+
+box "Low-Code" 
+participant "Business service" as low
+end box
+
+box "Data Factory"
+    participant "REST API" as rest
+end box
+
+low -> rest: request
+rest -x rest: validate
+rest --> low: 422
+@enduml
+----
+a|
+Response ControllerAdvice. _Validation is not implemented yet_
+|===
