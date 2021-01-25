@@ -1,0 +1,64 @@
+{{- if .Values.database.required }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    labels:
+        app: {{ .Values.name }}
+    name: {{ .Values.name }}-db
+spec:
+    replicas: 1
+    selector:
+      matchLabels:
+        app: {{ .Values.name }}-db
+    strategy:
+        type: Recreate
+    template:
+        metadata:
+            labels:
+                app: {{ .Values.name }}-db
+        spec:
+            containers:
+                - name: {{ .Values.name }}-db
+                  env:
+                      - name: POSTGRES_DB
+                        value: {{ .Values.name }}-db
+                      - name: POSTGRES_USER
+                        value: "admin"
+                      - name: POSTGRES_PASSWORD
+                        value: "admin"
+                      - name: PGDATA
+                        value: /var/lib/postgresql/data/pgdata
+                      - name: POD_IP
+                        valueFrom: { fieldRef: { fieldPath: status.podIP } }
+                  image: {{ .Values.database.version | quote }}
+                  imagePullPolicy: IfNotPresent
+                  ports:
+                      - containerPort: 5432
+                        protocol: TCP
+                  livenessProbe:
+                      exec:
+                          command:
+                              - sh
+                              - -c
+                              - exec pg_isready --host $POD_IP
+                      initialDelaySeconds: 60
+                      timeoutSeconds: 5
+                      failureThreshold: 6
+                  readinessProbe:
+                      exec:
+                          command:
+                              - sh
+                              - -c
+                              - exec pg_isready --host $POD_IP
+                      initialDelaySeconds: 60
+                      timeoutSeconds: 3
+                      periodSeconds: 5
+                  volumeMounts:
+                      - mountPath: /var/lib/postgresql/data
+                        name: {{ .Values.name }}-db
+            serviceAccount: {{ .Values.name }}
+            volumes:
+                - name: {{ .Values.name }}-db
+                  persistentVolumeClaim:
+                      claimName: {{ .Values.name }}-db
+{{- end }}

@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: {{ .Values.name }}
+    labels:
+        app: {{ .Values.name }}
+spec:
+    replicas: 1
+    selector:
+      matchLabels:
+        app: {{ .Values.name }}
+    strategy:
+        type: RollingUpdate
+    template:
+        metadata:
+            labels:
+                app: {{ .Values.name }}
+        spec:
+{{- if .Values.database.required }}
+            initContainers:
+                - name: init-{{ .Values.name }}-db
+                  image: busybox
+                  command: ["sh", "-c", "while ! nc -w 1 {{ .Values.name }}-db 5432 </dev/null; do echo waiting for {{ .Values.name }}-db; sleep 10; done;"]
+{{- end }}
+            serviceAccountName: {{ .Values.name }}
+            containers:
+                - name: {{ .Values.name }}
+                  image: "{{ .Values.image.name }}:{{ .Values.image.version }}"
+                  imagePullPolicy: Always
+                  ports:
+                      - containerPort: 8080
+                        protocol: TCP
+                  livenessProbe:
+                      failureThreshold: 5
+                      initialDelaySeconds: 180
+                      periodSeconds: 20
+                      successThreshold: 1
+                      tcpSocket:
+                          port: 8080
+                      timeoutSeconds: 5
+                  readinessProbe:
+                      failureThreshold: 5
+                      initialDelaySeconds: 60
+                      periodSeconds: 20
+                      successThreshold: 1
+                      tcpSocket:
+                          port: 8080
+                      timeoutSeconds: 5
+                  resources:
+                      requests:
+                          memory: 500Mi
+{{- if .Values.database.required }}
+                  env:
+                      - name: POSTGRES_DATABASE
+                        value: {{ .Values.name }}-db
+                      - name: POSTGRES_USER
+                        value: "admin"
+                      - name: POSTGRES_PASSWORD
+                        value: "admin"
+{{- end }}
+                  terminationMessagePath: /dev/termination-log
+                  terminationMessagePolicy: File
+            dnsPolicy: ClusterFirst
+            restartPolicy: Always
+            schedulerName: default-scheduler
+            securityContext: {}
+            terminationGracePeriodSeconds: 30
