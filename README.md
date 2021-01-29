@@ -8,10 +8,10 @@
 * [Remote server](http://www.plantuml.com/plantuml/uml/SyfFKj2rKt3CoKnELR1Io4ZDoSa70000)
 
 ##Наявні діаграми:
-* [Діаграма взаємодії компонентів платформи](/infrastructure/ddm-control-plane-components.puml)
-* [Діаграма послідовностей по розробці централізованих компонентів платформи та пакету для інсталяції](/infrastructure/gitops-main-flow.puml)
-* [Діаграма послідовностей встановлення платформи](/infrastructure/ddm-platform-install.puml)
-* [Діаграма послідовностей створення реэстру за допомогою Control Plane](/infrastructure/ddm-registry-creation-details.puml)
+* [Діаграма взаємодії компонентів платформи](/modules/ROOT/partials/infrastructure/ddm-control-plane-components.puml)
+* [Діаграма послідовностей по розробці централізованих компонентів платформи та пакету для інсталяції](/modules/ROOT/partials/infrastructure/gitops-main-flow.puml)
+* [Діаграма послідовностей встановлення платформи](/modules/ROOT/partials/infrastructure/ddm-platform-install.puml)
+* [Діаграма послідовностей створення реэстру за допомогою Control Plane](/modules/ROOT/partials/infrastructure/ddm-registry-creation-details.puml)
 
 # Antora
 
@@ -27,6 +27,11 @@ npm i -g @antora/cli @antora/site-generator-default asciidoctor-plantuml
 git config --global credential.helper store && \
   echo -n 'Repository URL: ' && read REPLY && \
   git ls-remote -h $REPLY > /dev/null
+```
+
+Генерація сайту документації
+```bash
+antora site.yml
 ```
 
 Див. офіційну документацію [інсталяція](https://docs.antora.org/antora/2.3/install/install-antora/) та [аутентифікація для приватних репозиторіїв](https://docs.antora.org/antora/2.3/playbook/private-repository-auth/)
