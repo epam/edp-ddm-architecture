@@ -1,0 +1,117 @@
+== Розгортання системи
+Розгортання системи відбувається на підставі одного або декількох регламентів.
+
+=== Структура регламенту
+
+[plantuml]
+----
+@startsalt
+{
+{T
++ <&folder> registry-regulations-catalogue
+
+++ <&folder> bpmn
++++ <&file> process.bpmn
++++ ...
+
+++ <&folder> dmn
++++ <&file> validation-rule.dmn
++++ ...
+
+++ <&folder> forms
++++ <&file> form.json
+++++ ...
+
+++ <&folder>data-model
++++ <&folder> changeLog
++++ <&file> model.xml
++++ <&file> settings.yaml
+
+++ <&folder> reports
++++ <&file> report.json
++++ ...
+}
+}
+@endsalt
+----
+
+*bpmn* - папка з бізнес процесами +
+*dmn* - валідаційні правила +
+*forms* - користувацькі форми +
+*data-model* - папка яка влючає в себе дані для розгортання БД та API +
+*changeLog* - папка з Liquibase файлами які описують БД +
+*main.xml* - файл з якого буде створюватись БД (підключення файлів з changeLog) +
+*settings.yaml* - додаткові налаштування для розгортання моделі даних +
+*reports* - папка для шаблонів звітів
+
+=== Сценарії використання
+
+==== Створення реестру
+Розгортання системи на підставі завантаженого регламенту.
+
+==== Внесення критичних змін
+Внесення критичних змін має супруводжуватись обов'зковим збільшенням версії в її другому розряді.
+До критичниз змін можна віднести будь які зміни до моделі даних та бізнес процесів.
+
+==== Внесення незначинх змін
+При внесенні навіть незначних змін версія має бути збільшена в своєму третьому розряді. Незначними змінами вважаються ті для внесення яких не потрібно рестарт сервісів.
+
+=== CI/CD
+
+image::deployment-pipeline.svg[]
+
+=== Registry regulation pipeline
+Кроки можна розділити на службові та породжуючі. Всі службові кроки - є обов'язковими для виконання. Породжуючі - кроки які відповідальні за розгортання/внесення змін до компонентів можуть бути пропущенні, якщо змін вносити не треба. +
+
+[plantuml]
+----
+@startuml
+skinparam monochrome true
+
+skinparam rectangle {
+    RoundCorner<<On Error>> 25
+}
+
+left to right direction
+
+rectangle "Checkout" as checkout
+rectangle "Валідація\n конфігураційних файлів" as validation
+rectangle "Штатне вимкнення сервісів" as shutdown
+rectangle "Створення\n резервної копії" as backup
+rectangle "Розгортання\n моделі даних" as createDatafactory
+rectangle "Розгортання\n бізнес процесів" as createBpmn
+rectangle "Створення\n правил" as createDmn
+rectangle "Створення\n форм" as createForms
+rectangle "Створення\n звітів" as createReports
+rectangle "Запуск автотестів" as autotest
+rectangle "Відновлення стану\n з резервної копії" as rollback<<On Error>>
+
+checkout --> validation
+validation --> shutdown
+shutdown --> backup
+backup --> createDatafactory
+createDatafactory --> createBpmn
+createBpmn --> createDmn
+createDmn --> createForms
+createForms --> createReports
+createReports --> autotest
+autotest -[dashed]-> rollback
+@enduml
+----
+
+==== Валідація конфігураційних файлів
+Перевірка відповідності завантаженого регламенту схемам та правилам. +
+Наприклад: відповідність зміни версії до типу внесенних змін.
+
+==== Розгортання моделі даних
+Оскільки розгортання моделі даних являє собою складний процес, то його створення винесено в окремий pipeline
+//TODO: після перенесення документації по datafactory-pipeline додати посилання на нього
+
+==== Автотести
+Не перевіряють логіку бізнес процесів чи комунікацію між компонентами системи. Основна задача таких тестів - перевірити чи всі компоненти стартували успішно.
+
+
+
+
+
+
