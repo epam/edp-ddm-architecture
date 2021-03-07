@@ -2,11 +2,20 @@
 
 title Діаграма взаємодії компонентів платформи
 
-package "DDM platform Install" as ddm_platrom_install{
+package "DDM platform Install" as ddm_platform_install{
   [Denovo OKD Install] as denovo_okd_install
-  [DDM CP Helm] as ddm_cp_helm
+  [DDM Core Install] as ddm_core_install
 }
-ddm_cp_helm -down-> ddm_cp_install: creates uber helmfile or chart and publish it to Nexus
+ddm_core_install -down-> ddm_components_install: deploys Nexus, Ceph and Platform Keycloak
+
+
+package "DDM Core components Install" as ddm_components_install {
+  [Nexus registry]
+  [Platform Keycloak]
+  [Object Storage]
+}
+
+ddm_core_install -down-> ddm_cp_install: deploys Control Plane components
 
 package "DDM Control Plane (CP) install" as ddm_cp_install {
   [DDM CP Edp Operators] as ddm_cp_edp_operators
@@ -17,7 +26,7 @@ package "DDM Control Plane (CP) install" as ddm_cp_install {
       -jenkins-operator
       -gerrit-operator
       -codebase-operator
-      -reconcile-operator
+      -nexus-operator
   end note
   [DDM CP Applicaiton] as ddm_cp_app
   note top of ddm_cp_app
@@ -29,7 +38,7 @@ package "DDM Control Plane (CP) install" as ddm_cp_install {
     Helm contains:
       -EDP Gerrit CR
       -EDP GitServer CR
-      -EDP Codebase CR for cluser-manaegment
+      -EDP Codebase CR for cluster-management
   end note
   [DDM CP Jenkins] as ddm_jenkins
   note top of ddm_jenkins
@@ -44,14 +53,16 @@ package "Infra Components" as infra_components {
   [logging]
   [storage]
   [monitoring]
-  [network-security]
   [service-mesh]
   [user-management]
   [backup-management]
 }
 
-denovo_okd_install -[hidden]down-> ddm_cp_install
-ddm_gerrit -down-> infra_components : collects all helm charts into one folder with concrete versions,\nwhich should be converted to repository """cluster-management"""  in a template folder
+denovo_okd_install -[hidden]down-> ddm_components_install
+ddm_gerrit -down-> infra_components : collects all helm charts into one folder with concrete versions,\nwhich should be converted to repository """cluster-mgmt"""  in a template folder
+ddm_gerrit -[hidden]down-> infra_components
+ddm_gerrit -down-> registry_components : collects all helm charts into one folder with concrete versions,\nwhich should be converted to repository """regitstry-tenant-template"""
+
 
 package "Registry Components" as registry_components {
   [keycloak-operator]
@@ -61,10 +72,17 @@ package "Registry Components" as registry_components {
   [kong]
   [kafka]
   [citus]
-  [low-code-components]
+  [bpms]
+  [formio]
+  [officer-portal]
+  [user-process-management]
+  [business-process-administration-portal]
+  [user-task-management]
+  [digital-signature-ops]
+  [dataplatform-jenkins-agent]
 }
 
-ddm_gerrit -down-> registry_components : collects all helm charts into one folder with concrete versions,\nwhich should be converted to repository """regitstry-tenant-template"""
+
 
 package "Registry Regulations" as registry_regulations {
   [registry-regulation-template]
