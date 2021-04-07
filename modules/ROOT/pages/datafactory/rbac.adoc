@@ -1,0 +1,220 @@
+= RBAC
+
+
+.RBAC on create table
+[%collapsible]
+====
+[source, xml]
+----
+<changeSet id="table test_pd_subject_role" author="registry owner">
+
+    <createTable tableName="test_pd_subject_role" ext:historyFlag="true" read="officer" write="officer" delete="officer">
+        <column name="role_id" type="UUID">
+            <constraints nullable="false" primaryKey="true" primaryKeyName="pk_test_pd_subject_role"/>
+        </column>
+        <column name="role_name" type="TEXT" read="citizen">
+            <constraints nullable="false"/>
+        </column>
+    </createTable>
+</changeSet>
+
+<changeSet id="table test_pd_processing_consent" author="registry owner">
+
+    <ext:createTable tableName="test_pd_processing_consent" ext:historyFlag="true">
+        <column name="consent_id" type="UUID">
+            <constraints nullable="false" primaryKey="true" primaryKeyName="pk_test_pd_processing_consent"/>
+        </column>
+        <column name="consent_date" type="TIMESTAMPTZ">
+            <constraints nullable="false"/>
+        </column>
+        <column name="person_full_name" type="TEXT" read="citizen">
+            <constraints nullable="false"/>
+        </column>
+        <column name="person_pass_number" type="dn_passport_num">
+            <constraints nullable="false"/>
+        </column>
+    </ext:createTable>
+</changeSet>
+
+----
+====
+
+.RBAC as separate tag
+[%collapsible]
+====
+[source, xml]
+----
+<changeSet id="roles" author="registry owner">
+
+    <rbac roleName="officer">
+        <read>
+            <item table="test_pd_subject_role">
+            <item table="test_pd_processing_consent">
+        </read>
+        <delete>
+            <item table="test_pd_subject_role">
+            <item table="test_pd_processing_consent">
+        <delete>
+        <insert>
+            <item table="test_pd_subject_role">
+            <item table="test_pd_processing_consent">
+        <insert>
+        <update>
+            <item table="test_pd_subject_role">
+            <item table="test_pd_processing_consent">
+        <update>
+    </rbac>
+    <rbac roleName="citizen">
+        <read>
+            <item table="test_pd_subject_role" column="role_name">
+            <item table="test_pd_processing_consent" column="person_full_name">
+        </read>
+        <update>
+            <item table="test_pd_processing_consent" column="person_full_name">
+        </update>
+    </rbac>
+</changeSet>
+
+
+</changeSet>
+----
+====
+
+image::datafactory/rbac-table.svg[]
+
+== API 
+
+=== CRUD
+hasRole('birth_officer')
+[source]
+----
+POST /person
+{
+   "first_name": "...",
+   "last_name": "...",
+   "passport": "...",
+   "inn": "..."
+}
+----
+
+hasRole('death_officer')
+[source]
+----
+DELETE /person/{id}
+----
+
+denyAll
+[source]
+----
+GET /person/{id}
+----
+
+denyAll
+[source]
+----
+PUT /person/{id}
+{
+   "first_name": "...",
+   "last_name": "...",
+   "passport": "...",
+   "inn": "..."
+}
+----
+
+=== Additional endpoints
+
+isAuthenticated()
+[source]
+----
+GET /any-person/{id}
+
+{
+   "first_name": "...",
+   "last_name": "...",
+}
+----
+
+hasRole('officer')
+[source]
+----
+GET /officer-person/{id}
+
+{
+   "first_name": "...",
+   "last_name": "...",
+   "passport": "..."
+}
+----
+
+hasRole('officer')
+[source]
+----
+PATCH /officer-person/{id}
+
+{
+   "first_name": "...",
+   "last_name": "...",
+}
+----
+
+hasRole('passport_officer')
+[source]
+----
+PATCH /passport-officer-person/{id}
+
+{
+   "passport": "..."
+}
+----
+
+hasRole('inn_officer')
+[source]
+----
+PATCH /inn-officer-person/{id}
+
+{
+   "inn": "..."
+}
+----
+
+image::datafactory/rbac-hist.svg[]
+
+=== Search conditions 
+
+Find  name by inn
+
+hasRole('inn_officer') AND hasRole('officer') AND isAuthenticated() 
+on error
+denyAll
+
+[source]
+----
+GET /name-and-inn-by-inn/{inn}
+
+{
+    "inn": "...",
+    "first_name": "..."
+}
+----
+
+[WARNING]
+idnk if it's secure 
+
+isAuthenticated() 
+[source]
+----
+GET /name-by-inn/{inn}
+
+{
+    "first_name": "..."
+}
+----
+
+== DB
+
+=== on select
+Procedure that  accept list of column names and list of roles returns flag if operation is ok
+
+=== insert/update/delete
+
+Lookup on RBAC table inside procedure
