@@ -1,45 +1,49 @@
-= RBAC
+= Розмежування прав доступу до даних, RBAC
 
+== Опис рішення
+//[%collapsible]
+//====
 
-.RBAC on create table
-[%collapsible]
-====
-[source, xml]
+Доступ до даних реєстру мають декілька компонентів: Аналітика (Redash), та Портал, що забезпечує інтерфейс користувача (Lowcode). Розмежування рівнів доступу до даних з боку Аналітики більш детально описано на сторінці link:analytics/analytics.adoc[Побудова аналітичних звітів]. Цей документ фокусується на розмежуванні прав доступу до операційних даних з боку користувачів реєстру, з інтерфейсу порталу.
+
+.Datafabric RBAC, highlevel
+[plantuml, general, svg]
 ----
-<changeSet id="table test_pd_subject_role" author="registry owner">
-
-    <createTable tableName="test_pd_subject_role" ext:historyFlag="true" read="officer" write="officer" delete="officer">
-        <column name="role_id" type="UUID">
-            <constraints nullable="false" primaryKey="true" primaryKeyName="pk_test_pd_subject_role"/>
-        </column>
-        <column name="role_name" type="TEXT" read="citizen">
-            <constraints nullable="false"/>
-        </column>
-    </createTable>
-</changeSet>
-
-<changeSet id="table test_pd_processing_consent" author="registry owner">
-
-    <ext:createTable tableName="test_pd_processing_consent" ext:historyFlag="true">
-        <column name="consent_id" type="UUID">
-            <constraints nullable="false" primaryKey="true" primaryKeyName="pk_test_pd_processing_consent"/>
-        </column>
-        <column name="consent_date" type="TIMESTAMPTZ">
-            <constraints nullable="false"/>
-        </column>
-        <column name="person_full_name" type="TEXT" read="citizen">
-            <constraints nullable="false"/>
-        </column>
-        <column name="person_pass_number" type="dn_passport_num">
-            <constraints nullable="false"/>
-        </column>
-    </ext:createTable>
-</changeSet>
-
+include::partial$datafactory/rbac_overview.puml[]
 ----
-====
+//====
+Операційні дані будуть захищені картою ролей, в імплементації - <<Службова таблиця,службовою таблицею>>, створену окремим <<XML Шаблон,тегом>> Liquibase розширення. Створена таблиця задаватиме набір можливих операцій над кожною сутністю реєстру для ролей користувачів.
 
-.RBAC as separate tag
+Під час первинного розгортання реєстру структура тегу використовується для формування:
+
+* службової таблиці *_ddm_role_permission_* в операційній базі даних та наповненню її даними зі структури тегу
+
+* <<Додаткові ендпоінти,додаткових ендпоінтів>> з метою часткового оновлення елементів сутностей реєстру; окремий ендпоінт створюється для кожної таблиці для якої існує дозвіл на оновлення частини її полів.
+
+WARNING: оновлення всіх колонок таблиці можливе через CRUD операції, тому додаткові ендпоінти мають бути створені лише для тих таблиць, для яких надано доступ на оновлення лише частини їх колонок
+
+Роль для користувача визначається на Keycloak під час автентифікації і передається в JWT токені Lowcode'у. Кожен API запит Lowcode до Datafabric містить отриману з JWT токену роль.
+
+Звернення Datafabric до даних реєстру відбувається за наступною схемою:
+
+* Запити на будь-яку *зміну даних* (Insert/Update/Delete) відбуваються через відповідну службову процедуру реєстру. Окремим параметром передається роль користувача. Перевірка прав відбувається до зміни даних і тільки у випадку коли дозвіл на операцію над необхідними колонками таблиці присутній в *_ddm_role_permission_*.
+
+* Перед запитом на отримання даних Datafabric робить виклик функції *_f_permission_check_*, що перевіряє наявність права доступа на читання всіх колонок необхідної таблиці для ролі користувача.
+
+Більш детально процесс перевірки рівня доступа описано на діаграмі <<access_check>> нижче.
+
+WARNING: Всі <<CRUD>> операції та <<Search Conditions>> також враховують роль користувача, перевіряючи наявний доступ у *_ddm_role_permission_* по зазначеній схемі
+
+Liquibase шаблон знаходиться в Gerrit репозитарії: _data-model/role_permission.xml_. Будь-які зміни прав доступу проходять через процес перевірки, після чого імплементуються через Jenkins pipeline:
+
+* перестворюється таблиця *_ddm_role_permission_* відподвідно до шаблону
+
+* перестворюються <<API>> у відповідності до заданих у шаблоні ролей.
+
+Детальніше процес зміни прав доступу до таблиць реєстру описано на діаграмі <<roles_update>>
+
+== XML Шаблон
+.Variant 1
 [%collapsible]
 ====
 [source, xml]
@@ -48,39 +52,109 @@
 
     <rbac roleName="officer">
         <read>
-            <item table="test_pd_subject_role">
-            <item table="test_pd_processing_consent">
+            <item table="test_pd_subject_role"/>
+            <item table="test_pd_processing_consent"/>
         </read>
         <delete>
-            <item table="test_pd_subject_role">
-            <item table="test_pd_processing_consent">
-        <delete>
+            <item table="test_pd_subject_role"/>
+            <item table="test_pd_processing_consent"/>
+        </delete>
         <insert>
-            <item table="test_pd_subject_role">
-            <item table="test_pd_processing_consent">
-        <insert>
+            <item table="test_pd_subject_role"/>
+            <item table="test_pd_processing_consent"/>
+        </insert>
         <update>
-            <item table="test_pd_subject_role">
-            <item table="test_pd_processing_consent">
-        <update>
-    </rbac>
-    <rbac roleName="citizen">
-        <read>
-            <item table="test_pd_subject_role" column="role_name">
-            <item table="test_pd_processing_consent" column="person_full_name">
-        </read>
-        <update>
-            <item table="test_pd_processing_consent" column="person_full_name">
+            <item table="test_pd_subject_role"/>
+            <item table="test_pd_processing_consent"/>
         </update>
     </rbac>
-</changeSet>
 
+    <rbac roleName="citizen">
+        <read>
+            <item table="test_pd_subject_role" column="role_name"/>
+            <item table="test_pd_processing_consent" column="person_full_name"/>
+        </read>
+        <update>
+            <item table="test_pd_processing_consent" column="person_full_name"/>
+        </update>
+    </rbac>
+
+</changeSet>
+----
+====
+.Variant 2
+[%collapsible]
+====
+[source, xml]
+----
+<changeSet id="roles" author="registry owner">
+
+    <rbac roleName="officer">
+        <item table="test_pd_subject_role">
+            <read/>
+            <delete/>
+            <insert/>
+            <update/>
+        </item>
+        <item table="test_pd_processing_consent">
+            <read/>
+            <delete/>
+            <insert/>
+            <update/>
+        </item>
+    </rbac>
+
+    <rbac roleName="citizen">
+        <item table="test_pd_subject_role">
+            <read>
+                <item column="role_name"/>
+            </read>
+        </item>
+        <item table="test_pd_processing_consent">
+            <read>
+                <item column="person_full_name"/>
+            </read>
+            <update>
+                <item column="person_full_name"/>
+            </update>
+        </item>
+    </rbac>
 
 </changeSet>
 ----
 ====
 
-image::datafactory/rbac-table.svg[]
+== Службова таблиця
+Таблиця ролей створюється під час розгортання регламенту реєстру. Приклад значень карти доступів для зазначеного вище <<XML Шаблон, шаблону>>
+
+.ddm_role_permission
+|===
+^|role_name ^|table_name ^|column_name ^|permission ^|created_at
+
+|officer|test_pd_subject_role|NULL|read|2021-01-01 ...
+|officer|test_pd_processing_consent|NULL|read|2021-01-01 ...
+|officer|test_pd_subject_role|NULL|delete|2021-01-01 ...
+|officer|test_pd_processing_consent|NULL|delete|2021-01-01 ...
+|officer|test_pd_subject_role|NULL|insert|2021-01-01 ...
+|officer|test_pd_processing_consent|NULL|insert|2021-01-01 ...
+|officer|test_pd_subject_role|NULL|update|2021-01-01 ...
+|officer|test_pd_processing_consent|NULL|update|2021-01-01 ...
+|citizen|test_pd_subject_role|role_name|read|2021-01-01 ...
+|citizen|test_pd_processing_consent|person_full_name|read|2021-01-01 ...
+|citizen|test_pd_processing_consent|person_full_name|update|2021-01-01 ...
+
+|===
+
+== Процес перевірки рівня доступа
+//[%collapsible]
+//====
+[[access_check]]
+.перевірка рівня доступа
+[plantuml, process, svg]
+----
+include::partial$datafactory/rbac_process.puml[]
+----
+//====
 
 == API 
 
@@ -121,7 +195,7 @@ PUT /person/{id}
 }
 ----
 
-=== Additional endpoints
+=== Додаткові ендпоінти
 
 isAuthenticated()
 [source]
@@ -177,9 +251,9 @@ PATCH /inn-officer-person/{id}
 }
 ----
 
-image::datafactory/rbac-hist.png[]
+//image::datafactory/rbac-hist.png[]
 
-=== Search conditions 
+=== Search Conditions
 
 Find  name by inn
 
@@ -210,11 +284,19 @@ GET /name-by-inn/{inn}
 }
 ----
 
-== DB
+== Процес зміни прав доступу
+[[roles_update]]
+.зміна прав доступу
+[plantuml, deployment, svg]
+----
+include::partial$datafactory/rbac_change_permissions.puml[]
+----
 
-=== on select
-Procedure that  accept list of column names and list of roles returns flag if operation is ok
-
-=== insert/update/delete
-
-Lookup on RBAC table inside procedure
+//== DB
+//
+//=== on select
+//Procedure that  accept list of column names and list of roles returns flag if operation is ok
+//
+//=== insert/update/delete
+//
+//Lookup on RBAC table inside procedure
