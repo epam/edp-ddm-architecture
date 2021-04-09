@@ -43,6 +43,7 @@ Liquibase шаблон знаходиться в Gerrit репозитарії: 
 Детальніше процес зміни прав доступу до таблиць реєстру описано на діаграмі <<roles_update>>
 
 == XML Шаблон
+
 .Variant 1
 [%collapsible]
 ====
@@ -50,33 +51,47 @@ Liquibase шаблон знаходиться в Gerrit репозитарії: 
 ----
 <changeSet id="roles" author="registry owner">
 
+    <rbac roleName="isAuthenticated">
+        <read>
+            <item table="person" column="first_name"/>
+            <item table="person" column="last_name"/>
+        </read>
+    </rbac>
+
     <rbac roleName="officer">
         <read>
-            <item table="test_pd_subject_role"/>
-            <item table="test_pd_processing_consent"/>
+            <item table="person" column="first_name"/>
+            <item table="person" column="last_name"/>
+            <item table="person" column="passport"/>
         </read>
-        <delete>
-            <item table="test_pd_subject_role"/>
-            <item table="test_pd_processing_consent"/>
-        </delete>
-        <insert>
-            <item table="test_pd_subject_role"/>
-            <item table="test_pd_processing_consent"/>
-        </insert>
         <update>
-            <item table="test_pd_subject_role"/>
-            <item table="test_pd_processing_consent"/>
+            <item table="person" column="first_name"/>
+            <item table="person" column="last_name"/>
         </update>
     </rbac>
 
-    <rbac roleName="citizen">
-        <read>
-            <item table="test_pd_subject_role" column="role_name"/>
-            <item table="test_pd_processing_consent" column="person_full_name"/>
-        </read>
+    <rbac roleName="passport_officer">
         <update>
-            <item table="test_pd_processing_consent" column="person_full_name"/>
+            <item table="person" column="passport"/>
         </update>
+    </rbac>
+
+    <rbac roleName="inn_officer">
+        <update>
+            <item table="person" column="inn"/>
+        </update>
+    </rbac>
+
+    <rbac roleName="birth_officer">
+        <insert>
+            <item table="person"/>
+        </insert>
+    </rbac>
+
+    <rbac roleName="death_officer">
+        <delete>
+            <item table="person"/>
+        </delete>
     </rbac>
 
 </changeSet>
@@ -89,34 +104,54 @@ Liquibase шаблон знаходиться в Gerrit репозитарії: 
 ----
 <changeSet id="roles" author="registry owner">
 
-    <rbac roleName="officer">
-        <item table="test_pd_subject_role">
-            <read/>
-            <delete/>
-            <insert/>
-            <update/>
-        </item>
-        <item table="test_pd_processing_consent">
-            <read/>
-            <delete/>
-            <insert/>
-            <update/>
+    <rbac roleName="isAuthenticated">
+        <item table="person">
+            <read>
+                <item column="first_name"/>
+                <item column="last_name"/>
+            </read>
         </item>
     </rbac>
 
-    <rbac roleName="citizen">
-        <item table="test_pd_subject_role">
+    <rbac roleName="officer">
+        <item table="person">
             <read>
-                <item column="role_name"/>
-            </read>
-        </item>
-        <item table="test_pd_processing_consent">
-            <read>
-                <item column="person_full_name"/>
+                <item column="first_name"/>
+                <item column="last_name"/>
+                <item column="passport"/>
             </read>
             <update>
-                <item column="person_full_name"/>
+                <item column="first_name"/>
+                <item column="last_name"/>
             </update>
+        </item>
+    </rbac>
+
+    <rbac roleName="passport_officer">
+        <item table="person">
+            <update>
+                <item column="passport"/>
+            </update>
+        </item>
+    </rbac>
+
+    <rbac roleName="inn_officer">
+        <item table="person">
+            <update>
+                <item column="inn"/>
+            </update>
+        </item>
+    </rbac>
+
+    <rbac roleName="birth_officer">
+        <item table="person">
+            <insrt/>
+        </item>
+    </rbac>
+
+    <rbac roleName="death_officer">
+        <item table="person">
+            <delete/>
         </item>
     </rbac>
 
@@ -128,22 +163,7 @@ Liquibase шаблон знаходиться в Gerrit репозитарії: 
 Таблиця ролей створюється під час розгортання регламенту реєстру. Приклад значень карти доступів для зазначеного вище <<XML Шаблон, шаблону>>
 
 .ddm_role_permission
-|===
-^|role_name ^|table_name ^|column_name ^|permission ^|created_at
-
-|officer|test_pd_subject_role|NULL|read|2021-01-01 ...
-|officer|test_pd_processing_consent|NULL|read|2021-01-01 ...
-|officer|test_pd_subject_role|NULL|delete|2021-01-01 ...
-|officer|test_pd_processing_consent|NULL|delete|2021-01-01 ...
-|officer|test_pd_subject_role|NULL|insert|2021-01-01 ...
-|officer|test_pd_processing_consent|NULL|insert|2021-01-01 ...
-|officer|test_pd_subject_role|NULL|update|2021-01-01 ...
-|officer|test_pd_processing_consent|NULL|update|2021-01-01 ...
-|citizen|test_pd_subject_role|role_name|read|2021-01-01 ...
-|citizen|test_pd_processing_consent|person_full_name|read|2021-01-01 ...
-|citizen|test_pd_processing_consent|person_full_name|update|2021-01-01 ...
-
-|===
+image::datafactory/rbac-table.svg[]
 
 == Процес перевірки рівня доступа
 //[%collapsible]
@@ -197,10 +217,14 @@ PUT /person/{id}
 
 === Додаткові ендпоінти
 
+[NOTE]
+Чи потрібне додавання штучної ролі у ендпоінті у разі доступності ендпоінта для усіх аутентифікованих користувачів public, authenticated, all, any ?
+
+
 isAuthenticated()
 [source]
 ----
-GET /any-person/{id}
+GET /person/public/{id}
 
 {
    "first_name": "...",
@@ -211,7 +235,7 @@ GET /any-person/{id}
 hasRole('officer')
 [source]
 ----
-GET /officer-person/{id}
+GET /person/officer/{id}
 
 {
    "first_name": "...",
@@ -223,7 +247,7 @@ GET /officer-person/{id}
 hasRole('officer')
 [source]
 ----
-PATCH /officer-person/{id}
+PATCH /person/officer/{id}
 
 {
    "first_name": "...",
@@ -234,7 +258,7 @@ PATCH /officer-person/{id}
 hasRole('passport_officer')
 [source]
 ----
-PATCH /passport-officer-person/{id}
+PATCH /person/passport-officer/{id}
 
 {
    "passport": "..."
@@ -244,22 +268,19 @@ PATCH /passport-officer-person/{id}
 hasRole('inn_officer')
 [source]
 ----
-PATCH /inn-officer-person/{id}
+PATCH /person/inn-officer/{id}
 
 {
    "inn": "..."
 }
 ----
 
-//image::datafactory/rbac-hist.png[]
-
 === Search Conditions
 
-Find  name by inn
+У зазанчаеному прикладі такий SearchConditions буде мати права доступу denayAll оскільки в жодної ролі нема права читання поля `inn`
 
-hasRole('inn_officer') AND hasRole('officer') AND isAuthenticated() 
-on error
-denyAll
+Але у разі додавання такого права `inn_officer` права доступу будуть виглядати - так
+hasRole('inn_officer') AND hasRole('officer') AND isAuthenticated()
 
 [source]
 ----
@@ -270,9 +291,6 @@ GET /name-and-inn-by-inn/{inn}
     "first_name": "..."
 }
 ----
-
-[WARNING]
-idnk if it's secure 
 
 isAuthenticated() 
 [source]
@@ -292,11 +310,10 @@ GET /name-by-inn/{inn}
 include::partial$datafactory/rbac_change_permissions.puml[]
 ----
 
-//== DB
-//
-//=== on select
-//Procedure that  accept list of column names and list of roles returns flag if operation is ok
-//
-//=== insert/update/delete
-//
-//Lookup on RBAC table inside procedure
+== Kafka API
+
+=== Читання даних
+Для перевірки можливості того чи іншого запиту перед його виконанням викликається процедура в яку передається список полів які будуть викликані та перелік ролей користувача. Процедура повертає true або false. У разі true відбуваєтьс запит, а у разі false користувачу буде відправлена 403 помилка.
+
+=== Модифікація даних
+Для операцій модифікації механізм перевірки RBAC вбудований в процедури, і вимагає лише передачі переліку ролей користувача
