@@ -1,0 +1,51 @@
+@startuml
+skinparam monochrome true
+skinparam backgroundColor #aaaaaa
+
+Actor User
+participant Keycloak
+User -> Lowcode: HTTPS request
+Keycloak <- Lowcode: auth
+Keycloak -> Lowcode: JWT {**role**: officer, ...}
+opt data manipulations
+else INSERT/UPDATE/DELETE
+    Lowcode -> Datafabric++: API request {**role**: officer, ...}
+    database Citus
+    Datafabric -> Citus++: JDBC procedure call\ninsert/update/delete\n(**role**=officer, ...)
+    Citus -> Citus: query ddm_role_permission\nto check permission for **role**
+
+    alt operation is permitted
+        Citus <- Citus: execute insert/update/delete
+        alt operation is successful
+            Datafabric <- Citus: data/return control
+            Lowcode <- Datafabric: API response {code: 200, ...}
+        else operation is not successful
+            Datafabric <- Citus: exception
+            Lowcode <- Datafabric: API response {code: 503, ...}
+        end
+    else operation is not permitted
+        Datafabric <- Citus--: exception
+        Lowcode <- Datafabric--: API response {code: 403, ...}
+    end
+else SELECT
+    Lowcode -> Datafabric++:API request {**role**: officer, ...}
+    Datafabric -> Citus++: JDBC function call\n(**role**=officer, ...)
+    alt operation is permitted
+        Datafabric <- Citus: True
+        Datafabric -> Citus: JDBC query data
+        alt operation is successful
+            Datafabric <- Citus: data
+            Lowcode <- Datafabric: API response {code=200, ...}
+        else operation is not successful
+            Datafabric <- Citus: exception
+            Lowcode <- Datafabric: API response {code=503, ...}
+        end
+    else operation is not permitted
+        Datafabric <- Citus--: False
+        Lowcode <- Datafabric--: API response {code=403, ...}
+
+    end
+end
+
+
+@enduml
