@@ -2,12 +2,12 @@
 
 ### Інструменти для розробки технічної документації проекту
 
-- [AsciiDoc](https://asciidoc.org/) - мова розмітки з підтримкою структурних та семантичних елементів, яка використовується для формування текстових документів.
-- [Antora](https://antora.org/) - інструмент структурування текстових AsciiDoc документів за розділами та формування єдиного статичного HTML сайту з технічною документацією.
+- [AsciiDoc](https://asciidoc.org/) - мова розмітки з підтримкою структурних та семантичних елементів, яка використовується для формування текстових документів
+- [Antora](https://antora.org/) - інструмент структурування текстових AsciiDoc документів за розділами та формування єдиного статичного HTML сайту з технічною документацією на базі _.yml_ плейбука конфігурації
 
 ### Інструменти візуалізації технічних аспектів рішення та діаграм
-- [PlantUml](https://plantuml.com/) - інструмент з відкритим кодом, який дозволяє описувати UML діаграми, візуалізовувати JSON та YAML у текстовому вигляді за допомогою власного доменного синтаксису.
-- [Draw.IO](https://draw.io/) - он-лайн інструмент створення діаграм різних типів з можливостями збереження у SVG форматі с підтримкою подальшого редагування.
+- [PlantUml](https://plantuml.com/) - інструмент з відкритим кодом, який дозволяє описувати UML діаграми, візуалізовувати JSON та YAML у текстовому вигляді за допомогою власного доменного синтаксису
+- [Draw.IO](https://draw.io/) - он-лайн інструмент створення діаграм різних типів з можливостями збереження у SVG форматі с підтримкою подальшого редагування
 
 ### Шаблон типової документації
 - [Шаблон опису типового бекенд-сервісу](https://gitbud.epam.com/mdtu-ddm/general/doc-template)
@@ -31,11 +31,11 @@
 ### Локальне оточення для розробки технічної документації
 
 Для ведення розробки документації, необхідно встановити:
-- [IntelliJ IDEA / JetBrains WebStorm](https://www.jetbrains.com/) - інтегроване середовище розробки.
-- [AsciiDoc JetBrains плагін](https://plugins.jetbrains.com/plugin/7391-asciidoc) - підтримка синтаксису AsciiDoc та попереднього перегляду в IntelliJ IDEA та WebStorm.
-- [PlantUML Integration IntelliJ IDEA плагін](https://plugins.jetbrains.com/plugin/7017-plantuml-integration) - плагін для розробки діаграм у текстовому вигляді з використанням PlantUML синтаксису та їх попереднього перегляду.   
-- [Antora](https://docs.antora.org/antora/2.3/install/install-antora/) - генератор статичних HTML сайтів шляхом структурування та трансформації AsciiDoc документів. 
-- (опційно) [Asciidoctor.js Live Preview](https://chrome.google.com/webstore/detail/asciidoctorjs-live-previe/iaalpfgpbocpdfblpnhhgllgbdbchmia) - розширення до браузеру Сhrome для перегляду AsciiDoc документів.
+- [IntelliJ IDEA / JetBrains WebStorm](https://www.jetbrains.com/) - інтегроване середовище розробки
+- [AsciiDoc JetBrains плагін](https://plugins.jetbrains.com/plugin/7391-asciidoc) - підтримка синтаксису AsciiDoc та попереднього перегляду в IntelliJ IDEA та WebStorm
+- [PlantUML Integration IntelliJ IDEA плагін](https://plugins.jetbrains.com/plugin/7017-plantuml-integration) - плагін для розробки діаграм у текстовому вигляді з використанням PlantUML синтаксису та їх попереднього перегляду
+- [Antora](https://docs.antora.org/antora/2.3/install/install-antora/) - генератор статичних HTML сайтів шляхом структурування та трансформації AsciiDoc документів 
+- (опційно) [Asciidoctor.js Live Preview](https://chrome.google.com/webstore/detail/asciidoctorjs-live-previe/iaalpfgpbocpdfblpnhhgllgbdbchmia) - розширення до браузеру Сhrome для перегляду AsciiDoc документів (файли з розширенням _.adoc_)
 
 ### Встановлення Antora
 
@@ -72,3 +72,26 @@ antora site.yml
 ```bash
 antora site-local.yml
 ```
+
+В обох випадках, сайт технічної документації буде згенеровано у директорію, налаштовану у _.yml_ плейбуці: 
+```bash
+outpout:
+  dir: ./build/site
+```
+
+### Перегляд технічної документації
+
+Для перегляду згенерованої документації на локальному оточенні можно використовувати:
+- Браузер, встановлений за замовчуванням, шляхом відкриття файлу _./build/site/index.html_ в IntelliJ IDEA (_File > Open In > Browser > Default_)
+- Вбудовані можливості перегляду IntelliJ IDEA (_File > Open In > Browser > Built-in Preview_)
+
+### Налаштування швидкого запуску процесу генерації документації в IntelliJ IDEA
+
+Для автоматизації кроку генерації документації, в IntelliJ IDEA можно налаштувати конфігурацію запуску **Shell Script**:
+- Викликати з головного меню: _Run > Edit Configurations > Add New Configuration_
+- Вибрати тип конфігурації запуску **Shell Script**
+- Вказати ім'я **Name: antora-site**
+- Вказати тип скприпта **Execute: Shell Script**
+- Вказати скрипт **Script text: antora site-local.yml**
+
+Як результат, в IntelliJ IDEA з'явиться додаткова конфігурація запуску для генерації технічної документації через Antora **antora-site**, яку можна використовувати у якості швидкого виклику.
