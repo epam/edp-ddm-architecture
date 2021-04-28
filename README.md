@@ -1,11 +1,11 @@
 ## Архітектурна документація
 
-### Технічна документація проекту сформована з використанням
+### Інструменти для розробки технічної документації проекту
 
 - [AsciiDoc](https://asciidoc.org/) - мова розмітки з підтримкою структурних та семантичних елементів, яка використовується для формування текстових документів.
 - [Antora](https://antora.org/) - інструмент структурування текстових AsciiDoc документів за розділами та формування єдиного статичного HTML сайту з технічною документацією.
 
-### Для візуалізації технічних аспектів рішення та діаграм використовуються:
+### Інструменти візуалізації технічних аспектів рішення та діаграм
 - [PlantUml](https://plantuml.com/) - інструмент з відкритим кодом, який дозволяє описувати UML діаграми, візуалізовувати JSON та YAML у текстовому вигляді за допомогою власного доменного синтаксису.
 - [Draw.IO](https://draw.io/) - он-лайн інструмент створення діаграм різних типів з можливостями збереження у SVG форматі с підтримкою подальшого редагування.
 
@@ -34,7 +34,7 @@
 - [IntelliJ IDEA / JetBrains WebStorm](https://www.jetbrains.com/) - інтегроване середовище розробки.
 - [AsciiDoc JetBrains плагін](https://plugins.jetbrains.com/plugin/7391-asciidoc) - підтримка синтаксису AsciiDoc та попереднього перегляду в IntelliJ IDEA та WebStorm.
 - [PlantUML Integration IntelliJ IDEA плагін](https://plugins.jetbrains.com/plugin/7017-plantuml-integration) - плагін для розробки діаграм у текстовому вигляді з використанням PlantUML синтаксису та їх попереднього перегляду.   
-- [Antora](https://docs.antora.org/antora/2.3/install/install-antora/) - генератор статичних HTML сайтів шляхом структурування та трансформації AsciiDoc документів 
+- [Antora](https://docs.antora.org/antora/2.3/install/install-antora/) - генератор статичних HTML сайтів шляхом структурування та трансформації AsciiDoc документів. 
 - (опційно) [Asciidoctor.js Live Preview](https://chrome.google.com/webstore/detail/asciidoctorjs-live-previe/iaalpfgpbocpdfblpnhhgllgbdbchmia) - розширення до браузеру Сhrome для перегляду AsciiDoc документів.
 
 ### Встановлення Antora
