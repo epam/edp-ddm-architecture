@@ -1,0 +1,182 @@
+= Налаштування кабінету людини
+
+image::datafactory/settings.drawio.svg[]
+
+== API
+
+=== Операції з профілем
+Операції з профілями вимагають аутентифікацію та цифровий підпис
+
+==== Cтворення профайлу
+*POST /profile* 
+
+Приклад запиту:
+[source, json]
+----
+{
+  "subject_id": "uuid"
+}
+----
+
+Приклад відповіді: +
+HTTP код
+
+==== Видалення профайлу
+
+Використовується soft delete
+*DELETE /profile* 
+
+Приклад відповіді: +
+HTTP код
+
+=== Операції з налаштуваннями
+Всі операції вимагають аутентифікацію.
+Отримання налаштувань можливе лише для поточного користувача.
+
+=== Перелік налаштувань
+
+
+|===
+|Назва параметра |Опис
+
+|email
+|електронна пошта людини
+
+
+|phone
+|телефон людини
+
+
+|communicationIsAllowed
+| Налаштування чи можливо використовувати канали для комунікації для зв'язку з людиною
+
+|optIn
+|...
+
+|===
+
+=== Структура даних для налаштувань
+
+*subject_id* -  штучний ідентифікатор суб'єкта БД. +
+*keycloak_id* - ід яке існує в JWT токені і унікальне для користувача +
+
+==== Об'єкт
+[plantuml]
+----
+@startuml
+skinparam monochrome true
+class Setting {
+  + UUID id;
+  + UUID profileId;
+  + UUID keycloakId;
+  + String email;
+  + String phone;
+  + boolean optIn;
+}
+@enduml
+----
+
+==== Модель бази даних
+[plantuml]
+----
+@startuml
+skinparam monochrome true
+
+object "Profile" as profile {
+  id: uuid
+  subject_id: uuid
+  keycloak_id: uuid
+  state: text
+}
+
+object "Settings" as settings  {
+  id: uuid
+  profile_id: uuid
+  keycloak_id: uuid
+  email: text
+  phone: text
+  optIn: boolean
+  communicationIsAllowed: boolean
+}
+
+
+profile ||--|| settings
+@enduml
+----
+==== Отримання всіх налаштувань
+*GET /settings*
+
+Приклад відповіді:
+[source, json]
+----
+{
+  "e-mail": "test@test.com",
+  "phone": "+380441111111",
+  "optIn": true,
+  "communicationIsAllowed": true
+}
+----
+
+==== Зміна налаштувань
+
+Приклад запиту:
+
+*PUT /settings*
+[source, json]
+----
+{
+  "e-mail": "test@test.com",
+  "phone": "+380671111111",
+  "optIn": true,
+  "communicationIsAllowed": true
+}
+----
+Приклад відповіді: +
+HTTP код
+
+
+== Бізнес процеси кабінету людини
+
+[plantuml, test, svg]
+----
+@startuml
+skinparam monochrome true
+
+actor "Людина\nПредставник Юр.особи\nФОП" as person
+participant "Kaбінет людини" as ui
+participant KeyCloack as security
+
+participant "Low code" as low
+
+participant "Точки інтеграції\n регламенту" as reg
+participant "Сервіс\n налаштувань" as settings
+
+
+== Перший логін ==
+person -> ui: логін з КЕП
+ui -> security: аутентифікація
+security -> security: перевірка КЕП
+security --> ui: ok 
+ui --> person: кабінет
+
+== Створення профілю \ закінчення реєстрації ==
+person -> ui: Закінчити реєстрацію
+ui -> low: старт БП
+low -> reg: пошук/створення суб'єкта
+return ідшечка
+low -> settings: створення профілю\n (запит с кеп)
+return
+low -> security: зміна ролі
+return ok
+low --> ui: ok
+ui --> person: все ок
+== Зміна налаштувань профіля == 
+person -> ui: нові налаштування
+ui -> settings: нові налаштування + jwt
+settings -> settings: знайшли акаунт з jwt \n поміняли налаштування
+settings --> ui: ok
+ui --> person: все ок
+@enduml
+----
+
+
