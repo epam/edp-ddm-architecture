@@ -1,119 +1,55 @@
 = Налаштування кабінету людини
 
+Налаштування кабінету людини є частиною платформи і розгортається незалежно від регламенту.
+
 image::datafactory/settings.drawio.svg[]
 
-== API
-
-=== Операції з профілем
-Операції з профілями вимагають аутентифікацію та цифровий підпис
-
-==== Cтворення профайлу
-*POST /profile* 
-
-Приклад запиту:
-[source, json]
-----
-{
-  "subject_id": "uuid"
-}
-----
-
-Приклад відповіді: +
-HTTP код
-
-==== Видалення профайлу
-
-Використовується soft delete
-*DELETE /profile* 
-
-Приклад відповіді: +
-HTTP код
-
-=== Операції з налаштуваннями
-Всі операції вимагають аутентифікацію.
-Отримання налаштувань можливе лише для поточного користувача.
-
-=== Перелік налаштувань
-
-
+== Перелік налаштувань
 |===
 |Назва параметра |Опис
 
 |email
-|електронна пошта людини
-
+|електронна пошта людини (обова'язкове поле)
 
 |phone
-|телефон людини
-
+|телефон людини (по замовчуванню: null)
 
 |communicationIsAllowed
-| Налаштування чи можливо використовувати канали для комунікації для зв'язку з людиною
-
-|optIn
-|...
+|дозвіл на використання контактних даних для сповіщень  (по замовчуванню: false)
 
 |===
 
-=== Структура даних для налаштувань
+== Сервіс для доступу до налаштувань
 
-//*subject_id* -  штучний ідентифікатор суб'єкта БД. +
-*keycloak_id* - ід яке існує в JWT токені і унікальне для користувача +
+=== Структура сервіса
 
-==== Об'єкт
-[plantuml]
-----
-@startuml
-skinparam monochrome true
-class Setting {
-  + UUID id;
-  + UUID profileId;
-  + UUID keycloakId;
-  + String email;
-  + String phone;
-  + boolean optIn;
-}
-@enduml
-----
+Сервіс складається з двох частин settings API та settings. +
 
-==== Модель бази даних
-Таблиця налаштувань створюється в окремій БД *internal*, що в свою чергу створюється на етапі розгортання регламенту.
-[plantuml]
-----
-@startuml
-skinparam monochrome true
-hide circle
+*Settings API* - надає REST інтерфейс для операцій з налаштуваннями +
+*Settings* - сервіс для роботи з БД.
 
+=== Операції з налаштуваннями
+Всі операції вимагають аутентифікацію. Отримання налаштувань можливе лише для поточного користувача.
+Ключем для пошуку є keycloak_id який передається в JWT токені.
 
-            entity profile {
-                profile_id: UUID
-                --
-                keycloak_id: UUID
-                profile_name: TEXT
-'                settings: JSONB
-                email: TEXT
-                phone: TEXT
-                is_opt_in: BOOLEAN
-                is_communication_allowed: BOOLEAN
-            }
+=== Отримання всіх налаштувань
+У разі відсутності налаштувань для користувача повертаються налаштування по замовчуванню.
 
-@enduml
-----
-==== Отримання всіх налаштувань
 *GET /settings*
 
 Приклад відповіді:
 [source, json]
 ----
 {
+  "settings_id":  "uuid",
   "e-mail": "test@test.com",
   "phone": "+380441111111",
-  "optIn": true,
   "communicationIsAllowed": true
 }
 ----
 
-==== Зміна налаштувань
+=== Зміна налаштувань
+Данний метод підтримує створення налаштувань у разі їх відсутності.
 
 Приклад запиту:
 
@@ -122,13 +58,62 @@ hide circle
 ----
 {
   "e-mail": "test@test.com",
-  "phone": "+380671111111",
-  "optIn": true,
+  "phone": "+380444444444",
   "communicationIsAllowed": true
 }
 ----
+
 Приклад відповіді: +
-HTTP код
+HTTP код та ідентифікатор створених налаштувань
+[source, json]
+----
+{
+  "settings_id": "uuid"
+}
+----
+
+== Модель бази даних
+
+[NOTE]
+У випадку необхідності введення статусу/ролі користувача таблиця "subject_settings" може бути розширена відповідними полями
+
+[plantuml]
+----
+@startuml
+skinparam monochrome true
+left to right direction
+
+namespace registry {
+object "Subject" as s  {
+  id: uuid
+  ...
+}
+
+object "subject_settings" as sp {
+  id: uuid
+  subject_id: uuid
+  settings_id: uuid
+}
+}
+
+namespace platform {
+
+object "Settings" as settings  {
+  id: uuid
+  keycloak_id: uuid
+  email: text
+  phone: text
+  communicationIsAllowed: boolean
+}
+
+}
+
+s ||--|| sp
+sp ||---|| settings
+
+@enduml
+----
+
 
 
 == Бізнес процеси кабінету людини
@@ -155,12 +140,14 @@ security -> security: перевірка КЕП
 security --> ui: ok 
 ui --> person: кабінет
 
-== Створення профілю \ закінчення реєстрації ==
+== Створення налаштуавнь \ закінчення реєстрації ==
 person -> ui: Закінчити реєстрацію
 ui -> low: старт БП
 low -> reg: пошук/створення суб'єкта
-return ідшечка
-low -> settings: створення профілю\n (запит с кеп)
+return id
+low -> settings: створення налаштувань \n
+return id
+low -> reg: зв'язка налаштувань та суб'єкта
 return
 low -> security: зміна ролі
 return ok
@@ -169,7 +156,7 @@ ui --> person: все ок
 == Зміна налаштувань профіля == 
 person -> ui: нові налаштування
 ui -> settings: нові налаштування + jwt
-settings -> settings: знайшли акаунт з jwt \n поміняли налаштування
+settings -> settings: зміна налаштувань
 settings --> ui: ok
 ui --> person: все ок
 @enduml
