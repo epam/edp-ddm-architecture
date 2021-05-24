@@ -112,7 +112,11 @@ include::partial$datafactory/rbac_process.puml[]
 
 == API 
 
+Для кожної точки інтеграції встановлюються ролі які є сумою всіх необхідних ролей для доступу до полів цієї точки інтеграції.
+У випадку коли одна і та сама операція над полем дозволена для декількох ролей то застосовується логічне АБО для таких ролей.
+
 === CRUD
+
 hasRole('birth_officer')
 [source]
 ----
@@ -137,7 +141,7 @@ denyAll
 GET /person/{id}
 ----
 
-denyAll
+hasRole('officer') && hasRole('passport_officer') && hasRole('inn_officer')
 [source]
 ----
 PUT /person/{id}
@@ -151,9 +155,8 @@ PUT /person/{id}
 
 === Додаткові ендпоінти
 
-[NOTE]
-Чи потрібне додавання штучної ролі у ендпоінті у разі доступності ендпоінта для усіх аутентифікованих користувачів public, authenticated, all, any ?
-
+[WARNING]
+Для забезпечення більшої стабільності на прогнозованості контракту Дата Фабрики додаткові точки інтеграції не створюються. При необхідності реалізації часткового читання сутностей слід явно використовувати searchCondition, а для зміни частин сутностей - partialUpdate.
 
 isAuthenticated()
 [source]
@@ -214,7 +217,7 @@ PATCH /person/inn-officer/{id}
 У зазначеному прикладі такий SearchConditions буде мати права доступу denayAll оскільки в жодної ролі нема права читання поля `inn`
 
 Але у разі додавання такого права `inn_officer` права доступу будуть виглядати - так
-hasRole('inn_officer') AND hasRole('officer') AND isAuthenticated()
+hasRole('inn_officer') AND (hasAnyRole('officer') OR isAuthenticated())
 
 [source]
 ----
@@ -233,6 +236,28 @@ GET /name-by-inn/{inn}
 
 {
     "first_name": "..."
+}
+----
+
+=== Partial update
+
+hasRole('passport_officer')
+[source]
+----
+PATH /partial/person-passport/{id}
+{
+    "passport": "..."
+}
+----
+
+hasRole('passport_officer') AND hasRole('officer')
+[source]
+----
+PATH /partial/change-identity/{id}
+{
+    "first_name": "...",
+    "last_name": "...",
+    "passport": "..."
 }
 ----
 
