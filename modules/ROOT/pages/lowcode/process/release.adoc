@@ -1,0 +1,403 @@
+= Реліз процес компонентів Lowcode
+
+Даний документ містить інформацію, яка необхідна для релізу компонентів Lowcode платформи.
+
+== Загальні положення реліз процесу
+* AC для проведеного релізу Lowcode платформи:
+** Cформований перелік релізних версій для <<Перелік компонентів для релізу:,компонентів Lowcode>>
+* <<Реліз координатор,Реліз координатор>> відповідальний за успішний реліз процес в Lowcode платформі
+в цілому:
+** Отримання вхідних SNAPSHOT версій компонентів для релізу
+** Координація та інформування про статус виконання релізу у Teams каналі
+*** Публікація в каналі Release Management в останній день останнього спрінта релізу повідомлення за
+<<Шаблон повідомлення в Teams каналі, шаблоном>>
+*** Оновлення статусу виконання та ETA кожні 4 години робочого часу
+** Передача релізних версій компонентів для розгортання на *Release pipeline*
+* <<Відповідальні за реліз за напрямками,Відповідальні за напрямком>> повинні провести реліз згідно
+<<Послідовність дій для релізу компоненти,з інструкціями>>
+
+== Базові принципи
+* Загальна стратегія розробки для усіх компонентів - https://trunkbaseddevelopment.com/[Trunk based development]
+* Стратегія для релізів - https://trunkbaseddevelopment.com/branch-for-release/[Branch for release]
+* Стратегія для версіонування - https://semver.org/[Semver]
+* Версія компоненти для релізу повинна співпадати з версією релізу платформи:
+** Версія для релізної гілки та версія платформи двоскладна.Наприклад, *release-1.3*
+** Повна версія компоненти трьохскладна.Третя частина в релізі завжди починається с 0. Наприклад, *1.3.0*
+** При виникненні необхідності випуску хот-фікса, збільшується остання версія компоненти.Наприклад, *1.3.1*
+* В залежностях релізної версії компоненти не повинно бути залежностей на SNAPSHOT версії
+
+== Послідовність дій для релізу компоненти
+
+=== Передумови для релізу компоненти
+* SNAPSHOT версія компоненти, яка була перевірена QA командою.
+
+=== AC успішного релізу компоненти
+* RC версія компоненти, яка була побудована в процесі релізу
+
+=== Реліз процес
+. Створити реліз гілку в EDP Admin Console
+* Зайти на сторінку компоненти
+* Перейти до розділу _Branches_
+* Нажати на кнопку _Create_.Після цього ввести необхідні параметри:
+** *Release Branch* = *true*
+** *Branch name* - залишити незміненим
+** *From commit hash*.Для того щоб знайти необхідний _commit hash_ потрібно:
+*** Знати snapshot версію компоненти, яка пройшла QA перевірку перед релізом.Має структуру вигляду *1.2.0-SNAPSHOT.53*
+*** Знайти відповідний tag у git репозиторії компоненти.Tag має вигляд *build/1.2.0-SNAPSHOT.53*
+*** Для тегу зкопіювати commit hash та вставити у відповідне поле створення релізної гілки
+** *Branch version* = версія релізу платформи та третя складова *0*.Для 1.2 релізу = *1.2.0*
+** *Master Branch version* = Наступна запланована версія платформи.Для поточного 1.2 релізу = *1.3.0*
+* Після цього почнеться створення нової гілки.Триває до 1 хвилини
+* Ознаки успішного створення:
+** Нова git гілка відображається у списку гілок компоненти
+** Створені відповідні пайплайни у Jenkins:
+*** Code-review pipeline
+*** Build pipeline
+** Нова гілка створена у Git репозиторії компоненти
+
+. Оновити версію у *pom.xml* (для _java_ компонент)
+* Зробити commit'и зі змінами у project.version відповідно до версії у EDP Admin Console:
+** Для *release* гілки така ж сама версія, що і в *Branch version*.Тобто, *1.2.0*
+** Для *master* гілки - *Master Branch Version* з суфіксом *SNAPSHOT*.Тобто, *1.3.0-SNAPSHOT*
+
+. Оновити версії залежностей до релізних
+* Перевірити, що для усіх залежностей є релізна версія.
+* Зробити commit'и зі змінами _dependency.version_:
+** Для *release* гілки відповідну нову резілну версію.Якщо залежна компонента не є частиною поточного
+релізу, вказати останню версію реліза для залежності
+** Для *master* гілки відповідно нову snapshot версію залежності.Якщо залежна компонента не є частиною
+поточного релізу, версія залежності залишається без змін
+
+. Побудувати нову версію для *release* гілки компоненти
+* Переконатися. що *Build pipeline* у _Jenkins_ успішно закінчився.
+* Зафіксувати версію, що була побудована для подальшої передачі у тестування.Версія має структуру:
+*1.1.0-RC.2*
+
+. Передати список побудованих релізних версій компонент під відповідним повідомленням у *Teams* каналі
+Release Management
+
+
+=== Перелік компонентів для релізу:
+|===
+|Назва компоненти |Залежності |Категорія |EDP Codebase тип |Відповідальна команда
+
+|ddm-starter-actuator
+|-
+|General Library
+|Library
+|Lowcode BE
+
+|ddm-ceph-client
+|-
+|General Library
+|Library
+|Lowcode BE
+
+|ddm-starter-localization
+|-
+|General Library
+|Library
+|Lowcode BE
+
+|ddm-starter-logger
+|-
+|General Library
+|Library
+|Lowcode BE
+
+|ddm-starter-security
+|-
+|General Library
+|Library
+|Lowcode BE
+
+|ddm-starter-trembita-integration
+|-
+|General Library
+|Library
+|Lowcode BE
+
+|ddm-starter-error-handler
+|ddm-starter-security
+|General Library
+|Library
+|Lowcode BE
+
+|ddm-starter-juel-function
+|ddm-starter-security
+|Lowcode Library
+|Library
+|Lowcode BE
+
+|low-code-platform-parent
+|-
+|Lowcode BE
+|Library
+|Lowcode BE
+
+|digital-signature-ops
+a|
+* ddm-starter-logger
+* ddm-starter-localization
+* ddm-starter-security
+|Lowcode BE Apps
+|Application
+|Lowcode BE (Security)
+
+|bpms
+a|
+* low-code-platform-parent
+* ddm-starter-actuator
+* ddm-ceph-client
+* ddm-starter-localization
+* ddm-starter-logger
+* ddm-starter-security
+* ddm-starter-trembita-integration
+* ddm-starter-error-handler
+* ddm-starter-juel-function
+|Lowcode BE Apps
+|Application
+|Lowcode BE
+
+|user-task-management
+a|
+* low-code-platform-parent
+* business-process-management
+* digital-signature-ops
+* ddm-starter-actuator
+* ddm-ceph-client
+* ddm-starter-localization
+* ddm-starter-logger
+* ddm-starter-security
+* ddm-starter-error-handler
+|Lowcode BE Apps
+|Application
+|Lowcode BE
+
+|user-process-management
+a|
+* low-code-platform-parent
+* business-process-management
+* ddm-starter-actuator
+* ddm-ceph-client
+* ddm-starter-localization
+* ddm-starter-logger
+* ddm-starter-security
+* ddm-starter-error-handler
+|Lowcode BE Apps
+|Application
+|Lowcode BE
+
+|bp-admin-portal
+a|
+* low-code-platform-parent
+* ddm-starter-logger
+* ddm-starter-juel-function
+|Lowcode BE Apps
+|Application
+|Lowcode BE (Security)
+
+|form-management
+|-
+|Lowcode BE Apps
+|Application
+|Lowcode FE
+
+|camunda-auth-cli
+|ddm-starter-logger
+|Lowcode BE Utils
+|Library
+|Lowcode BE
+
+|web-components-library
+|-
+|Lowcode FE Libs
+|Library
+|Lowcode FE
+
+|keycloak-ds-login-page-citizen
+|web-components-library
+|Lowcode FE Apps
+|Library
+|Lowcode FE
+
+|keycloak-ds-login-page-officer
+|web-components-library
+|Lowcode FE Apps
+|Library
+|Lowcode FE
+
+|citizen-portal
+|web-components-library
+|Lowcode FE Apps
+|Application
+|Lowcode FE
+
+|officer-portal
+|web-components-library
+|Lowcode FE Apps
+|Application
+|Lowcode FE
+
+|admin-portal
+|web-components-library
+|Lowcode FE Apps
+|Application
+|Lowcode FE
+
+|keycloak-ds-authenticator
+|-
+|General
+|Library
+|Lowcode BE (Security)
+
+|keycloak-ds-citizen-authenticator
+|ddm-starter-trembita-integration
+|General
+|Library
+|Lowcode BE (Security)
+
+|keycloak
+a|
+* keycloak-ds-login-page-citizen
+* keycloak-ds-login-page-officer
+* keycloak-ds-authenticator
+* keycloak-ds-citizen-authenticator
+|DevOps
+|Application
+|Lowcode DevOps
+
+|business-process-modeler-extensions
+|-
+|Lowcode Platform
+|Library
+|Lowcode BE
+
+|certified-laboratories-registry-regulation
+|-
+|Registry Regulations
+|Library
+|Lowcode BE
+
+|empty-template-registry-regulation
+|-
+|Registry Regulations
+|Library
+|Lowcode BE
+
+|ddm-architecture
+|-
+|Documentation
+|Library
+|Lowcode Arch/Data Arch
+
+|auto-qa-setup
+|-
+|Autotests
+|Autotests
+|Lowcode QA
+
+|consent-data
+a|
+* certified-laboratories-registry-regulation
+* empty-template-registry-regulation
+* auto-qa-setup
+|Autotests
+|Library
+|Lowcode QA
+
+|form-modeler-ui-tests
+a|
+* certified-laboratories-registry-regulation
+* empty-template-registry-regulation
+* auto-qa-setup
+|Autotests
+|Autotests
+|Lowcode QA
+
+|users-cabinets-ui-tests
+a|
+* certified-laboratories-registry-regulation
+* empty-template-registry-regulation
+* auto-qa-setup
+|Autotests
+|Autotests
+|Lowcode QA
+
+|low-code-integration-tests
+a|
+* certified-laboratories-registry-regulation
+* empty-template-registry-regulation
+* auto-qa-setup
+|Autotests
+|Autotests
+|Lowcode QA
+
+|data-integration-tests
+a|
+* certified-laboratories-registry-regulation
+* empty-template-registry-regulation
+* auto-qa-setup
+|Autotests
+|Autotests
+|Lowcode QA
+
+
+|===
+
+=== Відповідальні за реліз за напрямками
+|===
+|Напрямок |Відповідальний |Backup
+
+|Lowcode BE
+|Oleh Soklakov
+|Eduard Kuznetsov
+
+|Lowcode BE (Security)
+|Ievgen Teslia
+|Oleh Soklakov
+
+|Lowcode FE
+|Mykyta Holkin
+|Ruslan Bielyi
+
+|Lowcode DevOps
+|Kseniia Dubniak
+|Dmytro Zinchenko
+
+|Lowcode Arch/Data Arch
+|Maksym Kharchenko
+|Ihor Skostariev
+
+|Lowcode QA
+|Alisa Suchkova
+|Yana Drozd
+
+|===
+
+=== Реліз координатор
+|===
+|Координатор |Backup
+
+|Emil Bagirov
+|Pavlo Yemelianov
+
+|===
+
+=== Шаблон повідомлення в Teams каналі
+[source]
+----
+Lowcode. Release x.y
+
+@Release Management, Вельмишановне панство, цей тред був создано для моніторінгу статусу проведення
+релізу у Lowcode команді. Наразі для успіху нам потрібно наступнe:
+- Змерджити зміни по компонентам за напрямнками - @Відповідальний за напрямком, ETA xx:yy (опційно)
+- Розгорнути та перевірити зміни на QA-auto - @QA Lead, ETA xx.yy
+- Розгорнути та перевірити зміни на SIT - @QA Lead, ETA xx.yy
+- Провести реліз за напрямком Lowcode BE - @Lowcode BE Responsible, ETA xx.yy
+- Провести реліз за напрямком Lowcode BE (Security)- @Lowcode BE (Security) Responsible, ETA xx.yy
+- Провести реліз за напрямком Lowcode FE - @Lowcode FE Responsible, ETA xx.yy
+- Провести реліз за напрямком Lowcode DevOps - @Lowcode DevOps Responsible, ETA xx.yy
+- Провести реліз за напрямком Lowcode Arch/Data Arch - @Lowcode Arch/Data Arch Responsible, ETA xx.yy
+- Провести реліз за напрямком Lowcode QA - @Lowcode QA Responsible, ETA xx.yy
+----
