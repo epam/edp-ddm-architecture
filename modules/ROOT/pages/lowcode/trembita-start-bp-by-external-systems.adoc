@@ -1,0 +1,187 @@
+= Дизайн обробки запитів на ініціювання бізнес-процесів зовнішніми системами через Трембіту
+
+== Призначення
+Зовнішні системи повинні мати можливість ініціювати бізнес-процес через Трембіту.
+
+=== Припущення
+* Бізнес-процеси, які викликані через Трембіту, автоматичні та синхронні(synchronous).
+
+=== Відкриті питання
+* Чи потрібно розмежовувати права доступу на рівні Консюмерів, системних акаунтів?
+
+=== Базові принципи реалізації вимог
+* При ініціюванні бізнес-процесу зовнішні системи мають можливість передати вхідні параметри(*start_vars*) до SOAP запросу.
+* Валідація вхідих параметрів(*start_vars*)
+* В SOAP відповіді присутні *return_vars*, якщо вони є.
+* Ініціювання процесів відбувається з токеном сервісного акаунту *trembita_process_invoker*
+
+== Authentication / Authorization
+
+* Cтворений окремий системний реалм: *external-system* для менеджменту доступа зовнішніх Трембіта користувачів.
+* В *external-system* реалмі створений *системний акаунт*.
+* Створена системна роль *trembita_process_invoker*, яка встановлена *системному акаунту*, на цю роль будуть видані права
+* Створено окремий файл регулювання прав доступу до бізнес-процесів - *bp-auth/external-system.yaml*,
+в якому вказані бізнес-процеси, до яких має доступ *системний акаунт* з роллю *trembita_process_invoker*:
+[source, yaml]
+----
+authorization:
+  realm: external-system
+  process_definitions:
+    - process_definition_id: add-lab # Унікальний ідентифікатор бізнес-процесу
+      roles:
+        - trembita_process_invoker # Унікальне ім'я ролі регламенту
+    - process_definition_id: update-lab
+      roles:
+        - trembita_process_invoker
+----
+* Роль *trembita_process_invoker* повинна мати участь у карті доступу до ресурсів у *Data-factory*,
+так як bpms буде відправляти запити на ендпоінти дата фабрики з токеном системного акаунту.
+* В токені *системного акаунту* повинні бути наступні атрибути, які перевіряються на наявність на стороні *Data factory*:
+** drfo
+
+== Взаємодія з Data Factory
+
+Взаємодія soap-сервісу з дата фабрикою відбувається з бізнес-процесів через bpms сервіс.
+Це означає, що будь-який виклик єндпоінта дата фабрики буде відбуватися з токеном *ситемного акаунту*.
+
+=== Приклад бізнес-процесу
+
+image::lowcode/publish-soap-service/trembita-init-bpmn-example.PNG[]
+
+* В *x-digital-signature-source* ключ документа з даними *start_vars* без підписа
+* В *x-digital-signature-derived-source* ключ документа з системним підписом
+
+=== Відкриті питаня
+* Чи потрібно користувачу підписувати дані та присилати підпис у soap-запиті?
+* Чи потрібно передавати *cunsumer_id* в бізнес-процес для подальшої передачі на *data-factory* як http хедер (source_system, source_application),
+або створити новий хедер *exteranal_system_cunsumer_id*?
+
+== Діаграма розгортання
+
+image::lowcode/soap-service-deployment.svg[]
+
+== Діаграма послідовності
+[plantuml,completeTaskIntegrationWithTrembita,svg]
+----
+@startuml
+@startuml
+participant "Trembita" as trembita order 10
+participant "ШБО" as hbo order 20
+participant "Soap-service" as soapservice  order 30
+participant "Keycloak" as keycloak order 40
+participant "Ceph" as ceph order 50
+participant "Bpms" as bpms order 60
+participant "КЭП" as kep order 70
+participant "Data factory" as datafactory order 80
+
+title Ініціювання бізнес-процесів зовнішніми системами через Трембіту
+  trembita -> hbo: Ініціювати бізнес-процес (start_vars)
+  activate hbo
+  hbo -> soapservice: Ініціювати бізнес-процес (start_vars)
+  activate soapservice
+  soapservice -> soapservice: Валідація start_vars
+  soapservice -> keycloak: Отримати trembita_process_invoker токен
+  activate keycloak
+  keycloak -> soapservice: trembita_process_invoker токен
+  deactivate keycloak
+  soapservice -> ceph: Зберегти start_vars
+  activate ceph
+  ceph -> soapservice: 200 OK Дані збережені
+  deactivate ceph
+  soapservice -> bpms: Ініціювати бізнес-процес\n(start_vars_ceph_key, trembita_process_invoker_token, consumer_id)
+  activate bpms
+  group Виконання бізнес-процесу
+    bpms -> ceph: Читання start_vars (start_vars_ceph_key)
+    activate ceph
+    ceph -> bpms: 200 OK, start_vars
+    deactivate ceph
+    bpms -> kep: Підписати системні дані (data_factory_request_body)
+    activate kep
+    kep -> bpms: 200 OK Системний підпис
+    deactivate kep
+    bpms -> datafactory: Зберегти дані в дата фабриці\n(data_factory_request_body, system_signature_ceph_key)
+    datafactory -> bpms: 200 OK, Дані збережені
+  end group
+  bpms -> soapservice: Бізнес-процес ініційований (return_vars)
+  deactivate bpms
+  soapservice -> hbo: Бізнес-процес ініційований (return_vars)
+  deactivate soapservice
+  hbo -> trembita: Бізнес-процес ініційований (return_vars)
+  deactivate hbo
+@endunl
+----
+
+== Файл регулювання вхідних/вихідних параметрив бізнес-процеса
+Файл, який описує вхідні та вихідні параметри для унікального бізнес-процесу.
+На базі цього файла буде виконана валідація вхідних параметрів при ініціалізації бізнес-процесу.
+
+[IMPORTANT]
+start_vars/return_vars  змінні мають підтримку тільки примітивних типів: *int, long, string, boolean*.
+
+Формат bp-trembita/external-system.yaml:
+[source, yaml]
+----
+trembita:
+    process_definitions:
+      - process_definition_id: '<id>' # Унікальний ідентифікатор бізнес-процесу
+        start_vars: # Список вхідних параметрів бізнес-процесу
+          - <var_name>
+          - ...
+        return_vars: # Список вихідних параметрів, які будуть в респонсі ініціатора
+          - <var_name>
+          - ...
+      - process_definition_id: '<id>'
+        start_vars:
+          - <var_name>
+          - ...
+        return_vars:
+          - <var_name>
+          - ...
+----
+
+Приклад конфігурації:
+[source, yaml]
+----
+trembita:
+    process_definitions:
+      - process_definition_id: 'add-lab'
+        start_vars:
+          - 'edrpou'
+          - 'name'
+        return_vars:
+          - 'labId'
+          - 'status'
+----
+
+== Реєстрація SOAP-сервісу в системі Трембіта
+1) Відкрити інтерфейс адміністрування сервісу безпеки, далі обираємо клієнта та відкриваємо його soap сервіси:
+
+image::lowcode/publish-soap-service/step1.PNG[]
+
+2) Натиснути на кнопку *"Додати WSDL"*
+
+image::lowcode/publish-soap-service/step2.PNG[]
+
+3) Далі треба вставити *посилання до wsdl сервісу*
+
+image::lowcode/publish-soap-service/step3.PNG[]
+
+4) Після реєстрації wsdl сервісу виставляємо *права доступу* до сервісу
+
+image::lowcode/publish-soap-service/step4.PNG[]
+
+5) Натиснути *Додати обь'ект*
+
+image::lowcode/publish-soap-service/step5.PNG[]
+
+6) Шукаємо учасника та обираємо його
+
+image::lowcode/publish-soap-service/step6.PNG[]
+
+image::lowcode/publish-soap-service/step7.PNG[]
+
+7) Натиснути *Увімкнути*
+
+image::lowcode/publish-soap-service/step8.PNG[]
+
+Сервіс зареєстровано і він готовій приймати запроси.
