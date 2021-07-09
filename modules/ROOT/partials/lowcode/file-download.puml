@@ -5,26 +5,51 @@ actor "Користувач" as user
 participant "Клієнтський додаток\n кабінету користувача" as cabinet
 participant "Kong \nAPI Management" as kong
 participant "Сервіс управління \n задачами користувача" as user_task_mngmnt
-participant "Сервіс виконання бізнес-процесів" as bpms
+participant "Сервіс виконання \nбізнес-процесів" as bpms
 participant "Дата Фабрика" as data_factory
-participant "Об'єктне сховище Ceph" as ceph
-participant "Сервіс постачання UI-форм" as form_provider
+participant "Об'єктне сховище Ceph \n(бакет: lowcode-file-storage)" as file_storage_ceph
+participant "Об'єктне сховище Ceph \n(бакет: lowcode-form-data-storage)" as form_data_ceph
+participant "Сервіс \nцифрових документів" as digital_documents
 
 skinparam responseMessageBelowArrow false
 title Вивантаження та перегляд файлів в рамках виконання задач користувачів
 
-autonumber
 activate bpms
-  note over bpms: Бізнес-процес у виконанні
+  note over bpms, data_factory: Бізнес-процес у виконанні
   bpms -> bpms: Підготовка даних для \nформування запиту до Дата Фабрики
-  bpms -> data_factory: Отримання сутності з файловими вкладеннями
+  bpms -> data_factory: Отримання сутності з файловими вкладеннями \n* X-Access-Token
   activate data_factory
-    data_factory -> data_factory: Підготовка сутності з посиланнями на Ceph-документи
-    data_factory -> ceph: Збереження файлових вкладень в Ceph бакет \nдля подальшого використання в Low-code платформі
+    data_factory -> data_factory: Підготовка сутності \nз посиланнями на Ceph-документи
+    data_factory -> ceph: Збереження файлових вкладень \nдля подальшого використання \nв Low-code платформі
   return JSON-документ з посиланнями на Ceph-документи
+
+  note left
+    {
+      "<file_property_name>": [
+        {
+          "id": "{UUID}",
+          "hash": "{SHA256-hash}"
+        }
+      ]
+    }
+  end note
   bpms -> bpms: Підготовка документу з даними для передзаповнення форми
-  bpms -> ceph: Збереження даних для UI-форми задачі з файловими вкладеннями \nу вигляді посилань на Ceph-документи
-  ceph --> bpms
+
+  bpms -> form_data_ceph: Збереження даних для UI-форми задачі з файловими вкладеннями \nу вигляді посилань на Ceph-документи
+  note right
+    {
+      "data": {
+        "<file_property_name>": [
+          {
+            "id": "{UUID}",
+            "hash": "{SHA256-hash}"
+          }
+        ]
+      }
+    }
+  end note
+
+  form_data_ceph --> bpms
   bpms -> bpms: Перехід до очікування виконання задачі
   bpms --> user: Повернення управління користувачу
 deactivate bpms
@@ -35,36 +60,80 @@ activate cabinet
   activate kong
     kong -> user_task_mngmnt: Запит на отримання даних задачі: GET "/task/{id}" \nПараметри: \nX-Access-Token
     activate user_task_mngmnt
-      user_task_mngmnt -> bpms: Отримання метаданих задачі
-      bpms --> user_task_mngmnt
       user_task_mngmnt -> user_task_mngmnt: Перевірка відповідності Assignee задачі\n поточному користувачу
       user_task_mngmnt -> user_task_mngmnt: Генерація ідентифікатора Ceph-документа \nдля отримання підготовлених даних \n(processInstanceId, taskDefinitionKey)
       user_task_mngmnt -> ceph: Читання JSON-документа даних форми за UUID
       ceph --> user_task_mngmnt: Підготовлений JSON-документ UI-форми з Ceph посиланнями файлових вкладень
-      user_task_mngmnt -> form_provider: Отримання схеми UI-форми за значенням "formKey"
-      form_provider --> user_task_mngmnt: JSON-схема UI-форми
+      note left
+        {
+          "data": {
+            "<file_property_name>": [
+              {
+                "id": "{UUID}",
+                "hash": "{SHA256-hash}"
+              }
+            ]
+          }
+        }
+      end note
 
-      user_task_mngmnt -> user_task_mngmnt: Перевірка на наявність полів типу "File" \nзі значеннями у документі даних UI-форми
-      alt Форма має поля типу "File" зі значеннями (>0 елемента в масиві)
-        loop Для всіх вкладених структур - значень полів типу "File"
-          user_task_mngmnt -> user_task_mngmnt: Отримання UUID посилання на Ceph документ з поля "id"
-          user_task_mngmnt -> ceph: Читання Ceph-документу файлового вкладення за UUID
-          ceph --> user_task_mngmnt: контент та метадані файлу ("name", "type", "size", "content")
-          user_task_mngmnt -> user_task_mngmnt: Енкодинг контенту файлу в Base64 ("content)
-          user_task_mngmnt -> user_task_mngmnt: Формування об'єкта файлового вкладення ("name", "type", "size", "content")
-          user_task_mngmnt -> user_task_mngmnt: Заміщення елемента масива файлового вкладення новоствореним об'єктом
-        end
-      end
       user_task_mngmnt -> user_task_mngmnt: Формування агрегованих даних задачі \nз підготовленими даними для відображення UI-форми
       user_task_mngmnt --> cabinet: Повернення даних задачі
+      note left
+        {
+          "data": {
+            "<file_property_name>": [
+              {
+                "id": "{UUID}",
+                "hash": "{SHA256-hash}"
+              }
+            ]
+          }
+        }
+      end note
     deactivate
   deactivate
+  cabinet -> kong: Запит на отримання мета-даних файлів: POST "/documents/metadata/search (ids)" \n* Ідентифікатор сесії Kong
+  activate kong
+    kong -> digital_documents: Запит на отримання мета-даних файлів: POST "/documents/metadata/search" (ids) \n*X-Access-Token
+    digital_documents --> kong: Мета-дані документів
+    kong -> cabinet: Мета-дані документів
+  deactivate kong
+  note left
+    [
+        {
+            "id": "{UUID}",
+            "name": "{filename}",
+            "size": 1000,
+            "type:": "{mime-type}",
+            "hash": "{SHA256-hash}"
+        }
+    ]
+  end note
+
   cabinet -> cabinet: Приведення значень полів типу "File" до канонічного вигляду \nдля використання у клієнтському додатку
-  cabinet -> cabinet: Попереднє заповнення полів UI-форми з використанням метаданих \nта Base64 контенту файлових вкладень
+  note left
+    {
+        "id": "{UUID}",
+        "url": "/documents/{UUID}",
+        "name": "{filename}",
+        "size": 1000,
+        "type:": "{mime-type}",
+        "hash": "{SHA256-hash}"
+    }
+  end note
 return
 
-user -> cabinet: Вивантажити / Переглянути файлове вкладення на UI-формі задачі
-cabinet -> cabinet: Формування файлу для вивантаження
-cabinet --> user: Файл
+user -> cabinet: Вивантажити файлове вкладення через UI-форму задачі
+activate cabinet
+  cabinet -> kong: Запит на вивантаження документа: GET "/documents/{id}" \n* Ідентифікатор сесії Kong
+  activate kong
+    kong -> digital_documents: Запит на вивантаження документа: GET "/documents/{id}" \n*X-Access-Token
+    digital_documents -> digital_documents: Формування файлу для вивантаження
+    digital_documents --> kong: Файл
+    kong --> cabinet: Файл
+  deactivate kong
+  cabinet --> user: Файл
+deactivate cabinet
 
 @enduml

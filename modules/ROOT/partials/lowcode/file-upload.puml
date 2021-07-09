@@ -4,106 +4,109 @@ skinparam monochrome true
 actor "Користувач" as user
 participant "Клієнтський додаток\n кабінету користувача" as cabinet
 participant "Kong \nAPI Management" as kong
+participant "Сервіс \nцифрових документів" as digital_documents
+participant "Об'єктне сховище Ceph \n(бакет: lowcode-file-storage)" as file_storage_ceph
 participant "Сервіс управління \n задачами користувача" as user_task_mngmnt
-participant "Сервіс постачання UI-форм" as form_provider
 participant "Сервіс виконання бізнес-процесів" as bpms
-participant "Об'єктне сховище Ceph" as ceph
+participant "Об'єктне сховище Ceph \n(бакет: lowcode-form-data-storage)" as form_data_ceph
 
 skinparam responseMessageBelowArrow false
-title Завантаження та перегляд файлів в рамках виконання задач користувачів
+title Завантаження та використання файлів в рамках виконання задач користувачів
 
-== Завантаження файлових вкладень в рамках виконання задачі  ==
-autonumber
 user -> cabinet: Перехід до виконання задачі \nдодавання файлових вкладень через UI-форму
 return
 
 user -> cabinet: Завантаження файлових вкладень\n через окрему UI-компоненту форми задачі
 activate cabinet
-  cabinet -> cabinet: Збереження мета-даних та контенту файлів \nв Base64 форматі у локальному сховищі браузера
-return
+  cabinet -> kong: Завантаження файлу POST "/documents" \n* Ідентифікатор сесії Kong \n* Бінарний контент файлу та мета-дані
+  activate kong
+    kong -> digital_documents: Завантаження файлу POST "/documents" \n* X-Access-Token \n* Бінарний контент файлу та мета-дані
+    digital_documents -> digital_documents: Підготовка цифрового документу
+    digital_documents -> file_storage_ceph: Збереження цифрового документу
+    file_storage_ceph --> digital_documents
+    digital_documents -> kong: Повернення мета-даних новоствореного документу
+    kong --> cabinet: Повернення мета-даних новоствореного документу
+    note left
+      {
+          "id": "{UUID}",
+          "url": "/documents/{UUID}",
+          "name": "{filename}",
+          "size": 1000,
+          "type:": "{mime-type}",
+          "hash": "{SHA256-hash}"
+      }
+    end note
+  deactivate kong
+return Повернення управління користувачу
 
 user -> cabinet: Підтвердження виконання задачі внесення даних
 activate cabinet
   cabinet -> cabinet: Клієнтська валідація даних форми
+
   cabinet -> cabinet: Приведення значень полів типу "File" згідно контракту \nвзаємодії з серверним додатком
-  cabinet -> kong: Підтвердження виконання задачі: POST "/task/{id}/complete" \nПараметри: \nІдентифікатор сесії Kong \nДані форми з метаданими та Base64 контентом \nфайлових вкладень
+  note left
+    {
+      "data": {
+        "<file_property_name>": [
+          {
+            "id": "{UUID}",
+            "hash": "{SHA256-hash}"
+          }
+        ]
+      }
+    }
+  end note
+
+  cabinet -> kong: Підтвердження виконання задачі: POST "/task/{id}/complete" \n*Ідентифікатор сесії Kong \n*Дані форми з Ceph-посиланнями на файлові вкладення
   activate kong
-    kong -> user_task_mngmnt: Підтвердження виконання задачі: POST "/task/{id}/complete" \nПараметри: \nX-Access-Token \nДані форми з метаданими та Base64 контентом \nфайлових вкладень
+    kong -> user_task_mngmnt: Підтвердження виконання задачі: POST "/task/{id}/complete" \n* X-Access-Token \n*Дані форми з Ceph-посиланнями на файлові вкладення
     activate user_task_mngmnt
-      user_task_mngmnt -> form_provider: Серверна валідація даних форми
-      form_provider --> user_task_mngmnt: Результат валідації
-      user_task_mngmnt -> bpms: Отримання метаданих задачі у виконанні
-      bpms --> user_task_mngmnt: Метадані задачі з ідентифікатором UI-форми "formKey"
       user_task_mngmnt -> user_task_mngmnt: Перевірка відповідності Assignee задачі\n поточному користувачу
       user_task_mngmnt -> user_task_mngmnt: Встановлення X-Access-Token \nдля JSON-документа даних форми
-      user_task_mngmnt -> form_provider: Отримання схеми UI-форми за значенням "formKey"
-      form_provider --> user_task_mngmnt: JSON-схема UI-форми
-
-      user_task_mngmnt -> user_task_mngmnt: Перевірка на наявність полів типу "File" \nзі значеннями у документі даних UI-форми
-      alt Форма має поля типу "File" зі значеннями (>0 елемента в масиві)
-        loop Для всіх вкладених структур - значень полів типу "File"
-          user_task_mngmnt -> user_task_mngmnt: Генерація ідентифікатора (UUID) Ceph-документа \nдля подальшого збереження контенту та метаданих файлу
-          user_task_mngmnt -> user_task_mngmnt: Отримання метаданих файла ("name", "type", "size")
-          user_task_mngmnt -> user_task_mngmnt: Отримання Base64 контенту файлових вкладень з поля "content"
-          user_task_mngmnt -> user_task_mngmnt: Декодинг контенту файла з Base64
-          user_task_mngmnt -> ceph: Збереження декодованого контенту файлу та метаданих \nу вигляді Ceph-документа під згенерованим UUID
-          ceph --> user_task_mngmnt: Посилання на Ceph-документ файлу (UUID)
-          user_task_mngmnt -> user_task_mngmnt: Заміщення елемента масива файлового вкладення \nновим об'єктом з полем "id" з посиланням на Ceph-документ (UUID)
-        end
-      end
 
       user_task_mngmnt -> user_task_mngmnt: Генерація ідентифікатора Ceph-документа \nдля подальшого збереження даних \n(processInstanceId, taskDefinitionKey)
-      user_task_mngmnt -> ceph: Збереження трансформованого JSON-документа даних форми \nПараметри:\nНазва документа \nJSON-документ даних форми з Ceph посиланнями (UUID)
-      ceph --> user_task_mngmnt
+      user_task_mngmnt -> form_data_ceph: Збереження JSON-документа даних форми \n* Назва документа \n* JSON-документ даних форми з Ceph посиланнями (UUID)
+      note right
+        {
+          "data": {
+            "<file_property_name>": [
+              {
+                "id": "{UUID}",
+                "hash": "{SHA256-hash}"
+              }
+            ]
+          },
+          "x-access-token": "{X-Access-Token}"
+        }
+      end note
+
+      form_data_ceph --> user_task_mngmnt
 
       user_task_mngmnt -> bpms: Підтвердження виконання задачі
       activate bpms
-        bpms -> ceph: Отримання JSON-документа даних UI-форми \nза ідентифікатором задачі
-        ceph --> bpms: JSON документ з Ceph посиланнями
+        bpms -> form_data_ceph: Отримання JSON-документа даних UI-форми \nза ідентифікатором задачі
+        form_data_ceph --> bpms: JSON документ з Ceph посиланнями
         bpms -> bpms: Підготовка даних для попереднього заповнення форми \nнаступної задачі перегляду файлових вкладень
+        bpms -> form_data_ceph: Збереження JSON-документа даних UI-форми \nдля наступної задачи
+        note right
+          {
+            "data": {
+              "<file_property_name>": [
+                {
+                  "id": "{UUID}",
+                  "hash": "{SHA256-hash}"
+                }
+              ]
+            }
+          }
+        end note
+
+        form_data_ceph --> bpms
         bpms -> bpms: Перехід до очікування виконання наступної задачі
       return Повернення управління
       user_task_mngmnt --> user: Повернення управління користувачу
     deactivate
   deactivate
 deactivate
-== Перегляд файлових вкладень в рамках виконання задачі  ==
-user -> cabinet: Перехід до виконання наступної задачі \nперегляду файлових вкладень
-activate cabinet
-  cabinet -> kong: Запит на отримання даних задачі: GET "/task/{id}" \nПараметри: \nІдентифікатор сесії Kong
-  activate kong
-    kong -> user_task_mngmnt: Запит на отримання даних задачі: GET "/task/{id}" \nПараметри: \nX-Access-Token
-    activate user_task_mngmnt
-      user_task_mngmnt -> bpms: Отримання метаданих задачі
-      bpms --> user_task_mngmnt
-      user_task_mngmnt -> user_task_mngmnt: Перевірка відповідності Assignee задачі\n поточному користувачу
-      user_task_mngmnt -> user_task_mngmnt: Генерація ідентифікатора Ceph-документа \nдля отримання підготовлених даних \n(processInstanceId, taskDefinitionKey)
-      user_task_mngmnt -> ceph: Читання JSON-документа даних форми за UUID
-      ceph --> user_task_mngmnt: Підготовлений JSON-документ UI-форми з Ceph посиланнями файлових вкладень
-      user_task_mngmnt -> form_provider: Отримання схеми UI-форми за значенням "formKey"
-      form_provider --> user_task_mngmnt: JSON-схема UI-форми
-
-      user_task_mngmnt -> user_task_mngmnt: Перевірка на наявність полів типу "File" \nзі значеннями у документі даних UI-форми
-      alt Форма має поля типу "File" зі значеннями (>0 елемента в масиві)
-        loop Для всіх вкладених структур - значень полів типу "File"
-          user_task_mngmnt -> user_task_mngmnt: Отримання UUID посилання на Ceph документ з поля "id"
-          user_task_mngmnt -> ceph: Читання Ceph-документу файлового вкладення за UUID
-          ceph --> user_task_mngmnt: контент та метадані файлу ("name", "type", "size", "content")
-          user_task_mngmnt -> user_task_mngmnt: Енкодинг контенту файлу в Base64 ("content)
-          user_task_mngmnt -> user_task_mngmnt: Формування об'єкта файлового вкладення ("name", "type", "size", "content")
-          user_task_mngmnt -> user_task_mngmnt: Заміщення елемента масива файлового вкладення новоствореним об'єктом
-        end
-      end
-      user_task_mngmnt -> user_task_mngmnt: Формування агрегованих даних задачі \nз підготовленими даними для відображення UI-форми
-      user_task_mngmnt --> cabinet: Повернення даних задачі
-    deactivate
-  deactivate
-  cabinet -> cabinet: Приведення значень полів типу "File" до канонічного вигляду \nдля використання у клієнтському додатку
-  cabinet -> cabinet: Попереднє заповнення полів UI-форми з використанням метаданих \nта Base64 контенту файлових вкладень
-return
-
-user -> cabinet: Вивантажити / Переглянути файлове вкладення на UI-формі задачі
-cabinet -> cabinet: Формування файлу для вивантаження
-cabinet --> user: Файл
 
 @enduml

@@ -6,77 +6,97 @@ participant "Клієнтський додаток\n кабінету корис
 participant "Kong \nAPI Management" as kong
 participant "Сервіс управління \n задачами користувача" as user_task_mngmnt
 participant "Сервіс виконання бізнес-процесів" as bpms
-participant "Сервіс постачання UI-форм" as form_provider
 participant "Сервіс КЕП операцій" as dso
-participant "Об'єктне сховище Ceph" as ceph
+participant "Об'єктне сховище Ceph \n(бакет: lowcode-form-data-storage)" as form_data_ceph
 participant "Дата Фабрика" as data_factory
 
 skinparam responseMessageBelowArrow false
-title Підпис файлів через кабінет користувача
+title Підпис даних форми з файловими вкладеннями через кабінет користувача
 
-== Завантаження файлових вкладень в рамках виконання задачі  ==
-autonumber
 user -> cabinet: Перехід до виконання задачі \nнакладання підпису на дані форми з файловими вкладеннями
+activate cabinet
+  cabinet -> cabinet: Підготовка UI-форми для відображення
+  cabinet --> user: Повернення управління
+deactivate cabinet
 
 user -> cabinet: Підтвердження виконання задачі підпису даних
 activate cabinet
   cabinet -> cabinet: Клієнтська валідація даних форми
   cabinet -> cabinet: Приведення значень полів типу "File" згідно контракту \nвзаємодії з серверним додатком
-  cabinet -> cabinet: Генерація цифрового підпису "signature" на JSON-документ даних форми \nз inlined Base64 контентом файлів
-  cabinet -> kong: Підтвердження виконання задачі підпису: POST "/{realm}/task/{id}/sign-form" \nПараметри: \nІдентифікатор сесії Kong \nДані форми з метаданими та Base64 контентом файлових вкладень\nЦифровий підпис
+  note left
+    {
+      "data": {
+        "<file_property_name>": [
+          {
+            "id": "{UUID}",
+            "hash": "{SHA256-hash}"
+          }
+        ]
+      }
+    }
+  end note
+  cabinet -> cabinet: Генерація цифрового підпису "signature" на JSON-документ даних форми \nз SHA256-геш та UUID документів
+  cabinet -> kong: Підтвердження виконання задачі підпису: \nPOST "/{realm}/task/{id}/sign-form" \n* Ідентифікатор сесії Kong \n* Дані форми з SHA256-геш / UUID файлових вкладень\n* Цифровий підпис даних форми
   activate kong
-    kong -> user_task_mngmnt: Підтвердження виконання задачі підпису: POST "/{realm}/task/{id}/sign-form" \nПараметри: \nX-Access-Token \nДані форми з метаданими та Base64 контентом файлових вкладень\nЦифровий підпис
+    note left
+      {
+        "data": {
+          "<file_property_name>": [
+            {
+              "id": "{UUID}",
+              "hash": "{SHA256-hash}"
+            }
+          ]
+        },
+        "signature": "${signature}"
+      }
+    end note
+    kong -> user_task_mngmnt: Підтвердження виконання задачі підпису: \nPOST "/{realm}/task/{id}/sign-form" \n* X-Access-Token \n* Дані форми з SHA256-геш / UUID файлових вкладень\n* Цифровий підпис даних форми
     activate user_task_mngmnt
-      user_task_mngmnt -> form_provider: Серверна валідація даних форми
-      form_provider --> user_task_mngmnt: Результат валідації
-
-      user_task_mngmnt -> bpms: Отримання метаданих задачі у виконанні
-      bpms --> user_task_mngmnt: Метадані задачі з ідентифікатором UI-форми "formKey"
       user_task_mngmnt -> user_task_mngmnt: Перевірка відповідності Assignee задачі\n поточному користувачу
       user_task_mngmnt -> user_task_mngmnt: Встановлення X-Access-Token \nдля JSON-документа даних форми
       user_task_mngmnt -> user_task_mngmnt: Підготовка даних до валідації цифрового підпису
       user_task_mngmnt -> dso: Валідація цифрового підпису ("data", "signature")
       dso -> user_task_mngmnt: Результат валідації
-      group Збереження оригінального JSON-документа з даними та підписом користувача (processInstanceId, taskDefinitionKey, "SIGNED")
-        user_task_mngmnt -> user_task_mngmnt: Генерація ідентифікатора Ceph-документа \nдля збереження оригінального документа з підписом \n(processInstanceId, taskDefinitionKey, "SIGNED")
-        user_task_mngmnt -> ceph: Збереження JSON-документа даних форми з підписом  \nПараметри:\nНазва документа \nJSON-документ даних форми з підписом
-        ceph --> user_task_mngmnt
-      end
 
-      group Збереження JSON-документа з даними для подальшого використання в БП (processInstanceId, taskDefinitionKey)
-        user_task_mngmnt -> user_task_mngmnt: Видалення підпису "signature" з JSON-документа з даними
-        user_task_mngmnt -> form_provider: Отримання схеми UI-форми за значенням "formKey"
-        form_provider --> user_task_mngmnt: JSON-схема UI-форми
-        user_task_mngmnt -> user_task_mngmnt: Перевірка на наявність полів типу "File" \nзі значеннями у документі даних UI-форми
-        alt Форма має поля типу "File" зі значеннями (>0 елемента в масиві)
-          loop Для всіх вкладених структур - значень полів типу "File"
-            user_task_mngmnt -> user_task_mngmnt: Генерація ідентифікатора (UUID) Ceph-документа \nдля подальшого збереження контенту та метаданих файлу
-            user_task_mngmnt -> user_task_mngmnt: Отримання метаданих файла ("name", "type", "size")
-            user_task_mngmnt -> user_task_mngmnt: Отримання Base64 контенту файлових вкладень з поля "content"
-            user_task_mngmnt -> user_task_mngmnt: Декодинг контенту файла з Base64
-            user_task_mngmnt -> ceph: Збереження декодованого контенту файлу та метаданих \nу вигляді Ceph-документа під згенерованим UUID
-            ceph --> user_task_mngmnt: Посилання на Ceph-документ файлу (UUID)
-            user_task_mngmnt -> user_task_mngmnt: Заміщення елемента масива файлового вкладення \nновим об'єктом з полем "id" з посиланням на Ceph-документ (UUID)
-          end
-        end
+      user_task_mngmnt -> user_task_mngmnt: Генерація ідентифікатора Ceph-документа \nдля збереження документа з підписом \n(processInstanceId, taskDefinitionKey)
 
-        user_task_mngmnt -> user_task_mngmnt: Генерація ідентифікатора Ceph-документа \nдля подальшого збереження даних \n(processInstanceId, taskDefinitionKey)
-        user_task_mngmnt -> ceph: Збереження трансформованого JSON-документа даних форми \nПараметри:\nНазва документа \nJSON-документ даних форми з Ceph посиланнями (UUID)
-        ceph --> user_task_mngmnt
-      end
+      user_task_mngmnt -> form_data_ceph: Збереження JSON-документа даних форми з підписом  \n* Назва документа \n* JSON-документ даних форми з підписом
+      note right
+        {
+          "data": {
+            "<file_property_name>": [
+              {
+                "id": "{UUID}",
+                "hash": "{SHA256-hash}"
+              }
+            ]
+          },
+          "x-access-token": {X-Access-Token}
+          "signature": "{signature}"
+        }
+      end note
+      form_data_ceph --> user_task_mngmnt
 
       user_task_mngmnt -> bpms: Підтвердження виконання задачі
       activate bpms
-        bpms -> ceph: Отримання JSON-документа даних UI-форми \nза ідентифікатором задачі (processInstanceId, taskDefinitionKey)
-        ceph --> bpms: JSON документ з Ceph посиланнями
+        bpms -> form_data_ceph: Отримання JSON-документа даних UI-форми \nза ідентифікатором задачі (processInstanceId, taskDefinitionKey)
+        form_data_ceph --> bpms: JSON документ з Ceph посиланнями
         bpms -> bpms: Підготовка даних для формування запиту на збереження у Дата Фабрику
-        bpms -> dso: Накладання системного підпису
-        dso -> bpms: Системний підпис
-        bpms -> ceph: Збереження системного підпису та тіла запиту (X-Digital-Signature-Derived)
-        bpms -> bpms: Отримання посилання на Ceph-документ \nз оригінальним JSON-документом та підписом користувача (X-Digital-Signature) \n(processInstanceId, taskDefinitionKey, "SIGNED")
-        bpms -> data_factory: Збереження даних в реєстрі (Payload, X-Access-Token, X-Digital-Signature, X-Digital-Signature-Derived)
+        bpms -> data_factory: Збереження даних в реєстрі \n* X-Access-Token \n* X-Digital-Signature
+        note left
+          {
+            "data": {
+              "<file_property_name>": [
+                {
+                  "id": "{UUID}",
+                  "hash": "{SHA256-hash}"
+                }
+              ]
+            }
+          }
+        end note
         data_factory --> bpms: Результат виконання операції
-
       return Повернення управління
       user_task_mngmnt --> user: Повернення управління користувачу
     deactivate

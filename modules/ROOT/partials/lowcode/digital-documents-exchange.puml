@@ -1,0 +1,60 @@
+@startuml
+skinparam monochrome true
+
+box Low-code підсистема
+  participant "Клієнтський додаток\n кабінету користувача" as cabinet
+  participant "Сервіс \nцифрових документів" as digital_documents
+  participant "Сервіс управління \nзадачами користувача" as user_task_mngmnt
+  participant "Сервіс виконання \nбізнес-процесів" as bpms
+  participant "Ceph бакет \n(lowcode-file-storage)" as lowcode_file_ceph
+  participant "Ceph бакет \n(lowcode-form-data-storage)" as lowcode_form_data_ceph
+end box
+box Дата Фабрика
+  participant "REST API" as data_factory
+  participant "Ceph бакет \n(registry-file-storage)" as data_file_ceph
+  participant "Сховище даних" as citus
+end box
+skinparam responseMessageBelowArrow true
+
+title Обмін файлами при взаємодії Low-code та Дата Фабрики
+
+activate cabinet
+  cabinet -> digital_documents: Завантаження файлів цифрових документів
+  activate digital_documents
+    digital_documents -> digital_documents: Генерація SHA256-гешів
+    digital_documents -> lowcode_file_ceph: Збереження файлів цифрових документів
+    lowcode_file_ceph --> digital_documents: UUID-ідентифікатори Ceph-документів
+    digital_documents --> cabinet: UUID-ідентифікатори та SHA256-геші файлів
+  deactivate digital_documents
+
+  cabinet -> user_task_mngmnt: Виконання підпису документа даних форми, \nякий містить UUID-ідентифікатори та SHA256-геші файлів
+  activate user_task_mngmnt
+    user_task_mngmnt -> lowcode_form_data_ceph: Зберегти документ даних форми з UUID-ідентифікаторами та SHA256-гешами файлів
+    user_task_mngmnt -> bpms: Завершення виконання задачі
+    activate bpms
+      bpms -> lowcode_form_data_ceph: Зчитати документ даних форми з UUID-ідентифікаторами та SHA256-гешами файлів
+      note over bpms, data_factory: X-Digital-Signature: UUID Ceph-документа з підписом користувача
+      bpms -> data_factory: Запит на збереження документа даних форми \nз UUID-ідентифікаторами та SHA256-гешами файлів
+      activate data_factory
+        data_factory -> data_factory: Перевірка цифрового підпису
+        data_factory -> lowcode_file_ceph: Отримання файлів за UUID-ідентифікаторами
+        data_factory -> data_factory: Перевірка співпадіння SHA256-гешів
+        data_factory -> data_file_ceph: Збереження файлів за UUID-ідентифікаторами
+        data_factory -> citus: Збереження даних сутності з UUID-ідентифікаторами та SHA256-гешами файлів
+        data_factory -> bpms: 200 OK, Дані збережено
+      deactivate data_factory
+
+      bpms -> data_factory: Отримання даних сутності
+      activate data_factory
+        data_factory -> citus: Отримання даних сутності за UUID-ідентифікаторами
+        data_factory -> data_file_ceph: Отримання файлів за UUID-ідентифікаторами
+        data_factory -> data_factory: Перевірка співпадіння SHA256-гешів
+        data_factory -> lowcode_file_ceph: Збереження файлів за UUID-ідентифікаторами
+        data_factory -> bpms: 200 OK, Дані сутності
+      deactivate data_factory
+      bpms -> cabinet: Повернення управління
+    deactivate bpms
+  deactivate user_task_mngmnt
+deactivate cabinet
+
+@enduml
