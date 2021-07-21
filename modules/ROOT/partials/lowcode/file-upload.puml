@@ -18,24 +18,26 @@ return
 
 user -> cabinet: Завантаження файлових вкладень\n через окрему UI-компоненту форми задачі
 activate cabinet
-  cabinet -> kong: Завантаження файлу POST "/documents" \n* Ідентифікатор сесії Kong \n* Бінарний контент файлу та мета-дані
+  cabinet -> kong: Запит на завантаження файлу: \nPOST "/documents/{processInstanceId}/{taskId}/{fieldName}" \n* Ідентифікатор сесії Kong; \n* Мета-атрибути файлу; \n* Бінарний контент файлу;
   activate kong
-    kong -> digital_documents: Завантаження файлу POST "/documents" \n* X-Access-Token \n* Бінарний контент файлу та мета-дані
+    kong -> digital_documents: Запит на завантаження файлу: \nPOST "/documents/{processInstanceId}/{taskId}/{fieldName}" \n* X-Access-Token; \n* Мета-атрибути файлу; \n* Бінарний контент файлу;
+    digital_documents -> digital_documents: Авторизація доступу до виконання операції
+    digital_documents -> digital_documents: Валідація цифрового документу
     digital_documents -> digital_documents: Підготовка цифрового документу
-    digital_documents -> file_storage_ceph: Збереження цифрового документу
+    digital_documents -> file_storage_ceph: Збереження цифрового документу \n* Ключ: <process/{processInstanceId}/{UUID}>
     file_storage_ceph --> digital_documents
     digital_documents -> kong: Повернення мета-даних новоствореного документу
-    kong --> cabinet: Повернення мета-даних новоствореного документу
     note left
       {
           "id": "{UUID}",
-          "url": "/documents/{UUID}",
           "name": "{filename}",
-          "size": 1000,
           "type:": "{mime-type}",
-          "hash": "{SHA256-hash}"
+          "size": 1000,
+          "hash": "{sha256-hash}",
+          "url": "https://.../documents/{processInstanceId}/{taskId}/{fieldName}/{id}"
       }
     end note
+    kong --> cabinet: Повернення мета-даних новоствореного документу
   deactivate kong
 return Повернення управління користувачу
 
@@ -65,7 +67,7 @@ activate cabinet
       user_task_mngmnt -> user_task_mngmnt: Встановлення X-Access-Token \nдля JSON-документа даних форми
 
       user_task_mngmnt -> user_task_mngmnt: Генерація ідентифікатора Ceph-документа \nдля подальшого збереження даних \n(processInstanceId, taskDefinitionKey)
-      user_task_mngmnt -> form_data_ceph: Збереження JSON-документа даних форми \n* Назва документа \n* JSON-документ даних форми з Ceph посиланнями (UUID)
+      user_task_mngmnt -> form_data_ceph: Збереження JSON-документа даних форми \n* Назва документа \n* JSON-документ даних форми з UUID файлів
       note right
         {
           "data": {
@@ -85,7 +87,7 @@ activate cabinet
       user_task_mngmnt -> bpms: Підтвердження виконання задачі
       activate bpms
         bpms -> form_data_ceph: Отримання JSON-документа даних UI-форми \nза ідентифікатором задачі
-        form_data_ceph --> bpms: JSON документ з Ceph посиланнями
+        form_data_ceph --> bpms: JSON документ з UUID файлів
         bpms -> bpms: Підготовка даних для попереднього заповнення форми \nнаступної задачі перегляду файлових вкладень
         bpms -> form_data_ceph: Збереження JSON-документа даних UI-форми \nдля наступної задачи
         note right

@@ -23,8 +23,8 @@ activate cabinet
   cabinet -> digital_documents: Завантаження файлів цифрових документів
   activate digital_documents
     digital_documents -> digital_documents: Генерація SHA256-гешів
-    digital_documents -> lowcode_file_ceph: Збереження файлів цифрових документів
-    lowcode_file_ceph --> digital_documents: UUID-ідентифікатори Ceph-документів
+    digital_documents -> lowcode_file_ceph: Збереження файлів цифрових документів під ключами <process/{processInstanceId}/{id}>
+    lowcode_file_ceph --> digital_documents:
     digital_documents --> cabinet: UUID-ідентифікатори та SHA256-геші файлів
   deactivate digital_documents
 
@@ -35,11 +35,11 @@ activate cabinet
     activate bpms
       bpms -> lowcode_form_data_ceph: Зчитати документ даних форми
       lowcode_form_data_ceph --> bpms: Документ даних форми \nз UUID-ідентифікаторами та SHA256-гешами файлів
-      note over bpms, data_factory: X-Digital-Signature: UUID Ceph-документа з підписом користувача
+      note over bpms, data_factory: X-Digital-Signature, X-Source-Business-Process-Instance-Id
       bpms -> data_factory: Запит на збереження документа даних форми \nз UUID-ідентифікаторами та SHA256-гешами файлів
       activate data_factory
         data_factory -> data_factory: Перевірка цифрового підпису
-        data_factory -> lowcode_file_ceph: Отримання файлів цифрових документів \nза UUID-ідентифікаторами
+        data_factory -> lowcode_file_ceph: Отримання файлів цифрових документів \nза ключами "process/{X-Source-Business-Process-Instance-Id}/UUID
         lowcode_file_ceph --> data_factory
         data_factory -> data_factory: Перевірка співпадіння SHA256-гешів
         data_factory -> data_file_ceph: Збереження файлів за UUID-ідентифікаторами
@@ -47,6 +47,7 @@ activate cabinet
         data_factory -> bpms: 200 OK, Дані збережено
       deactivate data_factory
 
+      note over bpms, data_factory: X-Source-Business-Process-Instance-Id
       bpms -> data_factory: Отримання даних сутності
       activate data_factory
         data_factory -> citus: Отримання даних сутності за UUID-ідентифікаторами
@@ -54,7 +55,7 @@ activate cabinet
         data_factory -> data_file_ceph: Отримання файлів за UUID-ідентифікаторами
         data_file_ceph --> data_factory
         data_factory -> data_factory: Перевірка співпадіння SHA256-гешів
-        data_factory -> lowcode_file_ceph: Збереження файлів за UUID-ідентифікаторами
+        data_factory -> lowcode_file_ceph: Збереження файлів з ключами "process/{X-Source-Business-Process-Instance-Id}/UUID
         data_factory -> bpms: 200 OK, Дані сутності
       deactivate data_factory
       bpms -> cabinet: Повернення управління
