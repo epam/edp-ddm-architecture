@@ -2,13 +2,24 @@
 
 == Базові принципи
 * Зовнішні системи мають можливість інтегруватись з платформою через ШБО Трембіта
-* Керування зовнішніми клієнтами виконується адміністратором тенанту і є частиною регламенту
-* Кожен зовнішній клієнт має відповідний сервіс аккаунт у реалмі *external-system*
+* Керування правами доступу до підсистем тенанта платформи з боку інших зареєстрованих підсистем-учасників
+обміну виконується на рівні ШБО Трембіти адміністратором тенанту
+* Керування правами доступу до бізнес-процесів та даних окремого тенанта з боку зареєстрованих
+підсистем-учасників, яким дозволена взаємодія з підсистемами тенанта виконується на рівні регламента
+реєстру адміністратором регламента
+* Регламент налаштувань зовнішніх підсистем-учасників проходить валідацію в процесі проходження
+пайплайну публікації змін до регламенту
+* Кожному зовнішньому клієнту (підсистемі-учаснику обміну) надається унікальне ім'я-ідентифікатор
+при реєстрації в регламенті реєстру для подальшого створення окремої ролі та її використання
+у визначенні прав доступу на рівні бізнес-процесів та даних реєстру
 * Пароль для сервіс аккаунту генерується автоматично та не задається розробником регламенту при
 реєстрації нового клієнту
-* Кожен сервіс-аккаунт зовнішнього клієнта має відповідну роль, яка є доступною в access token
+* Кожен сервіс-аккаунт зовнішнього клієнта має відповідну роль, яка є доступною в access token, назва
+якої автоматично генерується згідно конвенції
+*external-system-role-_<унікальнe ім'я-ідентифікатор зовнішнього клієнта>_*
 * Усі сервіс аккаунти зовнішніх клієнтів мають роль за замовчуванням *trembita_invoker*
-* Ідентифікація зовнішнього клієнта виконується використовуючи системні заголовки виклику Трембіти
+* Ідентифікація зовнішнього клієнта виконується використовуючи системні заголовки виклику Трембіти,
+а саме *subsystemCode*, *memberClass* та *memberCode*
 
 == Реєстрація в регламенті
 [plantuml, consumers-regisrtation, svg]
@@ -40,12 +51,12 @@ include::partial$lowcode/trembita/consumers-registration.puml[]
 ----
 trembita:
   consumers:
-    - name: drrp
+    drrp: # name
       description: Державний реєстр речових прав на нерухоме майно
       subsystemCode: 6_MJU_DRRP_cons
       memberClass: GOV
       memberCode: 00015622
-    - name: berdyansk-rtg
+    berdyansk-rtg: # name
       description: РТГ Бердянської територіальної громади
       subsystemCode: 63_BerdyanskRTG_cons
       memberClass: GOV
@@ -83,7 +94,7 @@ trembita:
 
 === Правила валідації при обробці файлу в пайплані публікації
 
-* Ім'я зовнішнього клієнту (поле *name*) повинно бути унікальним для регламенту реєстру.
+* Ім'я зовнішнього клієнту (поле *external client name*) повинно бути унікальним для регламенту реєстру.
 * Системні заголовки з ШБО Трембіта утворюють складений ключ який також повинен бути унікальним.
 * При непроходженні валідації пайплайн публікації повинен закінчитися з помилкою
 
@@ -107,13 +118,13 @@ trembita:
 |Статичне значення
 
 |spec.roles[].name
-|external-system-role-_<trembita.consumers[].name>_
-|_<trembita.consumers[].name>_ - значення з файлу конфігурацій. Використання префіксу потрібно для
+|external-system-role-_<trembita.consumers.*name*>_
+|_<trembita.consumers.*name*>_ - значення з файлу конфігурацій. Використання префіксу потрібно для
 запобігання можливих колізій при використанні в системі декількох реалмів
 
 |spec.roles[].description
-|_<trembita.consumers[].description>_
-|_<trembita.consumers[].description>_ - значення з файлу конфігурацій.
+|_<trembita.consumers.*name*.description>_
+|_<trembita.consumers.*name*.description>_ - значення з файлу конфігурацій.
 
 |===
 
@@ -145,20 +156,20 @@ spec:
 |KeycloakClient |Значення |Коментар
 
 |metadata.name
-|external-system-sa-_<trembita.consumers[].name>_
-|_<trembita.consumers[].name>_ - значення з файлу конфігурацій.
+|external-system-sa-_<trembita.consumers.*name*>_
+|_<trembita.consumers.*name*>_ - значення з файлу конфігурацій.
 
 |spec.clientId
-|_<trembita.consumers[].name>_
-|_<trembita.consumers[].name>_ - значення з файлу конфігурацій.
+|_<trembita.consumers.*name*>_
+|_<trembita.consumers.*name*>_ - значення з файлу конфігурацій.
 
 |spec.serviceAccount.enabled
 |true
 |Параметр для створення сервіс аккаунта для клієнту Кейклоак
 
 |spec.serviceAccount.realmRoles
-|external-system-role-_<trembita.consumers[].name>_
-|_<trembita.consumers[].name>_ - значення з файлу конфігурацій. Роль *trembita-invoker* не задається
+|external-system-role-_<trembita.consumers.*name*>_
+|_<trembita.consumers.*name*>_ - значення з файлу конфігурацій. Роль *trembita-invoker* не задається
 тому що надається за замовчуванням в реалмі *external-system*
 
 |spec.serviceAccount.attributes.drfo
@@ -174,24 +185,24 @@ spec:
 |Статичне значення-заглушка
 
 |spec.serviceAccount.attributes.fullName
-|_<trembita.consumers[].description>_
-|_<trembita.consumers[].description>_ - значення з файлу конфігурацій.
+|_<trembita.consumers.*name*.description>_
+|_<trembita.consumers.*name*.description>_ - значення з файлу конфігурацій.
 
 |spec.serviceAccount.attributes.subsystemCode
-|_<trembita.consumers[].subsystemCode>_
-|_<trembita.consumers[].subsystemCode>_ - значення з файлу конфігурацій.
+|_<trembita.consumers.*name*.subsystemCode>_
+|_<trembita.consumers.*name*.subsystemCode>_ - значення з файлу конфігурацій.
 
 |spec.serviceAccount.attributes.memberClass
-|_<trembita.consumers[].memberClass>_
-|_<trembita.consumers[].memberClass>_ - значення з файлу конфігурацій.
+|_<trembita.consumers.*name*.memberClass>_
+|_<trembita.consumers.*name*.memberClass>_ - значення з файлу конфігурацій.
 
 |spec.serviceAccount.attributes.memberCode
-|_<trembita.consumers[].memberCode>_
-|_<trembita.consumers[].memberCode>_ - значення з файлу конфігурацій.
+|_<trembita.consumers.*name*.memberCode>_
+|_<trembita.consumers.*name*.memberCode>_ - значення з файлу конфігурацій.
 
 |spec.serviceAccount.targetRealm
-|_<trembita.consumers[].memberCode>_
-|_<trembita.consumers[].memberCode>_ - значення з файлу конфігурацій.
+|_<trembita.consumers.*name*.memberCode>_
+|_<trembita.consumers.*name*.memberCode>_ - значення з файлу конфігурацій.
 
 |===
 
