@@ -1,0 +1,97 @@
+= Типові розширення-конектори до інших реєстрів із каталогу
+
+:sectnums:
+:sectanchors:
+== Встановлення типових розширень-конекторів
+- Перейди в Nexus репозиторій за посиланням - https://nexus-{CP-NAMESPACE}.{DNS-WILDCARD}/[]
+
+TIP: `{CP-NAMESPACE}` та `{DNS-WILDCARD}` є змінними, де `{CP-NAMESPACE}` -- назва namespace (простору імен) у Nexus, а `{DNS-WILDCARD}` -- значення DNS wildcardfootnote:[В системі DNS можна задавати запис за замовчуванням для неоголошених піддоменів. Такий запис називається wildcard.]
+
+- Знайди папку `business-process-modeler-extensions`
+- Буде відображений список папок з іменем `version.build` - наприклад _(e.g. 0.0.1-SNAPSHOT.12)_. Обери папку з останньою версією.
+- Обери .zip файл у папці, що була відкрита
+- На вкладці `Summary` клацніть правою кнопкою миші посилання `Path`. Почнеться завантаження zip.
+- Розпакуй із заміною завантажений файл .zip у підпапку `resources` в локальну папку {APP_DATA_DIRECTORY} (де зберігається додаток) або в папку USER_DATA_DIRECTORY}.
+
+== Розширення-конектори для отримання даних з ЄДР
+Для спрощення моделювання бізнес-процесів було розроблено типові інтеграційні конектори для отримання інформації з ЄДР.  Налаштовування відбувається на схемах бізнес-процесів.
+
+- searchSubject - для отримання інформації про суб'єкт за кодом ЄДРПОУ або ІПН
+- subjectDetails - для отримання деталізованої інформації про суб'єкт за ID
+
+Інтеграційні конектори
+
+=== Налаштування конектора для пошуку суб'єкта в ЄДР - searchSubject
+
+Переконайся, що папка element-templates містить searchSubjectsEdrRegistryConnectorDelegate.json
+
+В Service Task, натисніть кнопку `Open Catalog` та оберіть шаблон template.
+
+- Заповніть поле `name`- вказати назву задачі.
+- Заповніть поле `Authorization token` - токен для доступу в СЕВ ДЕІР "Трембіта".
+
+NOTE: `Authorization token` - надається постачальником сервісу (в нашому випадку ЄДР), який є іншим учасником СЕВ ДЕІР "Трембіта"
+
+- Заповніть поле `Code` - код (ЄДРПОУ або ІПН) для пошуку в ЄДР
+- Заповніть поле `Result variable` -  назва вихідний параметру, в який буде записано відповідь від сервіса для подальшого використання у бізнес-процесах.
+
+
+image::admin:element-template-settings-1.png[]
+
+===  Налаштування конектора для пошуку детальної інформації по суб'єкту з ЄДР - subjectDetail
+
+Переконайся, що папка element-templates містить subjectDetailEdrRegistryConnectorDelegate.json
+
+В Service Task, натисніть кнопку `Open Catalog` та оберіть шаблон template.
+
+- Заповніть поле `name`- вказати назву задачі.
+- Заповніть поле `Authorization token` - токен для доступу в СЕВ ДЕІР "Трембіта".
+
+NOTE: `Authorization token` - надається постачальником сервісу (в нашому випадку ЄДР), який є іншим учасником СЕВ ДЕІР "Трембіта"
+
+- Заповніть поле `Id` - унікальний ідентифікатор суб'єкта для пошуку в ЄДР
+- Заповніть поле `Result variable` -  назва вихідний параметру, в який буде записано відповідь від сервіса для подальшого використання у бізнес-процесах.
+
+
+image::admin:element-template-settings-2.png[]
+
+== Використання в бізнес-процесі
+Наприклад в бізнес процесі потрібно перевірити статус суб'єкта в ЄДР.
+Для цього в процесі налаштовується конектор для пошуку суб'єкта з ЄДР, в нашому випадку відповідь буде записано у змінну `responseEDR`
+
+Приклад відповіді
+
+[source,json]
+----
+    {
+    "name": "active user",
+    "code": "77777777",
+    "id": 213123,
+    "state": "ACTIVE"
+    }
+----
+
+image::admin:element-template-settings-3.png[]
+
+
+У відповіді є параметр `state`, який має значення "ACTIVE", далі на шлюзі відбувається перевірка:
+** Якщо `state` має значення SUSPENDED або CANCELLED, то бізнес-процес видає валідаційну помилку.
+
+приклад налаштування гілки
+====
+${responseEdr.value.responseBody.elements().get(0).prop('state').value().equals('SUSPENDED') || responseEdr.responseBody.elements().get(0).prop('state').value().equals('CANCELED')}
+====
+image::admin:element-template-settings-4.png[]
+
+
+**  Якщо `state` не дорівнює SUSPENDED або CANCELLED, то відбується подальше виконання процесу..
+
+приклад налаштування гілки
+====
+${!responseEdr.value.responseBody.elements().get(0).prop('state').value().equals('SUSPENDED') && !responseEdr.value.responseBody.elements().get(0).prop('state').value().equals('CANCELED')}
+====
+
+image::admin:element-template-settings-5.png[]
+
+
+
