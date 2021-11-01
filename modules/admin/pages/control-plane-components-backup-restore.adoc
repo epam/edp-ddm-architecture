@@ -1,0 +1,72 @@
+= Створення резервної копії (backup) центральних компонентів та їх відновлення (restore)
+:sectnums:
+:sectanchors:
+
+== Передумови
+* Перейдіть за посиланням https://github.com/vmware-tanzu/velero/releases/tag/v1.6.0 та завантажте віповідну версію `velero CLI`
+* Відкрийти Git Bush та створіть у директорії користувача папку `bin`
+
+[source,bash]
+----
+$ ls -la | grep bin
+----
+* Покладіть завантажений velero CLI в папку bin
+* Перевірте що velero встановлений вірно за допомогою команди
+----
+$ velero
+----
+== Бекап центральних компонентів (резервне копіювання)
+
+Адміністратор Платформи має можливість створити резервну копію центральних компонентів, що буде збережена до захищеного сховища бекапів (для прикладу Minio).
+
+Для цього необхідно виконати наступні кроки:
+
+* Відкрийти Git Bush та перейдіть у папку bin за допомогою команди: _cd bin/_ та нитисніть *_Enter_*
+[source,bash]
+----
+$ cd bin/
+----
+* Скопіюйте токен доступу до *_Openshift_* відповідного кластеру до якого буде виконане резервне копіювання
+image:admin:backup-restore-openshift-token.png[]
+* Вставте скопійований токен у *_Git Bash_* та нитисніть *_Enter_*
+[source,bash]
+----
+$ oc login --token=sha256~NyHYErh_JwJQy1TB4yIfmeoE-UY_Y3s_diQG422v9Rw --server=https://api.backup.mdtu-ddm.projects.epam.com:6443
+----
+* Виконайте команду:
+[source,bash]
+----
+$ velero backup create control-plane-release1-4-backup-28-10 --include-namespaces control-plane --ttl 120h
+----
+де:
+
+-- _control-plane-release1-4-backup-25-10_ - назва папки в сховащі де буде зберігаться резервна копія (для зручності вказана назва кластеру та дата створення бекапу)
+
+-- _control-plane_ - назва центрального компоненту для якого буде створене резервне копіювання
+
+-- _--ttl 120h_ - час зберігання резервної копії
+
+* Для того щоб перевірити що резервна копія успішно створилась виконайте команду:
+
+[source,bash]
+----
+$ velero backup get
+----
+image:admin:backup-restore-central-get.png[]
+
+- Status *New* - запрос на створення копії новий та знаходиться у черзі
+- Status *InProgress* - копія створюється
+- Status *Completed* - копія вже створена
+
+Створені резервні копії центральних компонентів можна також перевірити у *Minio Console* у розділі *Buckets*
+image:admin:backup-restore-minio.png[]
+
+* Для того щоб видалити резервну копію виконайте команду:
+[source,bash]
+----
+$ velero backup delete control-plane-release1-4-backup-28-10
+----
+де "control-plane-release1-4-backup-28-10" - назва резервної копії яку потрібно видалити.
+
+== Відновлення центральних компонентів (Restore)
+
