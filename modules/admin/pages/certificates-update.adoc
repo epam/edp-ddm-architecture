@@ -1,0 +1,69 @@
+= Оновлення сертифікатів кластеру
+
+Дана стаття описує процедуру оновлення сертифікатів роутера
+і API Openshift 4.х кластеру з використанням безкоштовних сертифікатів
+letsencrypt
+
+== Передумови
+* Для проведення процедури оновлення сертифікатів мають бути виконані
+наступні умови
+* Роль в кластері cluster-admin
+* Встановлено oc cli
+* Можливість створення та редагування DNS записів у hosted zone,
+до якої відноситься доменне ім'я кластеру (далі DNS_WILDCARD).
+* Встановлено Certbot. Інструкцію зі встановлення можна знайти на сайті
+https://certbot.eff.org/lets-encrypt/osx-other. При цьому слід обирати
+My HTTP website is running: None of the above on <Ваша операційна система>.
++
+image::certificates-update/certificates-update-1.png[Сторінка завантаження certbot]
++
+Зауваження: виконувати будь-які кроки інструкції, крім власне інсталляції certbot, не є необхідним.
+
+== Процедура оновлення
+. Запустити консоль з правами адміністратора / sudo
+. Виконати команду: certbot certonly --manual
+. На вимогу, тільки при першому запуску: ввести свій email і погодитись
+з умовами використання та погодитись або відмовитись на поширення вашого
+email з Electronic Frontier Foundation
+Вказати доменні імена для сертифікатів:
+.. *.<DNS_WILDCARD>. Наприклад, Наприклад: *.openshift.example.com
+.. *.apps.<DNS_WILDCARD>. Наприклад, *.apps.openshift.example.com
+. Опціонально: якщо ви бачите повідомлення:
+"You have an existing certificate that has exactly the same domains or
+certificate name you requested and isn't close to expiry.",
+слід обрати варіант Renew & replace the certificate
+. У hosted zone, до якої відноситься DNS_WILDCARD кластеру, створити TXT
+записи, що вимагає certbot. При цьому, перед тим як продовжувати
+(вводити Enter), слід перевірити, що запис створено і він актуальний
+за допомогою виконання команди nslookup -type=txt <dns_record>
+в паралельній консолі
++
+image::certificates-update/certificates-update-2.png[Перевірка створеного запису]
+. Видалити старий secret роутера і API:
+. У випадку успішної видачі сертифікату, ми отримаємо відповідне
+повідомлення в якому можна побачити шлях до файлів з ключем і ланцюжком
+сертифікатів
++
+image::certificates-update/certificates-update-3.png[Успішне отримання сертифікату]
+. Видалити старий secret роутера і API:
+[#id-for-listing-block]
++
+----
+oc delete secret router-certs -n openshift-ingress
+oc delete secret router-certs -n openshift-config
+----
+. Створити новий сікрет роутера і API:
++
+[#id-for-listing-block]
+----
+oc create secret tls router-certs --cert=<fullchain.pem>
+--key=<privkey.pem> -n openshift-ingress
+oc create secret tls router-certs --cert=<fullchain.pem>
+--key=<privkey.pem> -n openshift-config
+----
+. Видалити поди роутера:
++
+[#id-for-listing-block]
+----
+oc delete pods --all -n openshift-ingress
+----
