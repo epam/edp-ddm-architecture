@@ -13,24 +13,26 @@
 |realm |Призначення
 
 |`-admin`
-|доступ до Gerrit та Jenkins реєстру
+|доступ до адміністративних інструментів таких, як Gerrit, Jenkins, Camunda реєстру
 
 |`-officer-portal`
-|Системна роль для доступу до Кабінету Посадової особи (**Officer Portal**) та звітів (https://redash.io/[Redash]).
+|Задвання ролей для доступу до Кабінету Посадової особи (**Officer Portal**) та звітів (https://redash.io/[Redash])
 
-|-citizen-portal
-|Системна роль для доступу до Кабінету Громадянина (**Citizen Portal**).
+|`-citizen-portal`
+|Задавання ролей для доступу до Кабінету Громадянина (**Citizen Portal**)
+
+|`-external-system`
+|Задавання ролей для доступу у зовнішні системи, наприклад, до Трембіти та ін.
 
 |===
 
-image:admin:keycloak_list_of_realms.png[]
+image:admin:keycloak-permissions/realms-list.png[]
 
-== Створення та конфігурування користувачів Gerrit та Jenkins реєстру
+== Як створити нового користувача у Keycloak?
 
-Для створення нового користувача Gerrit та Jenkins необхідно виконати наступні кроки:
+Для створення нового користувача у Keycloak необхідно виконати наступні кроки:
 
-*  Перейдіть до `-admin` realm відповідного реєстру -> далі на вкладці **Users** натисніть `View all users` -> далі натисніть кнопку `Add user`.
-
+*  Виберіть необхідний realm відповідного реєстру -> далі на вкладці **Users** натисніть `View all users` -> далі натисніть кнопку `Add user`.
 image:admin:keycloak_view_users.png[]
 
 *  У відкритому вікні введіть дані користувача:
@@ -54,16 +56,33 @@ CAUTION: З метою безпеки необхідно змінити тимч
 
 image:admin:keycloak_set_credentials.png[]
 
-* Перейдіть на вкладку **Role Mappings** та встановіть необхідні ролі користувачу:
+* Перейдіть на вкладку **Role Mappings** та встановіть необхідні ролі користувачу.
+
+* Натисніть кнопку `Add selected`, щоб обрана роль відображувалася у секції **Assigned Roles**.
+image:admin:keycloak_assign_roles_check.png[]
+
+== Адміністрування доступу адміністратора регламенту
+
+У `-admin` realm створіть користувача та задайте йому наступні ролі:
+
+image:admin:keycloak-permissions/admin-user-roles-list.png[]
 
 ** `gerrit-administrators` - адміністратор Gerrit, роль необхідна для розгортяння регламенту та підтвердження змін (проходження Quality gates)
-** `jenkins-administrators` - адміністратор системи Jenkins. Ця роль необхідна для запуску `clean-up` job, перегляду згенегованих та доданих до Jenkins pipelines, перегляду логів та ін.
+** `jenkins-administrators` - адміністратор Jenkins, роль необхідна для запуску `clean-up` job, перегляду згенегованих та доданих до Jenkins pipelines, перегляду логів та ін.
+** `camunda-admin` - адміністратор Camunda Cockpit, роль необхідна для перегляду поступних бізнес процесів, правил, задач тощо. Окрім ролі, користувачеві необхідно задати групу -> Groups -> Available Groups -> вибрати `camunda-admin` -> натиснути `join` -> група повинна з'явитись у переліку Group Membership
 
-image:admin:keycloak_assign_roles.png[]
+image:admin:keycloak-permissions/admin-user-groups.png[]
 
-* Виберіть ці ролі та натисніть кнопку `Add selected`, щоб обрана роль відображувалася у секції **Assigned Roles**.
+== Які ролі користувачів бувають для Кабінету Посадової особи та Кабінету Громадянина?
 
-image:admin:keycloak_assign_roles_check.png[]
+Keycloak ролі рознізняються на системні та регламентні:
+
+* `системні` - створюються платформою під час створення реєстру або встановлення платформи (officer, citizen, auditor та ін)
+* `регламентні` - створюються під час розгортання реєстру та задаються у регламенті реєстру -> директорія  `roles` -> у відповідному `.yml`
+
+Наприклад, для створення релой Кабінету Посадової особи необхідно задати їх у officer.yml:
+image:admin:keycloak-permissions/registry-roles.png[]
+
 
 == Адміністрування доступу користувачів до Кабінету Посадової особи
 
@@ -71,12 +90,14 @@ image:admin:keycloak_assign_roles_check.png[]
 
 * Перейдіть до `-officer-portal` realm відповідного реєстру -> вкладка **Users** -> натисніть кнопку `View all users` -> натисніть кнопку `Add user`.
 
-image:admin:keycloak_op_view_all.png[]
+image:admin:keycloak-permissions/officer-realm-users-list.png[]
 
 * Виконайте кроки зі створення користувача, описані вище, та встановіть роль `officer` у вкладці **Role Mappings**.
+* Виберить необхідні регламенті ролі наприклад `head-officer`
+* Виберіть роль `auditor` у разі необхідності доспуту до системних звітів Redash ("Журнал подiй системи", "Журнал дiй користувача")
 * Натисніть кнопку `Add selected`.
 
-image:admin:keycloak_op_add_user_and_assign_roles.png[]
+image:admin:keycloak-permissions/officer-sidorenko-user-roles.png[]
 
 * Перейдіть на вкладку **Attributes**, та встановіть значення для ключів параметрів `drfo`, `edrpou` та `fullName`, що пов'язані з КЕП користувача, наприклад:
 
@@ -84,21 +105,22 @@ image:admin:keycloak_op_add_user_and_assign_roles.png[]
 ** `edrpou: 34554362`;
 ** `fullName: Сидоренко Василь Леонідович`.
 
+image:admin:keycloak-permissions/officer-sidorenko-user-attributes.png[]
+
 CAUTION: *[red]##Увага!##* У разі невідповідності значень атрибутів до значень заданих у КЕП користувач не матиме можливості увійти до Кабінету Посадової особи та підписувати задачі КЕП.
-
-* Вкажіть значення `Registry Officers` для атрибуту `RedashGroups` для можливості перегляду звітів:
-
-** `RedashGroups:Registry Officers`
-
-image:admin:keycloak_op_check_attributes.png[]
 
 == Адміністрування доступу користувачів до Кабінету Громадянина
 
-Для створення нового користувача **Кабінету Громадянина**, необхідно виконати наступні кроки:
+Створення користувача Кабінету Громадянина відбувається при першому вході у кабінет. Користувачу пропонується пройти початковий бізнес процес "Створення суб'єкту", де необхідно задати email.
+Далі дані користувача з'являться в Keycloak в realm `-citizen` з відповідними ролями (legal, entrepreneur, individual та ін.) та атрибутами.
 
-* Перейдіть до `-citizen-portal` realm відповідного реєстру -> далі -- на вкладку **Users**. Натисніть **View all users** -> далі натисніть клавішу `Add user`.
-* Виконайте кроки зі створення користувача, що описані вище, та зазначте роль `citizen` у вкладці **Role Mappings**.
-* Натисніть кнопку `Add selected`
-* Перейдіть на вкладку **Attributes**, та вкажіть значення для ключів параметрів `drfo`, `edrpou` та `fullName`, що пов'язані з КЕП користувача, що пов'язані з КЕП користувача.
+image:admin:keycloak-permissions/citizen-realm-users-list.png[]
 
-image:admin:keycloak_cp_create_user.png[]
+image:admin:keycloak-permissions/citizen-legal-roles.png[]
+
+image:admin:keycloak-permissions/citizen-legal-attributes.png[]
+
+== Адміністрування доступу до зовнішніх систем
+Створення користувачів для доступу до зовнішніх систем дизайном платформи не передбачається. Всі доступи вирішуються на рівні ролей та клієнту trembita-invoker (у разі Трембіти). У разі необхідності можливо додати регламентні ролі, що будуть задіяні для побудови бізнес процесів.
+
+
