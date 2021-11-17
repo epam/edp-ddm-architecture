@@ -1,0 +1,78 @@
+= Права доступу до аналітичних даних
+
+:sectnums:
+:sectanchors:
+
+== Загальний опис
+Одним з елементів механізму розмежування прав доступу до даних аналітичної БД є визначення переліку представлень (**views**), доступних для кожної зі створених аналітичних ролей в бази даних.
+
+Цей перелік визначається моделювальником даних через додатковий XML-шаблон для Liquibase (_див. секцію xref:data-analytical-data-access-rights.adoc#xml-templates[XML-шаблони]_) цього документа.
+
+== Передумови
+Для видачі або відкликання прав запита даних із представлень для певної ролі, мають виконуватися наступні умови:
+
+* Команда має виконуватись лише на аналітичній БД (`context="sub"`).
+* Роль, для якої надається доступ, має існувати на рівні аналітичної бази даних.
+* Представлення, доступ до якого надається, має існувати на рівні аналітичної бази даних.
+
+Порушення цих передумов генеруватиме помилку.
+
+[#xml-templates]
+== XML-шаблони
+
+Наступна конструкція надаватиме право запита даних із представлень `registry_data_v` та `registry_info_v` для ролі `analytic_officer_level_1`, а також заборонятиме доступ до цих самих представлень для ролі `analytic_officer_level_2`.
+
+.Приклад XML-шаблону для зміни прав доступу для аналітичних ролей:
+[source, xml]
+----
+<changeSet author="registry owner" id="grant/revoke analytic rights" context="sub">
+    <ext:grant>
+        <ext:role name="analytic_officer_level_1">
+            <ext:view name="registry_data_v"/>
+            <ext:view name="registry_info_v"/>
+        </ext:role>
+    </ext:grant>
+    <ext:revoke>
+        <ext:role name="analytic_officer_level_2">
+            <ext:view name="registry_data_v"/>
+            <ext:view name="registry_info_v"/>
+        </ext:role>
+    </ext:revoke>
+</changeSet>
+----
+Результатом виконання зазначеного шаблону Liquibase є згенерований нижче SQL-синтаксис, що містить DCL-оператори для визначення доступу до даних.
+
+.Приклад згенерованого SQL-синтаксису для зміни прав доступу для аналітичних ролей:
+[source, xml]
+
+[source, sql]
+----
+GRANT SELECT ON registry_data_v TO analytic_officer_level_1;
+GRANT SELECT ON registry_info_v TO analytic_officer_level_1;
+
+REVOKE SELECT ON registry_data_v FROM analytic_officer_level_2;
+REVOKE SELECT ON registry_info_v FROM analytic_officer_level_2;
+----
+
+TIP: _За детальною інформацією щодо створення моделі даних за допомогою шаблонів Liquibase зверніться до розділу xref:admin:liquibase-changes-management-sys-ext.adoc[Створення сценаріїв побудови фізичної моделі даних реєстру за допомогою функціональних розширень Liquibase] цього керівництва_.
+
+=== Теги доступу до всіх представлень
+
+Якщо певна роль потребує доступу до всіх наявних аналітичних представлень, то за допомогою тегів `grantAll` та `revokeAll` є можливість надати та анулювати права на запит всіх даних, присутніх у представленнях репліки БД.
+
+NOTE: *[red]##_Важливо!##* Ці теги вимагають застосування атрибута `runAlways` зі значенням `"true"` (`runAlways="true"`) на рівні changeset Liquibase. Якщо задати значення `false`, то тег не спрацює, і, в результаті, повернеться помилка. Якщо не встановити жодного значення для атрибута, то буде використане значення за замовчуванням, що також призведе до помилки_.
+
+.Приклад XML-шаблону для надання прав доступу до всіх аналітичних даних:
+[source, xml]
+----
+<changeSet author="registry owner" id="grant all" context="sub" runAlways="true">
+    <ext:grantAll>
+        <ext:role name="analytic_officer_level_1"/>
+    </ext:grantAll>
+    <ext:revokeAll>
+        <ext:role name="analytic_officer_level_2"/>
+    </ext:revokeAll>
+</changeSet>
+----
+
+Така конструкція має виконати DCL-оператори надання прав запита даних по кожному з представлень, що існують в аналітичній БД, для ролі `analytic_officer_level_1` і анулювання таких прав для ролі `analytic_officer_level_2`.
