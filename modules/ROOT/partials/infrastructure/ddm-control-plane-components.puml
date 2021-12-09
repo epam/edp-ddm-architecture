@@ -10,85 +10,91 @@ ddm_core_install -down-> ddm_components_install: deploys Nexus, Ceph and Platfor
 
 
 package "DDM Core components Install" as ddm_components_install {
-  [Nexus registry]
-  [Platform Keycloak]
-  [Object Storage]
+  [catalog-source]
+  [storage]
+  [logging]
+  [service-mesh]
+  package "Outside Openshift" #DDDDDD {
+    [platform-vault]
+    [platform-minio]
+  }
+  [control-plane-nexus]
+  package "user-management" {
+    [digital-signature-ops]
+    [keycloak]
+    [hashicorp-vault]
+  }
 }
 
 ddm_core_install -down-> ddm_cp_install: deploys Control Plane components
 
 package "DDM Control Plane (CP) install" as ddm_cp_install {
-  [DDM CP Edp Operators] as ddm_cp_edp_operators
-  note top of ddm_cp_edp_operators
-    Helm contains:
-      -keycloak-operator
-      -EDP Keycloak Realm
-      -jenkins-operator
-      -gerrit-operator
-      -codebase-operator
-      -nexus-operator
-  end note
-  [DDM CP Applicaiton] as ddm_cp_app
-  note top of ddm_cp_app
-    Helm contains:
-      -EDP Admin Console CR for ddm control plane
-  end note
-  [DDM CP Gerrit] as ddm_gerrit
-  note top of ddm_gerrit
-    Helm contains:
-      -EDP Gerrit CR
-      -EDP GitServer CR
-      -EDP Codebase CR for cluster-management
-  end note
-  [DDM CP Jenkins] as ddm_jenkins
-  note top of ddm_jenkins
-    Helm contains:
-      -EDP Jenkins CR
-      -EDP JenkinsScript CR
-      -Job Provisioner ConfigMap
-  end note
+  [keycloak-operator ]
+  [codebase-operator ]
+  [control-plane-console ]
+  [control-plane-gerrit] as ddm_gerrit
+  [control-plane-jenkins]
 }
 
 package "Infra Components" as infra_components {
-  [logging]
-  [storage]
-  [monitoring]
-  [service-mesh]
-  [user-management]
-  [backup-management]
+  [logging ]
+  [storage ]
+  [monitoring ]
+  [service-mesh ]
+  package "user-management" as user-management_infra {
+    [digital-signature-ops ]
+    [keycloak ]
+    [hashicorp-vault ]
+  }
+  [backup-management ]
+  [catalog-source ]
 }
 
 denovo_okd_install -[hidden]down-> ddm_components_install
 ddm_gerrit -down-> infra_components : collects all helm charts into one folder with concrete versions,\nwhich should be converted to repository """cluster-mgmt"""  in a template folder
 ddm_gerrit -[hidden]down-> infra_components
-ddm_gerrit -down-> registry_components : collects all helm charts into one folder with concrete versions,\nwhich should be converted to repository """regitstry-tenant-template"""
+ddm_gerrit -down-> registry_components : collects all helm charts into one folder with concrete versions,\nwhich should be converted to repository """registry-tenant-template"""
 
 
 package "Registry Components" as registry_components {
-  [keycloak-operator]
+  [bpms]
+  [officer-portal]
   [jenkins-operator]
   [gerrit-operator]
   [codebase-operator]
-  [kong]
-  [kafka]
-  [citus]
-  [bpms]
-  [formio]
-  [officer-portal]
   [user-process-management]
-  [business-process-administration-portal]
+  [bp-admin-portal]
   [user-task-management]
   [digital-signature-ops]
+  [kong]
+  [form-management]
+  [admin-portal]
+  [redash-chart]
+  [pg-exporter-chart]
+  [citus]
+  [strimzi-kafka-operator]
+  [nexus]
+  [keycloak-operator]
+  [kafka-schema-registry]
+  [citizen-portal]
+  [user-settings-service-persistence]
+  [user-settings-service-api]
+  [bp-webservice-gateway]
+  [digital-document-service]
+  [hashicorp-vault]
+  [excerpt-service-api]
+  [excerpt-worker]
   [dataplatform-jenkins-agent]
 }
 
 
 
 package "Registry Regulations" as registry_regulations {
-  [registry-regulation-template]
+  [registry-regulation-template-minimal]
+  [registry-regulation-template-recommended]
 }
 
-ddm_gerrit -down-> registry_regulations : creates repository """regitstry-regulations-template"""
+ddm_gerrit -down-> registry_regulations : creates repository """registry-regulations-template"""
 
 legend
  Each component is a dedicated git repository

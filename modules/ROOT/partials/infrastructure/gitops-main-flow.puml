@@ -1,12 +1,15 @@
 @startuml
 actor "Розробник платформи" as devops order 10
-participant "gitbud.epam.com " as gitbud  order 30
-participant "Інфра EDP Jenkins" as infra_jenkins  order 40
-participant "Інфра OKD кластер" as infra_cluster  order 50
+participant "gitserver" as gitserver  order 30
+box "Тестовий кластер"
+    participant "control-plane-gerrit" as control_plane_gerrit  order 35
+    participant "control-plane-jenkins" as control_plane_jenkins  order 40
+    participant "OKD cluster" as test_cluster  order 50
+end box
 box "CICD Кластер" #LightBlue
-  participant "CICD Docker Registry" as cicd_docker_registry  order 60
-  participant "CICD Nexus" as cicd_nexus  order 70
-  participant "CICD OKD кластер " as cicd_cluster  order 80
+  participant "CICD Jenkins" as cicd_jenkins  order 60
+  participant "CICD Docker Registry" as cicd_docker_registry  order 70
+  participant "CICD Nexus" as cicd_nexus  order 80
 end box
 
 autonumber
@@ -14,71 +17,40 @@ autonumber
 title Діаграма послідовностей по розробці централізованих компонентів платформи та пакету для інсталяції
 
 group Розробка інфра компоненту
-  hnote over gitbud : e.g. logging
-  devops -> gitbud: "Commit до інсталяцйії або конфігурації компоненту в Infra branch"
-  activate gitbud
-    gitbud -> infra_jenkins: "Запуск CI джоби для тестування та\n застосування зміни"
-    activate infra_jenkins
-      infra_jenkins -> infra_jenkins: "Валідація"
-      infra_jenkins -> infra_cluster: "Застосування змін"
-      infra_jenkins -> infra_jenkins: "Тестування"
-      gitbud <-- infra_jenkins: "Тегування коміту згідно EDP версіонування"
-    deactivate infra_jenkins
-    devops <-- gitbud: "Розуміння, що зміни можна переносити у master гілку"
-  deactivate gitbud
-  devops -> gitbud: "Merge змін в master гілку "
-  activate gitbud
-    gitbud -> infra_jenkins: "Запуск CI джоби для тестування та\n застосування зміни"
-    activate infra_jenkins
-      infra_jenkins -> infra_jenkins: "Валідація"
-      gitbud <-- infra_jenkins: "Тегування коміту згідно EDP версіонування"
-    deactivate infra_jenkins
-    devops <-- gitbud: "Версія компонента для формування DDM CP Gerrit"
-  deactivate gitbud
+  hnote over gitserver: e.g. logging
+  devops -> control_plane_gerrit: "Commit в репозиторій gerrit компонента на тестовому кластері"
+  activate control_plane_gerrit
+    control_plane_gerrit -> control_plane_jenkins: "Запуск CD джоби cluster-mgmt для тестування та\n застосування зміни"
+  deactivate control_plane_gerrit
+  activate control_plane_jenkins
+    control_plane_jenkins -> test_cluster: "Застосування змін"
+  deactivate control_plane_jenkins
+  devops -> test_cluster: "Тестування"
+  devops <-- test_cluster: "Розуміння, що зміни можна переносити у master гілку основного gitserver"
+  devops -> gitserver: "Merge змін в master гілку основного gitserver"
 end
 
 group Збірка інсталяції для цільового кластеру
-  hnote over gitbud : DDM CP Gerrit
-  devops -> gitbud: "Commit конкретних версій Infra та Registry компенентів"
-  activate gitbud
-    gitbud -> infra_jenkins: "Запуск CI джоби для DDM CP Gerrit"
-    activate infra_jenkins
-      infra_jenkins -> infra_jenkins: "Створення репозиторію """cluster-management""""
-      infra_jenkins -> infra_jenkins: "Створення репозиторію """registry-tenant-template""""
-      infra_jenkins -> infra_jenkins: "Створення репозиторію """registry-regulations-template""""
-      infra_jenkins -> infra_jenkins: "Створення Gerrit docker image з репозиторіями, створеними вище"
-      infra_jenkins -> cicd_docker_registry: "Публікація Gerrit docker image"
-      gitbud <-- infra_jenkins: "Тегування коміту згідно EDP версіонування"
-    deactivate infra_jenkins
-    devops <-- gitbud: "Версія Gerrit Docker Image для формування інсталяційного пакету"
-  deactivate gitbud
-  hnote over gitbud : DDM CP Helm
-  devops -> gitbud: "Commit конкретних версій компенентів"
-  activate gitbud
-  gitbud -> infra_jenkins: "Запуск CI джоби для первірки helm DDM Control Plane"
-    activate infra_jenkins
-      infra_jenkins -> infra_jenkins: "Створення helmfile на базі репозиторіїв з групи """DDM Control Plane (CP) install""""
-      infra_jenkins -> cicd_nexus: "Публікація архіву з інсталяцією"
-      gitbud <-- infra_jenkins: "Тегування коміту згідно EDP версіонування"
-    deactivate infra_jenkins
-    devops <-- gitbud: "Версія інсталяційного пакету, що можна скачати у Nexus"
-  deactivate gitbud
+  devops -> cicd_jenkins: Запуск control-plane-versioner і вибір Stage CR з потрібними версіями компонентів
+  devops -> gitserver: Commit мерж реквесту в control_plane_gerrit репозиторій, створеного control-plane-versioner
+  activate gitserver
+    gitserver -> cicd_jenkins: Запуск CI джоби для control_plane_gerrit
+    activate cicd_jenkins
+        cicd_jenkins -> cicd_docker_registry: "Публікація control_plane_gerrit docker image"
+        gitserver <-- cicd_jenkins: "Тегування коміту згідно EDP версіонування"
+    deactivate cicd_jenkins
+  deactivate gitserver
+  devops -> gitserver: Commit мерж реквесту в control-plane-installer репозиторій, створеного control-plane-versioner
+  devops -> gitserver: Оновлення версії control_plane_gerrit в репозиторії control-plane-installer
+  activate gitserver
+    gitserver -> cicd_jenkins: Запуск CI джоби для control-plane-installer
+    activate cicd_jenkins
+      cicd_jenkins -> cicd_nexus: "Публікація control-plane-installer zip архіву"
+      gitserver <-- cicd_jenkins: "Тегування коміту згідно EDP версіонування"
+    deactivate cicd_jenkins
+    devops <-- gitserver: "Версія інсталяційного пакету, що можна скачати у Nexus"
+  deactivate gitserver
 end
 
-
-opt Застосування змін до CICD кластер з cicd branch
-  hnote over gitbud : e.g. logging
-  devops -> gitbud: "Commit до інсталяцйії або конфігурації компоненту в CICD branch"
-  activate gitbud
-    gitbud -> infra_jenkins: "Запуск CI джоби для тестування та\n застосування зміни"
-    activate infra_jenkins
-      infra_jenkins -> infra_jenkins: "Валідація"
-      infra_jenkins -> cicd_cluster: "Застосування змін"
-      infra_jenkins -> infra_jenkins: "Тестування"
-      gitbud <-- infra_jenkins: "Тегування коміту згідно EDP версіонування"
-    deactivate infra_jenkins
-    devops <-- gitbud: "Зміни застосовані до CICD кластеру"
-  deactivate gitbud
-end
 
 @enduml
