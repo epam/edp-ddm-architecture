@@ -178,6 +178,125 @@ kafka_subscriber --> kafka
 
 == API доступу до історичних даних виконання бізнес-процесів користувача
 
+=== Отримання поточних ініційованих бізнес-процесів
+
+[WARNING]
+Отримання доступу до даних можливе лише в рамках виконання запиту автентифікованого користувача в системі.
+
+Ідентифікатор користувача, отриманий з _X-Access-Token_ HTTP-заголовка запиту, безумовно використовується у якості обов'язкового критерія для формування вибірки даних за полем *"startUserId"*.
+
+[NOTE]
+При формуванні запитів на вибірку даних бізнес-процесів безумовно додається критерій на отримання БП верхнього рівня (_SUPER_PROCESS_INSTANCE_ID IS NULL_)
+
+*GET /api/process-instances*
+
+|===
+|Параметр|Тип|Частина запиту|Опційність|Значення за замовчуванням|Опис
+
+|*X-Access-Token*
+|JWT
+|HTTP заголовок
+|Ні
+|-
+|Токен доступу користувача
+
+|*offset*
+|Числовий
+|Параметр запиту
+|Так
+|_0_
+|Зміщення запису
+
+|*limit*
+|Числовий
+|Параметр запиту
+|Так
+|_10_
+|Обмеження кількості записів
+
+|*sort*
+|Текстовий
+|Параметр запиту
+|Так
+|_desc(endTime)_
+|Поле та порядок сортування записів. _Приклад: asc(<field>) / desc(<field>)_
+|===
+
+.Приклад відповіді
+[source, json]
+----
+[
+    {
+      "processInstanceId":  "",
+      "superProcessInstanceId": "",
+      "processDefinitionId": "",
+      "processDefinitionKey": "",
+      "processDefinitionName": "",
+      "businessKey": "",
+      "startTime": "",
+      "startUserId": "",
+      "status": {
+        "code": "",
+        "title": ""
+      }
+    }
+]
+----
+
+.Коди помилок
+|===
+|Код|Опис
+
+a|[green]#200#
+|OK з поверненням результату виконання запиту
+a|[red]#400#
+|Некоректно сформований запит (неправильний формат даних)
+a|[yellow]#401#
+| Помилка автентифікації (відсутній токен доступу)
+a|[red]#500#
+|Серверна помилка обробки запиту
+|===
+
+.Діаграма послідовності запиту поточних даних бізнес-процесів
+[plantuml]
+----
+@startuml
+skinparam shadowing false
+skinparam DatabaseBackgroundColor white
+skinparam DatabaseBorderColor #2688d4
+skinparam sequence {
+    ArrowColor #2688d4
+    ActorBorderColor #2688d4
+    LifeLineBorderColor #2688d4
+    ParticipantBorderColor #2688d4
+    ParticipantBackgroundColor white
+    BoxBorderColor #2688d4
+    BoxBackgroundColor white
+}
+
+participant "Process History \nservice" as historyService
+database "History \nDatabase" as history_db
+
+-> historyService ++: Request \nprocess-instance list
+historyService -> history_db ++: Select process-instance list with state in \n("ACTIVE", "SUSPENDED")
+return requested list
+historyService -> history_db ++: Select list of unfinished tasks by ACTIVE\nroot-process-instance-id list assigned to current user
+return requested tasks
+historyService -> historyService: Replace ACTIVE state with PENDING \nif there exists an unfinished task by process-instance id
+historyService -> historyService: remap database "state" to status.code and define localized status.title
+return Requested list
+@enduml
+----
+
+.Локалізація статусів
+|===
+|Технічний статус|Локалізований статус
+
+|ACTIVE|У виконанні
+|PENDING|Очікує виконання задачі
+|SUSPENDED|Призупинено адміністратором
+|===
+
 === Отримання історії ініційованих бізнес-процесів
 
 [WARNING]
@@ -236,9 +355,11 @@ kafka_subscriber --> kafka
       "startTime": "",
       "endTime": "",
       "startUserId": "",
-      "state": "",
       "excerptId": "",
-      "completionResult": ""
+      "status": {
+        "code": "",
+        "title": ""
+      }
     }
 ]
 ----
@@ -255,6 +376,43 @@ a|[yellow]#401#
 | Помилка автентифікації (відсутній токен доступу)
 a|[red]#500#
 |Серверна помилка обробки запиту
+|===
+
+.Діаграма послідовності запиту історичних даних бізнес-процесів
+[plantuml]
+----
+@startuml
+skinparam shadowing false
+skinparam DatabaseBackgroundColor white
+skinparam DatabaseBorderColor #2688d4
+skinparam sequence {
+    ArrowColor #2688d4
+    ActorBorderColor #2688d4
+    LifeLineBorderColor #2688d4
+    ParticipantBorderColor #2688d4
+    ParticipantBackgroundColor white
+    BoxBorderColor #2688d4
+    BoxBackgroundColor white
+}
+
+participant "Process History \nservice" as historyService
+database "History \nDatabase" as history_db
+
+-> historyService ++: Request \nprocess-instance list
+historyService -> history_db ++: Select process-instance list with state in \n("COMPLETED", "EXTERNALLY_TERMINATED")
+return requested list
+historyService -> historyService: remap database "state" to status.code and define localized status.title
+return Requested list
+@enduml
+----
+
+.Локалізація статусів
+|===
+|Технічний статус|Локалізований статус
+
+|completionResult != null| Значення completionResult
+|COMPLETED|Надання послуги завершено
+|EXTERNALLY_TERMINATED|Відмінено адміністратором
 |===
 
 === Отримання історії виконаних задач бізнес-процесів
