@@ -1,0 +1,76 @@
+= Дизайн моніторингу мультикластерів Openshift
+3.0, February 22, 2022: AsciiDoc article template
+:toc:
+:icons: font
+:url-quickref: https://docs.asciidoctor.org/asciidoc/latest/syntax-quick-reference/
+
+== Високорівневий дизайн мультикластерного моніторингу Openshift
+
+.Високорівневий дизайн мультикластерного моніторингу Openshift
+image:admin:infrastructure/cluster_monitoring_design.png[]
+
+== VictoriaMetrics
+
+VictoriaMetrics являється time-series базою даних, що підтримує PromQL і навіть розширяє її.
+Вона може збирати дані з Prometheus інстансів використовуючи remote write API, а також з інших ресурсів,
+що використовують протоколи як InfluxDB, Graphite та інші. Для додаткової інформації можна ознайомитись
+з офіційною <<_deduplicationhttps://docs.victoriametrics.com/, _документацією_>>.
+
+.VictoriaMetrics HA cluster design
+image:admin:infrastructure/victoriametrics_ha_design.png[]
+
+== Встановлення VictoriaMetrics
+
+VictoriaMetrics може бути розгорнута за допомогою <<_https://docs.docker.com/compose/, _Docker Compose_>> на окремому інстансі Ubuntu,
+з 8 GB RAM, 4 CPU cores, and 500GB disk.
+
+== Prometheus Operator setup
+
+Prometheus на платформі Openshift керується Cluster Monitoring Operator та Prometheus Operator. Кастомізація
+OCP Prometheus дуже обмежена та виконується через cluster-monitoring-config ConfigMap.
+
+Конфігурування є простим: відредагувати або створити cluster-monitoring-config ConfigMap. Додати
+externalLabels що будуть ідентифікувати кластер і визначити remoteWrite endpoint, в нашому випадку
+VictoriaMetrics TSDB.
+
+----
+apiVersion: v1
+metadata:
+  name: cluster-monitoring-config
+  namespace: openshift-monitoring
+data:
+  config.yaml: |
+    prometheusK8s:
+      externalLabels:
+        cluster: labdev
+        type: dev
+      remoteWrite:
+        - url: "http://victoriametrics-url:8428/api/v1/write"
+kind: ConfigMap
+----
+
+== Deduplication
+The Cluster Monitoring Operator в OpenShift створює дві Prometheus репліки для
+забезпечення HA і кожна з двух реплік містить однаковий сет метрик. Після того, як увімкнеться
+remoteWrite налаштування, кожна репліка буде сконфігурованою перенаправляти метрики в VictoriaMetrics.
+В загальному, VictoriaMetrics може відстежувати дублювання метрик., але це вимагає однаковий сет externalLabels
+для кожної репліки. Prometheus оператор внітрішньо додає додатковий лейбл для метрики з унікальним значенням для
+кожної репліки. На жаль, поведінка така поведінка не може бути змінена для Prometheus, що менеджиться
+OpenShift Cluster Monitoring Operator, але такий лейбл може бути видалений, використовуючи relabelConfig option, наступним чином:
+
+----
+- action: labeldrop
+  regex: "prometheus_replica"
+----
+
+== Grafana дашборди
+
+Grafana отримує дані напряму від VictoriaMetrics API, яка сумісна з Prometheus query API.
+
+.OpenShift Grafana dashboard with additional cluster dropdown menu
+image:admin:infrastructure/cluster_monitoring_grafana.png[]
+
+Openshift розгортається з кількома Grafana дашбордами, що можуть бути легко змінені для
+підтримки мультикластерів. Зовнішні лейби визначаються як додаткове Prometheus Operator налаштування
+і добавляє лейбл до кожної метрики, що перенаправляється до VictoriaMetrics. Можна використовувати додаткові темплейт змінні в дашборді
+і фільтри. Приклади можна переглянути <<_https://github.com/rafal-szypulka/vmetrics-dc/blob/master/OCP-Compute-Resources.json, _тут_>>.
