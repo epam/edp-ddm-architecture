@@ -1,0 +1,131 @@
+@startuml
+skinparam shadowing false
+skinparam DatabaseBackgroundColor white
+skinparam DatabaseBorderColor #2688d4
+skinparam QueueBackgroundColor white
+skinparam QueueBorderColor #2688d4
+skinparam NoteBackgroundColor white
+skinparam NoteBorderColor #2688d4
+skinparam sequence {
+    ArrowColor #2688d4
+    ActorBorderColor #2688d4
+    LifeLineBorderColor #2688d4
+    ParticipantBorderColor #2688d4
+    ParticipantBackgroundColor white
+    BoxBorderColor #2688d4
+    BoxBackgroundColor white
+}
+
+box "Сервіс виконання БП"
+    participant "BPMN \nCore Engine" as engine
+    participant "Send User Notification \nDelegate" as send_notification_delegate
+    participant "Notification Facade" as notification_facade
+    participant "Notification \nEvent Publisher" as notification_kafka_publisher
+end box
+
+queue "'user-notifications'\n Kafka Topic" as user_notifications_kafka_topic
+
+box "Сервіс відправки повідомлень"
+  participant "Notification \nEvent Subscriber" as notification_kafka_subscriber
+  participant "Notification \nService" as notification_service
+  participant "Java Mail Sender" as email_sender
+  participant "Audit Service" as audit_service
+  participant "FreeMarker" as freemarker_processor
+end box
+
+participant "Сервіс \nналаштувань користувачів" as user_settings_service
+
+queue "'audit-events'\n Kafka Topic" as audit_events_kafka_topic
+
+database "Сховище \nшаблонів" as template_db
+
+participant "Поштовий Сервер" as mail_server
+
+engine -> send_notification_delegate: Обробка задачі \nвідправки повідомлення
+activate send_notification_delegate
+  send_notification_delegate -> send_notification_delegate: Обробка вхідних параметрів
+  send_notification_delegate -> notification_facade: Відправка повідомлення
+  notification_facade -> notification_kafka_publisher: Відправка повідомлення
+  activate notification_kafka_publisher
+  notification_kafka_publisher -> user_notifications_kafka_topic: Публікація події відправки повідомлення
+    note left
+      {
+        "context": {
+          "system"
+          "application"
+          "businessProcess"
+          "businessProcessDefinitionId"
+          "businessProcessInstanceId"
+          "businessActivity"
+          "businessActivityInstanceId"
+        },
+        "notification": {
+          "recipient": string,
+          "subject": string,
+          "template:": string,
+          "templateModel:": map<string, object>
+        }
+      }
+    end note
+  user_notifications_kafka_topic --> notification_kafka_publisher: Результат публікації в Kafka-топік
+  notification_kafka_publisher -> notification_kafka_publisher: Обробка результату публікації
+
+  alt Подія успішно опублікована
+    notification_kafka_publisher --> notification_facade
+    notification_facade --> send_notification_delegate
+    send_notification_delegate --> engine
+  deactivate send_notification_delegate
+else Не вдалося опублікувати подію
+notification_kafka_publisher --> engine: throw BPMN Error (створення інциденту)
+end
+deactivate notification_kafka_publisher
+  notification_kafka_subscriber -> user_notifications_kafka_topic: Зчитування події
+activate notification_kafka_subscriber
+notification_kafka_subscriber -> notification_service: Відправка повідомлення користувачу <recipient>
+activate notification_service
+  notification_service -> user_settings_service: Читання налаштувань користувача (**username = <recipient>**)
+  user_settings_service --> notification_service: Налаштування користувача (обраний канал зв'язку, email, тощо.)
+  notification_service -> notification_service: Визначення каналу зв'язку (**channel**)
+
+  alt channel='email' налаштовано у якості основного каналу зв'язку користувачем
+    notification_service -> template_db: Завантаження шаблону \nза назвою '**notificationTemplate**' та каналом зв'язку '**channel**'
+    template_db --> notification_service: Запис шаблону повідомлення ('ftlh'-контент)
+      note right
+        {
+            "ID": "{UUID}",
+            "NAME": "{template_name}",
+            "CHANNEL:": "email",
+            "CONTENT:": "{content}",
+            "CHECKSUM": "{sha256-hash}",
+            "CREATED_AT": "{timestamp}",
+            "UPDATED_AT": "{timestamp}"
+        }
+      end note
+    notification_service -> freemarker_processor: Формування результуючого HTML-тіла повідомлення \nна базі завантаженого "ftlh" Freemarker-шаблону \nта вхідних даних 'notificationTemplateModel'
+    freemarker_processor --> notification_service: Результат трансформації **<html_content>**
+    notification_service -> notification_service: Формування MimeMessage об'єкту повідомлення
+    notification_service -> email_sender: Відправка повідомлення
+      note left
+        {
+            "to": {recipient},
+            "subject": {subject},
+            "text:": {html_content}
+        }
+      end note
+    email_sender -> mail_server: Відправка повідомлення
+    mail_server --> email_sender: Результат відправки \nпоштового повідомлення
+    email_sender --> notification_service: Результат відправки \nпоштового повідомлення
+  end
+  notification_service -> notification_service: Обробка результату відправки повідомлення
+
+  alt Повідомлення відправлено успішно
+    notification_service -> notification_service: Формування події аудиту
+    notification_service -> audit_events_kafka_topic: Публікація події аудиту
+    notification_service --> notification_kafka_subscriber: Повідомлення відправлено
+    notification_kafka_subscriber --> user_notifications_kafka_topic: Подію опрацьовано успішно
+  else Повідомлення не відправлено
+    notification_service --> user_notifications_kafka_topic: throw Runtime Exception (повернення події на повторну обробку)
+  end
+deactivate notification_service
+deactivate notification_kafka_subscriber
+@enduml

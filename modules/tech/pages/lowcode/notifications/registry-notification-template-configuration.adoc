@@ -1,0 +1,66 @@
+== Структура репозиторію регламенту
+
+Для забезпечення вимог по підтримці відправлення повідомлень користувачам, структуру регламенту розширено додатковою директорією _<registry-regulation>/notifications_:
+
+[plantuml, notification-regulation-structure, svg]
+----
+include::partial$lowcode/notifications/notification-regulation-structure.puml[]
+----
+
+Регламент нотифікацій реалізує наступні аспекти адміністрування:
+
+- _templates/_ - Налаштування шаблонів для генерації повідомлення на рівні окремих визначених каналів
+
+=== Шаблони повідомлень на рівні окремих каналів зв'язку
+
+[NOTE]
+Для забезпечення можливостей створення та кастомізації шаблонів повідомлень, у якості технології шаблонізації обрано https://freemarker.apache.org/[Apache FreeMarker] (розширення файлів "_*.ftlh_" та "_*.ftl_" для HTML та текстових документів відповідно).
+
+З ціллю подальшого розвитку, в структуру регламенту нотифікацій закладено підтримку шаблонів повідомлень в залежності наступних каналів зв'язку:
+
+- _email_ - Відправка повідомлень у HTML-вигляді електронною поштою
+- _diia_ - Відправка повідомлень у текстовому вигляді через мобільний додаток _Дія_
+- _messenger_ - Відправка повідомлень у текстовому вигляді через мобільні додатки месенджерів
+
+[WARNING]
+На даний момент платформою підтримується лише відправка повідомлень електронною поштою (_email_).
+
+=== Структура шаблону поштового повідомлення
+
+Типовий шаблон поштового повідомлення має наступну структуру:
+
+[plantuml, email-notification-structure, svg]
+----
+include::partial$lowcode/notifications/email-notification-structure.puml[]
+----
+
+- _<template-directory>_ - Директорія з ресурсами шаблону, яка має унікальне ім'я для заданого каналу зв'язку (_email_ у даному разі)
+- _<template-directory>/notification.ftlh_ - HTML-документ шаблону для подальшої генерації тіла повідомлення
+- _<template-directory>/css/style.css_ - "Єдиний CSS-файл стилів, які використовуються в HTML-документі (Приклад: _<link rel="stylesheet" href="css/style.css">_)
+- _<template-directory>/images/*.*_ - Перелік файлів зображень, які використовуються в HTML-документі (Приклад: _<img src="images/image.jpg">_)
+
+== Публікація змін до регламенту нотифікацій
+
+=== Публікація змін до шаблонів повідомлень
+
+Для завантаження зформованих/відкорегованих адміністратором шаблонів повідомлень, необхідно розширити пайплайн публікації регламенту етапом '_publish-notification-templates_' з викликом утиліти _notification-template-publisher_ на кшталт:
+
+[source, bash]
+----
+java -jar
+  -DPOSTGRES_USER=notification_template_publisher_user
+  -DPOSTGRES_PASSWORD=<pwd>
+  -DDB_URL=citus-master-rep
+  -DDB_PORT=5432
+  -DDB_NAME=notifications
+  /home/jenkins/notification-template-publisher/notification-template-publisher.jar --notification_templates=notifications/templates
+----
+
+[TIP]
+Розглянути можливість перевикористання та розширення наявної утиліти "_report-publisher_" для завантаження шаблонів повідомлень за умови її переіменування на "_regulation-publisher_".
+
+На даній діаграмі послідовності зображено деталі реалізації кроку завантаження змін та публікації шаблонів повідомлень для каналу зв'язку _email_:
+[plantuml, notification-template-publication, svg]
+----
+include::partial$lowcode/notifications/notification-template-publication.puml[]
+----
