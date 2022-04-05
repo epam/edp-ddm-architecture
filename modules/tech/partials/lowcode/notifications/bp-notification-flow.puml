@@ -29,17 +29,14 @@ box "Сервіс відправки повідомлень"
   participant "Notification \nEvent Subscriber" as notification_kafka_subscriber
   participant "Notification \nService" as notification_service
   participant "Java Mail Sender" as email_sender
-  participant "Audit Service" as audit_service
   participant "FreeMarker" as freemarker_processor
+  participant "Audit Service" as audit_service
 end box
 
 participant "Сервіс \nналаштувань користувачів" as user_settings_service
-
-queue "'audit-events'\n Kafka Topic" as audit_events_kafka_topic
-
 database "Сховище \nшаблонів" as template_db
-
 participant "Поштовий Сервер" as mail_server
+queue "'audit-events'\n Kafka Topic" as audit_events_kafka_topic
 
 engine -> send_notification_delegate: Обробка задачі \nвідправки повідомлення
 activate send_notification_delegate
@@ -120,7 +117,10 @@ activate notification_service
 
   alt Повідомлення відправлено успішно
     notification_service -> notification_service: Формування події аудиту
-    notification_service -> audit_events_kafka_topic: Публікація події аудиту
+    notification_service -> audit_service: Фіксація події аудиту
+    audit_service -> audit_events_kafka_topic: Публікація події аудиту
+    audit_events_kafka_topic --> audit_service
+    audit_service --> notification_service
     notification_service --> notification_kafka_subscriber: Повідомлення відправлено
     notification_kafka_subscriber --> user_notifications_kafka_topic: Подію опрацьовано успішно
   else Повідомлення не відправлено
