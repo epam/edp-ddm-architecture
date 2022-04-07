@@ -16,6 +16,32 @@ image::lowcode/notifications/notifications-starter.svg[]
 
 Задля запобігання блокування основного потоку виконання бізнес-процесу використовується принцип розділення публікації події про необхідність виконання операції від фактичного її виконання з використанням _publish-subscribe_ підходу, реалізованому за допомогою _Kafka_. З повним переліком, налаштуваннями та структурами об'єктів подій можна ознайомитись xref:lowcode/notifications/user-notifications-kafka-topics.adoc[за посиланням].
 
+.Приклад налаштувань сервісу для публікації подій через Kafka-топік (на прикладі використання *ddm-starter-kafka* бібліотеки)
+[source, yaml]
+----
+data-platform:
+  kafka:
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      custom-config:
+        "[enable.idempotence]": true
+    topic-properties:
+      creation:
+        enabled: true
+        timeout-in-seconds: 60
+      retention:
+        default-in-days: 7
+        num-partitions: 1
+        replication-factor: 1
+    error-handler:
+      initial-interval: 1500
+      max-elapsed-time: 6000
+      multiplier: 2
+    topics:
+      user-notifications: user-notifications
+----
+
 === Сервіс відправки повідомлень користувачів
 
 image::lowcode/notifications/notifications-service.svg[]
@@ -23,6 +49,40 @@ image::lowcode/notifications/notifications-service.svg[]
 За реалізацію вимог по формуванню та відправці повідомлень користувачам відповідає окремий компонент "_Сервіс відправки повідомлень користувачам_".
 
 Інтерфейсом для зовнішньої взаємодії з сервісом виступає окремий _Kafka_-топік "_user-notifications_", а основою рішення є реагування та обробка подій-запитів на генерацію повідомлень з використанням _FreeMarker_-шаблонів, попередньо завантажених у сховище та їх послідуюча відправка згідно налаштувань користувача.
+
+[NOTE]
+У разі, якщо подію-запит на відправку повідомлення через "_user-notifications_" топік не вдалося обробити, система проводить N спроб згідно поточної конфігурації і за відсутності результату перенаправляє повідомлення в окремий службовий топік "_user-notifications.DLT_".
+
+.Приклад налаштувань сервісу для отримання повідомлень через Kafka-топік (на прикладі використання *ddm-starter-kafka* бібліотеки)
+[source, yaml]
+----
+data-platform:
+   kafka:
+     consumer:
+       group-id: notifications-service
+       key-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+       value-deserializer: org.springframework.kafka.support.serialize.ErrorHandlingDeserializer
+       custom-config:
+         "[allow.auto.create.topics]": false
+         "[retry.backoff.ms]": 10000
+     topics:
+       user-notifications: user-notifications
+     error-handler:
+       initial-interval: 1500
+       max-elapsed-time: 6000
+       multiplier: 2
+----
+
+TIP: Існує необхідність реалізації автоматичного створення Kafka-топіків "_<topic-name>.DLT_" в рамках *ddm-starter-kafka* бібліотеки (_StartupKafkaTopicsCreator_) для коректного відпрацювання _DeadLetterPublishingRecoverer_ стратегії при неможливості обробки повідомлення.
+
+.Приклад налаштувань сервісу для публікації подій аудиту через Kafka-топік (на прикладі використання *ddm-starter-audit* бібліотеки)
+[source, yaml]
+----
+audit:
+  kafka:
+    topic: audit-events
+    schemaRegistryUrl: http://kafka-schema-registry:8081
+----
 
 === Взаємодія значущих компонентів системи
 
