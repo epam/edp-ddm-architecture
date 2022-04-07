@@ -80,7 +80,8 @@ notification_kafka_publisher --> engine: throw BPMN Error (створення і
 end
 deactivate notification_kafka_publisher
 
-note over of user_notifications_kafka_topic : Проведення повторних спроб (**retrying**) \nу разі помилки обробки повідомлення
+alt Відправка повідомлення
+loop Виконання N спроб на відправку згідно налаштувань у разі помилки обробки повідомлення
 notification_kafka_subscriber -> user_notifications_kafka_topic: Зчитування події
 activate notification_kafka_subscriber
 notification_kafka_subscriber -> notification_service: Відправка повідомлення користувачу <recipient>
@@ -118,22 +119,31 @@ activate notification_service
     mail_server --> email_sender: Результат відправки \nпоштового повідомлення
     email_sender --> notification_service: Результат відправки \nпоштового повідомлення
   end
-  notification_service -> notification_service: Обробка результату відправки повідомлення
 
-  alt Повідомлення відправлено успішно
+  notification_service -> notification_service: Обробка результату відправки повідомлення
+  alt У разі помилки відправки
+    notification_service --> user_notifications_kafka_topic
+  end
+end
     notification_service --> notification_kafka_subscriber: Повідомлення відправлено
     notification_kafka_subscriber -> notification_kafka_subscriber: Формування події аудиту
-    notification_kafka_subscriber -> audit_service: Фіксація події аудиту
+    notification_kafka_subscriber -> audit_service: Фіксація події аудиту _SEND_USER_NOTIFICATION_ (success)
     audit_service -> audit_events_kafka_topic: Публікація події аудиту
     audit_events_kafka_topic --> audit_service
     audit_service --> notification_kafka_subscriber
     notification_kafka_subscriber --> user_notifications_kafka_topic: Подію опрацьовано
-  else Повідомлення не відправлено
+
+else Повідомлення не відправлено
     notification_service --> notification_kafka_subscriber: Помилка обробки
+    notification_kafka_subscriber -> notification_kafka_subscriber: Формування події аудиту
+    notification_kafka_subscriber -> audit_service: Фіксація події аудиту _SEND_USER_NOTIFICATION_ (failure)
+    audit_service -> audit_events_kafka_topic: Публікація події аудиту
+    audit_events_kafka_topic --> audit_service
+    audit_service --> notification_kafka_subscriber
     notification_kafka_subscriber -> user_notifications_dlt_kafka_topic: Публікації події в Dead Letter Topic
     user_notifications_dlt_kafka_topic --> notification_kafka_subscriber
     notification_kafka_subscriber --> user_notifications_kafka_topic: Подію опрацьовано
-  end
+end
 deactivate notification_service
 deactivate notification_kafka_subscriber
 @enduml
