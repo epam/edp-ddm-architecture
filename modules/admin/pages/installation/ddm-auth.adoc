@@ -1,0 +1,171 @@
+= Авторизація в платформі ведення реєстрів
+
+== Визначення
+Платформа введення реєстрів:: OpenShift кластер зі встановленими компонентами необхідні для створення та ведення реєстрів.
+
+Control Plane:: сукупніть компонентів платформи, що забезпечує спрощення керування центральними компонентами платформи, дозволяє керувати реєстрами та агрегує посиллання до всіх WEB API центральних компонентів
+
+Керування кластером:: абстракція в рамках Control Plane, що дозволяє керувати центральними компонентами системи
+
+Центральні компоненти:: компоненти системи, що спільно використуваються усіма реєстрами та існують в єдиному екземплярі на кластері. Для доступу до них використовуються наступні інтерфейси та API:
+* OpenShift Console - для доступу до ресурсів в OpenShift
+* Control Plane Console - керування реєстрами та кластером
+* Control Plane Gerrit - доступ до конфігурацій центральних компонентів та компонентів реєстру
+* Control Plane Jenkins - доступ до пайпланів розгортання змін до компонентів
+* Control Plane Nexus - доступ до артефактів (docker image) платформи
+* Keycloak - для доступу до керування користувачами
+* Kibana - доступ до логів
+* Grafana - доступ до моніторингу
+* Kiali - керування Service Mesh
+* Jaeger - перегляд трейсів в рамках запитів до реєстру
+* ШБО Трембіти - налаштування Требмбіти (МАЄ ВЛАСНУ АВТОРИЗАЦІЮ, яку ми не контролюємо)
+* Velero CLI - cli для роботи з бекапами
+* oc - cli з кластером OpenShift
+
+Компоненти реєстру:: компоненти, що встановлюється окремо для кожного реєстру
+
+Kubernetes RBAC Authorization:: механізм авторизації, який використувається в OpenShift. Більш детально https://kubernetes.io/docs/reference/access-authn-authz/rbac/[тут]. Для спрощення розуміння нижчу будуть використуватися наступні основні аспекти:
+* https://kubernetes.io/docs/reference/access-authn-authz/rbac/#role-example[Ролі]
+* Subject - user, group чи serviceaccount
+* https://kubernetes.io/docs/reference/access-authn-authz/rbac/#rolebinding-and-clusterrolebinding[RoleBinding]
+* https://kubernetes.io/docs/reference/access-authn-authz/authorization/#checking-api-access[Перевірка доступу ]
+
+== Концепція авторизації
+Основні принципи авторизації у платформі:
+
+* Всі користувачі проходять аутентифікацію у KeyCloak (realm openshift)
+* OpenShift інтегрований з KeyCloak за допомогою OpenshiftAuth
+* Всі центральні компоненти реєстру інтегровані з KeyCloak або OpenShift Auth
+* авторизація дій (створення, перегляд, редагування, видалення) щодо інформації в центральних компонентах використовує один з підходів нижче. На осові можливостей конкретного компонента потрібно обирати підхід з максимальним пріоритетом:
+** авторизація на основі Kubernetes RBAC. Тобто якщо користувач має доступ до ресурсу через API Kubernetes то він може, виконувати аналогічні дії з пов'язаними ресурсами. Цей принцип найбільш характений для OpenShift Console та Control Plane Console
+** авторизація на основі ролей, що приходять з JWT Token
+** авторизація на основі власних засобів інструмента
+
+Схема аутентифікації для центральних компонент платформи:
+[plantuml, event, svg]
+----
+@startuml
+
+package "KeyCloak" as keycloak {
+  [Openshift] as platformRealm
+  package "Regitsry realms" as registryRealms {
+    [Admin Realm]
+    [Officer Realm]
+    [Citizen Realm]
+    [External System Realm]
+  }
+  [Control Plane Realm] as controlPlaneAdminRealm
+}
+
+package "Openshift" as openshift{
+[OAuth] as openshiftOAuth
+  package "Auth based on openshift" as ocBasedAuth{
+    [Openshift Console]
+    [Control Plane Console]
+    [Kibana]
+    [Grafana]
+    [Kiali]
+    [Jaeger]
+  }
+  package "Auth based on KeyCloak" as keycloakBasedAuth{
+    [Jenkins]
+    [Gerrit]
+    [Nexus]
+  }
+}
+
+openshift -[hidden]u--> keycloak
+
+ocBasedAuth -u-> openshiftOAuth
+openshiftOAuth -u-> platformRealm: integrated via OAuth2
+keycloakBasedAuth -u-> controlPlaneAdminRealm: integrated via OAuth2
+controlPlaneAdminRealm -u-> platformRealm
+registryRealms -u-> platformRealm
+
+@enduml
+----
+
+
+== Схема авторизації в рамках Control Plane Console
+
+За замовчуванням після встановлення платформи, додаються наступні користувачі:
+
+* `cp-cluster-mgmt-admin` ("Адміністратор платформи") - може створювати реєстр і додавати адміністраторів реєстру
+* `cp-registry-reader` ("ReadOnly користувач") - може переглядати дешборд
+
+
+Ролі, які створюються у OpenShift для спрощення адміністрування авторизації:
+
+|===
+|Назва ролі |Короткий опис |Що повинна дозволяти
+
+|`+cp-cluster-mgmt-admin+`
+|Керує налаштуваннями центральних компонентів, переглядає ії статус
+a|
+* Бачити пункт меню "Дашборд" у Control Plane Console
+* Бачити пункт меню "Керування кластером" у Control Plane Console
+* Бачити (не редагувати) всі неймспейси в Openshift Console
+* Мати змогу змінювати конфігурацію центральних компонентів у Control Plane Gerrit
+* Мати змогу переглядати деталі застосовування нової конфігурації центральних компонент у Control Plane Jenkins
+* Має доступ до Openshift Realm у KeyCloak
+* Додавати реєстри і адміністраторів реєстрів
+
+|`+cp-registry-admin-{REGISTRY-NAME}+`
+|Може бачити та редагувати налаштування конкретного реєстру
+a|
+* Бачити пункт меню "Дашборд" у Control Plane Console
+* Бачити пункт меню "Реєстри" та конкретний реєстр
+* Видаляти реєстр
+* Редагувати реєстр (змінювати системний ключ, адмінів і так далі)
+* Мати змогу змінювати конфігурацію реєстру в Control Plane Gerrit
+* Мати змогу переглядати деталі застосовування нової конфігурації центральних компонент у Control Plane Jenkins
+* Робити бекапи
+
+|`+cp-registry-reader+`
+|Може переглядати дашборди
+a|
+* Бачити пункт меню "Дашборд" у Control Plane Console
+* Бачити пункт меню "Реєстри"
+|===
+
+
+Маппінг дій у Control Plane Console на доступ до об'єктів Kubernetes на основі `+kubectl can-i+`
+
+[cols="1,1,1"]
+|===
+|Дія у Control Plane | Дія в OpenShift | В рамках якої ролі доступно
+
+|Перегляд Дашборду
+|list codebases, codebasebranches
+
+clusterRole admin
+|cp-registry-reader
+
+| Управління інфраструктурними компонентами
+| list,get,create * codebases,codebasebranches
+
+  list,get,create,patch,watch,update * codebases/finalizers,codebasebranches/finalizers
+
+  get,watch,list,create,update,patch * codebases,codebasebranches,codebases/finalizers,codebasebranches/finalizers cluster-mgmt
+
+  create secrets *
+
+  get secrets gerrit-project-creator-password
+
+| cp-cluster-mgmt-admin
+
+| Адміністрування реєстру
+| get,list,watch * {NAMESPACE}
+
+list codebases,codebasebranches {control-plane}
+
+get,watch,list,create,update,patch codebases,codebasebranches {REGISTRY-NAME}
+
+create secrets system-digital-sign-{REGISTRY-NAME}-key,system-digital-sign-{REGISTRY-NAME}-ca
+
+create jenkinsJobRun * {control-plane}
+| cp-registry-admin-{REGISTRY-NAME}
+
+cp-registry-admin-{REGISTRY-NAME}-namespace
+|===
+
