@@ -3,63 +3,59 @@
 title Діаграма взаємодії компонентів платформи
 
 package "DDM platform Install" as ddm_platform_install{
-  [Denovo OKD Install] as denovo_okd_install
+  [OKD Install] as denovo_okd_install
   [DDM Core Install] as ddm_core_install
 }
-ddm_core_install -down-> ddm_components_install: deploys Nexus, Ceph and Platform Keycloak
+ddm_core_install -down-> infra_components: розгортає Nexus, Ceph та Platform Keycloak
 
+ddm_core_install -down-> ddm_cp_install: розгортає компоненти Control Plane
 
-package "DDM Core components Install" as ddm_components_install {
-  [catalog-source]
-  [storage]
-  [logging]
-  [service-mesh]
-  package "Outside Openshift" #DDDDDD {
-    [platform-vault]
-    [platform-minio]
-  }
-  [control-plane-nexus]
-  package "user-management" {
-    [digital-signature-ops]
-    [keycloak]
-    [hashicorp-vault]
-  }
+package "Infra Components" as infra_components {
+    [catalog-source]
+    [monitoring ]
+    [storage ]
+    [logging ]
+    [service-mesh ]
+    [backup-management ]
+    package "user-management" as user-management_infra {
+        [groupsync-operator]
+        [keycloak-operator]
+        [digital-signature-ops]
+        [keycloak]
+        [hashicorp-vault]
+    }
+    [control-plane-nexus]
+    [external-integration-mocks]
+    package "Поза Openshift" #DDDDDD {
+      [platform-vault]
+      [platform-minio]
+    }
 }
 
-ddm_core_install -down-> ddm_cp_install: deploys Control Plane components
-
-package "DDM Control Plane (CP) install" as ddm_cp_install {
+package "DDM Control Plane (CP)" as ddm_cp_install {
   [keycloak-operator ]
   [codebase-operator ]
   [control-plane-console ]
   [control-plane-gerrit] as ddm_gerrit
   [control-plane-jenkins]
+  [infrastructure-jenkins-agent]
 }
 
-package "Infra Components" as infra_components {
-  [logging ]
-  [storage ]
-  [monitoring ]
-  [service-mesh ]
-  package "user-management" as user-management_infra {
-    [digital-signature-ops ]
-    [keycloak ]
-    [hashicorp-vault ]
-  }
-  [backup-management ]
-  [catalog-source ]
-}
-
-denovo_okd_install -[hidden]down-> ddm_components_install
-ddm_gerrit -down-> infra_components : collects all helm charts into one folder with concrete versions,\nwhich should be converted to repository """cluster-mgmt"""  in a template folder
+denovo_okd_install -[hidden]down-> infra_components
+ddm_gerrit -down-> infra_components : містить в собі композитний репозиторій """cluster-mgmt""", який визначає конкретні версії інфраструктурних компонентів
 ddm_gerrit -[hidden]down-> infra_components
-ddm_gerrit -down-> registry_components : collects all helm charts into one folder with concrete versions,\nwhich should be converted to repository """registry-tenant-template"""
+ddm_gerrit -down-> registry_components : містить в собі шаблони реєстрів """registry-tenant-template-*""", які визначають конкретні версії компонентів реєстру
 
+package "Registry Regulations" as registry_regulations {
+  [registry-regulation-template-minimal]
+  [registry-regulation-template-recommended]
+}
 
 package "Registry Components" as registry_components {
   [bpms]
   [officer-portal]
   [jenkins-operator]
+  [dataplatform-jenkins-agent]
   [gerrit-operator]
   [codebase-operator]
   [user-process-management]
@@ -84,20 +80,15 @@ package "Registry Components" as registry_components {
   [hashicorp-vault]
   [excerpt-service-api]
   [excerpt-worker]
-  [dataplatform-jenkins-agent]
+  [report-exporter]
+  [registry-configuration]
+  [process-history-service-api]
 }
 
-
-
-package "Registry Regulations" as registry_regulations {
-  [registry-regulation-template-minimal]
-  [registry-regulation-template-recommended]
-}
-
-ddm_gerrit -down-> registry_regulations : creates repository """registry-regulations-template"""
+ddm_gerrit -down-> registry_regulations : створює репозиторій """registry-regulations-template"""
 
 legend
- Each component is a dedicated git repository
+ Кожен компонент є окремим git резозиторієм
 end legend
 
 @enduml

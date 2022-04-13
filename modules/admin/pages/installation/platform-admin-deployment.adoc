@@ -416,34 +416,15 @@ TIP: В нашому випадку назва кластера визначен
 
 Перед запуском скрипта з інсталювання Платформи необхідно виконати наступні кроки:
 
-* Завантажити та встановити helm-файл за посиланням:
-https://github.com/roboll/helmfile/releases/download/v0.139.0/helmfile_linux_386.
-
-* Встановити https://github.com/containers/skopeo[skopeo]:
+* Завантажити Інсталер відповідної версії та порівняти чексуми, щоб впевнитись, що Інсталер завантажився коректно:
 
 [source, bash]
 ----
-$ sudo apt install skopeo
+$ echo "$(cat [INSTALLER_NAME].zip.sha256) [INSTALLER_NAME].zip" | sha256sum --check
 ----
 
-* Завантажити та встановити https://docs.openshift.com/container-platform/4.2/cli_reference/openshift_cli/getting-started-cli.html[oc CLI] за посиланням:
-https://mirror.openshift.com/pub/openshift-v4/clients/oc/latest/linux/oc.tar.gz).
-
-* Встановити https://helm.sh/[helm]:
-
-[source, bash]
-----
-$ sudo snap install helm --classic.
-----
-
-* Встановити https://github.com/stedolan/jq/wiki/Installation[jq]:
-
-[source, bash]
-----
-$ sudo apt install jq
-----
-
-* Завантажити Інсталер відповідної версії.
+* Встановити докер (див. інструкцію нижче):
+https://docs.docker.com/engine/install/
 
 
 === Розгортання Платформи
@@ -452,6 +433,27 @@ $ sudo apt install jq
 
 * Розпакувати Інсталер в окрему директорію та увійти до неї.
 
+* Додати сертифікати та допоміжні файли сервісу `digital-signature-ops` в директорію `certificates`:
+
+** sign.key.device-type
+** sign.key.file.issuer
+** sign.key.file.password
+** sign.key.hardware.device
+** sign.key.hardware.password
+** sign.key.hardware.type
+** CACertificates.p7b
+** CAs.json
+** Key-6.dat
+** allowed-keys.yml
+** osplm.ini
+
+* Запустити інсталяційний контейнер з усіма інструментами, які необхідні для розгортання платформи:
+
+[source, bash]
+----
+$ bash docker_load.sh
+----
+
 * Увійти до OKD, виконавши команду:
 
 [source, bash]
@@ -459,18 +461,28 @@ $ sudo apt install jq
 $ oc login
 ----
 
+* Встановити необхідні параметри:
+
+[source, bash]
+----
+# VAULT_IP встановлюється тільки для VSphere
+$ export VAULT_IP=xxx.xxx.xxx.xxx
+$ export idgovuaClientId=XXXXXXXXXXX
+$ export idgovuaClientSecret=YYYYYYYYYYY
+----
+
 * Виконати команду, що запускає install-скрипт:
 
 [source, bash]
 ----
-$ bash install.sh
+$ bash install.sh -i
 ----
 
 == Управління налаштуваннями Платформи
 
 Управління кластером відбувається за методологією https://about.gitlab.com/topics/gitops/[GitOps]. Це означає, що будь-які зміни в конфігурації кластера, компонентів кластера та компонентів Платформи відбувається через зміну конфігурації кластера в git-гілці відповідного компонента.
 
-Метадані усіх компонентів, для яких реалізовано управління через GitOps-підхід, зберігаються в компоненті `cluster-management`.
+Метадані усіх компонентів, для яких реалізовано управління через GitOps-підхід, зберігаються в компоненті `cluster-mgmt`.
 
 Нижче представлено cписок компонентів, для яких наразі імплементований GitOps-підхід:
 
@@ -479,6 +491,7 @@ $ bash install.sh
 - `monitoring`;
 - `logging`;
 - `service-mesh`;
-- `velero`;
+- `backup-management`;
 - `control-plane-nexus`;
-- `user-management`.
+- `user-management`;
+- `external-integration-mocks`
