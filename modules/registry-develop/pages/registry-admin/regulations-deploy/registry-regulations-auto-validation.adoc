@@ -1,0 +1,81 @@
+= Автоматична валідація змін до регламенту
+:toc:
+:toclevels: 5
+:toc-title: ЗМІСТ
+:sectnums:
+:sectnumlevels: 5
+:sectanchors:
+
+Цей документ описує валідацію змін до регламенту на прикладі виникнення помилок при збірці pipeline `MASTER-build-registry-regulations` у реєстрах.
+
+Відповідно до архітектури безпеки Платформи та реєстрів, що на ній розгортаються, регламент кожного реєстру має проходити процедуру перевірки коду (Code Review) перед внесенням змін до цільового репозиторію.
+
+Така процедура є надійним фільтром для виявлення небажаних помилок при моделюванні елементів регламенту, і, за потреби, коригування змін. Однак там, де існує людський фактор, існує і ймовірність додаткових помилок. Прикладом таких помилок є неправильне використання регістру під час роботи з налаштуваннями деяких параметрів у файлах регламенту.
+
+З метою уникнення подібних помилок, на бекенді реалізована додаткова автоматична валідація змін.
+
+Автоматична валідація змін до регламенту наразі передбачає: ::
+
+* Перевірку регістрів при налаштуванні зовнішніх ключів у моделі даних. Валідація передбачена для перевірки регістрів у значенні параметра `foreignKeyName` в рамках моделювання структур даних реєстру.
+* Перевірку регістрів при налаштуванні назв ролей посадових осіб.
+Валідація передбачена для перевірки регістрів у значеннях параметра `name` в рамках визначення ролей у файлі `roles/officer.yml`.
+
+IMPORTANT: Значення параметрів необхідно вказувати у нижньому регістрі, тобто всі символи -- з маленької літери. Механізм валідації для обох випадків є однаковим.
+
+При внесенні змін до регламенту (_див. xref:registry-admin/regulations-deploy/registry-admin-deploy-regulation.adoc[]_), автоматично запускається процес збірки файлів регламенту, що має назву `MASTER-build-registry-regulations`.
+
+Якщо в одному з файлів на рівні Фабрики даних (наприклад, _data-model/tablesSubjects.xml_, що визначає структуру таблиць та зв'язків між ними) значення параметра зовнішнього ключа `foreignKeyName`
+вказано у верхньому регістрі (наприклад, `foreignKeyName="FK_suBject_subject_id"`), то збірка не пройде валідацію та завершиться помилкою.
+
+Якщо у файлі _roles/officer.yml_, на рівні бізнес-процесів, значення параметра `name`, тобто назву ролі посадової особи,
+вказано у верхньому регістрі (наприклад, `name: Officer`), то збірка не пройде валідацію та завершиться помилкою.
+
+.Приклад. Спрацьовування автоматичної валідації для значення параметра foreignKeyName
+====
+Розглянемо приклад спрацьовування автоматичної валідації при внесенні змін до файлу _data-model/tablesSubjects.xml_.
+
+Виконаємо наступні кроки: ::
+
+. Відкрийте файл _data-model/tablesSubjects.xml_ у середовищі розробки та моделювання регламенту.
+. В рамках моделювання структур даних, у тегу `<constraints>`, для атрибута `foreignKeyName` введіть значення `"Fk_subject_subject_id"`, використовуючи верхній регістр.
+. Перенесіть локальні зміни до цільового репозиторію в Gerrit (_див. xref:registry-admin/regulations-deploy/registry-admin-deploy-regulation.adoc[]_).
+. Пройдіть процедуру перевірки коду в Gerrit.
++
+image:registry-admin/regulations-deploy/auto-validation/registry-regulations-auto-validation-4.png[]
+
+. Виконайте злиття (`git merge`) змін до `master`-гілки репозиторію.
++
+image:registry-admin/regulations-deploy/auto-validation/registry-regulations-auto-validation-3.png[]
++
+За фактом злиття змін до `master`-гілки репозиторію в Gerrit, відбудеться автоматичний запуск процесу збірки внесених змін інструментом Jenkins.
+
+. Перейдіть до інтерфейсу *Jenkins* за відповідним посиланням для перегляду процесу збірки.
++
+image:registry-admin/regulations-deploy/auto-validation/registry-regulations-auto-validation-5.png[]
++
+Збірка завершиться помилкою на кроці `registry-regulations-validation`.
+
+. Відкрийте деталі збірки, натиснувши її номер. Далі перейдіть до журналу подій у виводі консолі (*Console Output*).
++
+image:registry-admin/regulations-deploy/auto-validation/registry-regulations-auto-validation-8.png[]
++
+image:registry-admin/regulations-deploy/auto-validation/registry-regulations-auto-validation-7.png[]
+
+. Ознайомтеся із причинами виникнення помилки. До консолі відповідне повідомлення та значення параметр, до якого застосовано валідацію:
++
+----
+[ERROR] Наступні foreign keys містять символи у верхньому регістрі, що неприпустимо: [Fk_subject_subject_id]
+----
++
+image:registry-admin/regulations-deploy/auto-validation/registry-regulations-auto-validation-1.png[]
++
+
+. Прокрутіть бігунок униз сторінки та знайдіть повідомлення про результат невдалої збірки:
++
+----
+ERROR: Registry regulations files did not pass validation
+Finished: FAILURE
+----
++
+image:registry-admin/regulations-deploy/auto-validation/registry-regulations-auto-validation-2.png[]
+====
