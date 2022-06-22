@@ -43,10 +43,10 @@
 
 == Ключові вимоги до редактора
 
-- Підтримка авто-доповнення
+- Підтримка автодоповнення
 - Синтаксичний аналіз
 - Підтримка валідації вибраної schema
-- Підтримка авто-доповнення для вибраної schema
+- Підтримка автодоповнення для вибраної schema
 
 == Розглянуті рішення
 
@@ -61,7 +61,7 @@
 |===
 |Критерій / Функціональність | @monaco-editor/react
 
-|Підтримка авто-доповнення
+|Підтримка автодоповнення
 |Так
 
 |Підтримка валідації вибраної schema
@@ -70,7 +70,7 @@
 |Синтаксичний аналіз
 |Базовий функціонал відсутній, але потрібно розглянути рішення з інтегруванням кастомних розширень з VsCode для веб версії редактора
 
-|Підтримка авто-доповнення для вибраної schema
+|Підтримка автодоповнення для вибраної schema
 | Базовий функціонал відсутній, але потрібно розглянути рішення з інтегруванням кастомних розширень з VsCode для веб версії редактора. Існує базова підтрика Liquibase-конструкцій, реалізована в розширенні https://github.com/rockinrimmer/VSCode-Liquibase-Snippets[VSCode-Liquibase-Snippets]
 |Підтримка можливості порівняння версій xml
 |Так
@@ -89,6 +89,39 @@
 == Підтримка темування та стилізації
 
 Бібліотека @monaco-editor/react надає доступні варіанти теми "vs-dark" | «light». Також ми можемо визначати власні теми за допомогою monaco.editor.defineTheme https://microsoft.github.io/monaco-editor/playground.html#customizing-the-appearence-exposed-colors[Приклад]
+
+== Підтримка автодоповнення
+Бібліотека @monaco-editor надає наступне API для підтримки автодоповнення. Для цього ми викликаємо метод https://microsoft.github.io/monaco-editor/api/modules/monaco.languages.html#registerCompletionItemProvider[_registerCompletionItemProvider()_] у об'єкта _monaco.languages_, який приймає два аргументи _languageId_(мова, на прикладі xml) та об'єкт https://microsoft.github.io/monaco-editor/api/interfaces/monaco.languages.CompletionItemProvider.html[_provider_]. В об'єкта _provider_ є значення https://microsoft.github.io/monaco-editor/api/interfaces/monaco.languages.CompletionItemProvider.html#provideCompletionItems[_provideCompletionItems_], в яке передаємо функцію, яка, в свою чергу, повертає об'єкт зі значенням https://microsoft.github.io/monaco-editor/api/interfaces/monaco.languages.CompletionItem.html[_suggestions_] - це масив елементів, в якому ми опишемо значення для автодоповнення. +
+На приклад:
+[source, javascript]
+----
+monaco.languages.registerCompletionItemProvider('xml', {
+	provideCompletionItems: function () {
+		return {
+			suggestions: [
+        {
+          label: 'createTable',
+          kind: monaco.languages.CompletionItemKind.Function,
+          documentation: 'Create Table.',
+          insertText: `
+            <createTable 
+              catalogName="${cat}",
+              remarks="${remarks}",
+              schemaName="${public}",
+              tableName="${person}",
+              tablespace="${tablespace}"
+            >
+              <column name="${address}" type="${int}" />,
+            </createTable>`,
+          insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+        }
+      ]
+		};
+	}
+});
+
+----
+На прикладі вищє, якщо користувач почне набирати символи які будуть співпадати з полем _label_, редактор запропонує вибрати це значення зі списку автодоповнення. Якщо користувач натисне на це слово, в редакторі автоматично підставиться значення з поля _insertText_.
 
 == Інтерфейс веб-редактора
 
