@@ -9,7 +9,7 @@ class DocumentCompile {
         script.dir("${context.workDir}") {
             script.withCredentials([
                 script.usernamePassword(credentialsId: "${context.nexus.credentialsId}", passwordVariable: 'PASSWORD', usernameVariable: 'USERNAME'),
-                script.usernamePassword(credentialsId: 'git-epam-ciuser', passwordVariable: 'gitPassword', usernameVariable: 'gitUsername')
+                script.usernamePassword(credentialsId: 'gerrit-ciuser-password', passwordVariable: 'gitPassword', usernameVariable: 'gitUsername')
                 ]) {
                 def token = script.sh(script: """
         curl -s -H "Accept: application/json" -H "Content-Type:application/json" -X PUT --data \
@@ -24,7 +24,7 @@ class DocumentCompile {
             npm set registry ${context.buildTool.groupRepository}
             """)
 
-            script.sh "export GIT_CREDENTIALS='https://${script.gitUsername}:${script.gitPassword}@gitbud.epam.com' && npm install"
+            script.sh "export GIT_CREDENTIALS='https://${script.gitUsername}:${script.gitPassword}@gerrit-mdtu-ddm-edp-cicd.apps.cicd2.mdtu-ddm.projects.epam.com' && npm install"
             }
         }
     }
