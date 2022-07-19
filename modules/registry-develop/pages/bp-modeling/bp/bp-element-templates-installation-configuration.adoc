@@ -1,10 +1,34 @@
 = Каталог типових розширень до бізнес-процесів
-:toc:
-:toclevels: 5
+// use these attributes to translate captions and labels to the document's language
+// more information: https://asciidoctor.org/docs/user-manual/#customizing-labels
+// table of contents title
 :toc-title: ЗМІСТ
+:toc:
+:experimental:
+:example-caption: Приклад
+:important-caption: ВАЖЛИВО
+:note-caption: ПРИМІТКА
+:tip-caption: ПІДКАЗКА
+:warning-caption: ПОПЕРЕДЖЕННЯ
+:caution-caption: УВАГА
+// captions for specific blocks
+:figure-caption: Figure
+:table-caption: Table
+// caption for the appendix
+:appendix-caption: Appendix
+// how many headline levels to display in table of contents?
+:toclevels: 5
+// https://asciidoctor.org/docs/user-manual/#sections-summary
+// turn numbering on or off (:sectnums!:)
 :sectnums:
+// enumerate how many section levels?
 :sectnumlevels: 5
+// show anchors when hovering over section headers
 :sectanchors:
+// render section headings as self referencing links
+:sectlinks:
+// number parts of a book
+:partnums:
 
 [#business-process-modeler-extensions-installation]
 == Встановлення каталогу типових розширень до бізнес-процесів
@@ -1029,7 +1053,6 @@ HTTP-метод `PATCH` використовується для частково
 
 +
 image:bp-modeling/bp/element-temp/universal-delegate/connect-to-data-factory-delegate-22.png[]
-
 ====
 
 [#element-temp-call-activity]
@@ -1152,3 +1175,133 @@ TIP: Якщо підпроцес, що викликали, продукує як
 image:bp-modeling/bp/element-temp/call-activity/element-temp-call-activity-check-excerpt-status-2.png[]
 
 NOTE: Всі інші атрибути, як то `Called Element`, `CallActivity Type` тощо, необхідні для налаштування Call Activity вручну, без використання шаблону, визначаються автоматично, "під капотом".
+
+=== Типові розширення для інтеграції із бізнес-процесами інших реєстрів на Платформі
+
+// TODO: Додати посилання на загальний документ з опис API No Trembita
+В рамках REST-взаємодії з іншими реєстрами на Платформі та бізнес-процесами, що змодельовані всередині регламентів таких реєстрів, імплементовано додаткові розширення-конектори (делегати) для передачі або отримання даних до/з цих реєстрів.
+
+На сьогодні Платформа підтримує 3 таких делегати: ::
+
+* xref:#start-bp-another-registry[Start business process in another registry] -- делегат для ініціювання бізнес-процесу, що змодельований в рамках регламенту іншого реєстру на Платформі.
+* xref:#read-entity-another-registry[Read entity from another registry data factory] -- делегат для отримання даних із сутності (конкретної таблиці) в базі даних іншого реєстру, що розгорнутий на Платформі.
+* xref:#search-for-entities-another-registry[Search for entities in another registry data factory] -- делегат для отримання даних декількох (сутностей) таблиць в базі даних іншого реєстру, що розгорнутий на Платформі.
+
+[#start-bp-another-registry]
+==== Делегат для ініціювання бізнес-процесу в іншому реєстрі
+
+Розширення *Start business process in another registry* -- делегат для інтеграції бізнес-процесів із бізнес-процесами інших реєстрів на Платформі, який налаштовується за допомогою розробленого однойменного шаблону *Start business process in another registry* (_registryConnectorStartBpDelegate.json_).
+
+[CAUTION]
+====
+Для того, щоб запустити бізнес-процес в цільовому реєстрі на Платформі, недостатньо просто використовувати делегат. Необхідно попередньо:
+
+* Відкрити доступ до такого реєстру в адмін-консолі для керування реєстрами Control Plane (_детальну інструкцію ви можете переглянути на сторінці xref:admin:registry-management/control-plane-registry-grant-access.adoc[]_).
+
+* Надати доступ до відповідних представлень та REST API реєстру на рівні моделі даних (_детальну інструкцію ви можете переглянути на сторінці xref:registry-develop:data-modeling/data/physical-model/rest-api-view-access-to-registry.adoc[]_).
+====
+
+Для налаштування шаблону делегата в Camunda Modeler, необхідно виконати наступні кроки: ::
+
+. Створіть *Service Task*.
+
+. На панелі налаштувань справа натисніть кнопку `Open Catalog`, оберіть відповідний шаблон *Start business process in another registry* зі списку та натисніть `Apply` для підтвердження.
++
+image:bp-modeling/bp/element-temp/start-bp-another-registry/start-process-another-registry-1.png[]
+
+. Сконфігуруйте обраний шаблон:
++
+NOTE: Перед налаштуванням шаблону в Сamunda Modeler переконайтеся, що папка із застосунком _resources_ -> _element-templates_ містить файл _registryConnectorStartBpDelegate.json_.
+
+* У полі `Name` введіть назву сервісної задачі, в рамках якої налаштовується делегат. Наприклад, `Ініціювати бізнес-процес в іншому реєстрі на Платформі`.
+
+* Перейдіть до секції *Input Parameters* (Вхідні параметри запита):
+
+** Розгорніть блок *Target registry* та вкажіть назву цільового реєстру для запуску в ньому бізнес-процесу.
++
+NOTE: Назва реєстру має відповідати назві, вказаній для реєстру в адміністративній панелі Control Plane.
+
+*** Активуйте позначку `Local Variable Assignment` -> `ON`. Це дозволить створити локальну змінну для назви реєстру, в якому необхідно запустити бізнес-процес.
+*** У полі `Variable Assignment Type` оберіть з випадного списку тип призначення змінної -- `String or Expression`.
++
+NOTE: У нашому випадку -- це буде рядок, тобто `String`.
+
+*** У полі `Variable Assignment Value` вкажіть назву реєстру із Control Plane, в якому необхідно запустити бізнес-процес. Наприклад, `test3`.
++
+image:bp-modeling/bp/element-temp/start-bp-another-registry/start-process-another-registry-2.png[]
+
+** Розгорніть блок *Business process definition key* та вкажіть ідентифікатор бізнес-процесу, який необхідно запустити в цільовому реєстрі.
++
+NOTE: ID бізнес-процесу є унікальним в рамках регламенту певного реєстру і відповідає параметру `process_definition_id` у каталозі _bp-auth_ або параметру `process_definition_key` у bpms.
+
+*** Активуйте позначку `Local Variable Assignment` -> `ON`. Це дозволить створити локальну змінну для ідентифікатора процесу у реєстрі, який необхідно запустити.
+*** У полі `Variable Assignment Type` оберіть з випадного списку тип призначення змінної -- `String or Expression`.
++
+NOTE: У нашому випадку -- це буде рядок, тобто `String`.
+
+*** У полі `Variable Assignment Value` вкажіть ID процесу, який необхідно запустити. Наприклад, `called-bp--another-registry-test`.
++
+image:bp-modeling/bp/element-temp/start-bp-another-registry/start-process-another-registry-3.png[]
+
+** Розгорніть блок *Start variables* та вкажіть стартові змінні для бізнес-процесу, який необхідно запустити в цільовому реєстрі.
++
+[NOTE]
+====
+Для того, щоб цільовий процес запрацював, йому необхідно передати відповідні параметри запуску. Такі параметри необхідно передати як набір змінних для запуску бізнес-процесу -- *start variables*.
+====
+
+*** Активуйте позначку `Local Variable Assignment` -> `ON`. Це дозволить створити локальні змінні для ініціювання процесу в іншому реєстрі.
+*** У полі `Variable Assignment Type` оберіть з випадного списку тип призначення змінної -- `Map`.
++
+NOTE: Іншими словами, необхідно передати набір пар "ключ-значення".
+
+*** У полі `Variable Assignment Value` вкажіть ключі та їх значення для змінних старту процесу, який необхідно запустити.
++
+Додайте два записи. Для цього дві натисніть `Add Entry`:
++
+**** У першому рядку для поля `Key` вкажіть `eduname`, а для поля Value вкажіть значення параметра. Наприклад, `${submission('ChildDataInput').formData.prop('eduFullName').value()}`.
+**** У другому рядку для поля `Key` вкажіть `formData`, а для поля Value вкажіть значення параметра. Наприклад, `${submission('ChildDataInput').formData.toString()}`.
++
+NOTE: У нашому випадку ми передаємо 2 параметри (змінні) з відповідної форми (`ChildDataInput`) за допомогою функції `submission()`.
++
+image:bp-modeling/bp/element-temp/start-bp-another-registry/start-process-another-registry-4.png[]
+
+** Розгорніть блок *X-Access-Token* та вкажіть введіть токен доступу до ресурсу:
+
+*** Активуйте позначку `Local Variable Assignment` -> `ON`. Це дозволить створити локальну змінну для токена доступу.
+*** У полі `Variable Assignment Type` оберіть з випадного списку тип призначення змінної -- `String or Expression`.
+*** У полі `Variable Assignment Value` введіть токен доступу. Наприклад, `${initiator().accessToken}`.
++
+[TIP]
+====
+Токен доступу береться з АБО ініціатора (наприклад, `$initiator().accessToken}`), АБО виконавця останньої користувацької задачі (наприклад, `${completer('taskDefinitionId').accessToken}`).
+====
++
+image:bp-modeling/bp/element-temp/start-bp-another-registry/start-process-another-registry-5.png[]
+
+* У секції *Output Parameters* (Вихідні параметри):
+
+** Розгорніть блок *Result variable* вкажіть назву змінної процесу, до якої необхідно записати результат (за замовчуванням -- `response`):
+
+*** Активуйте позначку `Local Variable Assignment` -> `ON`.
+*** У полі `Variable Assignment Type` оберіть з випадного списку тип призначення змінної -- `String or Expression`.
+*** У полі `Variable Assignment Value` введіть назву результівної змінної (за замовчуванням -- `response`).
++
+image:bp-modeling/bp/element-temp/start-bp-another-registry/start-process-another-registry-6.png[]
+
+
+
+
+[#read-entity-another-registry]
+==== Делегат для отримання даних із сутності в БД іншого реєстру
+
+//TODO
+NOTE: Розділ у процесі формування.
+
+[#search-for-entities-another-registry]
+==== Делегат для отримання даних декількох сутностей у БД іншого реєстру
+
+//TODO
+NOTE: Розділ у процесі формування.
+
+
