@@ -642,3 +642,171 @@ TIP: За детальною інформацією щодо прав досту
 </ext:revoke>
 ----
 ====
+
+== Використання вкладених структур в таблицях БД реєстру за вказаним параметром
+
+=== Тег використання вкладених структур
+
+Назва change type: `<tableReadParameters>` ::
+
+Цей тег надає можливість моделювати вкладені структури в таблицях БД реєстру за вказаним параметром.
+
+[NOTE]
+====
+Для використання у критеріях пошуку (search conditions) додано атрибут `fetchType`. Його зазначають для колонки, що містить масив даних.
+
+Застосовується для двох типів зв'язку:
+
+* Колонок, в яких визначено тип зв`яку "Багато до багатьох" (Many2Many);
+
+* Колонок, в яких є зовнішній ключ (foreign key) до іншої таблиці.
+
+Атрибут `fetchType` приймає наступні значення:
+
+* `id` -- отримати ідентифікатори (поведінка за замовчуванням);
+* `entity` -- отримати інформацію з таблиці, до якої налаштовано посилання.
+====
+
+._Приклад XML-схеми з тегом <tableReadParameters>_
+[%collapsible]
+====
+[source, XML]
+----
+<ext:tableReadParameters table="person_type_vpo">
+    <ext:column name="consents" fetchType="entity"/>
+</ext:tableReadParameters>
+----
+====
+
+._Приклад XML-схеми з атрибутом fetchType_
+[%collapsible]
+====
+[source, XML]
+----
+<ext:createSearchCondition name="vpo_person_equals_id_with_fetch_type_person">
+    <ext:table name="vpo_person_many_types">
+        <ext:column name="consent_id" fetchType="entity" />
+        <ext:column name="scan_copy" />
+        <ext:column name="legal_entity_name" sorting="asc" searchType="startsWith" />
+        <ext:column name="consent_subject_id"/>
+    </ext:table>
+</ext:createSearchCondition>
+----
+====
+
+.Використання тегу <tableReadParameters> та атрибуту _fetchType_ при моделюванні даних
+====
+* `Таблиця 1` має зв'язок many2many з `Таблицею 2`.
+* `Таблиця 1` має колонку з масивом id (зовнішні ключі до `Таблиці 2`).
+* Відповідь при запиті до ресурсу з `Таблиці 1` повинна мати у полі з посиланнями до `Таблиці 2` інформацію, відповідну до записів з `Таблиці 2`.
+
+.Таблиця 1
+[source,json]
+----
+{
+   "vpoId":"57152fa5-742c-4b1e-bd53-acc36524cc2d",
+   "vpoLastName":"Петренко",
+   "vpoFirstName":"Петро",
+   "vpoSecondName":"Іванович",
+   "personTypes":[
+      "2d89ffea-118c-4be9-9fa0-c3007991c811",
+      "0d756563-d6a4-46fe-a0c8-ddf4a935ec35"
+   ]
+}
+----
+
+.Таблиця 2
+[source,json]
+----
+[
+   {
+      "constantCode":"1100",
+      "name":"Багатодітна сім'я'",
+      "personTypeVpoId":"2d89ffea-118c-4be9-9fa0-c3007991c811"
+   },
+   {
+      "constantCode":"1200",
+      "name":"Діти",
+      "personTypeVpoId":"0d756563-d6a4-46fe-a0c8-ddf4a935ec35"
+   }
+]
+----
+
+
+.Приклад створення критерію пошуку `vpo_person_type_contains_name`
+[source,xml]
+----
+<changeSet author="registry owner" id="create SC vpo_person_equals_id_person_with_fetch_many_types">
+    <ext:createSearchCondition name="vpo_person_equals_id_person_with_fetch_many_types">
+        <ext:table name="vpo_person_many_types">
+            <ext:column name="vpo_person_many_id" searchType="equal"/>
+            <ext:column name="vpo_first_name" />
+            <ext:column name="vpo_last_name"/>
+            <ext:column name="vpo_second_name"/>
+            <ext:column name="person_types" fetchType="entity"/>
+        </ext:table>
+    </ext:createSearchCondition>
+</changeSet>
+----
+
+.Приклад створення таблиці з fetchType
+[source,xml]
+----
+<changeSet id="table t_person_table_many2many_fetch_id" author="registry owner">
+    <createTable tableName="t_person_table_many2many_fetch_id" ext:isObject="true" ext:historyFlag="true" remarks="VPO">
+        <column name="id"  type="UUID" defaultValueComputed="uuid_generate_v4()" remarks="Ідентифікатор vpo">
+            <constraints nullable="false" primaryKey="true" primaryKeyName="pk_t_person_table_many2many_fetch_id"/>
+        </column>
+        <column name="name" type="TEXT" remarks="iм'я">
+            <constraints nullable="false"/>
+        </column>
+        <column name="person_types" type="UUID[]" remarks="Масив id"/>
+    </createTable>
+    <ext:createMany2Many mainTableName="t_person_table_many2many_fetch_id"
+                         mainTableKeyField="id"
+                         referenceTableName="person_type_vpo"
+                         referenceKeysArray="person_types"/>
+    <ext:tableReadParameters table="t_person_table_many2many_fetch_id">
+        <ext:column name="person_types" fetchType="entity"/>
+    </ext:tableReadParameters>
+</changeSet>
+----
+
+.Приклад результат виконання запита за замовчуванням (search conditions або resource)
+[source,json]
+----
+{
+   "vpoId":"57152fa5-742c-4b1e-bd53-acc36524cc2d",
+   "vpoLastName":"Петренко",
+   "vpoFirstName":"Петро",
+   "vpoSecondName":"Іванович",
+   "personTypes":[
+      "2d89ffea-118c-4be9-9fa0-c3007991c811",
+      "0d756563-d6a4-46fe-a0c8-ddf4a935ec35"
+   ]
+}
+----
+
+.Приклад результат виконання запита з атрибутом fetchType (search conditions або resource)
+[source,json]
+----
+{
+   "vpoId":"57152fa5-742c-4b1e-bd53-acc36524cc2d",
+   "vpoLastName":"Петренко",
+   "vpoFirstName":"Петро",
+   "vpoSecondName":"Іванович",
+   "personTypes":[
+      {
+         "id":"2d89ffea-118c-4be9-9fa0-c3007991c811",
+         "constantCode":"1100",
+         "name":"Багатодітна сім'я'"
+      },
+      {
+         "id":"0d756563-d6a4-46fe-a0c8-ddf4a935ec35",
+         "constantCode":"1200",
+         "name":"Діти"
+      }
+   ]
+}
+----
+====
