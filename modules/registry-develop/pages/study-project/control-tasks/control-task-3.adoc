@@ -1,0 +1,195 @@
+:toc-title: ЗМІСТ
+:toc: auto
+:toclevels: 5
+:experimental:
+:important-caption:     ВАЖЛИВО
+:note-caption:          ПРИМІТКА
+:tip-caption:           ПІДКАЗКА
+:warning-caption:       ПОПЕРЕДЖЕННЯ
+:caution-caption:       УВАГА
+:example-caption:           Приклад
+:figure-caption:            Зображення
+:table-caption:             Таблиця
+:appendix-caption:          Додаток
+:sectnums:
+:sectnumlevels: 5
+:sectanchors:
+:sectlinks:
+:partnums:
+
+= Контрольне завдання 3
+{empty} +
+
+== Мета завдання
+
+_Виконання цього завдання має на меті:_
+
+* отримати поглиблені практичні знання зі створення бізнес-процесів на Платформі;
+* ознайомитися з вкладеними сутностями.
+
+== Завдання
+
+["upperroman"]
+. Створіть модель даних на базі представленої таблиці.
++
+[cols="5%,30%,30%,10%,20%,5%", options="header"]
+.Поля та їх опис
+|====
+|_№_|_Назва поля на формі та в логічній моделі даних_|_Назва поля у фізичній моделі даних_|_Формат_|_Довідник, що використовується_|_Обов'язковість_
+6+|Сутність *person_edu_profile*
+|1|Ідентифікатор профайлу дитини|person_profile_id|Text||+
+|2|Статус учня (Ідентифікатор статусів учня)|person_edu_state_id|UUID|link:{attachmentsdir}/study-project/control-task-3/dict-person-edu-state.csv[Статус учня (person_edu_state)]|+
+|3|Ідентифікатор ЗЗСО (заклад освіти в якому навчається, або навчався учень на останній момент часу)|edu_organization_id|UUID
+
+Паспорту ЗЗСО (Edu_organization) з Паспорта ЗЗСО||+
+6+|Сутність *orders*
+|4|Ідентифікатор класу|unit_id|UUID||+
+|5|Ідентифікатор профайлу дитини|person_profile_id|UUID||+
+|6|Номер наказу|order_number|Text||+
+|7|Дата наказу|order_date|Date||+
+|8|Тип наказу (Ідентифікатор типів наказів)|order_type_id|UUID|link:{attachmentsdir}/study-project/control-task-3/dict-order-type.csv[Тип наказу (order_type)]|+
+|9|Дата зарахування|enrollment_date|Date||+
+6+|Сутність *transaction*
+|10|Тип транзакції|transaction_type|UUID||+
+|11|Ідентифікатор наказу|order_id|UUID||+
+|12|Ідентифікатор класу|unit_id|UUID||+
+|13|Ідентифікатор освітнього профайлу учня|person_edu_profile_id|UUID||+
+|====
+
+. Створіть endpoint для сутностей `person_edu_profile`, `transaction`, `orders` за типом *_Composite Entity_*, в якій `orders` та `person_edu_profile` виступають батьківськими сутностями для `transaction`.
+
+. Створіть наступний перелік Search condition:
++
+["arabic"]
+.. Створіть за типом Search condition (*unit_edu_organization_id_equals*) для пошуку класів ЗЗСО з підтримкою `EQUALS`.
+
+SEARCH BY EQUALS::
++
+* Вхідні параметри:
++
+[source, sql]
+----
+SELECT unit.unit_id, unit.parallel, unit.name, unit_type.name, unit. students_max_number, COUNT (transaction_id)
+FROM unit
+INNER JOIN unit_type ON unit.unit_type_id = unit_type.unit_type_id
+INNER JOIN transaction on unit.unit_id = transaction.unit_id
+WHERE unit.edu_organization_id='UUID';
+Parameters: UUID
+Constants: none
+----
++
+* Вихідні параметри:
++
+[source, roomsql]
+----
+UUID, 1, А, загального типу, 25, 5
+----
+
+.. Створіть за типом Search condition (*person_profile_equal*) для перевірки значення поля `'person_edu_profile_id'` з підтримкою `EQUALS`.
++
+SEARCH BY EQUALS::
++
+* Вхідні параметри:
++
+[source, sql]
+----
+SELECT person_edu_profile.person_profile_id, person_edu_profile.edu_organization_id, person_edu_state.constant_code  FROM  person_edu_profile
+INNER JOIN  person_edu_state  ON  person_edu_profile.person_edu_state_id = person_edu_state.person_edu_state_id
+WHERE  person_edu_profile.person_edu_profile_id ='UUID'
+Parameters:  person_edu_profile.person_edu_profile_id
+Constants: none
+----
++
+* Вихідні параметри:
++
+[source, roomsql]
+----
+UUID, UUID, STUDYING
+Якщо запису не існує Output:
+null
+----
+
+.. Створіть за типом Search condition (*person_edu_state_equal*) для заповнення поля "Статус учня" з підтримкою `READ ALL` та `EQUALS`.
++
+READ ALL::
++
+* Вхідні параметри:
++
+[source, sql]
+----
+SELECT person_edu_state_id, name, constant_code FROM person_edu_state ORDER BY name;
+Parameters: none
+Constants: none
+----
++
+* Вихідні параметри:
++
+[source, roomsql]
+----
+UUID, Навчається, STUDYING
+UUID, Не відвідує навчання, NOT_ATTENDING
+UUID, Відрахований, EXCLUDED
+UUID, Завершив навчання, GRADUATED
+----
+
++
+EQUAL::
++
+* Вхідні параметри:
++
+[source, sql]
+----
+SELECT person_edu_state_id, name, constant_code FROM person_edu_state WHERE  constant_code = 'STUDYING' ORDER BY name;
+Parameters: constant_code
+Constants: none
+----
++
+* Вихідні параметри:
++
+[source, roomsql]
+----
+UUID, Навчається, STUDYING
+----
+
+.. Створіть за типом Search condition (*order_type_code_equals*) для заповнення поля "Тип наказу"  з підтримкою  `EQUALS`.
++
+SEARCH BY EQUALS::
++
+* Вхідні параметри:
++
+[source, sql]
+----
+SELECT order_type_id, name FROM order_type WHERE  constant_code='INITIAL_ONBOARDING' ;
+Parameters: constant_code
+Constants: none
+----
++
+* Вихідні параметри:
++
+[source, roomsql]
+----
+UUID, Первинне створення освітнього профілю
+----
+
+. Створіть наступний перелік форм:
+["arabic"]
+.. _Форма внесення даних для пошуку дитини (стартова)_
+.. _Форма внесення даних про освітній профіль_
+.. _Форма підписання даних про освітній профіль_
+{empty} +
+{empty} +
+
+. Створіть наступний бізнес-процес:
+
+* Бізнес-процес створення освітнього профілю дитини, де `businessKey` - `"ФІО дитини"`. Додайте наступні перевірки:
++
+--
+** профіль дитини було створено в реєстрі;
+** освітній профіль дитини раніше не було створено.
+--
++
+Об'єкт, який зберігається в базу даних являє собою вкладену сутність. Перед завершенням бізнес-процесу необхідно визначати статус цього бізнес-процесу.
+
+== Очікуваний результат завдання
+
+Змодельовано бізнес-процес створення освітнього профілю дитини у тестовому реєстрі. Бізнес-процес доступний у вигляді послуги в Кабінеті користувача.
