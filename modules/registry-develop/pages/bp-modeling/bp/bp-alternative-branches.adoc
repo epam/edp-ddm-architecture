@@ -1,0 +1,212 @@
+= Підтримка альтернативних гілок у бізнес-процесах
+// use these attributes to translate captions and labels to the document's language
+// more information: https://asciidoctor.org/docs/user-manual/#customizing-labels
+// table of contents title
+:toc-title: ЗМІСТ
+:toc:
+:experimental:
+:example-caption: Приклад
+:important-caption: ВАЖЛИВО
+:note-caption: ПРИМІТКА
+:tip-caption: ПІДКАЗКА
+:warning-caption: ПОПЕРЕДЖЕННЯ
+:caution-caption: УВАГА
+// captions for specific blocks
+:figure-caption: Figure
+:table-caption: Table
+// caption for the appendix
+:appendix-caption: Appendix
+// how many headline levels to display in table of contents?
+:toclevels: 5
+// https://asciidoctor.org/docs/user-manual/#sections-summary
+// turn numbering on or off (:sectnums!:)
+:sectnums:
+// enumerate how many section levels?
+:sectnumlevels: 5
+// show anchors when hovering over section headers
+:sectanchors:
+// render section headings as self referencing links
+:sectlinks:
+// number parts of a book
+:partnums:
+
+== Загальний опис
+
+Альтернативні гілки у бізнес-процесах дозволяють посадовій особі повернутися до попередньої форми бізнес-процесу та виправити внесені дані (тобто виконати "*step back*"), якщо в рамках бізнес-процесу є дві або більше задачі, розподілені в ряд на посадову особу, та коли процес змодельований зі стартовою формою.
+
+image:bp-modeling/bp/alternative-branches/alternative-branches-1.png[]
+
+Виділяють 2 сценарії використання функціональності: ::
+
+* Посадова особа може повернутися до виконання попередньої задачі у Кабінеті, відповідно до навігації у змодельованій альтернативній гілці бізнес-процесу.
+* Посадова особа може скасувати внесені дані на формі Кабінету та повернутися до меню послуг.
+
+CAUTION: Перехід до попередніх форм бізнес-процесу виконується із форми для підпису даних КЕП.
+
+////
+----
+Те що зроблено
+
+1.	Перевірена можливість використання при моделюванні задачі параметру _action_code
+2.	При натисканні на кнопку, в якій змодельовано Navigation, відбувається завершення задачі, при цьому поле _action_code у form data заповнюється значенням параметра Action code
+3.	На підписуючій формі кнопки, змодельовані з використанням компоненти Button, розміщуються під віджетом КЕП та візуально відділені від нього
+----
+////
+
+== Моделювання та налаштування альтернативних гілок у бізнес-процесі
+
+[NOTE]
+====
+
+Передумови ::
+
+Змодельовано синтетичний бізнес-процес, де можна налаштувати відповідні альтернативні гілки:
+
+* _Зелена гілка_ -- для повернення до форми під назвою "1-ша форма"
+* _Блакитна гілка_ -- для повернення до форми із назвою "2-га форма"
+* _Фіолетова гілка_ -- для скасування внесених даних та завершення бізнес-процесу.
+====
+
+[#return-to-the-first]
+=== Моделювання повернення до 1-ї форми
+
+. Оберіть гілку, яка веде до форми, до якої необхідно повернутися. В нашому випадку -- це зелена гілка.
+
+. У полі `Name` вкажіть назву гілки. Наприклад, `Повернутися до 1-ї форми`.
+. У полі `Condition Type`  оберіть тип -- `Expression`, тобто вираз.
+. У полі `Expression` змоделюйте повернення до 1-ї форми за допомогою виразу, використовуючи JUEL-функцію `submission()`.
++
+.Моделювання повернення до 1-ї форми за допомогою JUEL-функції submission()
+====
+[source,juel]
+----
+${submission('SignForm').formData.hasProp('_action_code') && submission('SignForm').formData.prop('_action_code').value().equals('return_to_first')}
+----
+
+Пояснення ::
+
+У першій частині, до `&&`, вираз перевірятиме, чи існує на формі `'_action_code'`:
++
+----
+{submission('SignForm').formData.hasProp('_action_code')
+----
++
+У другій частині, після `&&`, вираз перевірятиме, чому дорівнює значення `'_action_code'`. У нашому випадку action code дорівнює `'return_to_first'`:
++
+----
+submission('SignForm').formData.prop('_action_code').value().equals('return_to_first')
+----
++
+//TODO: xref to the button on the form modeling section
++
+`'return_to_first'` -- значення поля `Action` при налаштуванні форми у сервісі моделювання форм (налаштування кнопки навігації до 1-ї форми).
+====
++
+[TIP]
+====
+Детальну інформацію з описом доступних JUEL-функцій ви можете переглянути за посиланням:
+
+* xref:registry-develop:bp-modeling/bp/modeling-facilitation/modelling-with-juel-functions.adoc[]
+====
++
+image:bp-modeling/bp/alternative-branches/alternative-branches-2.png[]
+
+=== Моделювання повернення до 2-ї форми
+
+Моделювання повернення до будь-яких форм через альтернативні гілки є майже ідентичним. Змінюється лише значення параметра `_action_code`, визначене при моделюванні форми до бізнес-процесу. Це значення необхідно передати функції `submission()`.
+
+. Оберіть гілку, яка веде до форми, до якої необхідно повернутися. В нашому випадку -- це блакитна гілка.
+
+. У полі `Name` вкажіть назву гілки. Наприклад, `Повернутися до 2-ї форми`.
+. У полі `Condition Type`  оберіть тип -- `Expression`, тобто вираз.
+. У полі `Expression` змоделюйте повернення до 2-ї форми за допомогою виразу, використовуючи JUEL-функцію `submission()`.
++
+.Моделювання повернення до 2-ї форми за допомогою JUEL-функції submission()
+====
+[source,juel]
+----
+${submission('SignForm').formData.hasProp('_action_code') && submission('SignForm').formData.prop('_action_code').value().equals('return_to_second')}
+----
+
+Пояснення ::
+
+У першій частині, до `&&`, вираз перевірятиме, чи існує на формі для підпису даних `'_action_code'`:
++
+----
+{submission('SignForm').formData.hasProp('_action_code')
+----
++
+У другій частині, після `&&`, вираз перевірятиме, чому дорівнює значення `'_action_code'`. У нашому випадку action code дорівнює `'return_to_second'`:
++
+----
+submission('SignForm').formData.prop('_action_code').value().equals('return_to_first')
+----
++
+//TODO: xref to the button on the form modeling section
++
+`'return_to_second'` -- значення поля `Action` при налаштуванні форми у сервісі моделювання форм (налаштування кнопки навігації до 2-ї форми).
+====
++
+[TIP]
+====
+Детальну інформацію з описом доступних JUEL-функцій ви можете переглянути за посиланням:
+
+* xref:registry-develop:bp-modeling/bp/modeling-facilitation/modelling-with-juel-functions.adoc[]
+====
++
+image:bp-modeling/bp/alternative-branches/alternative-branches-3.png[]
+
+=== Моделювання скасування внесених даних на формі та повернення до головного меню
+
+Моделювання скасування внесених даних на формі та повернення до меню послуг через альтернативні гілки є майже ідентичним до моделювання повернення до попередніх форм для виправлення даних. Змінюється лише значення параметра `_action_code`, визначене при моделюванні форми до бізнес-процесу. Це значення необхідно передати функції `submission()`.
+
+. Виділіть XOR-шлюз, від якого йде розгалуження до скасування.
+* У полі `Name` вкажіть назву -- `Скасувати внесення даних?`.
++
+image:bp-modeling/bp/alternative-branches/alternative-branches-4.png[]
+
+. Оберіть гілку, яка веде до скасування внесених даних та завершення бізнес-процесу. В нашому випадку -- це фіолетова гілка.
+
+* У полі `Name` вкажіть назву гілки. Наприклад, `Так`.
+* У полі `Condition Type`  оберіть тип -- `Expression`, тобто вираз.
+* У полі `Expression` змоделюйте скасування внесених даних та переходу до меню послуг за допомогою виразу, використовуючи JUEL-функцію `submission()`.
++
+.Моделювання скасування внесених даних та переходу до меню послуг за допомогою JUEL-функції submission()
+====
+[source,juel]
+----
+${submission('Firsttask').formData.hasProp('_action_code') && submission('SignForm').formData.prop('_action_code').value().equals('cancel')}
+----
+
+Пояснення ::
+
+У першій частині, до `&&`, вираз перевірятиме, чи існує на 1-й формі `'_action_code'`:
++
+----
+{submission('Firsttask').formData.hasProp('_action_code')
+----
++
+У другій частині, після `&&`, вираз перевірятиме, чому дорівнює значення `'_action_code'`. У нашому випадку action code дорівнює `'cancel'`:
++
+----
+submission('Firsttask').formData.prop('_action_code').value().equals('cancel')
+----
++
+//TODO: xref to the button on the form modeling section
++
+`'cancel'` -- значення поля `Action` при налаштуванні форми у сервісі моделювання форм (налаштування скасування внесених даних та повернення до меню послуг).
+====
++
+[TIP]
+====
+Детальну інформацію з описом доступних JUEL-функцій ви можете переглянути за посиланням:
+
+* xref:registry-develop:bp-modeling/bp/modeling-facilitation/modelling-with-juel-functions.adoc[]
+====
++
+image:bp-modeling/bp/alternative-branches/alternative-branches-5.png[]
+
+
+== Моделювання на налаштування кнопок для альтернативних гілок на формах бізнес-процесів
+
+NOTE: Розділ у процесі формування.
