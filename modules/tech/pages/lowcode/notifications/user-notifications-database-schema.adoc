@@ -1,39 +1,53 @@
 == Фізична модель збереження шаблонів повідомлень
 
-В рамках реалізації функціональних вимог, необхідно створити окрему схему _NOTIFICATIONS_ та розширити фізичну модель додатковими таблицями _NOTIFICATION_TEMPLATE_ та _NOTIFICATION_TEMPLATE_ATTR_, призначенням якої є збереження шаблонів повідомлень та їх атрибутів в залежності від каналу зв'язку, який підтримується платформою.
+В рамках реалізації функціональних вимог, необхідно створити окрему схему _NOTIFICATIONS_ та розширити фізичну модель додатковими таблицями:
 
-Наповнення таблиць реалізується на етапі публікації регламенту через окрему _Утиліту публікації шаблонів повідомлень_ (*notification-template-publisher*) та _Cервіс відправки повідомлень користувачам_ (*notification-service*).
+- _NOTIFICATION_TEMPLATE_ - зберігання даних шаблонів повідомлень
+- _NOTIFICATION_TEMPLATE_ATTR_ - зберігання додаткових атрибутів шаблонів в залежності від вимог окремого каналу зв'язку
+- _INBOX_NOTIFICATION_ - зберігання _in-app_ повідомлень користувачів для відображення у _Кабінеті Громадянина_
 
 [plantuml]
 ----
 hide circle
 
-entity "NOTIFICATION_TEMPLATE" as notification_template {
-    ID: UUID <<PK>>
-    -- unique composite key ---
-    NAME: TEXT
-    CHANNEL: ENUM [inbox|diia|email]
-    --
-    TITLE: TEXT
-    CONTENT: TEXT
-    CHECKSUM: TEXT
-    CREATED_AT: TIMESTAMP
-    UPDATED_AT: TIMESTAMP
-    -- if published externally --
-    EXT_TEMPLATE_ID: TEXT
-    EXT_PUBLISHED_AT: TIMESTAMP
-}
+package "NOTIFICATIONS" as notifications {
+    entity "NOTIFICATION_TEMPLATE" as notification_template {
+        ID: UUID <<PK>>
+        -- unique composite key ---
+        NAME: TEXT
+        CHANNEL: ENUM [inbox|diia|email]
+        --
+        TITLE: TEXT
+        CONTENT: TEXT
+        CHECKSUM: TEXT
+        CREATED_AT: TIMESTAMP
+        UPDATED_AT: TIMESTAMP
+        -- if published externally --
+        EXT_TEMPLATE_ID: TEXT
+        EXT_PUBLISHED_AT: TIMESTAMP
+    }
 
-entity "NOTIFICATION_TEMPLATE_ATTR" as notification_template_attr {
-    ID: UUID <<PK>>
-    --
-    TEMPLATE_ID: UUID <<FK>>
-    --
-    NAME: TEXT
-    VALUE: TEXT
-}
+    entity "NOTIFICATION_TEMPLATE_ATTR" as notification_template_attr {
+        ID: UUID <<PK>>
+        --
+        TEMPLATE_ID: UUID <<FK>>
+        --
+        NAME: TEXT
+        VALUE: TEXT
+    }
 
-notification_template ||-|{ notification_template_attr
+  entity "INBOX_NOTIFICATION" as inbox_notification {
+        ID: UUID <<PK>>
+        RECIPIENT_ID: TEXT
+        SUBJECT: TEXT
+        MESSAGE: TEXT
+        IS_ACKNOWLEDGED: BOOLEAN
+        CREATED_AT: TIMESTAMP
+        UPDATED_AT: TIMESTAMP
+  }
+
+  notification_template ||-|{ notification_template_attr
+}
 ----
 
 === Структура даних шаблонів повідомлень (_NOTIFICATION_TEMPLATE_)
@@ -134,6 +148,55 @@ notification_template ||-|{ notification_template_attr
 
 |===
 
+==== Структура даних _in-app_ повідомлень _INBOX_NOTIFICATION_
+
+|===
+|Поле|Тип|Обмеження|Значення за замовчуванням|Опис
+
+|*ID*
+|UUID
+|Primary Key
+|_uuid_generate_v4()_
+|Унікальний автоматично згенерований ідентифікатор запису
+
+|*RECIPIENT_ID*
+|TEXT
+|Not Null
+|-
+|Ідентифікатор користувача, який має отримати повідомлення
+
+|*SUBJECT*
+|TEXT
+|Not Null
+|-
+
+|Заголовок повідомлення
+|*MESSAGE*
+|TEXT
+|Not Null
+|-
+|Зміст повідомлення
+
+|*IS_ACKNOWLEDGED*
+|BOOLEAN
+|Not Null
+|false
+|Статус повідомлення (прочитане/не прочитане)
+
+|*CREATED_AT*
+|TIMESTAMP
+|Not Null
+|_now()_
+|Дата/Час створення повідомлення
+
+|*UPDATED_AT*
+|TIMESTAMP
+|Not Null
+|_now()_
+|Дата/Час оновлення повідомлення
+
+|===
+
 === Ролі/системні користувачі БД
 
 Для обслуговування операцій взаємодії з БД, необхідно створити ролі/користувачів з визначеними правами доступу для використання відповідними компонентами системи:
@@ -146,5 +209,7 @@ notification_template ||-|{ notification_template_attr
 |_GRANT SELECT, INSERT, UPDATE, DELETE ON NOTIFICATION_TEMPLATE_
 
 _GRANT SELECT, INSERT, UPDATE, DELETE ON NOTIFICATION_TEMPLATE_ATTR_
+
+_GRANT SELECT, INSERT, UPDATE, DELETE ON INBOX_NOTIFICATION_
 
 |===
