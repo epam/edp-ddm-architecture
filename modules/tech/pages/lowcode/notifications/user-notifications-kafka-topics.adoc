@@ -1,8 +1,181 @@
-== Kafka-топіки опрацювання подій відправки повідомлень користувачам
+== Kafka-топіки запитів на відправку повідомлень користувачам
 
-=== "_user-notifications_"
+Наразі, за обслуговування запитів на відправлення повідомлень користувачам відповідають наступні _Kafka_-топіки, сегреговані за призначенням, вимогами до масштабування та контролю навантаження на _downstream_-сервіси:
 
-Цільовий топік, який використовується для публікації/обробки подій-запитів на відправку повідомлень користувачам.
+|===
+|Службова назва|Опис
+|_user-notifications_
+|Публікація та обробка системних запитів на відправлення повідомлень користувачам. Реалізує асинхронну взаємодію між сервісами реєстру та _Сервісом відправки повідомлень користувачам_
+
+|_user-notifications.DLT_
+|Публікація запитів на відправлення повідомлень користувачам, які не вдалося опрацювати _Сервісом відправки повідомлень користувачам_
+
+|_email-notifications_
+|Публікація та обробка запитів на відправлення поштових повідомлень користувачам через платформенний або зовнішній SMTP-сервер
+
+|_email-notifications.DLT_
+|Публікація запитів на відправлення поштових повідомлень користувачам, які не вдалося опрацювати
+
+|_diia-notifications_
+|Публікація та обробка запитів на відправлення _push_-повідомлень користувачам у мобільний застосунок Дія
+
+|_diia-notifications.DLT_
+|Публікація запитів на відправлення _push_-повідомлень користувачам у мобільний застосунок Дія, які не вдалося опрацювати
+
+|_inbox-notifications_
+|Публікація та обробка запитів на відправлення повідомлень користувачам у _Кабінет Громадянина_
+
+|_inbox-notifications.DLT_
+|Публікація запитів на відправлення повідомлень користувачам у _Кабінет Громадянина_, які не вдалося опрацювати
+|===
+
+=== Публікація та обробка запитів на відправлення повідомлень користувачам у _Кабінет Громадянина_
+
+Перелік _Kafka_-топіків:
+
+- _inbox-notifications_
+- _inbox-notifications.DLT_
+
+.Канонічний вигляд структури повідомлення
+[source,json]
+----
+{
+  "context": {
+    "system": "Low-code Platform",
+    "application": "<bpms.app.name>",
+    "businessProcess": "<optional>",
+    "businessProcessDefinitionId": "<optional>",
+    "businessProcessInstanceId": "<optional>",
+    "businessActivity": "<optional>",
+    "businessActivityInstanceId": "<optional>"
+  },
+  "notification": {
+    "subject": "<notification subject>",
+    "message": "<notification message>"
+  },
+  "recipient": {
+    "id": "<Ідентифікатор користувача>"
+  }
+}
+----
+
+=== Публікація та обробка системних запитів на відправлення повідомлень
+
+Перелік _Kafka_-топіків:
+
+- _user-notifications_
+- _user-notifications.DLT_
+
+.Канонічний вигляд структури повідомлення
+[source,json]
+----
+{
+  "context": {
+    "system": "Low-code Platform",
+    "application": "<bpms.app.name>",
+    "businessProcess": "<optional>",
+    "businessProcessDefinitionId": "<optional>",
+    "businessProcessInstanceId": "<optional>",
+    "businessActivity": "<optional>",
+    "businessActivityInstanceId": "<optional>"
+  },
+  "notification": {
+    "templateName": "<notification template unique name>"
+  },
+  "recipients": [
+    {
+      "id": "<Ідентифікатор користувача>",
+      "channels": [
+        {
+          "channel": "diia",
+          "rnokpp": "<ІПН користувача>"
+        },
+        {
+          "channel": "email",
+          "email": "<Email користувача>"
+        }
+      ],
+      "parameters": [
+        {
+            "key": "<key>",
+            "value": "<value>"
+        }
+      ]
+    }
+  ]
+}
+----
+
+=== Публікація та обробка запитів на відправлення поштових повідомлень
+
+Перелік _Kafka_-топіків:
+
+- _email-notifications_
+- _email-notifications.DLT_
+
+.Канонічний вигляд структури повідомлення
+[source,json]
+----
+{
+  "context": {
+    "system": "Low-code Platform",
+    "application": "<bpms.app.name>",
+    "businessProcess": "<optional>",
+    "businessProcessDefinitionId": "<optional>",
+    "businessProcessInstanceId": "<optional>",
+    "businessActivity": "<optional>",
+    "businessActivityInstanceId": "<optional>"
+  },
+  "notification": {
+    "subject": "<notification subject>",
+    "message": "<notification message>"
+  },
+  "recipient": {
+    "id": "<Ідентифікатор користувача - optional>",
+    "email": "<Email користувача>"
+  }
+}
+----
+
+=== Публікація та обробка запитів на відправлення _push_-повідомлень у мобільний застосунок Дія
+
+Перелік _Kafka_-топіків:
+
+- _diia-notifications_
+- _diia-notifications.DLT_
+
+.Канонічний вигляд структури повідомлення
+[source,json]
+----
+{
+  "context": {
+    "system": "Low-code Platform",
+    "application": "<bpms.app.name>",
+    "businessProcess": "<optional>",
+    "businessProcessDefinitionId": "<optional>",
+    "businessProcessInstanceId": "<optional>",
+    "businessActivity": "<optional>",
+    "businessActivityInstanceId": "<optional>"
+  },
+  "notification": {
+    "externalTemplateId": "<external template id>"
+  },
+  "recipient": {
+    "id": "<Ідентифікатор користувача - optional>",
+    "rnokpp": "<ІПН користувача>",
+    "parameters": [
+      {
+        "key": "<key>",
+        "value": "<value>"
+      }
+    ]
+  }
+}
+----
+
+=== Загальні налаштування Kafka-топіків підсистеми нотифікацій
+
+==== Налаштування цільових топіків запитів на відправку повідомлень
 
 |===
 |Властивість|Значення|Опис
@@ -20,7 +193,7 @@
 |Кількість днів збереження повідомлення в Kafka
 |===
 
-=== "_user-notifications.DLT_"
+==== Налаштування _Dead-Letter-Queue_ топіків запитів на відправку повідомлень, які не вдалося опрацювати
 
 Службовий топік, який використовується для публікації та тимчасового збереження подій-запитів на відправку повідомлень користувачам, які не вдалося обробити з ціллю їх подальшого повторного опрацювання.
 
@@ -43,30 +216,4 @@
 [NOTE]
 Перегляд та моніторинг подій, які не вдалося опрацювати, можливий через окремий адміністративний інтерфейс *kafka-ui*.
 
-TIP: У разі необхідності відправлення подій адміністратором на повторне опрацювання, розглядається опція побудови окремого службового процесу на базі _Kafka Connect_, який буде переносити події з _user-notifications.DLT_ у цільовий топік _user-notifications_.
-
-=== Канонічний вигляд структури повідомлення
-[source, json]
-----
-{
-  "context": {
-    "system": "Low-code Platform",
-    "application": "<bpms.app.name>",
-    "businessProcess": "",
-    "businessProcessDefinitionId": "",
-    "businessProcessInstanceId": "",
-    "businessActivity": "",
-    "businessActivityInstanceId": ""
-  },
-  "notification": {
-    "recipient": "",
-    "subject": "",
-    "template:": "",
-    "templateModel:": {
-      "key1": "val1",
-      "key2": "val2",
-      "key3": "val3"
-    }
-  }
-}
-----
+TIP: У разі необхідності відправлення подій адміністратором на повторне опрацювання, розглядається опція побудови окремого службового процесу на базі _Kafka Connect_, який буде переносити події з _Dead-Letter-Queue_ у цільовий топік.
