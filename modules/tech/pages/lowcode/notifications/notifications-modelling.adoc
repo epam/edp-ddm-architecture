@@ -1,4 +1,8 @@
-== Структура репозиторію регламенту
+= Моделювання регламенту
+
+== Моделювання шаблонів повідомлень
+
+=== Структура репозиторію регламенту
 
 Для забезпечення вимог по підтримці відправлення повідомлень користувачам, структуру регламенту розширено додатковою директорією _<registry-regulation>/notifications_:
 
@@ -22,7 +26,7 @@ include::partial$lowcode/notifications/general/notification-regulation-structure
 - _email_ - Відправка повідомлень у HTML-вигляді електронною поштою
 - _diia_ - Відправка повідомлень у текстовому вигляді через мобільний додаток _Дія_
 
-=== Структура шаблону повідомлення у кабінет громадянина
+=== Структура шаблону in-app повідомлення
 
 Типовий шаблон push-повідомлення має наступну структуру:
 
@@ -123,9 +127,7 @@ attributes:
 ⛔️ У разі виявлення шахрайських дій щодо вас або помилки кредитора - оскаржіть дані у кредитній історії."
 ----
 
-== Публікація змін до регламенту нотифікацій
-
-=== Публікація змін до шаблонів повідомлень
+=== Публікація змін до регламенту шаблонів повідомлень
 
 Для завантаження зформованих/відкорегованих адміністратором шаблонів повідомлень, необхідно розширити пайплайн публікації регламенту етапом '_publish-notification-templates_' з викликом утиліти _notification-template-publisher_ на кшталт:
 
@@ -140,4 +142,118 @@ java -jar
 [plantuml, notification-template-publication, svg]
 ----
 include::partial$lowcode/notifications/general/notification-template-publication.puml[]
+----
+
+== Моделювання бізнес-процесів з відправленням повідомлень користувачам
+
+Задля спрощення використання можливостей відправки повідомлень користувачам у межах виконання бізнес-процесів, платформа надає _Адміністратору регламенту_ окреме типове розширення "_Send User Notification_" у каталозі моделювальника.
+
+[NOTE]
+Канал зв'язку, який буде використано для відправки повідомлення залежить від налаштувань користувача.
+
+image::lowcode/notifications/bpm/send-notification-element-template.png[send-notification-element-template, 300]
+
+=== Конфігурація типового розширення відправки повідомлення користувачу "_Send User Notification_"
+
+*Службова назва делегата*: _SendUserNotificationDelegate_
+
+*Назва типового розширення*: '_Відправка повідомлення користувачу_'
+
+|===
+|Конфігураційний параметр|Вхідний/Вихідний|Службова назва|Тип|Опис
+
+|*Отримувач повідомлення (_Recipient_)*
+|in
+|notificationRecipient
+|_string_
+|Унікальний ідентифікатор _<username>_ отримувача повідомлення
+
+|*Шаблон повідомлення (_Notification message template_)*
+|in
+|notificationTemplate
+|_string_
+|Унікальна назва _FreeMarker_-шаблону для формування тіла повідомлення, яка відповідає назві директорії шаблону згідно структури _<registry-regulation>/notifications/<channel>/<template_name>/*.*_
+
+|*Вхідні дані для генерації тіла повідомлення (_Notification template model_)*
+|in
+|notificationTemplateModel
+|_map<string, object>_
+|Набір даних для генерації тіла повідомлення на базі шаблона
+|===
+
+[NOTE]
+Для визначення отримувача повідомлення _notificationRecipient_ платформа надає можливість використання службових _JUEL_-функцій: ${_completer_('<user-task-id>')._userName_} або ${_initiator_()._userName_}.
+
+=== Референтні бізнес-процеси з використанням типового розширення відправки повідомлення
+
+У якості референтних, розглядаються два сценарії моделювання відправки повідомлень у межах виконання бізнес-процесу:
+
+- Відправка повідомлення користувачу
+
+image::lowcode/notifications/bpm/send-single-notification.png[send-single-notification,300]
+
+- Відправка повідомлення _N_ користувачам
+
+image::lowcode/notifications/bpm/send-multi-notifications.png[send-multi-notifications,500]
+
+=== Код опису типового розширення відправки повідомлення користувачу "_Send User Notification_"
+
+[source, json]
+----
+{
+  "$schema": "https://unpkg.com/@camunda/element-templates-json-schema/resources/schema.json",
+  "name": "Send User Notification",
+  "id": "sendUserNotification",
+  "appliesTo": [
+    "bpmn:SendTask"
+  ],
+  "properties": [
+    {
+      "label": "Implementation Type",
+      "type": "Hidden",
+      "value": "${sendUserNotificationDelegate}",
+      "editable": false,
+      "binding": {
+        "type": "property",
+        "name": "camunda:delegateExpression"
+      }
+    },
+    {
+      "label": "Recipient",
+      "description": "Notification recipient username <br/>(${initiator().userName or completer('taskDefinitionId').userName})",
+      "type": "String",
+      "binding": {
+        "type": "camunda:inputParameter",
+        "name": "notificationRecipient"
+      },
+      "constraints": {
+        "notEmpty": true
+      }
+    },
+    {
+      "label": "Notification message template",
+      "description": "Notification message template <br/>(<registry-regulation>/notifications/<channel>/<template_name>/*.*)",
+      "type": "String",
+      "binding": {
+        "type": "camunda:inputParameter",
+        "name": "notificationTemplate"
+      },
+      "constraints": {
+        "notEmpty": true
+      }
+    },
+    {
+      "label": "Notification template model",
+      "description": "Notification template model <br/>(${templateModel} variable to be used for template processing)",
+      "type": "String",
+      "binding": {
+        "type": "camunda:inputParameter",
+        "name": "notificationTemplateModel"
+      },
+      "constraints": {
+        "notEmpty": true
+      }
+    }
+  ]
+}
 ----

@@ -1,0 +1,49 @@
+== Формування запиту на відправлення повідомлення
+
+Задля запобігання блокування основного потоку виконання використовується принцип розділення публікації події про необхідність виконання операції від фактичного її виконання з використанням _publish-subscribe_ підходу, реалізованому за допомогою _Kafka_. З повним переліком, налаштуваннями та структурами об'єктів подій можна ознайомитись xref:lowcode/notifications/user-notifications-kafka-topics.adoc[за посиланням].
+
+.Приклад налаштувань сервісу для публікації подій через Kafka-топік (на прикладі використання *ddm-starter-kafka* бібліотеки)
+[source, yaml]
+----
+data-platform:
+  kafka:
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      custom-config:
+        "[enable.idempotence]": true
+    topic-properties:
+      creation:
+        enabled: true
+        timeout-in-seconds: 60
+      retention:
+        default-in-days: 7
+        num-partitions: 1
+        replication-factor: 1
+    error-handler:
+      initial-interval: 1500
+      max-elapsed-time: 6000
+      multiplier: 2
+    topics:
+      "user-notifications": "user-notifications"
+----
+
+== Взаємодія з сервісом повідомлень
+
+=== Відправка повідомлень користувачам з бізнес-процесу
+
+image::lowcode/notifications/notifications-starter.svg[]
+
+В основу рішення покладено використання Camunda-концепції _Java Delegate_ для виконання операцій по відправці повідомлень з бізнес-процесу. Спрощення досвіду моделювання реалізовано за допомогою окремих  xref:lowcode/notifications/user-notifications-modelling.adoc#_моделювання_бізнес_процесів_з_відправкою_повідомлень_користувачам[типових розширень].
+
+[plantuml, bp-notification-flow, svg]
+----
+include::partial$lowcode/notifications/bpm/bp-notification-flow.puml[]
+----
+
+=== Службовий сценарій відправки повідомлень користувачам сервісом реєстру
+[plantuml, upstream-notification-flow, svg]
+----
+include::partial$lowcode/notifications/general/upstream-notification-flow.puml[]
+----
+

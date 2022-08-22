@@ -1,47 +1,5 @@
 == Низькорівневий дизайн рішення
 
-На даній діаграмі зображено залучені для реалізації вимог сервіси платформи та взаємодію між ними.
-
-image::lowcode/notifications/notifications-design.svg[notifications-design,700]
-
-include::user-notifications-system-components.adoc[]
-
-include::user-notifications-system-network-policies.adoc[]
-
-=== Сервіс виконання бізнес-процесів
-
-image::lowcode/notifications/notifications-starter.svg[]
-
-В основу рішення покладено використання Camunda-концепції _Java Delegate_ для виконання операцій по відправці повідомлень з бізнес-процесу. Спрощення досвіду моделювання реалізовано за допомогою окремих  xref:lowcode/notifications/user-notifications-modelling.adoc#_моделювання_бізнес_процесів_з_відправкою_повідомлень_користувачам[типових розширень].
-
-Задля запобігання блокування основного потоку виконання бізнес-процесу використовується принцип розділення публікації події про необхідність виконання операції від фактичного її виконання з використанням _publish-subscribe_ підходу, реалізованому за допомогою _Kafka_. З повним переліком, налаштуваннями та структурами об'єктів подій можна ознайомитись xref:lowcode/notifications/user-notifications-kafka-topics.adoc[за посиланням].
-
-.Приклад налаштувань сервісу для публікації подій через Kafka-топік (на прикладі використання *ddm-starter-kafka* бібліотеки)
-[source, yaml]
-----
-data-platform:
-  kafka:
-    producer:
-      key-serializer: org.apache.kafka.common.serialization.StringSerializer
-      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
-      custom-config:
-        "[enable.idempotence]": true
-    topic-properties:
-      creation:
-        enabled: true
-        timeout-in-seconds: 60
-      retention:
-        default-in-days: 7
-        num-partitions: 1
-        replication-factor: 1
-    error-handler:
-      initial-interval: 1500
-      max-elapsed-time: 6000
-      multiplier: 2
-    topics:
-      "<topic-name>": "<topic-name>"
-----
-
 === Сервіс відправки повідомлень користувачів
 
 image::lowcode/notifications/notifications-service.svg[]
@@ -75,35 +33,6 @@ data-platform:
 
 TIP: Існує необхідність реалізації автоматичного створення Kafka-топіків "_<topic-name>.DLT_" в рамках *ddm-starter-kafka* бібліотеки (_StartupKafkaTopicsCreator_) для коректного відпрацювання _DeadLetterPublishingRecoverer_ стратегії при неможливості обробки повідомлення.
 
-.Приклад налаштувань сервісу для публікації подій аудиту через Kafka-топік (на прикладі використання *ddm-starter-audit* бібліотеки)
-[source, yaml]
-----
-audit:
-  kafka:
-    topic: audit-events
-    schemaRegistryUrl: http://kafka-schema-registry:8081
-----
-
-include::user-notification-templates-api.adoc[]
-
-include::user-inbox-notifications-api.adoc[]
-
-=== Взаємодія значущих компонентів системи
-
-==== Формування запиту на відправлення повідомлення
-
-.Відправка повідомлень користувачам з бізнес-процесу
-[plantuml, bp-notification-flow, svg]
-----
-include::partial$lowcode/notifications/bpm/bp-notification-flow.puml[]
-----
-
-.Службовий сценарій відправки повідомлень користувачам сервісом реєстру
-[plantuml, upstream-notification-flow, svg]
-----
-include::partial$lowcode/notifications/general/upstream-notification-flow.puml[]
-----
-
 ==== Загальний сценарій обробки повідомлень
 
 .Загальний сценарій обробки повідомлень kafka-топіком user-notifications
@@ -122,7 +51,7 @@ include::partial$lowcode/notifications/email/email-notification-flow.puml[]
 
 ==== Обробка запиту на відправлення push-нотифікації в Дію
 
-TIP: З детальною інформацією щодо взаємодії з сервісом нотифікація Дії можна ознайомитись у розділі xref:lowcode/notifications/diia/diia-notifications-api.adoc[API відправки push-нотифікацій у мобільний додаток "Дія"].
+TIP: З детальною інформацією щодо взаємодії з сервісом нотифікація Дії можна ознайомитись у розділі xref:lowcode/notifications/diia-notifications-api.adoc[API відправки push-нотифікацій у мобільний додаток "Дія"].
 
 .Обробка запитів на відправку push-нотифікацій користувачам у мобільний додаток Дія
 [plantuml, diia-notification-flow, svg]
