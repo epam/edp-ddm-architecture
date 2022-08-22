@@ -27,6 +27,7 @@ control "Пайплайн \nпублікації змін регламенту" 
 end box
 participant "Утиліта \nпублікації шаблонів \n(**notification-template-publisher**)" as template_publisher
 participant "Сервіс відправки \nповідомлень користувачам\n(**notification-service**)" as notification_service
+participant "Diia Notification \nTemplate Service" as diia_template_service
 participant "Шлюз нотифікацій Дія\n(**diia-notification-service**)" as diia_notification_service
 database "Сховище шаблонів \n(**citus**)" as template_database
 
@@ -109,14 +110,17 @@ activate publication_pipeline
           notification_service -> notification_service: Побудова нового запису шаблону для збереження \nна базі тіла запиту
 
           alt channel=diia
-            notification_service -> diia_notification_service: Аутентифікація партнера: \n**GET /api/v1/auth/partner/{partnerToken}**
-            diia_notification_service --> notification_service: Токен доступу
+            notification_service -> diia_template_service: Аутентифікація партнера
+            diia_template_service -> diia_notification_service: Аутентифікація партнера: \n**GET /api/v1/auth/partner/{partnerToken}**
+            diia_notification_service --> diia_template_service: Токен доступу
             note right
               {
                 "token": "<authorization token>"
               }
             end note
-            notification_service -> diia_notification_service: Створення шаблону \n**POST /api/v1/notification/template**
+            diia_template_service --> notification_service: Токен доступу
+            notification_service -> diia_template_service: Створення шаблону
+            diia_template_service -> diia_notification_service: Створення шаблону \n**POST /api/v1/notification/template**
             note left
               {
                 "actionType": ""{attributes['actionType']}"",
@@ -126,12 +130,13 @@ activate publication_pipeline
                 "fullText" : "{content}"
               }
             end note
-            diia_notification_service --> notification_service: Ідентифікатор шаблона
+            diia_notification_service --> diia_template_service: Ідентифікатор шаблона
             note right
               {
                 "templateId": "<external template id>"
               }
             end note
+            diia_template_service --> notification_service: Ідентифікатор шаблона
             notification_service -> notification_service: Встановлення значення \n'externalTemplateId' для запису
             notification_service -> notification_service: Встановлення значення \n'externallyPublishedAt' для запису
           end
@@ -145,9 +150,13 @@ activate publication_pipeline
           alt Заголовки, чек-суми контенту або атрибути не співпадають
             notification_service -> notification_service: Побудова зміненого запису шаблону для збереження \nна базі тіла запиту
             alt channel=diia
-              notification_service -> diia_notification_service: Аутентифікація партнера: \n**GET /api/v1/auth/partner/{partnerToken}**
-              diia_notification_service --> notification_service: Токен доступу
-              notification_service -> diia_notification_service: Створення шаблону \n**POST /api/v1/notification/template**
+              notification_service -> diia_template_service: Аутентифікація партнера
+              diia_template_service -> diia_notification_service: Аутентифікація партнера: \n**GET /api/v1/auth/partner/{partnerToken}**
+              diia_notification_service --> diia_template_service: Токен доступу
+              diia_template_service --> notification_service: Токен доступу
+              notification_service -> diia_template_service: Створення шаблону
+              diia_template_service -> diia_notification_service: Створення шаблону \n**POST /api/v1/notification/template**
+              diia_notification_service --> diia_template_service: Ідентифікатор шаблона
               diia_notification_service --> notification_service: Ідентифікатор шаблона
               notification_service -> notification_service: Встановлення значення \n'externalTemplateId' для запису
               notification_service -> notification_service: Встановлення значення \n'externallyPublishedAt' для запису

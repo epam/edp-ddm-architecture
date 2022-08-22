@@ -21,12 +21,14 @@ queue "'user-notifications'\n Kafka Topic" as user_notifications_kafka_topic
 box "Сервіс відправки повідомлень"
   participant "Notification \nEvent Subscriber" as notification_kafka_subscriber
   participant "Notification \nService" as notification_service
-  participant "Notification \nChannel Validators" as notification_channel_validators
+  participant "Channel Notification \nValidators" as notification_channel_validators
+  participant "Channel Notification \nProducers" as notification_channel_producers
   participant "Notification \nTemplate Service" as notification_template_service
-  participant "Channel \nNotification Publishers" as channel_notification_publishers
+  participant "Channel Notification \nPublishers" as channel_notification_publishers
 end box
 
 participant "Сервіс \nналаштувань користувачів" as user_settings_service
+participant "Сервіс управління \nкористувачами та доступом" as keycloak
 participant "Сервіс логування" as logging_service
 database "Сховище \nшаблонів" as template_db
 
@@ -39,19 +41,28 @@ notification_kafka_subscriber -> user_notifications_kafka_topic: Зчитува�
     note left
       {
         "context": {
-          "system"
-          "application"
-          "businessProcess"
-          "businessProcessDefinitionId"
-          "businessProcessInstanceId"
-          "businessActivity"
-          "businessActivityInstanceId"
+          "system": "Low-code Platform",
+          "application": "<bpms.app.name>",
+          "businessProcess": "<optional>",
+          "businessProcessDefinitionId": "<optional>",
+          "businessProcessInstanceId": "<optional>",
+          "businessActivity": "<optional>",
+          "businessActivityInstanceId": "<optional>"
         },
         "notification": {
-          "recipient": string,
-          "template:": string,
-          "templateModel:": map<string, object>
-        }
+          "templateName": "<notification template unique name>"
+        },
+        "recipients": [
+          {
+            "id": "<Ідентифікатор користувача>",
+            "parameters": [
+              {
+                  "key": "<key>",
+                  "value": "<value>"
+              }
+            ]
+          }
+        ]
       }
     end note
 activate notification_kafka_subscriber
@@ -59,6 +70,8 @@ notification_kafka_subscriber -> notification_service: Відправка пов
 activate notification_service
   notification_service -> user_settings_service: Читання налаштувань користувача \n(**username = <recipient>**)
   user_settings_service --> notification_service: Обрані канали зв'язку з їх налаштуваннями
+  notification_service -> keycloak: Читання атрибутів користувача
+  keycloak --> notification_service: Атрибути користувача: РНОКПП, тощо.
   notification_service -> notification_service: Визначення каналів зв'язку (**channel**)
   loop Обробка повідомлення для кожного каналу зв'язку
   notification_service -> notification_channel_validators: Валідація повідомлення
@@ -67,10 +80,11 @@ activate notification_service
   end
   notification_channel_validators --> notification_service
   notification_service -> notification_template_service: Запит на отримання шаблону для каналу зв'язку \n(у випадку з diia - створення шаблону)
-  notification_template_service -> template_db: Отримання шаблону (для diia -\nзбереження + отримання)
+  notification_template_service -> template_db: Отримання шаблону
   template_db --> notification_template_service
   notification_template_service --> notification_service
-  notification_service -> notification_service: Створення повідомлення для каналу зв'язку
+  notification_service -> notification_channel_producers: Створення повідомлення для каналу зв'язку
+  notification_channel_producers --> notification_service: Повідомлення для каналів зв'язку
   alt Помилка створення повідомлення з шаблону і моделі
     notification_service -> logging_service: Логування помилки
   end
@@ -88,28 +102,36 @@ deactivate notification_service
 deactivate notification_kafka_subscriber
 
 == Відправка повідомлень за визначеним каналом ==
+
 alt Відправка повідомлення
 notification_kafka_subscriber -> user_notifications_kafka_topic: Зчитування події
     note left
-      {
-        "context": {
-          "system"
-          "application"
-          "businessProcess"
-          "businessProcessDefinitionId"
-          "businessProcessInstanceId"
-          "businessActivity"
-          "businessActivityInstanceId"
-        },
-        "notification": {
-          "template:": string,
-          "templateModel:": map<string, object>,
-          "channel": {
-            "name": "email",
-            "email": "email@gmail.com"
-          }
-        }
-      }
+     {
+       "context": {
+         "system": "Low-code Platform",
+         "application": "<upstream-service>",
+       },
+       "notification": {
+         "templateName": "{notificationTemplate}"
+       },
+       "recipients": [
+         {
+            "id": "<user id - optional>",
+            "channels": [
+              {
+                "channel": "email",
+                "email": "<Email користувача>"
+              }
+            ],
+            "parameters": [
+              {
+                  "key": "<key>",
+                  "value": "<value>"
+              }
+            ]
+         }
+       ]
+     }
     end note
 activate notification_kafka_subscriber
 notification_kafka_subscriber -> notification_service: Відправка повідомлення користувачу \nза інформацією з **channel**
@@ -123,7 +145,8 @@ activate notification_service
   notification_template_service -> template_db: Отримання шаблону (для diia -\nзбереження + отримання)
   template_db --> notification_template_service
   notification_template_service --> notification_service
-  notification_service -> notification_service: Створення повідомлення для каналу зв'язку
+  notification_service -> notification_channel_producers: Створення повідомлення для каналу зв'язку
+  notification_channel_producers --> notification_service: Повідомлення для каналу зв'язку
     alt У разі помилки при створенні повідомлення з шаблону
       notification_service --> logging_service
     end

@@ -1,35 +1,101 @@
-== Низькорівневий дизайн сервісу повідомлень
+= Низькорівневий дизайн сервісу повідомлень
 
-За реалізацію вимог по формуванню та відправці повідомлень користувачам відповідає окремий компонент "_Сервіс повідомлень користувачів_".
+За реалізацію вимог по формуванню та відправленню повідомлень користувачам відповідає "_Сервіс повідомлень користувачів_".
 
-image::lowcode/notifications/notifications-service.svg[]
-
-Інтерфейсом для зовнішньої взаємодії з сервісом виступає окремий _Kafka_-топік "_user-notifications_", а основою рішення є реагування та обробка подій-запитів на генерацію повідомлень з використанням _FreeMarker_-шаблонів, попередньо завантажених у сховище та їх послідуюча відправка згідно налаштувань користувача.
+Інтерфейсом для зовнішньої взаємодії з сервісом виступає окремий _Kafka_-топік "_user-notifications_", а основою рішення є реагування та обробка подій-запитів на генерацію повідомлень з використанням _FreeMarker_-шаблонів, попередньо завантажених у сховище та їх послідуюча відправка згідно налаштувань користувача у _Kafka_-топіки, які відповідають за окремі канали зв'язку.
 
 [NOTE]
 У разі, якщо подію-запит на відправку повідомлення через "_user-notifications_" топік не вдалося обробити, система проводить N спроб згідно поточної конфігурації і за відсутності результату перенаправляє повідомлення в окремий службовий топік "_user-notifications.DLT_".
 
-.Приклад налаштувань сервісу для отримання повідомлень через Kafka-топік (на прикладі використання *ddm-starter-kafka* бібліотеки)
-[source, yaml]
+На даній компонентній діаграмі зображено важливі аспекти функціонування сервісу, компоненти та їх призначення, зовнішні інтеграції та інтеграції з іншими сервісами _Платформами_.
+
+image::lowcode/notifications/notifications-service.svg[]
+
+== Компоненти та їх призначення
+
+|===
+|Компонент|Бібліотека|Призначення
+
+|*Notification Event Subscriber*
+|-
+|Обробка системних запитів на відправлення повідомлень користувачам
+
+Логування деталей у разі невдалої спроби опрацювання запиту.
+
+Публікація запитів, які не вдалося опрацювати у окрему чергу повідомлень для аналізу.
+
+|*Notification Service*
+|-
+|Оркестрація процесу обробки запиту на відправлення повідомлень.
+
+Завантаження налаштувань користувачів та їх даних, необхідних для відправлення.
+
+Формування переліку каналів для яких необхідно відправити повідомлення.
+
+|*Notification Template Service*
+|-
+|Збереження змін до шаблонів повідомлень.
+
+Отримання шаблону повідомлення для каналу зв'язку.
+
+|*Channel Notification Validators*
+|-
+|Валідація запиту на відправку повідомлення згідно особливостей каналу зв'язку
+
+|*Channel Notification Producers*
+|-
+|Формування запиту на відправлення повідомлення для окремого каналу зв'язку на базі шаблону
+
+|*Channel Notification Publishers*
+|-
+|Публікація запитів на відправлення повідомлень для окремого каналу зв'язку
+
+|*Channel Notification Subscribers*
+|-
+|Обробка запитів на відправлення повідомлень для окремого каналу зв'язку.
+
+Публікація запитів, які не вдалося опрацювати у окрему чергу канала для подальшої обробки
+
+|*Inbox Notification Service*
+|-
+|Збереження in-app повідомлень для користувача.
+
+Отримання переліку in-app повідомлень користувача.
+
+Підтвердження перегляду in-app повідомлення користувачем
+
+|*User Settings Feign Client*
+|ddm-user-settings-client
+|Отримання налаштувань каналів зв'язку для користувача
+
+|*Diia Notification Service*
+|ddm-diia-client
+|Відправлення push-повідомлення користувачу
+
+|*Diia Notification Template Service*
+|ddm-diia-client
+|Реєстрація шаблону повідомлення для послідуючого використання при відправленні push-повідомлення
+
+|*Audit Service*
+|ddm-audit-starter
+|Фіксація події аудиту в журнал
+
+|*Idm Service*
+|ddm-idm-client
+|Отримання атрибутів користувача за ідентифікатором
+
+|===
+
+== Взаємодія компонентів в рамках реалізації сценаріїв
+
+=== Отримання _in-app_ повідомлень та підтвердження перегляду користувачем
+
+[plantuml, inbox-notification-read-flow, svg]
 ----
-data-platform:
-   kafka:
-     consumer:
-       group-id: <consumer-group>
-       key-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
-       value-deserializer: org.springframework.kafka.support.serialize.ErrorHandlingDeserializer
-       custom-config:
-         "[allow.auto.create.topics]": false
-         "[retry.backoff.ms]": 10000
-     topics:
-       "<topic-name>": "<topic-name>"
-     error-handler:
-       initial-interval: 1500
-       max-elapsed-time: 6000
-       multiplier: 2
+include::partial$lowcode/notifications/inbox/inbox-notification-read-flow.puml[]
 ----
 
-TIP: Існує необхідність реалізації автоматичного створення Kafka-топіків "_<topic-name>.DLT_" в рамках *ddm-starter-kafka* бібліотеки (_StartupKafkaTopicsCreator_) для коректного відпрацювання _DeadLetterPublishingRecoverer_ стратегії при неможливості обробки повідомлення.
+=== Відправлення повідомлень
 
 ==== Загальний сценарій обробки повідомлень
 
@@ -57,7 +123,6 @@ TIP: З детальною інформацією щодо взаємодії з
 include::partial$lowcode/notifications/diia/diia-notification-flow.puml[]
 ----
 
-
 ==== Обробка запиту на відправлення in-app повідомлень у inbox користувача Кабінету Громадянина
 
 [plantuml, inbox-notification-save-flow, svg]
@@ -65,9 +130,75 @@ include::partial$lowcode/notifications/diia/diia-notification-flow.puml[]
 include::partial$lowcode/notifications/inbox/inbox-notification-save-flow.puml[]
 ----
 
-==== Діаграма послідовності взаємодії компонентів системи для отримання користувачем inbox повідомлень
+== Загальні налаштування сервісу
 
-[plantuml, inbox-notification-read-flow, svg]
+.Приклад налаштувань сервісу для публікації подій через Kafka-топік (на прикладі використання *ddm-starter-kafka* бібліотеки)
+[source, yaml]
 ----
-include::partial$lowcode/notifications/inbox/inbox-notification-read-flow.puml[]
+data-platform:
+  kafka:
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      custom-config:
+        "[enable.idempotence]": true
+    topic-properties:
+      creation:
+        enabled: true
+        timeout-in-seconds: 60
+      retention:
+        default-in-days: 7
+        num-partitions: 1
+        replication-factor: 1
+    error-handler:
+      initial-interval: 1500
+      max-elapsed-time: 6000
+      multiplier: 2
+    topics:
+      "<topic-name>": "<topic-name>"
+----
+
+.Приклад налаштувань сервісу для отримання повідомлень через Kafka-топік (на прикладі використання *ddm-starter-kafka* бібліотеки)
+[source, yaml]
+----
+data-platform:
+   kafka:
+     consumer:
+       group-id: <consumer-group>
+       key-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+       value-deserializer: org.springframework.kafka.support.serialize.ErrorHandlingDeserializer
+       custom-config:
+         "[allow.auto.create.topics]": false
+         "[retry.backoff.ms]": 10000
+     topics:
+       "<topic-name>": "<topic-name>"
+     error-handler:
+       initial-interval: 1500
+       max-elapsed-time: 6000
+       multiplier: 2
+----
+
+TIP: Існує необхідність реалізації автоматичного створення Kafka-топіків "_<topic-name>.DLT_" в рамках *ddm-starter-kafka* бібліотеки (_StartupKafkaTopicsCreator_) для коректного відпрацювання _DeadLetterPublishingRecoverer_ стратегії при неможливості обробки повідомлення.
+
+.Канонічний приклад налаштувань каналів зв'язку з секретами для тестування
+[source, yaml]
+----
+notifications:
+  email:
+    host: smtp.gmail.com
+    port: 587
+    username: <username>
+    password: <password>
+    properties:
+      mail:
+        transport:
+          protocol: smtp
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+  diia:
+    url: https://api2t.diia.gov.ua/
+    partner:
+      token: <partner-token>
 ----
