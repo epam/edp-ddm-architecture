@@ -1,0 +1,136 @@
+= Управління налаштуваннями реєстру на рівні регламенту
+
+== Сценарії адміністрування налаштувань реєстру
+
+- Налаштування заголовку реєстру для відображення у кабінетах користувачів
+- Налаштування поштової скриньки для відправлення повідомлень команді підтримки користувачів кабінетів
+- Налаштування переліку доменів, поштові адреси на яких є забороненими для використання у реєстрі
+
+== Сценарії використання налаштувань реєстру
+
+- Відображення заголовку реєстру у кабінетах користувачів
+- Використання визначеної адміністратором поштової скриньки для повідомлень до служби підтримки, відправлених через кабінети користувачів
+- Використання переліку заблокованих доменів для валідації поштових адрес, які вносяться через UI-форми бізнес-процесів
+- Використання переліку заблокованих доменів для валідації поштових адрес, які вносяться через профіль _Кабінету Громадянина_
+- Використання переліку заблокованих доменів для валідації поштової скриньки команди підтримки реєстру, яка задається адміністратором
+
+== Редизайн управління налаштуваннями реєстру
+
+=== Поточний дизайн управління налаштуваннями
+
+Наразі зафіксовано:
+
+- Нецільове використання _global-vars/camunda-global-system-vars.yml_ для налаштування _supportEmail_ реєстру
+- Неможливість налаштувати перелік заборонених доменів для поштових адрес на рівні регламенту
+- Неконсистентність використання правил клієнтської та серверної валідації поштових адрес користувачів з урахуванням переліку заборонених доменів
+
+image::lowcode/registry-settings-baseline.svg[registry-settings-baseline,700]
+
+=== Цільовий дизайн управління налаштуваннями
+
+image::lowcode/registry-settings.svg[registry-settings,700]
+
+.*"registry-settings-js"* _ConfigMap_ налаштувань кабінетів користувачів
+[source, js]
+----
+const REGISTRY_SETTINGS = {
+  "settings": {
+    "general": {
+      "title": "<title>",
+      "contacts": {
+        "support": {
+          "email": "<email>"
+        }
+      }
+    },
+    "validation": {
+      "blacklist": {
+        "domains": [
+          'mail.ru',
+          'internet.ru',
+          'list.ru',
+          'bk.ru',
+          'inbox.ru',
+          'mail.ua',
+          'yandex.ru',
+          'yandex.ua',
+          'mail.yandex.ru',
+          'mail.yandex.ua',
+          'ya.ru',
+          'ya.ua'
+        ]
+      }
+    }
+  }
+};
+----
+
+.*"registry-settings"* _ConfigMap_ налаштувань бекенд-сервісів
+[source, yaml]
+----
+settings:
+  general:
+    title: "Реєстр судових рішень"
+    contacts:
+      support:
+        email: "help@support.com"
+  validation:
+      blacklist:
+        domains:
+          - 'mail.ru'
+          - 'internet.ru'
+          - 'list.ru'
+          - 'bk.ru'
+          - 'inbox.ru'
+          - 'mail.ua'
+          - 'yandex.ru'
+          - 'yandex.ua'
+          - 'mail.yandex.ru'
+          - 'mail.yandex.ua'
+          - 'ya.ru'
+          - 'ya.ua'
+----
+
+=== Регламент налаштувань реєстру
+
+[TIP]
+В рамках проведення редизайну, необхідно створити структуру та відповідну конфігурацію реєстру за замовчуванням у шаблоні репозиторію регламенту _empty_regulation_template_.
+
+.Структура регламенту реєстру
+[plantuml, registry-config-regulation-structure, svg]
+----
+include::partial$lowcode/registry-config-regulation-structure.puml[]
+----
+
+.Канонічний вигляд конфігурації реєстру _settings/settings.yml_
+[source, yaml]
+----
+settings:
+  general:
+    title: "Реєстр судових рішень"
+    contacts:
+      support:
+        email: "help@support.com"
+  validation:
+      blacklist:
+        domains:
+          - 'mail.ru'
+          - 'internet.ru'
+          - 'list.ru'
+          - 'bk.ru'
+          - 'inbox.ru'
+          - 'mail.ua'
+          - 'yandex.ru'
+          - 'yandex.ua'
+          - 'mail.yandex.ru'
+          - 'mail.yandex.ua'
+          - 'ya.ru'
+          - 'ya.ua'
+----
+
+== Міграція налаштувань
+
+При оновленні існуючих реєстрів, необхідно розширити структуру регламенту відповідно до канонічного вигляду та створити _settings/settings.yml_ файл з налаштуваннями реєстру, як зазначено вище та виконати наступні дії:
+
+- Встановити значення "_settings.general.title_" для реєстру
+- Встановити "_settings.general.contacts.support.email_" значенням з поточної конфігурації _global-vars/camunda-global-system-vars.yml_ поля _supportEmail_ та видалити налаштування з _camunda-global-system-vars.yml_
