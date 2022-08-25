@@ -128,9 +128,107 @@ settings:
           - 'ya.ua'
 ----
 
-== Міграція налаштувань
+=== Валідація регламенту налаштувань реєстру
 
-При оновленні існуючих реєстрів, необхідно розширити структуру регламенту відповідно до канонічного вигляду та створити _settings/settings.yml_ файл з налаштуваннями реєстру, як зазначено вище та виконати наступні дії:
+[TIP]
+В рамках редизайну, необхідно відкорегувати JSON-схему для валідації _global-vars/camunda-global-system-vars.yml_ та видалити _supportEmail_.
 
-- Встановити значення "_settings.general.title_" для реєстру
-- Встановити "_settings.general.contacts.support.email_" значенням з поточної конфігурації _global-vars/camunda-global-system-vars.yml_ поля _supportEmail_ та видалити налаштування з _camunda-global-system-vars.yml_
+В рамках реалізації рішення, необхідно розширити CLI-утиліту _registry-regulations-validator-cli_ валідації регламенту додатковими правилами:
+
+- Перевірка _settings/settings.yml_ на відповідність JSON-схемі
+
+.JSON-схема для валідації файлу налаштувань _settings/settings.yml_
+[source, json]
+----
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "type": "object",
+  "properties": {
+    "settings": {
+      "type": "object",
+      "properties": {
+        "general": {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string",
+              "minLength": 1
+            },
+            "contacts": {
+              "type": "object",
+              "properties": {
+                "support": {
+                  "type": "object",
+                  "properties": {
+                    "email": {
+                      "type": "string",
+                      "format": "email"
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "email"
+                  ]
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "support"
+              ]
+            }
+          },
+          "required": [
+            "title",
+            "contacts"
+          ]
+        },
+        "validation": {
+          "type": "object",
+          "properties": {
+            "blacklist": {
+              "type": "object",
+              "properties": {
+                "domains": {
+                  "type": "array",
+                  "minItems": 1,
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "domains"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "blacklist"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "general",
+        "validation"
+      ]
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "settings"
+  ]
+}
+----
+
+== Міграція налаштувань при оновленні
+
+При оновленні існуючих реєстрів, необхідно:
+
+* Розширити структуру регламенту відповідно до канонічного вигляду
+* Створити _settings/settings.yml_ файл з налаштуваннями реєстру, як зазначено вище:
+*  Встановити значення "_settings.general.title_" для реєстру
+* Встановити "_settings.general.contacts.support.email_" значенням з поточної конфігурації _global-vars/camunda-global-system-vars.yml_ поля _supportEmail_ та видалити налаштування з _camunda-global-system-vars.yml_
