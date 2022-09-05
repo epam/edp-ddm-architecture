@@ -22,10 +22,34 @@
 
 image::lowcode/registry-settings-baseline.svg[registry-settings-baseline,700]
 
+.Налаштування регламенту реєстру: registry-gerrit/<registry-regulation>.git/global-vars/camunda-global-system-vars.yml
+[source, yaml]
+----
+supportEmail: help@support.com
+themeFile: white-theme.js
+----
+
+.Налаштування конфігурації реєстру: control-plane-gerrit/<registry>.git/deployment-templates/values.yaml
+[source, yaml]
+----
+keycloak:
+  authFlows:
+    officerAuthFlow:
+      authenticators:
+        dsOfficerAuthenticator:
+          authenticatorConfig:
+            themeFile: white-theme.js
+    citizenAuthFlow:
+      authenticators:
+        dsCitizenAuthenticator:
+          authenticatorConfig:
+            themeFile: white-theme.js
+----
+
 В поточній реалізації підходу існує ряд недоліків:
 
 - Нецільове використання _global-vars/camunda-global-system-vars.yml_ для налаштування _supportEmail_ та _themeFile_ реєстру
-- Дублювання налаштування _themeFile_ в регламенті та конфігурації реєстру
+- Дублювання налаштування _themeFile_ в регламенті та конфігурації реєстру і, як результат, неможливість централізованого управління темуванням
 - Неможливість налаштувати перелік заборонених доменів для поштових адрес на рівні регламенту
 - Неконсистентність використання правил клієнтської та серверної валідації поштових адрес користувачів з урахуванням переліку заборонених доменів
 
@@ -262,14 +286,21 @@ settings:
           - 'ya.ua'
 ----
 
-=== Публікація налаштувань аутентифікаторів кабінетів
+=== Застосування налаштувань до аутентифікаторів кабінетів
 
-Необхідно змінити логіку _Пайплайну публікації регламенту_ таким чином, щоб налаштування _themeFile_ та _title_ для конфігурації реєстрових аутентифікаторів _dso-citizen-authenticator_ та _dso-officer-authenticator_ брались не з _registry-configuration.git_, а з регламенту _settings/settings.yml_.
+Необхідно видалити:
 
-.Налаштування аутентифікатора громадян
+- Визначення _themeFile_ на рівні конфігурації реєстру _control-plane-gerrit/<registry>.git/deployment-templates/values.yaml_
+- Логіку управління _themeFile_ з _control-plane-jenkins_ та відповідне налаштування _KeycloakAuthFlow_ для _dso-citizen-authenticator_ та _dso-officer-authenticator_
+
+Необхідно розширити:
+
+- Логіку _registry-jenkins_ _Пайплайну публікації регламенту_ таким чином, щоб налаштування _themeFile_ та _title_ для конфігурації реєстрових аутентифікаторів _dso-citizen-authenticator_ та _dso-officer-authenticator_ застосовувались з регламенту _registry-gerrit/<registry-regulation>.git/settings/settings.yml_ через внесення змін до відповідних _KeycloakAuthFlow_ ресурсів
+
+.Налаштування dso-citizen-authenticator
 image::lowcode/dso-citizen-authenticator.png[dso-citizen-authenticator, 300]
 
-.Налаштування аутентифікатора посадових осіб
+.Налаштування dso-officer-authenticator
 image::lowcode/dso-citizen-authenticator.png[dso-citizen-authenticator, 300]
 
 == Міграція налаштувань при оновленні
