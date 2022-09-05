@@ -52,6 +52,13 @@ activate citizen_portal
     kong -> user_settings_service: **Запит на верифікацію каналу зв'язку** \nPOST /api/settings/me/{channel}/verify \n*X-Access-Token
     activate user_settings_service
       user_settings_service -> user_settings_service: Валідація адреси \nзгідно правил каналу \n(regexp, blacklist, тощо.)
+      user_settings_service -> redis: пошук попереднього запису на \nвідправлення повідомлення з OTP-кодом
+      redis --> user_settings_service
+      alt запит прийшов коли таймаут попереднього не вийшов
+        user_settings_service --> kong: 429 - Too Many Requests
+        kong --> citizen_portal: 429 - Too Many Requests
+        citizen_portal --> citizen: Треба зачекати таймаут перед \nнаступним запитом на \nзмінення адреси
+      end
       user_settings_service -> user_settings_service: Генерація 6-значного OTP-коду **verificationCode**
       user_settings_service -> redis: Збереження запису з ключем \n**channel-verification-codes:{userId}/{channel}*** \nта встановленим TTL згідно конфігурації
       note left
