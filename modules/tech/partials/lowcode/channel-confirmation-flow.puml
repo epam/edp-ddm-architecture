@@ -52,12 +52,12 @@ activate citizen_portal
     kong -> user_settings_service: **Запит на верифікацію каналу зв'язку** \nPOST /api/settings/me/{channel}/verify \n*X-Access-Token
     activate user_settings_service
       user_settings_service -> user_settings_service: Валідація адреси \nзгідно правил каналу \n(regexp, blacklist, тощо.)
-      user_settings_service -> redis: пошук попереднього запису на \nвідправлення повідомлення з OTP-кодом
-      redis --> user_settings_service
-      alt запит прийшов коли таймаут попереднього не вийшов
+      user_settings_service -> redis: Перевірки існування запису за ключем \n**channel-verification-codes:{userId}/{channel}***
+      redis --> user_settings_service: Результат пошуку запису з email-адресою та згенерованим OTP-кодом
+      alt Запис знайдено - спробу повторного запиту на верифікацію заблоковано, поки не вичерпається час, відведений на підтвердження попереднього запиту
         user_settings_service --> kong: 429 - Too Many Requests
         kong --> citizen_portal: 429 - Too Many Requests
-        citizen_portal --> citizen: Треба зачекати таймаут перед \nнаступним запитом на \nзмінення адреси
+        citizen_portal --> citizen: Спробу повторного запиту на верифікацію заблоковано, \nпоки не вичерпається час, \nвідведений на підтвердження попереднього запиту
       end
       user_settings_service -> user_settings_service: Генерація 6-значного OTP-коду **verificationCode**
       user_settings_service -> redis: Збереження запису з ключем \n**channel-verification-codes:{userId}/{channel}*** \nта встановленим TTL згідно конфігурації
