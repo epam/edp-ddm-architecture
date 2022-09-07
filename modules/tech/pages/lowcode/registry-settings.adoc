@@ -29,27 +29,9 @@ supportEmail: help@support.com
 themeFile: white-theme.js
 ----
 
-.Налаштування конфігурації реєстру: control-plane-gerrit/<registry>.git/deployment-templates/values.yaml
-[source, yaml]
-----
-keycloak:
-  authFlows:
-    officerAuthFlow:
-      authenticators:
-        dsOfficerAuthenticator:
-          authenticatorConfig:
-            themeFile: white-theme.js
-    citizenAuthFlow:
-      authenticators:
-        dsCitizenAuthenticator:
-          authenticatorConfig:
-            themeFile: white-theme.js
-----
-
 В поточній реалізації існує ряд недоліків:
 
 - Нецільове використання _global-vars/camunda-global-system-vars.yml_ для налаштування _supportEmail_ та _themeFile_ реєстру
-- Дублювання налаштування _themeFile_ в регламенті та конфігурації реєстру і, як результат, неможливість централізованого управління темуванням
 - Неможливість налаштувати перелік заборонених доменів для поштових адрес на рівні регламенту
 - Неконсистентність використання правил клієнтської та серверної валідації поштових адрес користувачів з урахуванням переліку заборонених доменів
 
@@ -64,21 +46,16 @@ image::lowcode/registry-settings.svg[registry-settings,700]
 |===
 |Компонент|Службова назва|Призначення / Суть змін
 
-|_Конфігурація реєстру_
-|*registry-configuration*
-|Видалення налаштувань _themeFile_
-
-|_Пайплайн публікації конфігурації реєстру_
-|*control-plane-jenkins*
-|Видалення застосування налаштувань _themeFile_ до аутентифікаторів
-
-|Регламент реєстру
+|_Регламент реєстру_
 |*registry-regulation*
 |Розширення регламенту налаштуваннями _title_, _blacklist_ та реструктуризація
 
 |_Пайплайн публікації регламенту_
 |*registry-jenkins*
-|Розширення логіки публікації регламенту кроками налаштувань аутентифікаторів / реструктуризація ресурсів
+a|Застосування змін згідно реструктуризації файлів конфігурації та ресурсів:
+
+- _UploadGlobalVarsChanges.groovy_
+- _UpdateThemeLoginPage.groovy_
 
 |_Кабінет посадової особи_
 |*officer-portal*
@@ -98,23 +75,23 @@ image::lowcode/registry-settings.svg[registry-settings,700]
 
 |_Аутентифікатор громадян_
 |*keycloak-ds-citizen-authenticator*
-|Налаштування назви реєстру
+|Налаштування назви реєстру та теми
 
 |_Аутентифікатор посадових осіб_
 |*keycloak-ds-officer-authenticator*
-|Налаштування назви реєстру
+|Налаштування назви реєстру та теми
 
 |_Сервіс валідації даних UI-форм_
 |*form-submission-validation*
-|Валідація поштових адрес згідно переліку заблокованих доменів
+|Підключення конфігурації реєстру та валідація поштових адрес згідно переліку заблокованих доменів
 
 |_Сервіс управління налаштуваннями_
 |*user-settings-service*
-|Валідація поштових адрес згідно переліку заблокованих доменів
+|Підключення конфігурації реєстру та валідація поштових адрес згідно переліку заблокованих доменів
 
 |_Сервіс відправлення повідомлень_
 |*notification-service*
-|Валідація поштових адрес згідно переліку заблокованих доменів
+|Підключення конфігурації реєстру та валідація поштових адрес згідно переліку заблокованих доменів
 
 |_CLI-утиліта валідації цілісності регламенту_
 |*registry-regulations-validator-cli*
@@ -141,11 +118,11 @@ include::partial$lowcode/registry-settings-regulation-structure.puml[]
 ----
 settings:
   general:
-    title: "Реєстр судових рішень"
-    themeFile: "dark-theme.js"
+    title: "<Назва реєстру>"
+    themeFile: "white-theme.js"
     contacts:
       support:
-        email: "help@support.com"
+        email: "support@registry.gov.ua"
   validation:
     email:
       blacklist:
@@ -162,6 +139,13 @@ settings:
           - 'mail.yandex.ua'
           - 'ya.ru'
           - 'ya.ua'
+----
+
+.Канонічний вигляд конфігурації констант бізнес-процесів _global-vars/camunda-global-system-vars.yml_
+[source, yaml]
+----
+camundaVar1: "<constant to be used in business process>"
+camundaVar2: "<constant to be used in business process>"
 ----
 
 === Валідація регламенту налаштувань реєстру
@@ -287,7 +271,7 @@ settings:
 
 В рамках редизайну, необхідно відкорегувати згідно призначення назви та структури ресурсів, які створються у результаті виконання _Пайплайну публікації регламенту_.
 
-.*"registry-settings-js"* _ConfigMap_ налаштувань кабінетів користувачів
+.Канонічний вигляд *"registry-settings-js"* _ConfigMap_ налаштувань кабінетів користувачів
 [source, js]
 ----
 const REGISTRY_SETTINGS = {
@@ -325,16 +309,26 @@ const REGISTRY_SETTINGS = {
 };
 ----
 
-.*"registry-settings"* _ConfigMap_ налаштувань бекенд-сервісів
+.Канонічний вигляд *"environment-js"* _ConfigMap_ налаштувань кабінетів користувачів
+[source, js]
+----
+const ENVIRONMENT_VARIABLES = {
+  kibanaUrl: 'https://...',
+  redashUrl: 'https://...',
+  signWidgetUrl: 'https://...'
+};
+----
+
+.Канонічний вигляд *"registry-settings"* _ConfigMap_ налаштувань бекенд-сервісів
 [source, yaml]
 ----
 settings:
   general:
-    title: "Реєстр судових рішень"
-    themeFile: "dark-theme.js"
+    title: "<Назва реєстру>"
+    themeFile: "white-theme.js"
     contacts:
       support:
-        email: "help@support.com"
+        email: "support@registry.gov.ua"
   validation:
     email:
       blacklist:
@@ -353,12 +347,16 @@ settings:
           - 'ya.ua'
 ----
 
+.Канонічний вигляд *"bpms-camunda-global-system-vars"* _ConfigMap_ налаштувань бекенд-сервісу **bpms**
+[source, yaml]
+----
+camunda:
+  system-variables:
+    const_camundaVar1: "const_value"
+    const_camundaVar2: "const_value"
+----
+
 === Застосування налаштувань до аутентифікаторів кабінетів
-
-Необхідно видалити:
-
-- Визначення _themeFile_ на рівні конфігурації реєстру _control-plane-gerrit/<registry>.git/deployment-templates/values.yaml_
-- Логіку управління _themeFile_ з _control-plane-jenkins_ та відповідне налаштування _KeycloakAuthFlow_ для _dso-citizen-authenticator_ та _dso-officer-authenticator_
 
 Необхідно розширити:
 
@@ -368,7 +366,7 @@ settings:
 image::lowcode/dso-citizen-authenticator.png[dso-citizen-authenticator, 300]
 
 .Налаштування dso-officer-authenticator
-image::lowcode/dso-citizen-authenticator.png[dso-citizen-authenticator, 300]
+image::lowcode/dso-officer-authenticator.png[dso-officer-authenticator, 300]
 
 == Міграція налаштувань при оновленні
 
