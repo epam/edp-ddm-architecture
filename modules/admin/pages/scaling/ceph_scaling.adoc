@@ -1,0 +1,82 @@
+= Масштабування розміру файлової системи Ceph
+
+Розробники Ceph платформи xref:https://docs.ceph.com/en/quincy/rados/configuration/mon-config-ref/#storage-capacity[рекомендують] завчасно реагувати на зростання розміру файлової системи та недопускати переповнення дисків. Тому
+може виникнути типова потреба в масштабуванні розміру файлової системи.
+
+WARNING: Рекомендується регулярно перевіряти ємність кластера, щоб побачити, чи досягає він верхньої межі ємності пам’яті. Коли кластер досягає свого майже повного співвідношення, додайте одне або кілька OSD, щоб збільшити ємність Ceph кластера.
+
+== Принцип масштабування розміру файлової системи Ceph
+На Платформі реєстрів масштабування Ceph відбувається виключно засобами платформи OKD та вбудованого Ceph-оператора реалізовуючи оператор паттерн.
+
+NOTE: Оператор паттерн — це підхід використання програмних розширень Платформи OKD, які використовують спеціальні ресурси для керування програмами, їхніми компонентами та конфігураціює. Оператори дотримуються принципів Kubernetes, зокрема циклу керування та автоматизації.
+
+NOTE: Реконсиляція (англ. Reconcilation) або приведення в узгоджений стан — є частиною здібностей самовідновлення OKD Платформи та є процесом приведення поточного стану конфігурації в бажаний стан.
+
+Розширення розміру файлової системи Ceph може бути виконано у два різні способи:
+
+=== Додаванням дисків до вже існуючих віртуальних машин.
+
+Для створення нових дисків у віртуальних машин та додавання їх у пул Ceph потрібно виконати наступні дії:
+
+. Відкрити OKD Management Console та у розділі `Installed Operators -> ocs-operator.v4.9.8 -> StorageCluster details` натиснути на
+`Actions` та `Add Capacity`. Наприклад
++
+image::scaling/ceph/ceph-example-5.png[ceph-example,float="center",align="center"]
+
+. У вікні натиснути на `Add` та почекати поки нові диски створяться та Ceph підтягне їх собі в пул
+
+image::scaling/ceph/ceph-example-6.png[alt=ceph-example,width=350,height=480,ceph-example,float="center",align="center"]
+
+NOTE: Перевірити статус новостворених OSD можна командою у поді ceph-operator: `ceph  --conf=/var/lib/rook/openshift-storage/openshift-storage.config osd tree`
+
+NOTE: Можна запустити кілька OSD на одній віртуальній машині, але требі переконатися, що загальна пропускна здатність дисків OSD не перевищує пропускну здатність мережі, необхідну для обслуговування процесі читання або запису даних на ці диски.
+
+
+=== Додаванням нових віртуальних машин в Ceph MachineSet.
+Для додавання нових віртуальних машин в Ceph MachineSet потрібно виконати наступні дії.
+
+. Відкрити OKD Management Console та у розділі `Compute -> MachineSets`
++
+image::scaling/ceph/ceph-example-1.png[alt=ceph-example,width=200,height=480,ceph-example,float="center",align="center"]
++
+знайти потрібний MachineSet. Наприклад:
++
+image::scaling/ceph/ceph-example-2.png[ceph-example,float="center",align="center"]
+
+. Натиснути на додаткове меню та обрати `Edit Machine Count`
++
+image::scaling/ceph/ceph-example-3.png[ceph-example,float="center",align="center"]
+
+. Змінити на бажану кількість
++
+image::scaling/ceph/ceph-example-4.png[alt=ceph-example,width=350,height=480,ceph-example,float="center",align="center"]
+
+. Почекати поки нова віртуальна машина буде в статусі `Running`. Після цього вона вже буде доступна для використання її Ceph та
+додавання на неї нових дисків та OSD.
+
+
+WARNING: Після виконання всіх кроків треба перевірити поточний статус Ceph або в OKD Management Console, або командою в ceph-operator поді ceph --conf=/var/lib/rook/openshift-storage/openshift-storage.config health detail
+
+== Принцип масштабування розміру Ceph бакетів
+Кожний Ceph бакет динамічно розширяється при додаванні файлів та може досягнути розміру всього доступного місця у CephFS.
+Для масштабування треба виконати кроки, які розписані вище.
+
+== Зміна репліка фактора для Ceph
+Щоб змінити репліка фактор на все розгорнутому кластері OKD, потрібно виконати наступні кроки:
+
+. Відкрити в OKD Management Console yaml опис ресурса StorageCluster, та змінити наcтупну секцію:
++
+----
+  managedResources:
+    cephBlockPools: {}
+----
++
+на
++
+----
+managedResources:
+    cephBlockPools:
+      reconcileStrategy: init
+----
++
+. Дочекатись доки Ceph застосує зміни.
