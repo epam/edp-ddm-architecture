@@ -1,0 +1,190 @@
+= Призначення адміністраторів платформи та надання їм прав доступу
+:toc-title: ЗМІСТ
+:toc: auto
+:toclevels: 5
+:experimental:
+:important-caption:     ВАЖЛИВО
+:note-caption:          ПРИМІТКА
+:tip-caption:           ПІДКАЗКА
+:warning-caption:       ПОПЕРЕДЖЕННЯ
+:caution-caption:       УВАГА
+:example-caption:           Приклад
+:figure-caption:            Зображення
+:table-caption:             Таблиця
+:appendix-caption:          Додаток
+:sectnums:
+:sectnumlevels: 5
+:sectanchors:
+:sectlinks:
+:partnums:
+
+== Створення тимчасового (`one-time`) адміністратора платформи
+
+Після розгортання платформи у цільовому оточенні, в системі є лише один адміністратор -- `kube:admin`. Цей користувач потрібний для створення найпершого тимчасового адміністратора платформи та надання йому прав доступу.
+
+. Виконайте вхід до Openshift-консолі під користувачем `kube:admin`.
++
+TIP: Логін та пароль для входу під `kube:admin` можна отримати у команди технічної підтримки.
++
+image:registry-management/cp-platform-admins/cp-platform-admins-1.png[]
++
+
+. Перейдіть до *Projects* > *user-management*.
++
+image:registry-management/cp-platform-admins/cp-platform-admins-3.png[]
+
+. Знайдіть розділ *Networking* та перейдіть за посиланням до сервісу *keycloak*.
++
+image:registry-management/cp-platform-admins/cp-platform-admins-4.png[]
+
+. Виконайте вхід до *Keycloak Administration Console* із секретами (username та пароль) Keycloak.
++
+image:registry-management/cp-platform-admins/cp-platform-admins-4-1.png[]
++
+image:registry-management/cp-platform-admins/cp-platform-admins-7.png[]
++
+[NOTE]
+====
+Отримати username та пароль можна у секретах до Keycloak-сервісу.
+
+Для цього перейдіть до секції *Workloads* > *Secrets* > *keycloak* та скопіюйте секрети.
+
+image:registry-management/cp-platform-admins/cp-platform-admins-5.png[]
+
+image:registry-management/cp-platform-admins/cp-platform-admins-6.png[]
+====
+
+. Увійдіть до реалму `openshift`.
++
+image:registry-management/cp-platform-admins/cp-platform-admins-8.png[]
+
+. Створіть першого тимчасового адміністратора платформи:
+
+* Для цього відкрийте розділ *Users* > `Add user`.
++
+image:registry-management/cp-platform-admins/cp-platform-admins-9.png[]
+
+* Додайте інформацію про користувача, а саме `username` (наприклад, `one-time`), `Email` (`one-time@test.com`) тощо.
+* Далі натисніть `Save`, щоб зберегти зміни.
++
+image:registry-management/cp-platform-admins/cp-platform-admins-10.png[]
+
+* На вкладці *Credentials* встановіть пароль для адміністратора. Якщо пароль тимчасовий -- активуйте опцію `Temporary` > `On`.
++
+image:registry-management/cp-platform-admins/cp-platform-admins-11.png[]
+
+. Додайте групи користувачу:
+
+* Перейдіть до *Groups* > *Available Groups*.
+* Призначте групи `Cluster-admins` та `cp-cluster-mgmt-admin`.
++
+В результаті групи будуть додані до *Group Membership*.
++
+image:registry-management/cp-platform-admins/cp-platform-admins-12.png[]
+
+. Призначте ролі користувачу:
+
+* Перейдіть до *Role Mappings* > *Available Roles*.
+* Встановіть роль `cp-cluster-mgmt-admin`.
++
+image:registry-management/cp-platform-admins/cp-platform-admins-13.png[]
++
+image:registry-management/cp-platform-admins/cp-platform-admins-14.png[]
+
++
+NOTE: Всі групи та ролі для тимчасового адміністратора призначаються вручну.
+
+. Поверніться до консолі Openshift та відкрийте доступ до `control-plane-gerrit` (центрального Gerrit) для тимчасового (`one-time`) адміна.
++
+CAUTION: Тобто необхідно видати `one-time`-користувачу права адміністратора для `control-plane-gerrit`.
++
+Для цього необхідно зробити його учасником групи адміністраторів Gerrit -- *GerritGroupMember*:
+
+* У проєкті *control-plane* перейдіть до розділу *Home* > *Explore* > *GerritGroupMember*.
+* Відкрийте вкладку *Instances* і створіть нового учасника, натиснувши *`Create GerritGroupMember`*.
++
+image:registry-management/cp-platform-admins/cp-platform-admins-15.png[]
+
+* У конфігураційному файлі _.yaml_ додайте відповідні параметри адміністратора до секцій `metadata` й `spec`.
++
+image:registry-management/cp-platform-admins/cp-platform-admins-16.png[]
++
+.Параметри доступу у GerritGroupMember.
+====
+[source,yaml]
+----
+kind: GerritGroupMember
+metadata:
+  name: cp-admin
+  namespace: control-plane
+spec:
+  accoundId: onetime
+  groupId: administrators
+----
+
+* `cp-admin` -- Назва адміністратора у GerritGroupMember.
+* `namespace` -- простір імен/проєкт в Openshift, у рамках якого надається доступ.
+* `accoundId` -- ім'я користувача (`username` у сервісі Keycloak).
+
+====
+
+* Натисніть `Save`, щоб зберегти зміни.
+
+== Створення адміністратора платформи
+
+Тимчасовий (`one-time`) адміністратор створює повноцінних адміністраторів платформи в інтерфейсі Control Plane.
+
+. Увійдіть до консолі Control Plane як тимчасовий адміністратор.
++
+image:admin:infrastructure/cluster-mgmt/update-cluster-mgmt-01.png[]
+
+. Перейдіть до розділу _Керування платформою_ > _Редагувати_.
++
+image:registry-management/cp-platform-admins/cp-platform-admins-17.png[]
++
+image:registry-management/cp-platform-admins/cp-platform-admins-18.png[]
+
+. У секції _Адміністратори_ додайте нового (повноцінного) адміністратора(-ів) платформи:
+
+* Натисніть `+`, введіть дані адміністратора:
+** ім'я;
+** прізвище;
+** username (адреса електронної пошти). Службове ім'я користувача в системі;
+** пароль.
+* Натисніть `Підтвердити`.
++
+image:registry-management/cp-platform-admins/cp-platform-admins-19.png[]
++
+В результаті сформується запит на оновлення зі статусом `NEW`.
+
+. Відкрийте необхідний запит на оновлення та перейдіть до системи рецензування коду Gerrit за посиланням.
++
+image:registry-management/cp-platform-admins/cp-platform-admins-20.png[]
++
+image:registry-management/cp-platform-admins/cp-platform-admins-21.png[]
+
+. Підтвердьте зміни: `Code Review +2` > `Submit`.
++
+image:registry-management/cp-platform-admins/cp-platform-admins-22.png[]
++
+[TIP]
+====
+Зміни з даними про адміністратора вносяться до репозиторію _cluster-mgmt_ та записуються до файлу _deploy-templates/values.yaml_.
+
+image:registry-management/cp-platform-admins/cp-platform-admins-23.png[]
+====
+
+. Після злиття змін до master-гілки відповідного репозиторію, запускається процес збірки коду -- `MASTER-Build-cluster-mgmt`. Можна перейти за посиланням та переглянути статус виконання.
++
+image:registry-management/cp-platform-admins/cp-platform-admins-24.png[]
++
+image:registry-management/cp-platform-admins/cp-platform-admins-25.png[]
+
+. Після успішного проходження збірки, адміністратор додається до переліку адмінів платформи.
+
+[NOTE]
+====
+Такому (повноцінному) адміністратору платформи автоматично призначаються всі права доступу: групи `Cluster-admins` і `cluster-mgmt-admin`, та роль `cp-cluster-mgmt-admin` у Keycloak.
+====
+
+IMPORTANT: Створений адміністратор платформи має повний доступ до Openshift та Control Plane. Він може призначати інших адміністраторів платформи, створювати реєстри, а також додавати адміністраторів реєстру (_детальніше про створення адмінів реєстру -- див. xref:admin:registry-management/control-plane-create-registry.adoc[]_).
