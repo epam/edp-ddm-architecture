@@ -1,0 +1,454 @@
+= Ієрархічна рольова модель: територіальна прив'язка користувачів на основі кодів КАТОТТГ
+:toc-title: ЗМІСТ
+:toc: auto
+:toclevels: 5
+:experimental:
+:important-caption:     ВАЖЛИВО
+:note-caption:          ПРИМІТКА
+:tip-caption:           ПІДКАЗКА
+:warning-caption:       ПОПЕРЕДЖЕННЯ
+:caution-caption:       УВАГА
+:example-caption:           Приклад
+:figure-caption:            Зображення
+:table-caption:             Таблиця
+:appendix-caption:          Додаток
+:sectnums:
+:sectnumlevels: 5
+:sectanchors:
+:sectlinks:
+:partnums:
+
+CAUTION: Документ у процесі формування.
+
+== Загальний опис
+
+Що таке КАТОТТГ? ::
+
+КАТОТТГ -- кодифікатор адміністративно-територіальних одиниць та територій територіальних громад, національний реєстр адміністративно-територіальних одиниць та територій територіальних громад України, введений 26 листопада 2020 року наказом Міністерства розвитку громад та територій України (Мінрегіону).
+
+image:admin:user-management/user-management-41.png[]
+
+.Розшифрування коду КАТОТТГ за рівнями
+|===
+|Рівень КАТОТТГ |Пояснення
+
+| «Перший рівень»
+| 3-й та 4-й символи у коді. Автономна Республіка Крим, області та міста, що мають спеціальний статус.
+
+| «Другий рівень»
+|5-й та 6-й символи у коді. Райони в областях та Автономній Республіці Крим.
+
+| «Третій рівень»
+| 7-й, 8-й та 9-й символи у коді. Території територіальних громад в областях, територіальні громади Автономної Республіки Крим.
+
+| «Четвертий рівень»
+| 10-й, 11-й та 12-й символи у коді. Міста, селища міського типу, села, селища (населені пункти).
+
+| «Додатковий рівень»
+| 13-й та 14-й символи у коді. Райони у містах (у тому числі в містах, що мають спеціальний статус).
+
+| «Системний номер»
+| Останні 5 цифр -- це системний код, що присвоєний автоматично і надалі не буде змінюватися ні при яких адмінреформах (при переході з регіону до регіону або з району до району цей код залишається незмінним).
+
+|===
+
+.Категорія об'єкта за кодифікатором
+|===
+| Категорія об'єкта | Пояснення
+
+| «O»
+| Автономна Республіка Крим, області.
+
+| «K»
+| Міста, що мають спеціальний статус.
+
+| «P»
+| Райони в областях та Автономній Республіці Крим.
+
+| «H»
+| Території територіальних громад (назви територіальних громад) в областях, територіальні громади Автономної Республіки Крим.
+
+| «M»
+| Міста
+
+| «T»
+| Селища міського типу
+
+| «C»
+| Села
+
+| «X»
+| Селища
+
+|«B»
+| Райони в містах
+|===
+
+
+// TIP: Довідник КАТОТТГ: https://directory.org.ua/
+
+TIP: Міністерство розвитку громад та територій України -- https://www.minregion.gov.ua/napryamki-diyalnosti/rozvytok-mistsevoho-samovryaduvannya/administratyvno/kodyfikator-administratyvno-terytorialnyh-odynycz-ta-terytorij-terytorialnyh-gromad/[Кодифікатор адміністративно-територіальних одиниць та територій територіальних громад]
+
+Що таке рольова модель на базі КАТОТТГ? ::
+
+Ієрархічно-рольова модель в системі побудована на RLS-правилах доступу до об'єктів із прив'язкою до таблиць-довідників кодифікатора КАТОТТГ.
+
+
+== Завантаження користувачів до системи
+
+CAUTION: Розділ у процесі формування.
+
+////
+Оновити доку з імпортом користувачів.
+Надати посилання до тієї доки.
+Дописати про особливості відображення кодів у кіклок (Відсікання, розділитель тощо).
+////
+
+== Налаштування правил для рольової моделі на рівні моделі даних
+
+Ієрархічно-рольова модель налаштовується на рівні регламенту реєстру в директорії _registry-regulations/data-model_. Для правильної роботи моделі, регламент повинен містити відповідну структуру файлів, описану у розділі xref:#data-model-structure[].
+
+[#data-model-structure]
+=== Структура моделі даних для використання рольової моделі
+
+. Модель даних реєстру повинна містити 2 основні файли з XML-схемами, які мають відношення до кодифікатора КАТОТТГ. Наприклад:
+
+* _tablesKatottg.xml_ -- схема для таблиць-довідників із кодами КАТОТТГ, а також категорій об'єктів за кодифікатором.
+* _populateKatottg.xml_ -- схема із викликом процедур для заповнення таблиць _tablesKatottg.xml_ даними кодифікатора КАТОТТГ.
+
+. Необхідно змоделювати структуру таблиць-представлень (view) в окремому файлі для пошуку об'єктів за КАТОТТГ. Наприклад:
+* _createSearchConditionsKatottg.xml_
+
+. Також необхідно створити файл, що міститиме таблиці для операцій з об'єктами за КАТОТТГ у вашому реєстрі. Наприклад:
+
+* _tablesConsent.xml_
+
+. Необхідно додати змодельовані файли-схеми як посилання через директиву `<include file ... />` у файлі _main-liquibase.xml_:
++
+.Додавання посилань до файлів у main-liquibase.xml
+====
+[source,xml]
+----
+<databaseChangeLog ...
+
+    <include file="data-model/tablesKatottg.xml"/>
+    <include file="data-model/populateKatottg.xml" context="pub"/>
+    <include file="data-model/createSearchConditionsKatottg.xml"/>
+    <include file="data-model/tablesConsent.xml"/>
+
+</databaseChangeLog>
+----
+====
+
+. Додайте до директорії регламенту _data-model/data-load_ файли-довідники для наповнення створених таблиць-довідників даними. Довідники мають бути у форматі CSV. Вони містять дані кодифікатора з кодами КАТОТТГ за рівнями ієрархії, а також окремо - файл-довідник з позначенням категорій об'єктів КАТОТТГ.
+
+* _Katottg_category.csv_
+* _Katottg_level1.csv_
+* _Katottg_level2.csv_
+* _Katottg_level3.csv_
+* _Katottg_level4.csv_
+* _Katottg_level5.csv_
+
++
+IMPORTANT: Переконайтеся, що маєте останню версію довідника-кодифікатора. Дані КАТОТТГ публікуються регулярно на сайті https://www.minregion.gov.ua/napryamki-diyalnosti/rozvytok-mistsevoho-samovryaduvannya/administratyvno/kodyfikator-administratyvno-terytorialnyh-odynycz-ta-terytorij-terytorialnyh-gromad/[www.minregion.gov.ua] у форматі _.xls_.
+
+. Наповніть таблиці-довідники даними КАТОТТГ за допомогою функції виклику процедур завантаження даних до БД. Виклик процедури завантаження даних до таблиць довідників виглядає наступним чином:
++
+.Виклик процедури завантаження даних до таблиць-довідників
+====
+----
+<changeSet author="registry owner" id="load data to dictionaries">
+    <sql ...>
+
+        CALL p_load_table_from_csv('katottg_category', '${dataLoadPath}Katottg_category.csv', array['code','name']);
+
+        CALL p_load_table_from_csv('katottg', '${dataLoadPath}Katottg_level1.csv', array['code','name', 'category'], array['code','name', 'category', 'level::''1''']);
+
+        CALL p_load_table_from_csv('katottg', '${dataLoadPath}Katottg_level2.csv', array['code','name', 'category', 'katottg_parent'],
+        array['code','name', 'category', 'level::''2''', 'katottg_parent_id::ref(lookup_col:katottg_parent,ref_table:katottg,ref_col:code,ref_id:katottg_id)']);
+
+        CALL p_load_table_from_csv('katottg', '${dataLoadPath}Katottg_level3.csv', array['code','name', 'category', 'katottg_parent'],
+        array['code','name', 'category', 'level::''3''', 'katottg_parent_id::ref(lookup_col:katottg_parent,ref_table:katottg,ref_col:code,ref_id:katottg_id)']);
+
+        CALL p_load_table_from_csv('katottg', '${dataLoadPath}Katottg_level4.csv', array['code','name', 'category', 'katottg_parent'],
+        array['code','name', 'category', 'level::''4''', 'katottg_parent_id::ref(lookup_col:katottg_parent,ref_table:katottg,ref_col:code,ref_id:katottg_id)']);
+
+        CALL p_load_table_from_csv('katottg', '${dataLoadPath}Katottg_level5.csv', array['code','name', 'category', 'katottg_parent'],
+        array['code','name', 'category', 'level::''5''', 'katottg_parent_id::ref(lookup_col:katottg_parent,ref_table:katottg,ref_col:code,ref_id:katottg_id)']);
+
+    </sql>
+</changeSet>
+----
+====
+
+NOTE: Для зручності виконання операції завантаження даних кодифікатора КАТОТТГ до системи, рекомендуємо розбити файл-кодифікатор на окремі файли за рівнями. Також рекомендуємо відділити колонку "Категорія об'єкта" в окрему таблицю, дані до якої завантажуватимуться окремим файлом.
+
+[#rls-rules-types]
+=== Типи правил RLS, які підтримує система
+
+Безпека на рівні рядка (_англ. -- Row-level security або RLS_) -- це механізм контролю доступу до рядків у таблиці бази даних.
+
+RLS допомагає впроваджувати обмеження на доступ до рядка даних. Наприклад, ви можете гарантувати, що співробітники отримають доступ лише до тих рядків даних, які стосуються їх повноважень.
+
+Система використовує RLS-правила для налаштування ієрархічно-рольової моделі на основі кодів КАТОТТГ. Правила застосовуються до _колонок таблиць_, які містять атрибут `katottg`. Налаштування відбувається на рівні моделі даних (Liquibase) у регламенті реєстру -- _registry-regulations/data-model_.
+
+Правила є механізмом перевірки рольової моделі, при якому користувач може здійснювати операції _створення, оновлення, або читання_ даних лише у тому випадку, якщо у нього є права доступу до об'єктів відповідної адміністративно-територіальної одиниці за кодифікатором КАТОТТГ.
+
+Система використовує 4 типи правил перевірки рольової моделі: ::
+
+. `addWriteRule` -- додати права на створення, або оновлення об'єктів у базі даних на основі КАТОТТГ.
+. `removeWriteRule` -- видалити права на створення, або оновлення об'єктів у базі даних на основі КАТОТТГ.
+. `addReadRule` -- додати права на пошук (читання) інформації про об'єкти в базі даних на основі КАТОТТГ.
+. `removeReadRule` -- видалити права на пошук (читання) інформації про об'єкти в базі даних на основі КАТОТТГ.
++
+[NOTE]
+====
+Правила категорії `write` (`write_rls`) використовуються для звичайних таблиць.
+
+Правила категорії `read` (`read_rls`) використовуються для таблиць критеріїв пошуку (Search Conditions).
+====
+
+=== Застосування правил RLS до моделі даних
+
+За необхідності застосування рольової моделі до даних реєстру, потрібно на рівні моделі даних Liquibase додати правила рольової моделі -- Row-level Security (RLS).
+
+NOTE: Система прозоро вираховує рівень доступу до об'єктів даних за ієрархією відповідно до встановлених правил RLS. Не потрібно встановлювати додаткові обмеження на рівні регламенту у бізнес-процесах.
+
+Після створення таблиць, таблиць-представлень (view), таблиць довідників, а також наповнення даними КАТОТТГ, можна застосовувати правила рольової моделі у сценаріях відповідного реєстру.
+
+==== Визначення правил "write_rls" для створення та оновлення об'єктів за КАТОТТГ
+
+. Для прикладу, створіть таблицю для опрацювання заявок (взаємодія з об'єктами у БД) за рольовою моделлю з умовною назвою `request_by_katottg`.
++
+.Створення таблиці для опрацювання заявок за рольовою моделлю
+====
+[source,xml]
+----
+<changeSet id="table request by katottg" author="registry owner">
+    <createTable tableName="request_by_katottg" ext:historyFlag="true" remarks="Заявки рольової моделі">
+        <column name="request_by_katottg_id" type="UUID" defaultValueComputed="uuid_generate_v4()">
+            <constraints nullable="false" primaryKey="true" primaryKeyName="pk_request_by_katottg_id"/>
+        </column>
+        <column name="name" type="TEXT">
+            <constraints nullable="false"/>
+        </column>
+    </createTable>
+</changeSet>
+----
+====
+
+. Додайте до цієї таблиці додатковий стовпець `"katottg"`:
++
+.Додавання колонки `katottg` до таблиці в моделі даних
+====
+[source, xml]
+----
+<column name="katottg" type="TEXT">
+    <constraints nullable="false"/>
+</column>
+----
+====
++
+.Фінальний вигляд таблиці `request_by_katottg` у моделі даних
+====
+[source, xml]
+----
+<changeSet id="table request by katottg" author="registry owner">
+    <createTable tableName="request_by_katottg" ext:historyFlag="true" remarks="Заяви рольової моделі">
+        <column name="request_by_katottg_id" type="UUID" defaultValueComputed="uuid_generate_v4()">
+            <constraints nullable="false" primaryKey="true" primaryKeyName="pk_request_by_katottg_id"/>
+        </column>
+        <column name="name" type="TEXT">
+            <constraints nullable="false"/>
+        </column>
+        <column name="katottg" type="TEXT">
+            <constraints nullable="false"/>
+        </column>
+    </createTable>
+</changeSet>
+----
+====
+
+. Для цієї таблиці як окремий `<changeSet...>` необхідно додати правила рольової моделі (RLS) -- `write_rls`, тобто надання привілеїв доступу до створення, або оновлення об'єктів за рольовою моделлю.
++
+TIP: `write_rls` -- правила перевірки рольової моделі, при яких користувач може здійснювати операції створення та оновлення даних лише у тому випадку, якщо він має права доступу до певного об'єкта відповідної адміністративно-територіальної одиниці за кодифікатором КАТОТТГ (область, район області, територіальна громада області тощо).
++
+.Додавання правил write_rls до таблиці `request_by_katottg`
+====
+[source, xml]
+----
+<changeSet id="request by katottg rls1" author="registry owner">
+    <ext:rls name="write_rls1">
+        <ext:addWriteRule name="writeRule1" jwtAttribute="katottg" checkColumn="katottg" checkTable="request_by_katottg"/>
+    </ext:rls>
+</changeSet>
+----
+
+* `<ext:rls name="write_rls1">` -- атрибут назви правила для рольової моделі.
+
+* `<ext:addWriteRule ... />` -- тип правила для надання прав запису та оновлення об'єктів за КАТОТТГ.
+
+* `name="writeRule1"` -- атрибут назви правила `addWriteRule`.
+
+* `jwtAttribute="katottg"` -- JWT-атрибут. Система перевіряє цей атрибут і автоматично вичитує, які привілеї та права має користувач і відповідно до цих привілеїв показує лише ті об'єкти, до яких він має доступ. Всі інші об'єкти фабрика даних не повертатиме.
++
+NOTE: Фабрика даних може прийняти будь-яке значення атрибута `jwtAttribute`, та завантажити користувачів можна лише зі значенням `jwtAttribute="katottg"`.
+
+* `checkTable="request_by_katottg"` -- атрибут визначає, що необхідно перевіряти таблицю `request_by_katottg`.
+
+* `checkColumn="katottg"` -- атрибут визначає, що необхідно перевіряти колонку `katottg` таблиці `request_by_katottg`.
+====
+
+[#remove-write-rule]
+==== Скасування прав доступу write_rls
+
+Скасувати права доступу `write_rls` можна за допомогою правила видалення `removeWriteRule` в окремому changeSet:
+
+.Видалення правил write_rls з таблиці `request_by_katottg`
+====
+[source, xml]
+----
+<changeSet id="request by katottg rls1" author="registry owner">
+    <ext:rls name="write_rls1">
+        <ext:removeWriteRule name="writeRule1" />
+    </ext:rls>
+</changeSet>
+----
+====
+
+==== Визначення правил "read_rls" для пошуку об'єктів за КАТОТТГ
+
+Розглянемо випадок, коли необхідно виконувати пошук за 2-ма критеріями у певній таблиці, наприклад `request_by_katottg`.
+
+В такому разі необхідно: ::
+
+. Змоделювати відповідні представлення (Search Conditions) для кожного типу пошуку:
+
+* `<ext:createSearchCondition name="get_requests_by_katottg">` -- пошук за КАТОТТГ.
+* `<ext:createSearchCondition name="get_requests_by_name">` -- пошук за назвою об'єкта.
++
+.Створення представлення для пошуку за параметром katottg
+====
+[source,xml]
+----
+<changeSet author="registry owner" id="create SC get_requests_by_katottg">
+    <ext:createSearchCondition name="get_requests_by_katottg">
+        <ext:table name="request_by_katottg">
+            <ext:column name="request_by_katottg_id"/>
+            <ext:column name="name"/>
+            <ext:column name="katottg" searchType="startsWith" />
+        </ext:table>
+    </ext:createSearchCondition>
+</changeSet>
+----
+
+В такому випадку необхідно обов'язково вказати додатковий атрибут `searchType="startsWith"` для конкретної колонки пошуку (тут -- `column name="katottg"`).
+====
++
+.Створення представлення для пошуку за параметром name
+====
+[source,xml]
+----
+<changeSet author="registry owner" id="create SC get_requests_by_name">
+    <ext:createSearchCondition name="get_requests_by_name">
+        <ext:table name="request_by_katottg">
+            <ext:column name="request_by_katottg_id"/>
+            <ext:column name="name" searchType="startsWith"/>
+            <ext:column name="katottg"/>
+        </ext:table>
+    </ext:createSearchCondition>
+</changeSet>
+----
+
+В такому випадку необхідно обов'язково вказати додатковий атрибут `searchType="startsWith"` для конкретної колонки пошуку (тут -- `column name="name"`).
+====
++
+Далі необхідно встановити правила рольової моделі для операцій читання.
+
+[start=2]
+. Додайте правила `read_rls` до представлень `get_requests_by_katottg` та `get_requests_by_name`.
++
+[IMPORTANT]
+====
+У правилах для таблиць-представлень необхідно до назви представлення додавати суфікс `_v`. Наприклад:
+
+[source,xml]
+----
+<ext:rls name="some-rls-name">
+    <ext:addReadRule name="readRule1" jwtAttribute="katottg" checkColumn="katottg" checkTable="get_requests_by_katottg_v"/>
+</ext:rls>
+----
+====
+
++
+.Додавання правил read_rls до представлення get_requests_by_katottg
+====
+[source, xml]
+----
+<changeSet author="registry owner" id="create read_rls rule1">
+    <ext:rls name="read_rls1">
+        <ext:addReadRule name="readRule1" jwtAttribute="katottg" checkColumn="katottg" checkTable="get_requests_by_katottg_v"/>
+        <ext:addReadRule name="readRule2" jwtAttribute="katottg" checkColumn="katottg" checkTable="get_requests_by_name_v"/>
+    </ext:rls>
+</changeSet>
+----
+
+* `<ext:rls name="read_rls1">` -- атрибут назви набору правил для рольової моделі.
+
+* `<ext:addReadRule ... />` -- тип правила для надання прав запису та оновлення об'єктів за КАТОТТГ.
+
+* `name="readRule1"` -- атрибут назви правила `addReadRule` для представлення `get_requests_by_katottg_v`.
+
+* `name="readRule2"` -- атрибут назви правила `addReadRule` для представлення `get_requests_by_name_v`.
+
+* `jwtAttribute="katottg"` -- JWT-атрибут. Система перевіряє цей атрибут і автоматично вичитує, які привілеї та права має користувач і відповідно до цих привілеїв показує лише ті об'єкти, до яких він має доступ. Всі інші об'єкти фабрика даних не повертатиме.
++
+NOTE: Фабрика даних може прийняти будь-яке значення атрибута `jwtAttribute`, та завантажити користувачів можна лише зі значенням `jwtAttribute="katottg"`.
+
+* `checkTable="get_requests_by_name_v"` -- атрибут визначає, що необхідно перевіряти представлення `get_requests_by_katottg_v`.
+
+* `checkColumn="katottg"` -- атрибут визначає, що необхідно перевіряти колонку `katottg` представлення `get_requests_by_katottg_v`.
+
+* `checkTable="get_requests_by_name_v"` -- атрибут визначає, що необхідно перевіряти представлення `get_requests_by_name_v`.
+
+* `checkColumn="katottg"` -- атрибут визначає, що необхідно перевіряти колонку `katottg` представлення `get_requests_by_name_v`.
+====
+
++
+[CAUTION]
+====
+В одному changeSet можна додати одне та більше правил лише одного типу. Для різних типів правил використовуйте різні changeSet. Наприклад:
+
+[source, xml]
+----
+<changeSet author="registry owner" id="create read_rls rule1">
+    <ext:rls name="read_rls10">
+        <ext:addReadRule name="readRule1" ... />
+        <ext:addReadRule name="readRule2" ... />
+        <ext:addReadRule name="readRule3" ... />
+    </ext:rls>
+</changeSet>
+----
+
+Детальну інформацію щодо типів RLS-правил у системі ви можете переглянути у розділі xref:#rls-rules-types[].
+====
+
+==== Скасування прав доступу read_rls
+
+Скасувати права доступу `read_rls` можна за допомогою правила видалення `removeReadRule` в окремому changeSet:
+
+.Видалення правил read_rls з таблиці `get_requests_by_katottg`
+====
+[source, xml]
+----
+<changeSet id="request by katottg rls1" author="registry owner">
+    <ext:rls name="read_rls1">
+        <ext:removeWriteRule name="writeRule1" />
+    </ext:rls>
+</changeSet>
+----
+====
+
+== Застосування рольової моделі у бізнес-процесах
+
+CAUTION: Розділ у процесі формування.
