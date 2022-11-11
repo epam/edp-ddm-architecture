@@ -56,9 +56,15 @@ git config --global credential.helper store && \
   git ls-remote -h $REPLY > /dev/null
 ```
 
-Альтернативним шляхом може бути створення файлу сховища токенів доступу Git _$HOME/.git-credentials_ на базі файлу шаблону _.git-credentials.local_ шляхом копіювання та видалення суфіксу _.local_. Наступним кроком має бути генерація персонального токену доступу GitLab та додання необхідних репозиторіїв у вигляді:
+Альтернативним шляхом може бути створення файлу сховища токенів доступу Git _$HOME/.git-credentials_ на базі файлу шаблону _.git-credentials.local_ шляхом копіювання та видалення суфіксу _.local_. Наступним кроком має бути генерація HTTP-пароля у Gerrit та додавання
+адреси репозиторію до файлу:
 ```bash
-https://<personal_access_token>:@gitbud.epam.com/<repository_path>
+https://<user_name>:<http_password>@gerrit-mdtu-ddm-edp-cicd.apps.cicd2.mdtu-ddm.projects.epam.com
+```
+
+Альтернативою може бути додавання переліку необхідних репозиторіїв у вигляді:
+```bash
+https://<user_name>:<http_password>@gerrit-mdtu-ddm-edp-cicd.apps.cicd2.mdtu-ddm.projects.epam.com/<repository_path>
 ```
 
 ### Генерація технічної документації
