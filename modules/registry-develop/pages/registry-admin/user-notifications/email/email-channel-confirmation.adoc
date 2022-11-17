@@ -1,0 +1,122 @@
+:toc-title: ЗМІСТ
+:toc: auto
+:toclevels: 5
+:experimental:
+:important-caption:     ВАЖЛИВО
+:note-caption:          ПРИМІТКА
+:tip-caption:           ПІДКАЗКА
+:warning-caption:       ПОПЕРЕДЖЕННЯ
+:caution-caption:       УВАГА
+:example-caption:           Приклад
+:figure-caption:            Зображення
+:table-caption:             Таблиця
+:appendix-caption:          Додаток
+:sectnums:
+:sectnumlevels: 5
+:sectanchors:
+:sectlinks:
+:partnums:
+
+= Налаштування шаблону повідомлення з кодом для підтвердження каналу зв'язку Email
+
+== Загальний опис
+
+Для налаштування функції відправлення поштових повідомлень користувачам на електронну пошту, користувач має спочатку підтвердити, тобто авторизувати канал зв'язку `email`. Таким чином, користувач верифікує обмін даними (email-повідомленнями).
+
+Підтвердження каналу зв'язку використовує механізм верифікації даних за допомогою псевдовипадкового 6-значного OTP-коду, що генерується платформою і надходить до сервісу електронної пошти за вказаною адресою користувача.
+
+Власне відправлення OTP-коду -- це вже повідомлення, що містить OTP-код. І відправлення такого повідомлення вимагає попередньо xref:#registry-regulations-modeling[змодельованого шаблону] у структурі регламенту реєстру.
+
+[#registry-regulations-modeling]
+== Моделювання регламенту
+
+Базовий репозиторій розгортання регламенту _registry-regulations_ розширено директорією _channel-confirmation_, яка містить шаблон поштового повідомлення із плейсхолдеромfootnote:[Плейсхолдер (_англ. -- *placeholder_*) -- заповнювач тексту.] для OTP-кодуfootnote:[Одноразовий пароль (_англ. -- *one time password, OTP_*) -- це пароль, який є дійсним тільки для одного сеансу автентифікації. Його дія також може бути обмежена певним проміжком часу. Перевага такого пароля перед статичним полягає у тому, що його неможливо використовувати повторно.], що генеруватиметься системою та надсилатиметься громадянам за вказаною адресою електронної пошти.
+
+Шаблон повідомлення необхідно створити у розмітці HTML за допомогою технології шаблонізації Apache FreeMarker (розширення файлів _.ftlh_ та _.ftl_ для HTML та текстових документів відповідно).
+
+[NOTE]
+====
+Детальну інформацію щодо Apache FreeMarker можливо отримати за посиланням:
+
+* https://freemarker.apache.org/
+====
+
+Типовий шаблон поштового повідомлення має наступну структуру:
+
+[plantuml, email-notification-structure, svg]
+----
+@startsalt
+{
+{T
++ <&folder> registry-regulations
+++ ...
+++ <&folder> notifications
++++ <&folder> email
+++++ <&folder> <b>channel-confirmation</b>
++++++ <&folder> css
+++++++ <&file> style.css
++++++ <&folder> image
+++++++ <&file> image.jpg
+++++++ <&file> ...
++++++ <&file> notification.ftlh
++++++ <&file> notification.yml
+++++ ...
+}
+}
+@endsalt
+----
+
+- _channel-confirmation_ -- директорія з ресурсами шаблону;
+
+- _channel-confirmation/css/style.css_ -- єдиний CSS-файл стилів, які використовуються в HTML-документі (Приклад: _<link rel="stylesheet" href="css/style.css">_);
+
+- _channel-confirmation/image/*.*_ -- перелік файлів зображень, які використовуються в HTML-документі (Приклад: _<img src="images/image.jpg">_);
+
+- _channel-confirmation/notification.ftlh_ -- HTML-документ шаблону для подальшої генерації тіла повідомлення з плейсхолдером для OTP-коду.
++
+[%collapsible]
+.HTML-документ шаблону для подальшої генерації тіла повідомлення з плейсхолдером для OTP-коду
+====
+[source,html]
+----
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0"/>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="header">
+        <div class="logo-wrap">
+            <img src="image/trident.jpg" alt="Diia" class="logo">
+        </div>
+        <div class="platform-name">Платформа<br>реєстрів</div>
+    </div>
+    <div class="main">
+        Код підтвердження: ${verificationCode}
+    </div>
+    <div class="footer">
+        <br>
+        Адреса чи службова інформація
+    </div>
+</body>
+</html>
+----
+====
+
+- _channel-confirmation/notification.yml_ -- Конфігураційний файл з метаданими для відправлення поштового повідомлення з OTP-кодом.
++
+.Конфігураційний файл з метаданими для відправлення поштового повідомлення з OTP-кодом
+====
+[source,yaml]
+----
+title: "Підтвердження електронної пошти"
+----
+====
+
+Згенерований 6-значний псевдовипадковий код (наприклад, `345870`) автоматично надсилатиметься користувачеві на Email для перевірки та підтвердження контактних даних при внесенні, або зміні адреси поштової скриньки у профілі Кабінету отримувача послуг.
+
+TIP: Перегляньте сторінку xref:user:citizen/user-notifications/email-otp.adoc[] для отримання деталей.
+
+IMPORTANT: Після оновлення наявного реєстру, для правильної роботи функціональності, адміністратор регламенту має в ручному режимі додати до каталогу _notifications/email_ папку _channel-confirmation_ із відповідними файлами шаблону підтвердження, як показано на прикладах вище.
