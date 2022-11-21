@@ -1,0 +1,122 @@
+:toc-title: ЗМІСТ
+:toc: auto
+:toclevels: 5
+:experimental:
+:important-caption:     ВАЖЛИВО
+:note-caption:          ПРИМІТКА
+:tip-caption:           ПІДКАЗКА
+:warning-caption:       ПОПЕРЕДЖЕННЯ
+:caution-caption:       УВАГА
+:example-caption:           Приклад
+:figure-caption:            Зображення
+:table-caption:             Таблиця
+:appendix-caption:          Додаток
+:sectnums:
+:sectnumlevels: 5
+:sectanchors:
+:sectlinks:
+:partnums:
+
+= Делегат для пошуку користувачів за КАТОТТГ, ЄДРПОУ, ДРФО та ПІБ
+
+== Загальний опис
+
+Розширення *Keycloak Get Officer Users By Attributes Equals And Start With* -- делегат `${keycloakGetOfficerUsersByAttributesEqualsAndStartWith}`, для якого імплементовано однойменний шаблон *Keycloak Get Officer Users By Attributes Equals And Start With*, представлений у вигляді JSON-файлу _keycloakGetOfficerUsersByAttributesEqualsAndStartWith.json_.
+
+Делегат потрібний для того, щоб при виконанні бізнес-процесу отримувати список користувачів (посадових осіб) за атрибутами `KATOTTG`, `edrpou`, `drfo` та `fullName` із сервісу керування ідентифікацією та доступом Keycloak.
+
+Пошук за атрибутами `edrpou`, `drfo` та `fullName` здійснюється за допомогою функції `equal`, яка повертає значення, що мають точну відповідність (дорівнюють) заданим.
+
+Пошук за атрибутом `KATOTTG` здійснюється за допомогою функції `Inverse startsWith`, яка повертає значення зі вказаним префіксом, тобто значення, які "починаються із" заданої умови.
+
+
+NOTE: Перед налаштуванням шаблону в Сamunda Modeler переконайтеся, що папка із застосунком _resources_ -> _element-templates_ містить файл _keycloakGetOfficerUsersByAttributesEqualsAndStartWith.json_.
+
+== Налаштування шаблону у бізнес-процесі
+
+. Змоделюйте нову задачу.
+. Визначте її тип, натиснувши іконку ключа та обравши з меню пункт *Service Task* (сервісна задача).
++
+image:bp-modeling/bp/element-temp/search-by-katottg-attr/search-by-katottg-attr-01.png[]
+. Перейдіть до панелі налаштувань справа та застосуйте делегат *Keycloak Get Officer Users By Attributes Equals And Start With*. Для цього оберіть відповідний шаблон із каталогу (`Open Catalog`) та натисніть `Apply` для підтвердження.
++
+image:registry-develop:bp-modeling/bp/element-temp/search-by-katottg-attr/search-by-katottg-attr-02.png[]
++
+image:registry-develop:bp-modeling/bp/element-temp/search-by-katottg-attr/search-by-katottg-attr-3.png[]
+
+. Виконайте подальші налаштування:
+
+* У полі `Name` введіть назву задачі. Наприклад, `Пошук користувачів за введеними атрибутами`.
+* У полі `Attributes Equals` введіть значення для пошуку за ЄДРПОУ, та/або ДРФО, та/або ПІБ -- `${attributesEquals}`.
+* У полі `Attribute Inverse Start With` введіть значення для пошуку за КАТОТТГ -- `${attributesStartsWith}`.
++
+[CAUTION]
+====
+Наразі можна передати ключі та значення атрибутів лише як змінну.
+
+У нашому прикладі змінними для пошуку атрибутів є `${attributesEquals}` та `${attributesStartsWith}`.
+
+Об'єкти (пари ключ-значення) для атрибутів пошуку формуються скриптом у попередній задачі бізнес-процесу. Дані для скриптової задачі передаються з відповідної користувацької форми та обробляються скриптом. Результат виконання зберігається до змінних пошуку, які ми і використовуємо при налаштуванні шаблону делегата.
+
+image:registry-develop:bp-modeling/bp/element-temp/search-by-katottg-attr/search-by-katottg-attr-2.png[]
+====
+
+. У полі `Result variable` вкажіть змінну результату виконання пошуку, до якої необхідно зберегти список отриманих користувачів -- `usersByAttributes`.
++
+image:registry-develop:bp-modeling/bp/element-temp/search-by-katottg-attr/search-by-katottg-attr-1.png[]
+
+TIP: Скористайтеся link:{attachmentsdir}/bp-modeling/element-templates/test-search-by-attr.bpmn[BPMN-схемою тестового бізнес-процесу], щоб побачити більше контексту використання делегата. Завантажте BPMN-файл та відкрийте у моделері для візуалізації процесу.
+
+== Використання параметрів пошуку у Кабінеті посадової особи
+
+Система надає можливість пошуку як за одним з атрибутів, так і за комбінацією атрибутів: `KATOTTG`, `edrpou`, `drfo` та `fullName`
+
+[#prerequisites]
+=== Передумови
+
+. В системі є 3 користувачі з відповідними атрибутами ЄДРПОУ та КАТОТТГ:
+
+* Іванов, ЄДРПОУ 11111111, КАТОТТГ UA0502 (Вінницький р-н).
+* Петров, ЄДРПОУ 22222222, КАТОТТГ UA05 (Вінницька обл.).
+* Сидоренко, ЄДРПОУ 34554362, UA05 (Вінницька обл.).
+
+. Розглянемо 3 сценарії пошуку:
+* За атрибутом ЄДРПОУ та значенням 34554362.
+* За атрибутом КАТОТТГ та значенням UA05100030000051497 (Вапнярська ТГ, Тульчинський р-н, Вінницька обл.).
+* За комбінацією атрибутів: ЄДРПОУ=34554362 та КАТОТТГ=UA05100030000051497.
+
+=== Проходження процесу
+
+. Першочергово для того, щоб потрапити до Кабінету посадової особи, необхідно пройти автентифікацію в системі за допомогою ключа.
++
+image:user:officer/overview/officer-portal-overview-01.png[]
++
+[TIP]
+Детальніше ознайомитися з процедурою автентифікації користувачів ви можете за xref:user:citizen-officer-portal-auth.adoc[посиланням].
+
+. Перейдіть до розділу [.underline]#Доступні послуги# та запустіть бізнес-процес для пошуку користувачів за атрибутами.
+
+. На формі задачі введіть значення одного атрибута ЄДРПОУ -- `34554362` у відповідному полі. Натисніть `пошук`, щоб отримати результат.
++
+image:registry-develop:bp-modeling/bp/element-temp/search-by-katottg-attr/search-by-katottg-attr-4.png[]
++
+В результаті система знаходить одного користувача, що задовольняє критеріям пошуку.
++
+image:registry-develop:bp-modeling/bp/element-temp/search-by-katottg-attr/search-by-katottg-attr-5.png[]
+
+. Виконайте задачу повторно та введіть на формі значення одного атрибута КАТОТТГ -- `UA05100030000051497` у відповідному полі. Натисніть `пошук`, щоб отримати результат.
++
+image:registry-develop:bp-modeling/bp/element-temp/search-by-katottg-attr/search-by-katottg-attr-6.png[]
++
+В результаті система знаходить двох користувачів, що задовольняють критеріям пошуку.
++
+image:registry-develop:bp-modeling/bp/element-temp/search-by-katottg-attr/search-by-katottg-attr-7.png[]
+
+. Виконайте задачу повторно та введіть на формі значення комбінації атрибутів: ЄДРПОУ -- `34554362` та КАТОТТГ -- `UA05100030000051497` у відповідному полі. Натисніть `пошук`, щоб отримати результат.
++
+image:registry-develop:bp-modeling/bp/element-temp/search-by-katottg-attr/search-by-katottg-attr-8.png[]
+
++
+В результаті система знаходить одного користувача, що задовольняє критеріям пошуку.
++
+image:registry-develop:bp-modeling/bp/element-temp/search-by-katottg-attr/search-by-katottg-attr-9.png[]
