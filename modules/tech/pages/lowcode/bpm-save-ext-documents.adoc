@@ -1,0 +1,237 @@
+= Тимчасове збереження цифрових документів з бізнес-процесів
+
+== Загальний опис
+
+Для забезпечення можливостей збереження в _Операційну БД_ реєстру файлів, які було вивантажено з зовнішніх систем у процесі виконання бізнес-процесу, необхідно розширити набір типових розширень окремою _JUEL_-функцією, яка б дозволяла тимчасово зберегти цифровий документ для використання при формуванні запиту у _Фабрику Даних_ реєстру.
+
+== Актори та ролі користувачів
+
+* Розробник регламенту
+
+== Загальні принципи та положення
+
+* Збереження цифрових документів за межами задач користувачів дозволено лише для службового використання з бізнес-процесів через окрему _JUEL_-функцію
+* Збереження цифрових документів з бізнес-процесів можливе лише під системним користувачем
+* На цифрові документи, збереження яких змодельовано розробником на рівні _ScriptTask_ діє лише обмеження системного рівня на розмір завантажених файлів (_100Mb_)
+
+== Моделювання регламенту реєстру
+
+=== Розширення для моделювання
+
+_save_digital_document(String fileName, byte[] content): DocumentMetadata_
+
+[source, groovy]
+----
+class DocumentMetadata {
+  String id       // Унікальний ідентифікатор цифрового документу
+  String name     // Оригінальне ім’я файла
+  String type     // Тип контенту файла
+  String checksum // SHA256-геш на контент файлу
+  Long size       // Розмір файла
+}
+----
+=== Референтні приклади моделювання
+
+.Приклад використання при розробці _ScriptTask_ бізнес-процесу
+[source,groovy]
+----
+def fileResponse = okHttpClient.newCall(requestToGetFile).execute() // Load file from external system
+
+def fileName = "file.ext"
+def fileBytes = fileResponse.body().bytes()
+
+def documentMetadata = save_digital_document(fileName, fileBytes) // Temporary save file to object storage
+
+def fileReference = [
+    id: documentMetadata.id,
+    checksum: documentMetadata.checksum
+]
+----
+
+== Розширення API
+
+=== API для службового збереження файлів до об'єктного сховища
+
+Призначенням API-роута є збереження файлів, отриманих з зовнішніх систем у процесі виконання бізнес-процесу для подальшого використання при формуванні запиту на створення/оновлення даних реєстру.
+
+==== Авторизація доступу
+
+* Не доступний для зовнішнього доступу через _Kong_
+* Доступний для використання лише з токеном доступу системного користувача
+
+==== Специфікація API-роута
+
+_POST /internal-api/documents/{processInstanceId}/_
+
+.Заголовки запиту
+|===
+|Заголовок|Тип|Опис
+
+|*X-Access-Token*
+|JWT
+|Токен доступу системного користувача
+
+|*Content-Type*
+|multipart/form-data
+|Тип даних запиту для завантаження файла
+
+|===
+
+.Параметри запиту
+|===
+|Параметр|Тип|Частина запиту|Опис
+
+|*processInstanceId*
+|Текстовий
+|Параметр запиту
+|Ідентифікатор бізнес-процесу, в рамках якого виконується завантаження файла
+
+|*file*
+|MultipartFile
+|Параметр запиту
+|Файл для завантаження
+
+|*filename*
+|Текстовий
+|Параметр запиту
+|Назва файлу
+
+|===
+
+.Приклад тіла запиту
+[source]
+----
+---------------573cf973d5228
+Content-Disposition: form-data; filename="{filename}"
+Content-Type: {mime-type}
+
+file content
+---------------573cf973d5228--
+----
+
+.Структура тіла відповіді
+|===
+|Json Path|Тип|Опис
+
+|*$.id*
+|UUID
+|Унікальний ідентифікатор цифрового документу, зформований з використанням генератора псевдо-випадкових чисел
+
+|*$.name*
+|Текстовий
+|Оригінальне ім’я файла
+
+|*$.type*
+|Текстовий
+|Тип контенту файла (_application/pdf, image/png, image/jpeg_, etc.)
+
+|*$.checksum*
+|Тестовий
+|Автоматично згенерований геш на контент файла з використанням SHA256 алгоритму
+
+|*$.size*
+|Числовий
+|Розмір файла
+
+|===
+
+.Приклад відповіді
+[source, json]
+----
+{
+  "id": "{UUID}",
+  "name": "{fileName}",
+  "type": "{contentType}",
+  "checksum": "{sha256}",
+  "size": 0
+}
+----
+
+.Коди відповіді
+|===
+|Код|Опис
+
+a|[green]#201#
+|Created з поверненням тіла відповіді
+a|[red]#400#
+|Некоректно сформований запит
+a|[yellow]#401#
+|Помилка автентифікації (відсутній токен доступу)
+|[yellow]#422#
+| Помилка валідації (недопустимий розмір файлу, тощо.)
+a|[red]#500#
+|Серверна помилка обробки запиту
+|===
+
+== Взаємодія компонентів
+
+[plantuml, save-digital-document, svg]
+----
+@startuml
+
+skinparam shadowing false
+skinparam DatabaseBackgroundColor white
+skinparam DatabaseBorderColor #2688d4
+skinparam QueueBackgroundColor white
+skinparam QueueBorderColor #2688d4
+skinparam NoteBackgroundColor white
+skinparam NoteBorderColor #2688d4
+skinparam sequence {
+    ArrowColor #2688d4
+    ActorBorderColor #2688d4
+    LifeLineBorderColor #2688d4
+    ParticipantBorderColor #2688d4
+    ParticipantBackgroundColor white
+    BoxBorderColor #2688d4
+    BoxBackgroundColor white
+}
+
+participant "business-process" as bp
+participant "script-task" as script_task
+participant "save-digital-document-juel-function" as juel_func
+participant "system-user-keycloak-client-service" as idm_service
+participant "digital-document-service-client" as service_client
+participant "digital-document-service" as service
+
+activate bp
+  bp -> script_task: execute()
+  activate script_task
+    script_task -> script_task: load file \nfrom external system
+    script_task -> script_task: def filename
+    script_task -> script_task: def fileBytes
+    script_task -> juel_func: save_digital_document(fileName, fileBytes)
+    activate juel_func
+      juel_func -> juel_func: resolve processInstanceId
+      juel_func -> idm_service: get client access token
+      idm_service --> juel_func: <Access Token>
+      juel_func -> service_client: save(fileName, fileBytes)
+      activate service_client
+        service_client -> service: Запит на завантаження файлу: \nPOST "/internal-api/documents/{processInstanceId}/" \n* X-Access-Token; \n* Мета-атрибути файлу; \n* Бінарний контент файлу;
+        activate service
+        service -> service: Перевірка обмежень на розмір файлу
+        service -> service: Збереження в Об'єктне Cховище
+        service --> service_client: Повернення мета-даних новоствореного документу
+        deactivate service
+        note right
+          {
+              "id": "{UUID}",
+              "name": "{filename}",
+              "type:": "{mime-type}",
+              "size": 1000,
+              "checksum": "{sha256-hash}"
+          }
+        end note
+        service_client --> juel_func: Повернення мета-даних \nновоствореного документу
+      deactivate service_client
+      juel_func --> script_task: Повернення мета-даних \nновоствореного документу
+    deactivate juel_func
+    script_task --> bp: Завершення виконання \nскриптової задачі
+  deactivate script_task
+deactivate bp
+
+@enduml
+----
+
+== Міграція даних при оновленні реєстру
+
+У разі, якщо існуючий реєстр використовує внутрішній API зі скриптових задач для збереження файлів, розробники регламенту повинні перейти до використання типового розширення в рамках оновлення самостійно.s
