@@ -41,9 +41,7 @@ class DocumentMetadata {
 ----
 def fileResponse = okHttpClient.newCall(requestToGetFile).execute() // Load file from external system
 
-def sourceFileInputStream = fileResponse.body().byteStream();
-
-def documentMetadata = save_digital_document_from_stream(sourceFileInputStream, "digital-document.ext") // Temporary save file to object storage
+def documentMetadata = save_digital_document_from_stream(fileResponse.body().byteStream(), "digital-document.ext") // Temporary save file to object storage
 
 def fileReference = [
     id: documentMetadata.id,
@@ -223,15 +221,12 @@ participant "digital-document-service" as service
 activate bp
   bp -> script_task: execute()
   activate script_task
-    script_task -> script_task: load file \nfrom external system
-    script_task -> script_task: def filename
-    script_task -> script_task: def fileBytes
-    script_task -> juel_func: save_digital_document(fileName, fileBytes)
+    script_task -> juel_func: save_digital_document_from_url(url, targetFilename)
     activate juel_func
       juel_func -> juel_func: resolve processInstanceId
       juel_func -> idm_service: get client access token
       idm_service --> juel_func: <Access Token>
-      juel_func -> service_client: save(fileName, fileBytes)
+      juel_func -> service_client: upload(file, filename)
       activate service_client
         service_client -> service: Запит на завантаження файлу: \nPOST "/internal-api/documents/{processInstanceId}/" \n* X-Access-Token; \n* Мета-атрибути файлу; \n* Бінарний контент файлу;
         activate service
