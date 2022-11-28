@@ -1,0 +1,261 @@
+= Управління налаштуваннями автентифікаторів на рівні регламенту
+
+=== Сценарії адміністрування налаштувань автентифікаторів
+
+- Налаштування  порівняння імені користувача при автентифікації.
+- Валідація змін до регламенту налаштувань згідно з визначеними правилами.
+
+=== Сценарії використання налаштувань автентифікаторів
+
+- Застосування бізнес-логіки порівняння повного імені користувача отриманого з КЕП або від зовнішнього IdP зі значенням збереженим в KeyCloak.
+
+=== Стратегії автентифікації користувачів
+Автентифікація користувача в компоненті "dso-*-authenticator" відбувається згідно наступної логіки:
+Автентифікатор в якості вхідних даних отримує наступні атрибути користувача:
+
+- _drfo_: ідентифікаційний номер або серія і номер паспорта особи
+- _fullName_: ПІП особи
+- _edrpou_: код організації до якої належить особа
+
+В процесі автентифікації відбувається пошук користувача в БД за атрибутом _drfo_. Якщо користувача з відповідним атрибутом знайдено, то відбувається порівняння атрибутів _fullName_ та _edrpou_ (в разі наявності)
+
+==== Імплементація альтернативних стратегій порівння повного імені
+Якщо порівняння _drfo_ та _edrpou_ відбувається чітким співпадінням (equals) то для fullName можливі наступні стратегії:
+
+-  "strictIgnoreCase": перед порівнянням стрічки приводяться до нижнього регістру та видаляються всі символи пробілу. (поточна реалізація)
+-  "alphanumericIgnoreCase": перед порівнянням стрічки приводяться до нижнього регістру та видаляються всі символи окрім латинських та кириличних літер та цифр. Також довжина стрічки після нормалізації не може бути менше 50% від оригінальної. (потребує імплементації)
+
+Стратегія для порівняння атрибуту _fullName_ задається адміністратором в налаштуваннях регламенту реєстру для кожного порталу окремо.
+
+
+== Дизайн управління налаштуваннями
+
+image::lowcode/registry-authenticator-configuration.svg[registry-authenticator-settings,700]
+
+=== Компоненти системи та їх призначення в рамках дизайну рішення
+
+У даному розділі наведено перелік компонент системи, які задіяні або потребують змін/створення в рамках реалізації функціональних вимог згідно з технічним дизайном рішення.
+
+|===
+|Компонент|Службова назва|Призначення / Суть змін
+
+|_Регламент реєстру_
+|*registry-regulation*
+|Розширення регламенту налаштуванням _fullnameAuthStrategy_
+
+|_Пайплайн публікації регламенту_
+|*registry-jenkins*
+a|Застосування змін згідно файлів конфігурації та ресурсів
+
+|_Автентифікатор громадян_
+|*keycloak-ds-citizen-authenticator*
+|Налаштування стратегії порівняння повного імені особи при автентифікації
+
+|_Автентифікатор посадових осіб_
+|*keycloak-ds-officer-authenticator*
+|Налаштування стратегії порівняння повного імені посадової особи при автентифікації
+
+|_CLI-утиліта валідації цілісності регламенту_
+|*registry-regulations-validator-cli*
+|Валідація налаштувань реєстру
+
+|===
+
+=== Регламент налаштувань реєстру
+
+[TIP]
+В рамках задачі по розширенню налаштувань, необхідно також розширити відповідну конфігурацію реєстру за замовчуванням у шаблоні репозиторію регламенту _empty_regulation_template_.
+
+.Структура регламенту реєстру
+[plantuml, registry-config-regulation-structure, svg]
+----
+include::partial$lowcode/registry-settings-regulation-structure.puml[]
+----
+
+.Канонічний вигляд конфігурації реєстру _settings/settings.yml_
+[source, yaml]
+----
+settings:
+  general:
+    title: "<Назва реєстру>"
+    themeFile: "white-theme.js"
+    auth:
+      citizen:
+        fullnameAuthStrategy: "strictIgnoreCase"
+      officer:
+        fullnameAuthStrategy: "alphanumericIgnoreCase"
+    contacts:
+      support:
+        email: "support@registry.gov.ua"
+  validation:
+    email:
+      blacklist:
+        domains:
+          - 'mail.ru'
+          - 'internet.ru'
+          - 'list.ru'
+          - 'bk.ru'
+          - 'inbox.ru'
+          - 'mail.ua'
+          - 'yandex.ru'
+          - 'yandex.ua'
+          - 'mail.yandex.ru'
+          - 'mail.yandex.ua'
+          - 'ya.ru'
+          - 'ya.ua'
+----
+
+=== Валідація регламенту налаштувань реєстру
+
+В рамках реалізації рішення, необхідно розширити CLI-утиліту _registry-regulations-validator-cli_ валідації регламенту додатковим правилом:
+
+значення полів _settings.general.auth.officer.fullnameAuthStrategy_ та _settings.general.auth.citizen.fullnameAuthStrategy_ відповідають допустимим значенням: ["strictIgnoreCase", "alphanumericIgnoreCase"]
+
+.JSON-схема для валідації файлу налаштувань _settings/settings.yml_
+[source, json]
+----
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "type": "object",
+  "properties": {
+    "settings": {
+      "type": "object",
+      "properties": {
+        "general": {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string",
+              "minLength": 1
+            },
+            "themeFile": {
+              "type": "string",
+              "enum": [
+                "white-theme.js",
+                "dark-theme.js"
+              ]
+            },
+            "auth": {
+              "type": "object",
+              "properties": {
+                "citizen": {
+                  "type": "object",
+                  "properties": {
+                      "fullnameAuthStrategy": {
+                      "type": "string",
+                      "enum": [
+                        "strictIgnoreCase",
+                        "alphanumericIgnoreCase"
+                      ]
+                    }
+                  }
+                },
+                "officer": {
+                  "type": "object",
+                  "properties": {
+                      "fullnameAuthStrategy": {
+                      "type": "string",
+                      "enum": [
+                        "strictIgnoreCase",
+                        "alphanumericIgnoreCase"
+                      ]
+                    }
+                  }
+                }
+              }
+            },
+            "contacts": {
+              "type": "object",
+              "properties": {
+                "support": {
+                  "type": "object",
+                  "properties": {
+                    "email": {
+                      "type": "string",
+                      "format": "email"
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "email"
+                  ]
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "support"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "title",
+            "themeFile",
+            "contacts"
+          ]
+        },
+        "validation": {
+          "type": "object",
+          "properties": {
+            "email": {
+              "properties": {
+                "blacklist": {
+                  "type": "object",
+                  "properties": {
+                    "domains": {
+                      "type": "array",
+                      "minItems": 1,
+                      "uniqueItems": true,
+                      "items": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "domains"
+                  ]
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "blacklist"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "email"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "general",
+        "validation"
+      ]
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "settings"
+  ]
+}
+----
+
+=== Застосування налаштувань до аутентифікаторів кабінетів
+
+Необхідно розширити:
+
+- Логіку _dso-citizen-authenticator_ та _dso-officer-authenticator_ таким чином, щоб стратегія порівняння повного імені користувача бралася з конфігурації регламенту _registry-gerrit/<registry-regulation>.git/settings/settings.yml_.
+
+.Налаштування dso-citizen-authenticator
+image::lowcode/dso-citizen-authenticator.png[dso-citizen-authenticator, 300]
+
+.Налаштування dso-officer-authenticator
+image::lowcode/dso-officer-authenticator.png[dso-officer-authenticator, 300]
+
+== Міграція налаштувань при оновленні
+
+При оновленні існуючих реєстрів, необхідно встановити значення "_settings.general.auth.fullnameAuthStrategy_" для реєстру.
