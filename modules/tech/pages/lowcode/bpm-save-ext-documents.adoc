@@ -10,16 +10,20 @@
 
 == Загальні принципи та положення
 
-* Збереження цифрових документів за межами задач користувачів дозволено лише для службового використання з бізнес-процесів через окрему _JUEL_-функцію
+* Збереження цифрових документів за межами задач користувачів дозволено лише для службового використання з бізнес-процесів через службові _JUEL_-функції
 * Збереження цифрових документів з бізнес-процесів можливе лише під системним користувачем
+* Збережені через _JUEL_-функцію цифрові документи підлягаються видаленню по завершенню виконання бізнес-процесу
 * На цифрові документи, збереження яких змодельовано розробником на рівні _ScriptTask_ діє лише обмеження системного рівня на розмір завантажених файлів (_100Mb_)
 
 == Моделювання регламенту реєстру
 
 === Розширення для моделювання
 
-_save_digital_document(String fileName, byte[] content): DocumentMetadata_
+* _save_digital_document_from_url(URL sourceFileUrl, String targetFileName): DocumentMetadata_
+* _save_digital_document_from_stream(InputStream sourceFileInputStream, String targetFileName): DocumentMetadata_
+* _save_digital_document_from_bytes(byte[] sourceFileBytes, String targetFileName): DocumentMetadata_
 
+.Структура даних мета-даних цифрового документа
 [source, groovy]
 ----
 class DocumentMetadata {
@@ -32,15 +36,38 @@ class DocumentMetadata {
 ----
 === Референтні приклади моделювання
 
-.Приклад використання при розробці _ScriptTask_ бізнес-процесу
+.Приклад _save_digital_document_from_stream_ використання при розробці _ScriptTask_ бізнес-процесу
 [source,groovy]
 ----
 def fileResponse = okHttpClient.newCall(requestToGetFile).execute() // Load file from external system
 
-def fileName = "file.ext"
-def fileBytes = fileResponse.body().bytes()
+def sourceFileInputStream = fileResponse.body().byteStream();
 
-def documentMetadata = save_digital_document(fileName, fileBytes) // Temporary save file to object storage
+def documentMetadata = save_digital_document_from_stream(sourceFileInputStream, "digital-document.ext") // Temporary save file to object storage
+
+def fileReference = [
+    id: documentMetadata.id,
+    checksum: documentMetadata.checksum
+]
+----
+
+.Приклад використання _save_digital_document_from_url_ при розробці _ScriptTask_ бізнес-процесу
+[source,groovy]
+----
+def documentMetadata = save_digital_document_from_url(new URL("http://..."), "digital-document.ext") // Temporary save file to object storage
+
+def fileReference = [
+    id: documentMetadata.id,
+    checksum: documentMetadata.checksum
+]
+----
+
+.Приклад використання _save_digital_document_from_bytes_ при розробці _ScriptTask_ бізнес-процесу
+[source,groovy]
+----
+def fileResponse = okHttpClient.newCall(requestToGetFile).execute() // Load file from external system
+
+def documentMetadata = save_digital_document_from_bytes(fileResponse.body().bytes(), "digital-document.ext") // Temporary save file to object storage
 
 def fileReference = [
     id: documentMetadata.id,
@@ -240,10 +267,12 @@ deactivate bp
 
 === Технічні експертизи
 
+* BA
 * BE / Camunda
+* TW
 
 === План розробки
 
-* Розширення API _Сервісу цифрових документів_ службовим роутом
-* Реалізація JUEL-функції для завантаження файлів від імені системного користувача у _Сервіс цифрових документів_
+* Розширення API _Сервісу цифрових документів_ службовим роутом збереження файлів
+* Реалізація JUEL-функцій для завантаження файлів від імені системного користувача у _Сервіс цифрових документів_
 * Розробка інструкцій для розробника регламенту та референтних прикладів
