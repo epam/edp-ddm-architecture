@@ -2,7 +2,7 @@
 
 == Загальний опис
 
-Для забезпечення можливостей збереження в _Об’єктне сховищe реєстру_ файлів, які було вивантажено з зовнішніх систем у процесі виконання бізнес-процесу, необхідно розширити набір типових розширень окремою _JUEL_-функцією, яка б дозволяла тимчасово зберегти цифровий документ для використання при формуванні запиту у _Фабрику Даних_ реєстру.
+Для забезпечення можливостей збереження в _Об’єктне сховищe реєстру_ файлів, які було вивантажено з зовнішніх систем у процесі виконання бізнес-процесу, необхідно розширити набір типових розширень окремими _JUEL_-функціями, які б дозволяли тимчасово зберегти цифровий документ для використання при формуванні запиту у _Фабрику Даних_ реєстру.
 
 == Актори та ролі користувачів
 
@@ -15,65 +15,71 @@
 * Збережені через _JUEL_-функцію цифрові документи підлягаються видаленню по завершенню виконання бізнес-процесу
 * На цифрові документи, збереження яких змодельовано розробником на рівні _ScriptTask_ діє лише обмеження системного рівня на розмір завантажених файлів (_100Mb_)
 
-== Моделювання регламенту реєстру
+== Високорівневий дизайн рішення
 
-=== Розширення для моделювання
-
-* _save_digital_document_from_url(URL sourceFileUrl, String targetFileName): DocumentMetadata_
-* _save_digital_document_from_stream(InputStream sourceFileInputStream, String targetFileName): DocumentMetadata_
-* _save_digital_document_from_bytes(byte[] sourceFileBytes, String targetFileName): DocumentMetadata_
-
-.Структура даних мета-даних цифрового документа
-[source, groovy]
+[plantuml, save-digital-document, svg]
 ----
-class DocumentMetadata {
-  String id       // Унікальний ідентифікатор цифрового документу
-  String name     // Оригінальне ім’я файла
-  String type     // Тип контенту файла
-  String checksum // SHA256-геш на контент файлу
-  Long size       // Розмір файла
+@startuml
+
+skinparam shadowing false
+skinparam DatabaseBackgroundColor white
+skinparam DatabaseBorderColor #2688d4
+skinparam QueueBackgroundColor white
+skinparam QueueBorderColor #2688d4
+skinparam NoteBackgroundColor white
+skinparam NoteBorderColor #2688d4
+skinparam sequence {
+    ArrowColor #2688d4
+    ActorBorderColor #2688d4
+    LifeLineBorderColor #2688d4
+    ParticipantBorderColor #2688d4
+    ParticipantBackgroundColor white
+    BoxBorderColor #2688d4
+    BoxBackgroundColor white
 }
+
+participant "business-process" as bp
+participant "script-task" as script_task
+participant "save-digital-document-juel-function" as juel_func
+participant "system-user-keycloak-client-service" as idm_service
+participant "digital-document-service-client" as service_client
+participant "digital-document-service" as service
+
+activate bp
+  bp -> script_task: execute()
+  activate script_task
+    script_task -> juel_func: save_digital_document_from_url(url, targetFilename)
+    activate juel_func
+      juel_func -> juel_func: resolve processInstanceId
+      juel_func -> idm_service: get client access token
+      idm_service --> juel_func: <Access Token>
+      juel_func -> service_client: upload(file, filename)
+      activate service_client
+        service_client -> service: Запит на завантаження файлу: \nPOST "/internal-api/documents/{processInstanceId}/" \n* X-Access-Token; \n* Мета-атрибути файлу; \n* Бінарний контент файлу;
+        activate service
+        service -> service: Перевірка обмежень на розмір файлу
+        service -> service: Збереження в Об'єктне Cховище
+        service --> service_client: Повернення мета-даних новоствореного документу
+        deactivate service
+        note right
+          {
+              "id": "{UUID}",
+              "name": "{filename}",
+              "type:": "{mime-type}",
+              "size": 1000,
+              "checksum": "{sha256-hash}"
+          }
+        end note
+        service_client --> juel_func: Повернення мета-даних \nновоствореного документу
+      deactivate service_client
+      juel_func --> script_task: Повернення мета-даних \nновоствореного документу
+    deactivate juel_func
+    script_task --> bp: Завершення виконання \nскриптової задачі
+  deactivate script_task
+deactivate bp
+
+@enduml
 ----
-=== Референтні приклади моделювання
-
-.Приклад _save_digital_document_from_stream_ використання при розробці _ScriptTask_ бізнес-процесу
-[source,groovy]
-----
-def fileResponse = okHttpClient.newCall(requestToGetFile).execute() // Load file from external system
-
-def documentMetadata = save_digital_document_from_stream(fileResponse.body().byteStream(), "digital-document.ext") // Temporary save file to object storage
-
-def fileReference = [
-    id: documentMetadata.id,
-    checksum: documentMetadata.checksum
-]
-----
-
-.Приклад використання _save_digital_document_from_url_ при розробці _ScriptTask_ бізнес-процесу
-[source,groovy]
-----
-def documentMetadata = save_digital_document_from_url(new URL("http://..."), "digital-document.ext") // Temporary save file to object storage
-
-def fileReference = [
-    id: documentMetadata.id,
-    checksum: documentMetadata.checksum
-]
-----
-
-.Приклад використання _save_digital_document_from_bytes_ при розробці _ScriptTask_ бізнес-процесу
-[source,groovy]
-----
-def fileResponse = okHttpClient.newCall(requestToGetFile).execute() // Load file from external system
-
-def documentMetadata = save_digital_document_from_bytes(fileResponse.body().bytes(), "digital-document.ext") // Temporary save file to object storage
-
-def fileReference = [
-    id: documentMetadata.id,
-    checksum: documentMetadata.checksum
-]
-----
-
-== Розширення API
 
 === API для службового збереження файлів до об'єктного сховища
 
@@ -188,70 +194,64 @@ a|[red]#500#
 |Серверна помилка обробки запиту
 |===
 
-== Взаємодія компонентів
+== Моделювання регламенту реєстру
 
-[plantuml, save-digital-document, svg]
+=== Розширення для моделювання
+
+Необхідно реалізувати наступні _JUEL_-функції, які б дали можливість в подальшому оптимізувати використання пам'яті при завантаженні файлів з зовнішніх систем:
+
+* _save_digital_document_from_url(URL sourceFileUrl, String targetFileName): DocumentMetadata_
+* _save_digital_document_from_stream(InputStream sourceFileInputStream, String targetFileName): DocumentMetadata_
+* _save_digital_document_from_bytes(byte[] sourceFileBytes, String targetFileName): DocumentMetadata_
+
+.Структура даних мета-даних цифрового документа
+[source, groovy]
 ----
-@startuml
-
-skinparam shadowing false
-skinparam DatabaseBackgroundColor white
-skinparam DatabaseBorderColor #2688d4
-skinparam QueueBackgroundColor white
-skinparam QueueBorderColor #2688d4
-skinparam NoteBackgroundColor white
-skinparam NoteBorderColor #2688d4
-skinparam sequence {
-    ArrowColor #2688d4
-    ActorBorderColor #2688d4
-    LifeLineBorderColor #2688d4
-    ParticipantBorderColor #2688d4
-    ParticipantBackgroundColor white
-    BoxBorderColor #2688d4
-    BoxBackgroundColor white
+class DocumentMetadata {
+  String id       // Унікальний ідентифікатор цифрового документу
+  String name     // Оригінальне ім’я файла
+  String type     // Тип контенту файла
+  String checksum // SHA256-геш на контент файлу
+  Long size       // Розмір файла
 }
+----
+=== Референтні приклади моделювання
 
-participant "business-process" as bp
-participant "script-task" as script_task
-participant "save-digital-document-juel-function" as juel_func
-participant "system-user-keycloak-client-service" as idm_service
-participant "digital-document-service-client" as service_client
-participant "digital-document-service" as service
+.Приклад _save_digital_document_from_stream_ використання при розробці _ScriptTask_ бізнес-процесу
+[source,groovy]
+----
+def fileResponse = okHttpClient.newCall(requestToGetFile).execute() // Load file from external system
 
-activate bp
-  bp -> script_task: execute()
-  activate script_task
-    script_task -> juel_func: save_digital_document_from_url(url, targetFilename)
-    activate juel_func
-      juel_func -> juel_func: resolve processInstanceId
-      juel_func -> idm_service: get client access token
-      idm_service --> juel_func: <Access Token>
-      juel_func -> service_client: upload(file, filename)
-      activate service_client
-        service_client -> service: Запит на завантаження файлу: \nPOST "/internal-api/documents/{processInstanceId}/" \n* X-Access-Token; \n* Мета-атрибути файлу; \n* Бінарний контент файлу;
-        activate service
-        service -> service: Перевірка обмежень на розмір файлу
-        service -> service: Збереження в Об'єктне Cховище
-        service --> service_client: Повернення мета-даних новоствореного документу
-        deactivate service
-        note right
-          {
-              "id": "{UUID}",
-              "name": "{filename}",
-              "type:": "{mime-type}",
-              "size": 1000,
-              "checksum": "{sha256-hash}"
-          }
-        end note
-        service_client --> juel_func: Повернення мета-даних \nновоствореного документу
-      deactivate service_client
-      juel_func --> script_task: Повернення мета-даних \nновоствореного документу
-    deactivate juel_func
-    script_task --> bp: Завершення виконання \nскриптової задачі
-  deactivate script_task
-deactivate bp
+def documentMetadata = save_digital_document_from_stream(fileResponse.body().byteStream(), "digital-document.ext") // Temporary save file to object storage
 
-@enduml
+def fileReference = [
+    id: documentMetadata.id,
+    checksum: documentMetadata.checksum
+]
+----
+
+.Приклад використання _save_digital_document_from_url_ при розробці _ScriptTask_ бізнес-процесу
+[source,groovy]
+----
+def documentMetadata = save_digital_document_from_url(new URL("http://..."), "digital-document.ext") // Temporary save file to object storage
+
+def fileReference = [
+    id: documentMetadata.id,
+    checksum: documentMetadata.checksum
+]
+----
+
+.Приклад використання _save_digital_document_from_bytes_ при розробці _ScriptTask_ бізнес-процесу
+[source,groovy]
+----
+def fileResponse = okHttpClient.newCall(requestToGetFile).execute() // Load file from external system
+
+def documentMetadata = save_digital_document_from_bytes(fileResponse.body().bytes(), "digital-document.ext") // Temporary save file to object storage
+
+def fileReference = [
+    id: documentMetadata.id,
+    checksum: documentMetadata.checksum
+]
 ----
 
 == Міграція даних при оновленні реєстру
@@ -262,9 +262,7 @@ deactivate bp
 
 === Технічні експертизи
 
-* BA
 * BE / Camunda
-* TW
 
 === План розробки
 
