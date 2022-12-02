@@ -1,0 +1,149 @@
+= Редагування groovy скриптів бізнес-процесів в admin-portal
+
+== Загальний опис проблеми та рішення
+
+Розробка бізнес-процесів регламенту реєстру включає в себе розробку Groovy скриптів, що відображають логіку роботи кроків бізнес-процесу. Адмін-портал дозволяє проводити розробку бізнес-процесів регламенту реєстру.
+Набагато ефективніше вести розробку Groovy скриптів в спеціалізованих засобах розробки, таких як IDE (Desktop або Web версії). Розширення адмін-порталу використанням rich веб редакторів редагування Groovy скриптів покращить user experience до рівня використання Desktop IDE інструментів, а також зменшить час на постійне переміщення скриптів в Desktop IDE для редагування та назад в BPMN.IO візуальний конструктор бізнес-процесів
+-
+[NOTE]
+xref:lowcode/admin-portal/code-editor/code-editor-language-server-protocol.adoc[Результати POC] для ознайомлення з LSP протоколом та веб-редактором коду MonacoEditor
+
+== Глосарій
+
+- LSP - Language Server Protocol
+- LS - Language Server
+- WSS - WebSocket Secure
+
+== Актори
+- Розробник регламенту реєстру
+
+== Функціональні можливості редактору
+
+[NOTE]
+Наступні функціональни можливості в рівній мірі використовуються для двох функціональних сценаріїв: створення нового кроку бізнес-процесу та редагування або перегляд існуючого.
+
+- Автодоповнення у вигляді випадаючого списку варіантів виклику
+- Показ Hoover тултипу з javadoc інформацією
+- Використання різних кольорів при перегляді коду
+
+== Основні принципи
+
+- Monaco editor в якості Web інструменту розробки groovy скриптів
+- Використання сторонніх Language Server's (LS's) для отримання підказок, переліку для автодоповнення та результату помилок семантичного аналізу Groovy скриптів
+- Використання Language Server Protocol (використовує Json-RPC як базовий протокол) для комунікації між Language Server та Monaco editor
+- Використання lsp4j для менеджменту (orchestration) LS's
+- Транспортний протокол комунікації між Monaco editor та LS - WebSocket over HTTP (HTTPS)
+- Логічний протокол комунікації (структура payload в повідомленнях транспортного протоколу) між Monaco editor та LS - Json-RPC
+
+== Високорівневий дизайн
+
+image::architecture-workspace/platform-evolution/bpmnio-groovy-editor/bp-groovy-script-editor.svg[]
+
+=== Опис та призначення компонентів
+
+|===
+|Назва|Мова програмування|Опис
+
+|https://microsoft.github.io/monaco-editor/[Monaco editor] | JavaScript | Візуальний веб-редактор коду
+
+|Remote LS's | Java, LSP4J | Екземпляри LS сервісів, що реалізує LSP протокол та виконують перевірку клієнтського коду з поверненням результатів перевірки в форматі Json-RPC(LSP).
+
+|LS Manager, Websocket Manager|Java, Spring|Spring boot web controller. Створює необхідні екземпляри LS. Створює WebSocket та використовує  відповідний LS екземпляр для аналізу та перевірки коду з візуального редактору клієнту.
+
+|===
+
+=== LSP комунікація
+
+- В якості транспортного протоколу використовується WSS протокол
+- В якості RPC взаємодії використовується https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/[LSP] протокол версії 3.17
+
+
+==== WebSocket комунікація
+
+image::architecture-workspace/platform-evolution/bpmnio-groovy-editor/web-sockets-diagram.svg[]
+
+- В якості транспортного протоколу використовується WSS
+- Для налаштування Web-socket зв'язку зі сторони UI layer використовується https://www.npmjs.com/package/monaco-languageclient[monaco-languageclient].
+- Для організації websocket backend частини використовується spring-websocket.
+
+==== Кількість екземплярів LS
+
+image::architecture-workspace/platform-evolution/bpmnio-groovy-editor/web-sockets-concurrency-diagram.svg[]
+
+- Кожне вікно з monaco editor використовує свій окремий web-socket instance для з'єднання з LS
+- Кожний web-socket використовує окремий екземпляр LS.
+- Всі LS екземпляри знаходяться в одному JVM екземплярі. Технічно кожний екземпляр LS це новий екземпляр з інтерфейсом `org.eclipse.lsp4j.services.LanguageServer`.
+
+[plantuml,bp-script-editing ls-communication-sequence,svg]
+----
+include::partial$architecture-workspace/platform-evolution/bpmnio-groovy-editor/language-server-communication-sequence.puml[ls-communication-sequence]
+----
+
+== Розгортання компоненту
+
+image::architecture-workspace/platform-evolution/bpmnio-groovy-editor/ls-deployment.svg[]
+
+== Scaling
+
+В поточній версії розгортання сервісу пропонується використовувати лише вертикальне масштабування (RAM, CPU).
+Оскільки використовується підхід розміщення всіх LS в рамках однієї JVM, тому не очікується значного збільшення використання обчислювальних ресурсів під час збільшення кількості одночасно працюючих кліентів LS.
+
+[TIP]
+Горизонтальне маштабування можливе шляхом додавання Load Balancer для LSP (WebSocket JSON-RPC) трафіку.
+Out of scope.
+
+=== Security
+
+TODO
+
+- WSS via Kong
+- Auth during handshake
+- Max payload size limitation
+- Rate limits (socket open rate limit, packets within single socket limit or on JSON-RPS level method call limit)
+- proper CORS (not wildcard)
+
+== Технологічний стек
+
+TODO
+
+|===
+|Назва|Версія|Ліцензія|Опис
+
+|https://microsoft.github.io/monaco-editor/[Monaco editor] |0.34.1|https://github.com/microsoft/monaco-editor/blob/main/LICENSE.txt[MIT] | Візуальний веб-редактор коду
+
+|https://www.npmjs.com/package/vscode-languageclient[vscode-languageclient]|8.0.2|https://github.com/Microsoft/vscode-languageserver-node/blob/main/License.txt[MIT]|Language server клієнт, що підключається до Monaco editor та використовується для з'єднання з віддаленими language серверами використовуючи LSP протокол
+
+|https://github.com/eclipse/lsp4j/tree/main/documentation[LSP4J]|0.19| https://github.com/eclipse/lsp4j/blob/main/LICENSE[Eclipse Public License - v 2.0]| Бібліотека для менеджменту екземплярів LS. Використовується для запуску LS коду.
+
+|https://github.com/GroovyLanguageServer/groovy-language-server[Groovy language server] |-| https://github.com/GroovyLanguageServer/groovy-language-server/blob/master/LICENSE[APACHE LICENSE, v2.0]| Реалізує LSP протокол та виконую перевірку Groovy коду з поверненням результатів перевірки в форматі Json-RPC
+
+|https://github.com/spring-projects/spring-boot[Spring Boot]|2.6.1|https://www.apache.org/licenses/LICENSE-2.0[APACHE LICENSE, v2.0]|Розширення до Spring Framework для спрощення побудови аплікацій на базі Spring завдяки автоматичній конфігурації та наявності spring boot стартерів
+
+|https://spring.io/guides/gs/messaging-stomp-websocket/[Spring-websocket]|6.0.2|https://www.apache.org/licenses/LICENSE-2.0[APACHE LICENSE, v2.0]|Розширення для Spring для менеджменту веб-сокетів в серверних додатках
+
+|===
+
+== Високорівневий план розробки
+
+===  Необхідні експертизи
+
+- Java
+- Javascript
+- DevOps
+- QA, AQA
+
+==== Backend Java activities
+
+- Створити Spring Boot based backend service ddm-language-server
+- Розробити WebSocket proxy component
+
+==== Javascript activities
+
+- Інтеграція Monaco editor в BPMN.IO редактор бізнес-процесів
+- Інтеграція Monaco-editor з ddm-language-server використовуючи vscode-languageclient
+
+==== DevOps activities
+
+- Onboard https://github.com/GroovyLanguageServer/groovy-language-server (2 options: add codebase into gerrit and create pipeline around or add jar into nexus)
+- Створити deploy-templates та Dockerfile для service ddm-language-server (openjdk based image)
+- Конфігурація AdminKong для пропускання трафіку в ddm-language-server
