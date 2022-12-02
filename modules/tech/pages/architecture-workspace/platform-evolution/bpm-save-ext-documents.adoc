@@ -1,8 +1,10 @@
-= Тимчасове збереження цифрових документів з бізнес-процесів
+= Скриптування вивантаження файлів за віддаленою адресою з послідуючим збереженням до реєстру у бізнес-процесі
 
 == Загальний опис
 
-Для забезпечення можливостей збереження в _Об’єктне сховищe реєстру_ файлів, які було вивантажено з зовнішніх систем у процесі виконання бізнес-процесу, необхідно розширити набір типових розширень окремими _JUEL_-функціями, які б дозволяли тимчасово зберегти цифровий документ для використання при формуванні запиту у _Фабрику Даних_ реєстру.
+Для повноцінної обробки даних, отриманих у результаті взаємодії з зовнішніми системами з бізнес-процесів, існує необхідність вивантажувати файли за їх віддаленими адресами та зберігати у сховище реєстру.
+
+У якості рішення розглянуто реалізацію службової _JUEL_-функції, яка надає можливість зі скриптових задач БП ініціювати вивантаження за віддаленою адресою та збереження отриманого файлу до _Об'єктного сховища проміжних даних БП_ для подальшого використання при формуванні запиту у _Фабрику Даних_ реєстру.
 
 == Актори та ролі користувачів
 
@@ -10,91 +12,35 @@
 
 == Функціональні сценарії
 
-* Вивантаження публічно-доступних файлів з віддалених серверів та завантаження до сховища цифрових документів у скриптових задачах бізнес-процесів
-* Завантаження файлів, вивантажених з віддалених серверів у скриптових задачах бізнес-процесів до сховища цифрових документів
-* Завантаження файлів, сформованих у скриптових задачах бізнес-процесів до сховища цифрових документів
+* Вивантаження файлу за віддаленою адресою та завантаження до _Об'єктного сховища проміжних даних БП_ у скриптових задачах бізнес-процесів
 
 == Загальні принципи та положення
 
-* Збереження цифрових документів за межами задач користувачів дозволено лише для службового використання з бізнес-процесів через службові _JUEL_-функції
-* Збереження цифрових документів з бізнес-процесів можливе лише під системним користувачем
+* Ініціювання вивантаження та збереження файлу з БП через _JUEL_-функцію виконується під системним користувачем
+* Збереження файлів за віддаленою адресою дозволено лише для службового / внутрішнього використання у межах виконання бізнес-процесу
+* Розмір файлів, які можуть бути вивантажені обмежено налаштуваннями на рівні системи
+* Вивантаження та збереження файлів виконується за межами бізнес-процесу _Сервісом цифрових документів_
 * Збережені через _JUEL_-функцію цифрові документи підлягаються видаленню по завершенню виконання бізнес-процесу
-* На цифрові документи, збереження яких змодельовано розробником на рівні _ScriptTask_ діє лише обмеження системного рівня на розмір завантажених файлів (_100Mb_)
 
-== Високорівневий дизайн рішення
+== Технічний дизайн рішення
 
-[plantuml, save-digital-document, svg]
-----
-@startuml
+На даній діаграмі зображено залучені для реалізації вимог сервіси та взаємодію між ними. Додатково зображено важливі особливості, які необхідно брати до уваги в рамках реалізації.
 
-skinparam shadowing false
-skinparam DatabaseBackgroundColor white
-skinparam DatabaseBorderColor #2688d4
-skinparam QueueBackgroundColor white
-skinparam QueueBorderColor #2688d4
-skinparam NoteBackgroundColor white
-skinparam NoteBorderColor #2688d4
-skinparam sequence {
-    ArrowColor #2688d4
-    ActorBorderColor #2688d4
-    LifeLineBorderColor #2688d4
-    ParticipantBorderColor #2688d4
-    ParticipantBackgroundColor white
-    BoxBorderColor #2688d4
-    BoxBackgroundColor white
-}
+image::architecture-workspace/platform-evolution/remote-file-transfer.svg[remote-file-transfer,700]
 
-participant "business-process" as bp
-participant "script-task" as script_task
-participant "save-digital-document-juel-function" as juel_func
-participant "system-user-keycloak-client-service" as idm_service
-participant "digital-document-service-client" as service_client
-participant "digital-document-service" as service
+[NOTE]
+Вивантаження файлів за віддаленою адресою потребує наявності відповідного _Istio Service Entry_, який було створено в автоматичному або ручному режимі.
 
-activate bp
-  bp -> script_task: execute()
-  activate script_task
-    script_task -> juel_func: save_digital_document_from_url(url, targetFilename)
-    activate juel_func
-      juel_func -> juel_func: resolve processInstanceId
-      juel_func -> idm_service: get client access token
-      idm_service --> juel_func: <Access Token>
-      juel_func -> service_client: upload(file, filename)
-      activate service_client
-        service_client -> service: Запит на завантаження файлу: \nPOST "/internal-api/documents/{processInstanceId}/" \n* X-Access-Token; \n* Мета-атрибути файлу; \n* Бінарний контент файлу;
-        activate service
-        service -> service: Перевірка обмежень на розмір файлу
-        service -> service: Збереження в Об'єктне Cховище
-        service --> service_client: Повернення мета-даних новоствореного документу
-        deactivate service
-        note right
-          {
-              "id": "{UUID}",
-              "name": "{filename}",
-              "type:": "{mime-type}",
-              "size": 1000,
-              "checksum": "{sha256-hash}"
-          }
-        end note
-        service_client --> juel_func: Повернення мета-даних \nновоствореного документу
-      deactivate service_client
-      juel_func --> script_task: Повернення мета-даних \nновоствореного документу
-    deactivate juel_func
-    script_task --> bp: Завершення виконання \nскриптової задачі
-  deactivate script_task
-deactivate bp
+=== API збереження цифрового документу за віддаленою адресою
 
-@enduml
-----
+Призначенням API-роута є вивантаження файлу, який знаходиться за віддаленою адресою у межах налаштованих обмежень за розміром та подальше його збереження до _Об'єктного сховища проміжних даних БП_.
 
-=== API для службового збереження файлів до об'єктного сховища
-
-Призначенням API-роута є збереження файлів, отриманих з зовнішніх систем у процесі виконання бізнес-процесу для подальшого використання при формуванні запиту на створення/оновлення даних реєстру.
+[NOTE]
+Вивантаження файлу з віддаленого сервера та завантаження до об'єктного сховища має бути реалізовано з використанням стрімінгу та відповідних обмежень на використання пам'яті серверного додатка.
 
 ==== Авторизація доступу
 
-* Не доступний для зовнішнього доступу через _Kong_
-* Доступний для використання лише з токеном доступу системного користувача
+* Не публічний / для внутрішньої міжсервісної взаємодії
 
 ==== Специфікація API-роута
 
@@ -106,11 +52,7 @@ _POST /internal-api/documents/{processInstanceId}/_
 
 |*X-Access-Token*
 |JWT
-|Токен доступу системного користувача
-
-|*Content-Type*
-|multipart/form-data
-|Тип даних запиту для завантаження файла
+|Токен доступу
 
 |===
 
@@ -123,10 +65,10 @@ _POST /internal-api/documents/{processInstanceId}/_
 |Параметр запиту
 |Ідентифікатор бізнес-процесу, в рамках якого виконується завантаження файла
 
-|*file*
-|MultipartFile
+|*remoteFileLocation*
+|URL
 |Параметр запиту
-|Файл для завантаження
+|Віддалене розташування файлу для вивантаження
 
 |*filename*
 |Текстовий
@@ -134,17 +76,6 @@ _POST /internal-api/documents/{processInstanceId}/_
 |Назва файлу
 
 |===
-
-.Приклад тіла запиту
-[source]
-----
----------------573cf973d5228
-Content-Disposition: form-data; filename="{filename}"
-Content-Type: {mime-type}
-
-file content
----------------573cf973d5228--
-----
 
 .Структура тіла відповіді
 |===
@@ -200,17 +131,21 @@ a|[red]#500#
 |Серверна помилка обробки запиту
 |===
 
+=== Системні налаштування
+
+Розширити конфігурацію _Сервісу цифрових документів_ додатковими налаштуваннями:
+
+* _max-remote-file-size_ - Обмеження на розмір файлу для вивантаження за  віддаленою адресою (*default*: 10MB)
+
 == Моделювання регламенту реєстру
 
 === Розширення для моделювання
 
-Необхідно реалізувати наступні _JUEL_-функції, які б дали можливість в подальшому оптимізувати використання пам'яті при завантаженні файлів з зовнішніх систем:
+Необхідно реалізувати наступну _JUEL_-функцію:
 
-* _save_digital_document_from_url(String sourceFileUrl, String targetFileName): DocumentMetadata_
-* _save_digital_document_from_stream(InputStream sourceFileInputStream, String targetFileName): DocumentMetadata_
-* _save_digital_document_from_bytes(byte[] sourceFileBytes, String targetFileName): DocumentMetadata_
+* _save_digital_document_from_url(String remoteFileUrl, String targetFileName): DocumentMetadata_
 
-.Структура даних мета-даних цифрового документа
+.Структура об'єкту мета-даних цифрового документа
 [source, groovy]
 ----
 class DocumentMetadata {
@@ -221,48 +156,27 @@ class DocumentMetadata {
   Long size       // Розмір файла
 }
 ----
+
 === Референтні приклади моделювання
 
-.Приклад _save_digital_document_from_stream_ використання при розробці _ScriptTask_ бізнес-процесу
+.Приклад використання _save_digital_document_from_url_ при розробці скриптової задачі бізнес-процесу
 [source,groovy]
 ----
-def fileResponse = okHttpClient.newCall(requestToGetFile).execute() // Load file from external system
+try {
+  def documentMetadata = save_digital_document_from_url("http://...", "digital-document.ext") // Temporary save file to object storage
 
-def documentMetadata = save_digital_document_from_stream(fileResponse.body().byteStream(), "digital-document.ext") // Temporary save file to object storage
-
-def fileReference = [
+  def fileReference = [
     id: documentMetadata.id,
     checksum: documentMetadata.checksum
-]
-----
-
-.Приклад використання _save_digital_document_from_url_ при розробці _ScriptTask_ бізнес-процесу
-[source,groovy]
-----
-def documentMetadata = save_digital_document_from_url("http://...", "digital-document.ext") // Temporary save file to object storage
-
-def fileReference = [
-    id: documentMetadata.id,
-    checksum: documentMetadata.checksum
-]
-----
-
-.Приклад використання _save_digital_document_from_bytes_ при розробці _ScriptTask_ бізнес-процесу
-[source,groovy]
-----
-def fileResponse = okHttpClient.newCall(requestToGetFile).execute() // Load file from external system
-
-def documentMetadata = save_digital_document_from_bytes(fileResponse.body().bytes(), "digital-document.ext") // Temporary save file to object storage
-
-def fileReference = [
-    id: documentMetadata.id,
-    checksum: documentMetadata.checksum
-]
+  ]
+} catch (ValidationException ex) {
+ // File size exceeded "max-remote-file-size" value
+}
 ----
 
 == Міграція даних при оновленні реєстру
 
-У разі, якщо існуючий реєстр використовує внутрішній API зі скриптових задач для збереження файлів, розробники регламенту повинні перейти до використання JUEL-функції в рамках оновлення самостійно.
+У разі, якщо існуючий реєстр використовує внутрішній API зі скриптових задач для вивантаження та збереження файлів, розробники регламенту мають перейти до використання JUEL-функції в рамках оновлення самостійно.
 
 == Високорівневий план розробки
 
@@ -272,6 +186,7 @@ def fileReference = [
 
 === План розробки
 
-* Розширення API _Сервісу цифрових документів_ службовим роутом збереження файлів
-* Реалізація _JUEL_-функцій для завантаження файлів від імені системного користувача у _Сервіс цифрових документів_
+* Розширення API _Сервісу цифрових документів_ службовим роутом вивантаження та збереження файлів
+* Розширення / реалізація Java-клієнта для _Сервісу цифрових документів_
+* Реалізація _JUEL_-функції для завантаження файлів від імені системного користувача у _Сервіс цифрових документів_
 * Розробка інструкцій для розробника регламенту та референтних прикладів
