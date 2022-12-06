@@ -12,6 +12,7 @@ xref:lowcode/admin-portal/code-editor/code-editor-language-server-protocol.adoc[
 
 - LSP - Language Server Protocol
 - LS - Language Server
+- WS - WebSocket
 - WSS - WebSocket Secure
 
 == Актори
@@ -23,6 +24,7 @@ xref:lowcode/admin-portal/code-editor/code-editor-language-server-protocol.adoc[
 Наступні функціональни можливості в рівній мірі використовуються для двох функціональних сценаріїв: створення нового кроку бізнес-процесу та редагування або перегляд існуючого.
 
 - Автодоповнення у вигляді випадаючого списку варіантів виклику
+- Відображення результату аналізу коду на наявність помилок за допомогою language server
 - Показ Hoover тултипу з javadoc інформацією
 - Використання різних кольорів при перегляді коду
 - Автодоповнення для DDM JOEL функцій:
@@ -105,13 +107,24 @@ Out of scope.
 
 === Security
 
-- WSS via Kong
-- Авторизація під час handshake процесу
-- MaxPayloadSize ліміт (Kong limit, https://docs.konghq.com/hub/kong-inc/request-size-limiting/[Onboard plugin?])
-- Socket timeout (Java application limit, Javascript application limit)
-- Max number of sockets per user (backend application limit)
-- Rate limits (packets within single socket limit or on JSON-RPS level method call limit)
-- proper CORS, not wildcard(Kong or java application)
+|===
+|Area|Назва|Опис|Значення ліміту
+
+.6+|Kong|WSS трафік через Kong|Налаштування пропускання трафіку через admin kong шляхом використання Upgrade headers. https://docs.konghq.com/enterprise/2.4.x/proxy/#proxy-websocket-traffic[WebSocket kong manual] |
+
+| Авторизація під час handshake процесу| Поточна авторизація на admin kong. `GET /groovy` повинен бути доступним тільки авторизованим користувачам через admin realm |
+
+| Максимальний розмір запиту| Ліміт для payload всередині LSP (JSON-RPC). Використати https://docs.konghq.com/hub/kong-inc/request-size-limiting/[Request Size Limiting] | 65kb
+
+| Socket timeout| Idle time для сокету, через який він автоматично закривається. Необхідна конфігурація як на BE так і на FE side. Kong config property `proxy_read_timeout`| 60s (should be by default)
+
+| Socket open Rate limit | Ліміт на кількість запитів на створення web-socket `/groovy`. Використати існуючий плагін в Kong https://docs.konghq.com/hub/kong-inc/rate-limiting/[Rate limit plugin] |
+
+| Websocket methods Rate limit | Not possible in Kong|
+
+|Java application | Конфігурація CORS | Налаштувати CORS для `/groovy` методу відкриття web-socket |
+
+|===
 
 == Технологічний стек
 
