@@ -55,35 +55,37 @@ image::architecture/registry/operational/external-api-management/kong-context.dr
 [cols="2,1,1,4"]
 |===
 | Параметр | Значення за замовчуванням  | Обов'язковий | Опис
-| `name` || так | plugin name, has to be `oidc`
+| `name` || так | ім'я плагіну, повинно бути `oidc`
 | `config.client_id` || так | OIDC Client ID
-| `config.client_secret` || так | OIDC Client secret
+| `config.client_secret` || так | OIDC Client secret. Може також встановлюватися через змінну оточення `_OIDC_CLIENT_SECRET_`
 | `config.discovery` | https://.well-known/openid-configuration | ні | OIDC Discovery Endpoint (`/.well-known/openid-configuration`)
-| `config.scope` | openid | ні| OAuth2 Token scope. To use OIDC it has to contains the `openid` scope
-| `config.ssl_verify` | false | ні | Enable SSL verification to OIDC Provider
-| `config.session_secret` | | ні | Additional parameter, which is used to encrypt the session cookie. Needs to be random
+| `config.scope` | openid | ні| OAuth2 Token scope. Для того щоб використовувати _OIDC_, має містити `_openid_`.
+| `config.ssl_verify` | false | ні | Вмикає перевірку SSL до OIDC провайдера
+| `config.session_secret` | | ні | Параметр що використовується для шифрування куки сесії. Повинен бути випадковим. Якщо параметр відсутній то секрет довжиною 32 байти генерується автоматично кожним екземпляром OIDC плагіна незалежно. Якщо використовується кластер з декількох екземплярів Kong відсутність цього параметру призведе до того що сесія створена на одному екземплярі Kong буде недійсна на інших оскільки в кожного екземпляра свій ключ шифрування.
 | `config.introspection_endpoint` | | ні | Token introspection endpoint
-| `config.allow_token_auth` | false | ні | Allows access with Bearer token. If enabled introspection endpoint has to be set
-| `config.timeout` | | ні | OIDC endpoint calls timeout
-| `config.introspection_endpoint_auth_method` | client_secret_basic | ні | Token introspection auth method. resty-openidc supports `client_secret_(basic\|post)`
-| `config.bearer_only` | no | ні | Only introspect tokens without redirecting
-| `config.realm` | kong | ні | Realm used in WWW-Authenticate response header
-| `config.logout_path` | /logout | ні | Absolute path used to logout from the OIDC RP
-| `config.unauth_action` | deny | так | Action if user not authenticated:nil - redirect to auth, pass - do not redirect, deny - do not redirect but return an error instead
-| `config.access_token_header_name` | X-Access-Token | так | Name for header with access token
-| `config.bearer_access_token` | "no" | так | Use bearer access token
-| `config.id_token_header_name` | X-ID-Token | так | Name for header with ID token
-| `config.user_header_name` | X-Userinfo | так | Name for header with user info
-| `config.session_opts` | | ні | JSON configuration string for [lua-resty-session](https://github.com/bungle/lua-resty-session)
-| `config.enable_authorization` | true | ні | Enable user authorization based on JWT token issuer, scope and roles
-| `config.issuers_allowed` | | ні | List of allowed access token issuers (iss claim) in the following format: issuers_allowed:\["https://domain/issuer1", "https://domain/issuer2"]
-| `config.scopes_required` | nil | ні | The scopes required to be present in access token for successful authorization
-| `config.roles_required` | nil | ні | The roles (roles_claim claim) required to be present in the access token (at least one from the list) for successful authorization
-| `config.realm_roles_required` | nil | ні | The realm roles (realm_access.roles claim) required to be present in the access token (at least one from the list) for successful authorization
-| `config.client_roles_required` | nil | ні | The realm roles (resource_access claim) required to be present in the access token (at least one from the list) for successful authorization
-| `config.token_claim_header_value` | | ні | Access token claim name whose values will be set to the custom "token-claim" request header
+| `config.allow_token_auth` | false | ні | Дозволяє доступ з Bearer токеном. Якщо дозволений, introspection_endpoint має бути встановлений.
+| `config.timeout` | | ні | таймаут виклику OIDC endpoint
+| `config.introspection_endpoint_auth_method` | client_secret_basic | ні | метод автентифікації для Token introspection. resty-openidc підтримує `client_secret_(basic\|post)`.
+| `config.bearer_only` | no | ні | Лише перевірка токена без переадресації.
+| `config.realm` | kong | ні | Рілм що використовується в `_WWW-Authenticate_` заголовку відповіді.
+| `config.logout_path` | /logout | ні | абсолютний шлях для виходу (logout) з OIDC RP
+| `config.unauth_action` | deny | так | Поведінка якщо користувач неавтентифікований:nil - переадресація на сторінку автентифікації, pass - не переадресовувати, deny - не переадресовувати але повернути помилку натомість.
+| `config.access_token_header_name` | X-Access-Token | так | Ім'я для заголовку з токеном доступу.
+| `config.bearer_access_token` | "no" | так | Використовувати bearer токен доступу.
+| `config.id_token_header_name` | X-ID-Token | так | Ім'я для заголовку з ID токеном.
+| `config.user_header_name` | X-Userinfo | так | Ім'я для заголовку з інформацією про користувача.
+| `config.session_opts` | | ні | JSON стрічка з конфігурацією для сесії користувача. Управління сесією побудовано на базі [lua-resty-session](https://github.com/bungle/lua-resty-session).
+| `config.enable_authorization` | true | ні | Дозволити авторизацію базуючись на таких атрибутах JWT токену доступу як issuer, scope та roles.
+| `config.issuers_allowed` | | ні | Перелік дозволених видавців токена доступу (iss claim). Приклад: issuers_allowed:\["https://domain/issuer1", "https://domain/issuer2"]
+| `config.scopes_required` | nil | ні | Меже (scopes) що мають бути присутні в токені доступу для успішної авторизації.
+| `config.roles_required` | nil | ні | Ролі (roles_claim claim) що мають бути присутні (принаймні одна) в токені доступу для успішної авторизації.
+| `config.realm_roles_required` | nil | ні | Ролі рілма (realm_access.roles claim) що мають бути присутні (принаймні одна) в токені доступу для успішної авторизації.
+| `config.client_roles_required` | nil | ні | Клієнтські ролі (resource_access claim) що мають бути присутні (принаймні одна) в токені доступу для успішної авторизації.
+| `config.token_claim_header_value` | | ні | Назва атрибуту (token claim) токена доступа чиє значення буде додане в заголовок запиту "token-claim". Значення цього заголовку в подальшому може використовуватися іншими плагінами, наприклад, для обчислення лімітів запитів для автентифікованого користувача чи групи таких користувачів.
 
 |===
+[TIP]
+При використанні змінних оточення для встановлення конфігураційних параметрів які дозволяють такий механізм, необхідно додатково встановлювати ще одну змінну оточення `KONG_NGINX_MAIN_ENV` в значеннях якої необхідно перелічити інші змінні оточення читання яких ми хочемо дозволити OIDC плагіну. `KONG_NGINX_MAIN_ENV` використовує https://docs.konghq.com/gateway/latest/reference/configuration/#nginx-injected-directives-section[NGINX Injected Directives] для того щоб оголосити в _nginx.conf_ змінні оточення що містять секрети через команду _env_ і таким чином дозволити _OIDC_ плагіну прочитати їхні значення.
 
 ### Запит до цільового сервісу
 
