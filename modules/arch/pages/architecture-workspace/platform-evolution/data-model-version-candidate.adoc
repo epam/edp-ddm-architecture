@@ -1,0 +1,237 @@
+= Перегляд переліку таблиць моделі даних реєстру у режимі читання для версії-кандидату
+
+== Загальний опис
+Розробка регламенту реєстру включає в себе розробку моделі даних реєстру. Адміністративний портал надає функціонал по перегляду переліку таблиць моделі даних реєстру та їх структури.
+
+== Опис проблеми
+Адмін портал дозволяє перегляд переліку таблиць моделі даних тільки для мастер версії регламенту реєстру. Цей функціонал дозволяє отримати перелік таблиць регламенту, що розгорнутий на прод оточенні, але не дозволяє перегляд таблиць регламенту реєстру моделі даних версії-кандидату.
+
+- Під час розробки моделі даних регламенту реєстру необхідно оперувати переліком таблиць моделі даних, що описані в liquibase конфігурації версії-кандидату.
+
+- Під час редагування моделі даних розробниками реєстру шляхом внесення змін в gerrit, необхідно відображати актуальну інформацію зі списком таблиць моделі даних в адміністративному порталі.
+
+== Актори
+- Адміністратор регламенту реєстру
+- Розробник регламенту реєстру
+
+== Голосарій
+- rrm - registry-regulation-management backend service
+- DataModelSnapshot - файл для зберігання стану моделі даних регламенту реєстру
+- DataModelSnapshot files - набір файлів (файл per table), що відображають стан моделі даних регламенту реєстру по кожній із таблиць
+
+== Функціональні сценарії
+- Перегляд поточного стану моделі даних регламенту реєстру (перелік таблиць), що розробляється (в рамках версії-кандидату)
+- Перегляд значення атрибуту "суб'єктність" в переліку таблиць
+
+== Контекст проблеми
+
+image::architecture-workspace/platform-evolution/data-model-version-candidates/problem-context.svg[]
+
+
+== Загальні принципи
+- Внесення змін в модель даних регламенту реєстру відбувається шляхом внесення змін у відповідні liquibase файли
+- Структура liquibase файлів регламенту реєстру не змінюється
+- Кожна версія-кандидат використовую свою виділену схему БД для розгортування моделі даних
+- Використання еталонної схеми БД для створення тимчасових схем БД для версій-кандидатів регламенту реєстру. Дана схема не містить даних реєстру
+- registry-regulations-management створює структуру схеми БД шляхом розгортання liquibase конфігурацій регламенту реєстру
+
+== Дизайн інснуючого рішення
+
+image::architecture-workspace/platform-evolution/data-model-version-candidates/current-design.svg[]
+
+- Розгортання схеми БД відбувається в 2 етапи:
+** OKD run-db-scripts job, що запускається під час розгортання Citus. Розгортає preconditions для розгортання моделі даних регламенту реєстру (actual detailed behaviour out of scope)
+** Jenkins pipeline розгортання регламенту реєстру, а саме <registry-name>-data-model job. Розгортає модель регламенту реєстру.
+
+- registry-regulations-management зчитує та зберігає структуру БД в файли `DataModelSnapshot table file`. Кожна таблиця має свій окремий файл DataModelSnapshot. Дія відбувається під час запуску registry-regulations-management сервісу один раз
+- Rest API через сервіси доступу до DataModelSnapshot зчитують перелік таблиць шляхом зчитування переліку файлів `DataModelSnapshot table file`.
+
+== Технічний дизайн рішення
+
+image::architecture-workspace/platform-evolution/data-model-version-candidates/target-design.svg[]
+
+- OKD run-db-script job створю еталонну схему БД під час створення та розгортання схеми БД згідно з налаштування в citus repository. Еталонна схема не повинна містити тільки структуру БД без будь-яких даних відповідного реєстру.
+- rrm створює тимчасові БД для кожної з версій-кандидатів, що знаходяться в роботі.
+- rrm розгортає модель даних регламенту реєстру шляхом використання liquibase конфігурацій з регламенту реєстру
+- rrm зчитує структуру даних з тимчасової БД в `DataModelSnapshot files`
+
+=== Діаграма послідовності
+
+[WARNING]
+TODO
+
+=== Створення та іменування тимчасових схем БД
+
+Процес створення та розгортання тимчасових схем БД відбувається за допомогою окремого `VersionCandidateTemporaryDBSchemaManager`, що знаходиться в `ddm-rrm-data-model-management`.
+
+Лоігка роботи:
+
+- Створити тимчасову схему БД для версії кандидату використовуючи еталонну схему БД.
+
+[source,sql]
+----
+CREATE DATABASE [vc-<vcid>] WITH TEMPLATE registry-template OWNER [our owner user?];
+----
+
+[NOTE]
+`registry-template` - ім'я еталонної БД, отриманої після роботи OKD run-db-script-job. `vc-<vcid>` - шаблон імені тимчасової БД для версії-кандидату.
+
+- Розгортання liquibase структури з відповідної версії регламенту реєстру (стан майстер версії, з якої було створено версію-кандидат, або на яку останній раз відбувалась rebase операція)
+- Розгортання поточної liquibase структури з версії-кандидату
+
+Розгортання відбувається за допомогою https://docs.liquibase.com/workflows/liquibase-community/using-liquibase-java-api.html[Liquibase JavaAPI]
+
+
+[source,java]
+----
+Connection connection = openConnection(); //your openConnection logic
+Database database = DatabaseFactory.getInstance().findCorrectDatabaseImplementation(new JdbcConnection(connection));
+Liquibase liquibase = new liquibase.Liquibase("path/to/data-model/main-liquibase.xml", new ClassLoaderResourceAccessor(), database);
+liquibase.update(new Contexts(), new LabelExpression());
+----
+
+[CAUTION]
+Codeblock має ілюстративний характер, повинен бути змінений на робочий в процесі розробки
+
+
+=== Scheduled reconciliation process
+Reconciliation процес необхідний для видалення застарілих схем БД по версіям-кандидатам (версії кандидати що були інтегровані в мастер версію або ті, що були видалені без інтеграції)
+
+Необхідно додати Bean в підмодуль ddm-rrm-scheduled-jobs DBSchemaDataModelReconciliationManager.
+
+==== Логіка роботи DBSchemaDataModelReconciliationManager
+
+- Отримати перелік версій-кандидатів в gerrit
+- Отримати перелік тимчасових БД для версій-кандидатів в БД
+- Створити недостаючі схеми в БД для версій-кандидатів
+- Видалити тимчасові схеми БД версій-кандидатів для яких не існує відкритих MR в gerrit
+
+==== Schedule налаштування
+
+- Визов процесу reconciliation кожні 5 хвилин
+- Визов процесу reconciliation під час запуску registry-regulations-management сервісу
+
+=== Custom spring bean scope called `version-candidate`
+
+==== Опис проблеми
+
+Для доступу до тимчасових БД необхідно використовувати `DataSource` per тимчасова БД. Існуючий код, що забезпечує роботу з БД мастер версії використовує Spring bean типу DataSource. Для перевикористання механізму зчитування структури БД в DataModelSnapshot file пропонується створити custom spring bean scope під назвою `version-candidate`.
+
+==== Основна механіка і принципи роботи и speing bean custom scopes
+
+[source,java]
+----
+public class VersionCandidateScope implements Scope {
+    private Map<String, Object> scopedObjects = Collections.synchronizedMap(new HashMap<String, Object>());
+
+    @Override
+    public Object get(String name, ObjectFactory<?> objectFactory) {
+        String vcId = Something.getVersionCandidateId();
+        beanName = name +  vcId;
+        if(!scopedObjects.containsKey(beanName)) {
+            scopedObjects.put(name, objectFactory.getObject());
+        }
+        return scopedObjects.get(beanName);
+    }
+
+    @Override
+    public Object remove(String name) {
+        beanName = ...
+        ... dance with DestructionCallback, etc
+        return scopedObjects.remove(beanName);
+    }
+
+}
+----
+
+Використання custom scope:
+
+[source,java]
+----
+  @Bean
+  @Scope("version-candidate")
+  public DataSource dataSource(...) {
+    return ...
+  }
+
+  @Bean
+  @Scope("version-candidate")
+  @Lazy
+  public Catalog catalog(DataSource dataSource, SchemaCrawlerOptions options)
+      throws SQLException, SchemaCrawlerException {
+    return SchemaCrawlerUtility.getCatalog(dataSource.getConnection(), options);
+  }
+----
+
+==== Збереження version candidate id
+Для збереження id версії-кандидату або мастер версії можливо використання `RequestContextHolder`. На рівні RestAPI web controller необхідно провести збереження version-candidate id, який потім необхідно використати в `VersionCandidateScope`
+
+Таким чином під час опрацювання запитів RestAPI автоматично буде ініціалізуватись або підставлятись існуючий `Catalog` bean з spring context.
+
+[NOTE]
+Даний spring scope може буди використаний для будь-яких spring beans, що мають існувати в розрізі однієй версії-кандидату
+
+
+=== RestAPI
+Поточний RestAPI розширюється можливістю отримувати перелік таблиць моделі даних регламенту реєстру.
+Логіка роботи та структура запитів повторює роботу xref:registry-regulation-management:rest-api/rest-api-generated/index.adoc#_get_versionsmastertablestablename[відповідних запитів для мастер версії]
+для мастер версії регламенту реєстру
+
+==== Приклад запитів та відповідей на отримання переліку таблиць моделі даних версії-кандидату
+
+Запит:
+
+[source,http,options="nowrap"]
+----
+GET /versions/candidates/{versionCandidateId}/tables/
+----
+
+Структура відповіді:
+
+[source,http,options="nowrap"]
+----
+[
+    {"name":"Table 1","description":"Table 1 description","objectReference":true},
+    {"name":"Table 2","description":"Table 2 description","objectReference":true},
+    ...
+    {"name":"Table n","description":"Table 2 description","objectReference":true},
+]
+----
+
+[CAUTION]
+Необхідно використати ті ж самі структури даних та коди помилок для запитів та відповідей, що використовуються для отримання переліку таблиць моделі даних в матер версії
+
+=== Організація DataModelSnapshot files на файловій системі
+[WARNING]
+TODO
+
+== Високорівневий план розробки
+=== Необхідні експертизи
+- DevOps
+- BE
+- FE
+- QA/AQA
+
+=== DevOps
+- Створити create vc-template-schema stage. Розробити механізм створення схеми БД по master схемі за виключенням клієнтських даних
+
+=== Backend
+- Створити механізм зчитування схеми БД по заданому DataSource
+- Забезпечити створення DataSource spring bean для кожної версії-кандидату та майстер версії окремо. Використати custom spring bean scope.
+- Створити механізм розгортування liquibase конфігурацій регламенту реєстру з registry-regulations-management компонента для тимчасових схем по версіям-кандидатам
+- Змінити поведінку класу DataModelServiceImpl для роботи з версіями кандидатами
+- Внести зміни в DataBaseSnapshotWriter:
+** додати SnapshotFilePathProvider
+** Extract entity type as enum
+** Extract methods as a static which should be static
+** Extract DataBaseSnapshotWriter to interface and create FilesystemDataBaseSnapshotWriter
+- Додати reconciliation механізм між переліком версій кандидатів та тимчасовими БД
+- Провести необхідний рефакторинг коду в зв'язку з внесеними змінами:
+** Remove DdmTableRepository
+** Remove data.model.snapshot
+** Hide Catalog within DdmCatalogReader
+- Розширити RestAPI для опрацювання запитів по моделі даних для версій-кандидатів
+
+=== Frontend
+- Додати кнопку примусового оновлення переліку таблиць
+- Створити сторінку з переліком таблиць для версій-кандидатів
