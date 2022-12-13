@@ -52,13 +52,27 @@ image::architecture-workspace/platform-evolution/data-model-version-candidates/t
 
 - OKD run-db-script job створю еталонну схему БД під час створення та розгортання схеми БД згідно з налаштування в citus repository. Еталонна схема не повинна містити тільки структуру БД без будь-яких даних відповідного реєстру.
 - rrm створює тимчасові БД для кожної з версій-кандидатів, що знаходяться в роботі.
+- rrm створює тимчасову БД для мастер версії. Необхідно для отримання DataModelSnapshot для мастер версії до фактичного розгортання регламенту реєстру після інтеграції версії-кандидату
 - rrm розгортає модель даних регламенту реєстру шляхом використання liquibase конфігурацій з регламенту реєстру
 - rrm зчитує структуру даних з тимчасової БД в `DataModelSnapshot files`
 
-=== Діаграма послідовності
+[CAUTION]
+Еталонна та тимчасова схеми БД повинні бути створені тільки на DEV оточенні
 
-[WARNING]
-TODO
+=== Діаграми послідовності
+
+.Отримання переліку таблиць версії-кандидату
+[plantuml, data-model-version-candidates data-model-version-candidate-sequence, svg]
+----
+include::partial$architecture-workspace/platform-evolution/data-model-version-candidates/data-model-version-candidate-create-sequence.puml[]
+----
+
+.Оновлення переліку таблиць версії-кандидату
+[plantuml, data-model-version-candidates data-model-version-candidate-refresh-sequence, svg]
+----
+include::partial$architecture-workspace/platform-evolution/data-model-version-candidates/data-model-version-candidate-refresh-sequence.puml[]
+----
+
 
 === Створення та іменування тимчасових схем БД
 
@@ -70,11 +84,11 @@ TODO
 
 [source,sql]
 ----
-CREATE DATABASE [vc-<vcid>] WITH TEMPLATE registry-template OWNER [our owner user?];
+CREATE DATABASE [temporary-<vcid>] WITH TEMPLATE registry-template OWNER [our owner user?];
 ----
 
 [NOTE]
-`registry-template` - ім'я еталонної БД, отриманої після роботи OKD run-db-script-job. `vc-<vcid>` - шаблон імені тимчасової БД для версії-кандидату.
+`registry-template` - ім'я еталонної БД, отриманої після роботи OKD run-db-script-job. `temporary-<vcid>` - шаблон імені тимчасової БД для версії-кандидату (temporary-master для тимчасової БД мастер версії).
 
 - Розгортання liquibase структури з відповідної версії регламенту реєстру (стан майстер версії, з якої було створено версію-кандидат, або на яку останній раз відбувалась rebase операція)
 - Розгортання поточної liquibase структури з версії-кандидату
@@ -199,11 +213,45 @@ GET /versions/candidates/{versionCandidateId}/tables/
 ----
 
 [CAUTION]
-Необхідно використати ті ж самі структури даних та коди помилок для запитів та відповідей, що використовуються для отримання переліку таблиць моделі даних в матер версії
+Необхідно використати ті ж самі структури даних та коди помилок для запитів та відповідей, що використовуються для отримання переліку таблиць моделі даних в мастер версії
 
-=== Організація DataModelSnapshot files на файловій системі
-[WARNING]
-TODO
+
+==== Ручне оновлення переліку таблиць моделі даних
+
+Необхідно додати *синхронний* refresh ендпоінт для ручного виклику процесу оновлення переліку таблиць моделі даних.
+
+Запит:
+
+[source,http,options="nowrap"]
+----
+GET /versions/candidates/{versionCandidateId}/tables/refresh
+----
+
+|===
+| Code | Message | Datatype
+
+| 200| OK|  <<>>
+| 401| Unauthorized|  <<>>
+| 403| Forbidden|  <<>>
+| 404| Version candidate not found|  <<DetailedErrorResponse>>
+| 500| Internal server error|  <<DetailedErrorResponse>>
+
+|===
+
+=== DataModelSnapshot формат та структура snapshot файлів на файловій системі
+
+xref:tech:lowcode/admin-portal/data-model/admin-portal-data-model-json-schema-description.adoc[Опис структури DataModelSnapshot]
+
+.Структура DataModelSnapshot файлів на файловій системі
+[plantuml, data-model-version-candidates data-model-snapshots-filestructure, svg]
+----
+include::partial$architecture-workspace/platform-evolution/data-model-version-candidates/data-model-snapshots-filestructure.puml[]
+----
+
+В директорії repositories/data-model-snapshots/ знаходяться директорії з id версій-кандидатів там директорія, що відповідає мастер версії. В кожній з них знаходяться DataModelSnapshot файли для кожної з таблиць моделі даних окремо. Ім'я кожного з tables файлів - це `<ім'я таблиці файлу + .json>`
+
+[NOTE]
+В попередній версії коду роботи з DataModelSnapshots використовувалася директорія `repositories/data-model-snapshot/tables`.
 
 == Високорівневий план розробки
 === Необхідні експертизи
@@ -211,6 +259,7 @@ TODO
 - BE
 - FE
 - QA/AQA
+- UI Design
 
 === DevOps
 - Створити create vc-template-schema stage. Розробити механізм створення схеми БД по master схемі за виключенням клієнтських даних
@@ -225,13 +274,17 @@ TODO
 ** Extract entity type as enum
 ** Extract methods as a static which should be static
 ** Extract DataBaseSnapshotWriter to interface and create FilesystemDataBaseSnapshotWriter
-- Додати reconciliation механізм між переліком версій кандидатів та тимчасовими БД
+- Додати reconciliation anc cleanup механізм між переліком версій кандидатів та тимчасовими БД
 - Провести необхідний рефакторинг коду в зв'язку з внесеними змінами:
 ** Remove DdmTableRepository
 ** Remove data.model.snapshot
 ** Hide Catalog within DdmCatalogReader
 - Розширити RestAPI для опрацювання запитів по моделі даних для версій-кандидатів
+- Розширити RestAPI для опрацювання запитів оновлення інформації про модель даних
 
 === Frontend
 - Додати кнопку примусового оновлення переліку таблиць
 - Створити сторінку з переліком таблиць для версій-кандидатів
+
+=== UI Design
+- Додати кнопку ручного оновлення переліку таблиць для версій-кандидатів (та мастер версії?)
