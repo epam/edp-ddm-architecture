@@ -57,11 +57,12 @@ image::architecture/registry/operational/ext-api-management/kong-context.drawio.
 | Параметр | Значення за замовчуванням  | Обов'язковий | Опис
 | `name` || так | ім'я плагіну, повинно бути `oidc`
 | `config.client_id` || так | OIDC Client ID
-| `config.client_secret` || так | OIDC Client secret. Може також встановлюватися через змінну оточення `_OIDC_CLIENT_SECRET_`
+| `config.client_secret_var_name`||ні|Ім'я змінної оточення в якій міститься OIDC Client secret.
+| `config.client_secret` || ні | OIDC Client secret. Може також встановлюватися через змінну оточення. В такому випадку має бути встановлено _config.client_secret_var_name_
 | `config.discovery` | https://.well-known/openid-configuration | ні | OIDC Discovery Endpoint (`/.well-known/openid-configuration`)
 | `config.scope` | openid | ні| OAuth2 Token scope. Для того щоб використовувати _OIDC_, має містити `_openid_`.
 | `config.ssl_verify` | false | ні | Вмикає перевірку SSL до OIDC провайдера
-| `config.session_secret` | | ні | Параметр що використовується для шифрування куки сесії. Повинен бути випадковим. Якщо параметр відсутній то секрет довжиною 32 байти генерується автоматично кожним екземпляром OIDC плагіна незалежно. Якщо використовується кластер з декількох екземплярів Kong відсутність цього параметру призведе до того що сесія створена на одному екземплярі Kong буде недійсна на інших оскільки в кожного екземпляра свій ключ шифрування.
+
 | `config.introspection_endpoint` | | ні | Token introspection endpoint
 | `config.allow_token_auth` | false | ні | Дозволяє доступ з Bearer токеном. Якщо дозволений, introspection_endpoint має бути встановлений.
 | `config.timeout` | | ні | таймаут виклику OIDC endpoint
@@ -74,7 +75,7 @@ image::architecture/registry/operational/ext-api-management/kong-context.drawio.
 | `config.bearer_access_token` | "no" | так | Використовувати bearer токен доступу.
 | `config.id_token_header_name` | X-ID-Token | так | Ім'я для заголовку з ID токеном.
 | `config.user_header_name` | X-Userinfo | так | Ім'я для заголовку з інформацією про користувача.
-| `config.session_opts` | | ні | JSON стрічка з конфігурацією для сесії користувача. Управління сесією побудовано на базі [lua-resty-session](https://github.com/bungle/lua-resty-session).
+| `config.session_opts` | | ні | JSON стрічка з конфігурацією для сесії користувача. Управління сесією побудовано на базі [lua-resty-session](https://github.com/bungle/lua-resty-session). Детальний опис конфігураційних параметрів для управління сесіями вказано в документації до бібліотеки.
 | `config.enable_authorization` | true | ні | Дозволити авторизацію базуючись на таких атрибутах JWT токену доступу як issuer, scope та roles.
 | `config.issuers_allowed` | | ні | Перелік дозволених видавців токена доступу (iss claim). Приклад: issuers_allowed:\["https://domain/issuer1", "https://domain/issuer2"]
 | `config.scopes_required` | nil | ні | Меже (scopes) що мають бути присутні в токені доступу для успішної авторизації.
@@ -118,7 +119,7 @@ X-Id-Token: eyJuYmYiOjAsImF6cCI6ImtvbmciLCJpYXQiOjE1NDg1MTA3NjksImlzcyI6Imh0dHA6
 
 [source, yaml]
 ----
-onfig:
+config:
 ...
 access_token_header_name: Authorization
 bearer_access_token: 'yes'
@@ -130,3 +131,46 @@ kind: KongPlugin
 ```
 Authorization: bearer eyJhbGciOiJSUzI1NiIsInR5cCIgOiAiSldUIiwia2lkIiA6ICJGenFSY0N1Ry13dzlrQUJBVng1ZG9sT2ZwTFhBNWZiRGFlVDRiemtnSzZRIn0.eyJqdGkiOiIxYjhmYzlkMC1jMjlmLTQwY2ItYWM4OC1kNzMyY2FkODcxY2IiLCJleHAiOjE1NDg1MTA4MjksIm5iZiI6MCwiaWF0IjoxNTQ4NTEwNzY5LCJpc3MiOiJodHRwOi8vMTkyLjE2OC4wLjk6ODA4MC9hdXRoL3JlYWxtcy9tYXN0ZXIiLCJhdWQiOlsibWFzdGVyLXJlYWxtIiwiYWNjb3VudCJdLCJzdWIiOiJhNmE3OGQ5MS01NDk0LTRjZTMtOTU1NS04NzhhMTg1Y2E0YjkiLCJ0eXAiOiJCZWFyZXIiLCJhenAiOiJrb25nIiwibm9uY2UiOiJmNGRkNDU2YzBjZTY4ZmFmYWJmNGY4ZDA3YjQ0YWE4NiIsImF1dGhfdGltZSI6…IiwibWFuYWdlLWFjY291bnQtbGlua3MiLCJ2aWV3LXByb2ZpbGUiXX19LCJzY29wZSI6Im9wZW5pZCBwcm9maWxlIGVtYWlsIiwiZW1haWxfdmVyaWZpZWQiOmZhbHNlLCJwcmVmZXJyZWRfdXNlcm5hbWUiOiJhZG1pbiJ9.GWuguFjSEDGxw_vbD04UMKxtai15BE2lwBO0YkSzp-NKZ2SxAzl0nyhZxpP0VTzk712nQ8f_If5-mQBf_rqEVnOraDmX5NOXP0B8AoaS1jsdq4EomrhZGqlWmuaV71Cnqrw66iaouBR_6Q0s8bgc1FpCPyACM4VWs57CBdTrAZ2iv8dau5ODkbEvSgIgoLgBbUvjRKz1H0KyeBcXlVSgHJ_2zB9q2HvidBsQEIwTP8sWc6er-5AltLbV8ceBg5OaZ4xHoramMoz2xW-ttjIujS382QQn3iekNByb62O2cssTP3UYC747ehXReCrNZmDA6ecdnv8vOfIem3xNEnEmQw
 ```
+
+
+## Управління сесіями користувачів
+Для управління сесіями користувачів плагін використовує бібліотеку https://github.com/bungle/lua-resty-session[lua-resty-session] яка дозволяє зберігати JWT токени користувача як на стороні клієнта в куці так і на стороні сервера в одному з підтримуваних сховищ: `shared-memory|memcache|redis(single or cluster)`. Інструкція по налаштуванню роботи з наведеними сховищами є в репозиторії бібліотеки за посиланням вище.
+
+### Збереження сесій в Redis Sentinel
+Додатково функціонал бібліотеки був розширений можливістю зберігати сесію в Redis Sentinel.
+
+Приклад налаштування OIDC плагіна для збереження сесій в Redis Sentinel:
+```
+config:
+  session_opts:
+    {"storage":"sentinel",
+        "sentinel":{"sentinel_master_name":"mymaster",
+            "sentinel_db":"sessions",
+            "sentinel_host":"my-sentinel-host.env-dev.svc",
+            "sentinel_port":"26379",
+            "uselocking":false}}
+```
+
+Секрет доступу до Redis задається через змінну оточення `_REDIS_AUTH_SECRET_`
+```
+REDIS_AUTH_SECRET = some_secret_value
+KONG_NGINX_MAIN_ENV = REDIS_AUTH_SECRET
+```
+
+### Встановлення секрету сесії
+Бібліотека https://github.com/bungle/lua-resty-session[lua-resty-session] для управління сесіями та обрахунку HMAC дайджесту за замовчуванням використовує автозгенерований секрет довжиною 32 байти. Проте якщо інсталяція Kong передбачає декілька екземплярів то кожен з них згенерую власний секрет. Це призведе до того, що сесія створена одним екземпляром Kong не зможе бути прочитана іншими екземплярами. Для вирішення цієї проблеми можна або використовувати концепцію _sticky session_ (запити користувача завжди потрапляють на один екземпляр Kong) або явно встановити однаковий секрет на всіх екземплярах Kong. Секрет можна встановити або передавши його в конфігурації OIDC плагіна як додатковий параметр для _session_opts_:
+
+```
+config:
+  session_opts:
+    {"secret":"c29tZV9zZWNyZXRfdmFsdWU="}
+```
+
+або через змінну оточення `_OIDC_SESSION_SECRET_`:
+
+```
+OIDC_SESSION_SECRET = some_secret_value
+KONG_NGINX_MAIN_ENV = OIDC_SESSION_SECRET
+```
+
+В разі використання конфігурації OIDC, значення параметру _session_opts.secret_ має бути закодовано в _Base64_. При використанні змінної оточення кодувати секрет в _Base64_ не потрібно.
