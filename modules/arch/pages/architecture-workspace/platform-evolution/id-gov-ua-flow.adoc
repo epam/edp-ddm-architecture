@@ -42,15 +42,19 @@ browser -> key: запит на аутентифікацію
 
 return посилання на сторінку для аудентифікації
 browser -> idgov: перенаправлення на сторінку для аутентифікації
+note left: Передається clientId\n та redirectUrl
 return форма аутентифікації
 browser --> officer: логін форма id.gov.ua
 
 officer -> browser: файл ключ та пароль
 browser -> idgov
-
+idgov -> key: отримання токена обміну \n(refresh token)
+key -> idgov: запит на отримання токену\n(access token)
+note left:clientId та clientSecret\nє частиною запиту
 idgov --> key: результат аутентифікації\n(отримання access token)
 
 key -> idgov: отримання інформації \nпро користувача (/userInfo)
+note left:clientId та clientSecret\nє частиною запиту
 return данні користувача
 
 key -> key: пошук та валідація користувача за\nданними з id.gov.ua (аутентифікатор)
@@ -88,12 +92,15 @@ cp --> admin: метод аутентифікації змінено
 ----
 registry-kv/registry/%НАЗВА_РЕЄСТРУ%/officer-id-gov-ua-client-info
 ----
-з ключами `clientId`, `secret` для збереження ідентифікатора клієнта та клєнтського секрету відповідно
+з ключами `clientId`, `clientsecret` для збереження ідентифікатора клієнта та клєнтського секрету відповідно
 
 ==== Інтерфейс адмін-консолі
 
 .Вибір послідовноті для аутентифікації
 image::architecture/platform/operational/user-management/id-gov-ua-contal-plane-auth-flow.png[]
+
+[NOTE]
+При перемиканні типу аутентифікації параметри для іншого типу лишаються незмінними, так щоб одночасно могло співіснувати дві конфігурації, але активна може бути тільки одна
 
 .Екран конфігурації налаштувань аутентифікації через віджет
 image::architecture/platform/operational/user-management/id-gov-ua-contal-plane-widget.png[]
@@ -138,12 +145,18 @@ image::architecture/platform/operational/user-management/user-managment-deployme
 .Структура конфігурації values.yaml для registry-configuration chart-у
 [source, yaml]
 ----
+signWidget:
+  url: %ПОСИЛАННЯ_НА_ВІДЖЕТ%
 keycloak:
   realms:
     officerPortal:
       browserFlow: %НАЗВА_ПОСЛІДОВНОСТІ%
-      idGovUaUrl: %ПОСИЛАННЯ_ДЛЯ_ID_GOV_UA%
-      widgetUrl: %ПОСИЛАННЯ_ДЛЯ_ВІДЖЕТА%
+
+  identityProviders:
+    idGovUa:
+        url: %ПОСИЛАННЯ_ДЛЯ_ID_GOV_UA%
+        secretKey: >-
+          registry-kv/registry/%НАЗВА_РЕЄСТРУ%/officer-id-gov-ua-client-info
 ----
 Доступні значення для `browserFlow`:
 |===
@@ -172,8 +185,7 @@ spec:
     - extract:
         conversionStrategy: Default
         decodingStrategy: None
-        key: >-
-          registry-kv/registry/%НАЗВА_РЕЄСТРУ%/officer-id-gov-ua-client-info
+        key: {{ .Values.identityProviders.idGovUa.secretKey}}
   refreshInterval: 10s
   secretStoreRef:
     kind: SecretStore
