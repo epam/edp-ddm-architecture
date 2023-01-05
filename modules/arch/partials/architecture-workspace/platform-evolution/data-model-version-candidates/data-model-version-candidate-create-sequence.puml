@@ -22,60 +22,56 @@ skinparam sequence {
 skinparam responseMessageBelowArrow true
 
 actor "Розробник\n регламенту" as Dev
-'participant "Registry Regulations\nManagement" as RRM
 
+'box "Підсистема моделювання регламенту реєстру"
+  participant "Registry Regulation\nManagement" as rrm
+  participant "Gerrit" as gerrit
+'end box
 
-box "Registry Regulations Management"
-  participant "Version Candidate\nManager" as VCM
-  participant "DataModel\nManager" as TablesManager
-  participant "DataModelSnapshot\nManager" as SnapshotManager
-  participant "DBSchema\nManager" as DBSchemaManager
-end box
+'box "Підсистема розгортання регламенту реєстру"
+  participant "Jenkins" as jenkins
+'end box
 
+'box "PostgreSQL"
+  database "Template\nDB Schema" as TemplateDB
+  database "Registry dev VC\nDB Schema" as VCTemplateDB
+'end box
 
-box "PostgreSQL"
-  participant "Template\nDB Schema" as TemplateDB
-  participant "Registry dev VC\nDB Schema" as VCTemplateDB
-end box
-
-
-box "OKD Job's"
+'box "OKD Job's"
   participant "run-db-scripts" as OkdJob
-end box
+'end box
 
 OkdJob -> TemplateDB ** : Створює та розгортає
 
-'Create version candidate flow
-Dev -> VCM: Створює версію-кандидат
-  VCM -> TablesManager: Створює тимчасову БД
-    TablesManager -> DBSchemaManager: Створює тимчасову БД
-      DBSchemaManager -> TemplateDB: отримує еталонну БДc
-      DBSchemaManager <-- TemplateDB: result
-      DBSchemaManager -> VCTemplateDB ** : Створює тимчасову схему БД
-      DBSchemaManager <-- VCTemplateDB: result
-    DBSchemaManager --> TablesManager : result
+Dev -> rrm: Створює версію-кандидат
+  rrm -> gerrit: Створює MR
+  gerrit --> rrm: result
+rrm --> Dev: версія-кандидат
 
+gerrit -> jenkins: запуск пайплайну перевірки регламенту
 
-    TablesManager -> DBSchemaManager: Розгортання тимчасової БД моделлю даних регламенту реєстру
-      DBSchemaManager -> VCTemplateDB: Розгортання моделі даних по liquibase changelog's майстер версії
-      DBSchemaManager <-- VCTemplateDB: result
-      DBSchemaManager -> VCTemplateDB: Розгортання моделі даних по liquibase changelog's версії-кандидату
-      DBSchemaManager <-- VCTemplateDB: result
-    DBSchemaManager --> TablesManager: result
+  group "Створення тимчасової БД"
+    jenkins -> TemplateDB: отримує еталонну БДc
+    jenkins <-- TemplateDB: result
+    jenkins -> VCTemplateDB ** : Створює тимчасову схему БД
+    jenkins <-- VCTemplateDB: result
+  end group
 
-    TablesManager -> SnapshotManager: Зчитування структури БД
-      SnapshotManager -> TemplateDB: Зчитування структури\nтимчасової БД
-      TemplateDB --> SnapshotManager: result
-      SnapshotManager -> SnapshotManager: Створення та збереження\nDataModelSnapshot файлів
-    SnapshotManager --> TablesManager: result
+  group "Розгортання тимчасової БД моделлю даних регламенту реєстру"
+    jenkins -> VCTemplateDB: Розгортання моделі даних по liquibase changelog's майстер версії
+    jenkins <-- VCTemplateDB: result
+    jenkins -> VCTemplateDB: Розгортання моделі даних по liquibase changelog's версії-кандидату
+    jenkins <-- VCTemplateDB: result
+  end group
 
-  TablesManager --> VCM: result
+jenkins --> gerrit: публікація результату розгортання (Verified +1)
 
-VCM --> Dev: result
+Dev -> rrm: Отримує перелік таблиць моделі даних
+  rrm -> gerrit: зчитує стан розгортання регламенту
+  rrm <-- gerrit: result
 
-Dev -> TablesManager: Отримує перелік таблиць моделі даних
-  TablesManager -> SnapshotManager: Зчитування переліку файлів DataModelSnapshot tables
-  SnapshotManager --> TablesManager: result
-TablesManager --> Dev: Перелік таблиць версії-кандидату
+  rrm -> TemplateDB: Зчитування структури\nтимчасової БД
+  TemplateDB --> rrm: result
+rrm --> Dev: перелік таблиць
 
 @enduml
