@@ -52,8 +52,9 @@ return форма аутентифікації
 browser --> officer: логін форма id.gov.ua
 
 officer -> browser: файл ключ та пароль
-browser -> idgov
-idgov -> key: отримання токена обміну \n(refresh token)
+browser -> idgov: аутентифікація в id.gov.ua
+idgov -> browser: отримання токена обміну \n(authorization code)
+browser -> key: закінчення аутентифікації
 key -> idgov: запит на отримання токену\n(access token)
 note left:clientId та clientSecret\nє частиною запиту
 idgov --> key: результат аутентифікації\n(отримання access token)
@@ -63,7 +64,7 @@ note left:clientId та clientSecret\nє частиною запиту
 return данні користувача
 
 key -> key: пошук та валідація користувача за\nданими з id.gov.ua (аутентифікатор)
-key --> browser: аутентифікація успішна\nтокен та посилання на головну сторінку
+key --> browser: аутентифікація успішна\nідентифікатор сесії та посилання на головну сторінку
 browser -> portal: головна
 portal -> key: перевірка токена
 return токен валідний
@@ -71,14 +72,13 @@ portal --> browser
 browser --> officer
 @enduml
 ----
-
 === Конфігурація методу аутентифікації
 
 .Послідовність конфігурації
 [plantuml, configuration, svg]
 ----
 @startuml
-actor "Технічний адміністратор\nреєстру" as admin
+actor "Адміністратор\nреєстру" as admin
 participant "Інтерфейс адмін-консолі" as cp
 participant "Система контролю версій" as gerrit
 participant "Центральне\nсховище секретів" as registry
@@ -104,17 +104,14 @@ registry-kv/registry/%НАЗВА_РЕЄСТРУ%/officer-id-gov-ua-client-info
 
 === Інтерфейс адмін-консолі
 
-.Вибір послідовності для аутентифікації
-image::architecture/platform/operational/user-management/id-gov-ua-contal-plane-auth-flow.png[]
+.Екран конфігурації налаштувань аутентифікації через віджет
+image::architecture/platform/operational/user-management/id-gov-ua-control-plane-widget-config.png[]
 
+
+.Екран конфігурації налаштувань аутентифікації через id.gov.ua
+image::architecture/platform/operational/user-management/id-gov-ua-control-plane-config.png[]
 [NOTE]
 При перемиканні типу аутентифікації параметри для іншого типу лишаються незмінними, так щоб одночасно могло співіснувати дві конфігурації, але активна може бути тільки одна
-
-.Екран конфігурації налаштувань аутентифікації через віджет
-image::architecture/platform/operational/user-management/id-gov-ua-contal-plane-widget.png[]
-
-.Екран конфігурації налаштувань аутентифікації через портал `id.gov.ua`
-image::architecture/platform/operational/user-management/id-gov-ua-contal-plane-redirector.png[]
 
 == Технічний дизайн рішення
 
@@ -148,11 +145,13 @@ image::architecture/platform/operational/user-management/user-managment-componen
 
 image::architecture/platform/operational/user-management/user-managment-deployment.svg[]
 
-.Структура конфігурації values.yaml для registry-configuration chart-у
+.Структура конфігурації values.yaml для конфігурації реєстру.
 [source, yaml]
 ----
 signWidget:
   url: %ПОСИЛАННЯ_НА_ВІДЖЕТ%
+  wights: %ВИСОТА_ВІДЖЕТА%
+
 keycloak:
   realms:
     officerPortal:
