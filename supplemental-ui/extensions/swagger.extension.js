@@ -13,10 +13,10 @@ function uniqueid(){
   return (idstr);
 }
 
-// usage example: openApi::{attachmentsdir}/architecture-workspace/platform-evolution/bp-groups/rrm-swagger.yml[]
+// usage example: swagger::{attachmentsdir}/architecture-workspace/platform-evolution/bp-groups/rrm-swagger.yml[]
 
 module.exports = function (registry) {
-  registry.blockMacro('openApi', function () {
+  registry.blockMacro('swagger', function () {
     var self = this
     self.process(function (parent, target, args) {
       var id = uniqueid();
