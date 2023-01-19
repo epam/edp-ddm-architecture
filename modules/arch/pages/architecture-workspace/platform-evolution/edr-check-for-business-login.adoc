@@ -20,7 +20,9 @@
 .Екран конфігурації входу бізнес-користувачів в адмін-консолі
 image::architecture/platform/operational/user-management/edr-switch-control-plane-config.png[]
 
-.Діаграма діяльності (`Activity diagram`) класифікації користувача без доступу до ЕДР
+Поточний підхід до xref:architecture/platform/operational/user-management/citizen-authentication.adoc[автентифікації].
+
+.Діаграма діяльності (`Activity diagram`). Зміни в класифікації користувача без доступу до ЕДР
 [plantuml, flow, svg]
 ----
 :Вхід для бізнесу;
@@ -35,10 +37,10 @@ else (ні)
     elseif  (ЄДРПОУ і РНОКПП однакові?) then (так)
          :Упішна автентифікація як ФОП;
         kill
-    elseif (Перевірка довжини ЄДРПОУ) then (довжина 8)
+    elseif (Перевірка довжини ЄДРПОУ) then (довжина 8 символів)
         :Упішна автентифікація як представник\nюредичної особи;
         kill
-    else (довжина 10)
+    else (довжина 10 символів)
         :Упішна автентифікація як\nпредставник ФОП;
         kill
     endif
@@ -46,11 +48,15 @@ endif
 
 ----
 == Технічний дизайн рішення
+.Загальна структура компоненти
+image::architecture/platform/operational/user-management/user-managment-components.svg[]
+
+Впровадження додаткового параметра, що відповідальний за включення/виключення даної перевірки на рівні конфігурації компоненти `registry-configuration` з подальшим винесенням його до шаблонів реєстрів. Додавання додаткової гілки в автентифікатора `keycloak-ds-citizen-authenticator` визначення типу користувача без звернення до ЕДР.
 
 [NOTE]
 Привести назви до одного формату Subject як тип суб'єкта чи роль користувача;
 
-.Приклад низькорівневих змін
+.Приклад низькорівневих змін до `keycloak-ds-citizen-authenticator`.
 [source, java]
 ----
 package com.epam.digital.data.platform.keycloak.ds.citizen.authenticator.registration;
@@ -78,7 +84,7 @@ public class BusinessRegistrationService implements RegistrationService {
 [NOTE]
 Конфігурація параметрів інтеграції з ЕДР поза межами даного дизайну.
 
-.Структура конфігурації values.yaml для конфігурації реєстру.
+.Структура конфігурації values.yaml для конфігурації реєстру та компоненти `registry-configuration`.
 [source, yaml]
 ----
 keycloak:
@@ -87,12 +93,13 @@ keycloak:
       authenticators:
         dsCitizenAuthenticator:
           authenticatorConfig:
-            edrCheck: false
+            edrCheck: true
 ----
 
 
-=== Міграція існуючих реєстрів
+== Міграція існуючих реєстрів
 Міграція існуючих реєстрів відбувається шляхом оновлення поточної конфігурації реєстру оновленими параметрами з шаблону реєстру.
+Тобто, під час міграції реєстру на нову версію відбувається перенесення значень і структур шляхом злиття гілок шаблону до поточної конфігурації реєстру.
 
 == Високорівневий план розробки
 
