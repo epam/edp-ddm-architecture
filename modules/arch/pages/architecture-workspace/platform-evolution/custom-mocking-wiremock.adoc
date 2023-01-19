@@ -1,0 +1,250 @@
+= Конфігурація власних моків для інтеграційних точок
+
+== Загальний опис
+
+Існує проблема, що поточне рішення для мокування виконується за допомогою SoapUI та сервіси моку інтеграційних точок поставляється разом з платформою. Це призводить до того що не можливо швидко додати новий мок інтеграційної точки або змінити вже існуючий без надання апдейту платформи.
+
+Для вирішення цієї проблеми необхідно замістити поточний підхід для створення моків на реалізацію нової унифікованої стратегії яка дає можливість конфігурувати власні моки для інтеграційниї точок в режимі реального часу без постачання нової версії платформи.
+
+== Актори та ролі користувачів
+
+* Розробник реєстрів
+* Розробник платформи
+
+== Глосарій
+
+- WM - WireMock
+- WMS - WireMock Studio
+- Mocks - заглушки точки інтеграції
+- CP Console - консоль адміністратора платформи
+
+== Поточна робота мокування інтеграційних точок
+
+image::architecture-workspace/platform-evolution/mocking/current-mocking-solution.drawio.svg[]
+
+На даній діаграмі можна побачити, що для оновлення/додавання моку треба:
+
+* Розробник платформи створює мок у SOAP UI
+* Розробник платформи додає зміну у інсталлер
+* Розробник реєстру може використовувати загальний мок після оновлення платформи
+
+Також варто зазначити, що мок знаходиться на рівні платформи, а не реєстру, тобто він загальній на усі реєстри які є на кластері.
+
+Недоліки поточного рішення:
+
+* Моки постачаються разом з платформою що унеможливлює зміни розробником регламенту
+* Немає можливості швидко інтегруватися з новою зовнішньою системою адміністратору реєстру без допомоги розробника платформи
+* Немає можливості персонизувати мок інтеграційної точки для реєстру
+
+
+== Технічний дизайн рішення
+
+=== Інтеграційни сценарії
+|===
+|Назва компоненту|Рівень|Зовнішня система/Реєстр|Вид інтеграції|Протокол
+
+|*notification-service*
+|Реєстр
+|Дія
+|Зовнішня інтеграція
+|REST
+
+.3+|*bpms*
+.3+|Реєстр
+|ЄДР
+
+ДРАЦС
+
+ЄІБДВПО
+|Зовнішня інтеграція
+|SOAP
+
+|Дія
+|Зовнішня інтеграція
+|REST
+
+|<Зовнішня система>
+|Зовнішня інтеграція
+|REST/SOAP
+|===
+
+
+На даній діаграмі зображено залучені для реалізації вимог сервіси та взаємодію між ними. Додатково зображено важливі особливості, які необхідно брати до уваги в рамках реалізації.
+
+image::architecture-workspace/platform-evolution/mocking/rework-mock-solution.drawio.svg[align="center"]
+
+Для мокування інтеграційних точок пропонується використовувати WM та WMS. За даним підходом можливо мокуватия як REST так і SOAP API.
+
+.Налаштування інтеграції реєстру з моком зовнішної точки інтеграції
+[plantuml, svg]
+----
+include::partial$architecture-workspace/platform-evolution/mocking/enable-mocking-for-registry.puml[align="center"]
+----
+
+.Додавання власного моку для використання у реєстрі
+[plantuml, svg]
+----
+include::partial$architecture-workspace/platform-evolution/mocking/import-user-mock.puml[align="center"]
+----
+
+=== Порядок дій для розгортання власного моку інтеграційної точки
+
+* Адміністратор платформи додає зовнішню інтеграцію для dev реєстру з <<trembita-link, Трембіта>> або <<external-system, іншою зовнішньою системою>>
+
+* У герріті CP консолі оновився файл конфігурації для інтеграції з зовнішньою системою
+
+.control-plane-gerrit:<registry>.git/deployment-templates/values.yaml
+[source,yaml]
+----
+trembita:
+#SOAP external systems integration
+  registries:
+    edr-registry:
+      #Link on registry wiremock
+      url: "http://registry-wiremock/"
+      ...
+    dracs-registry:
+      #Link on registry wiremock
+      url: "http://registry-wiremock/"
+      ...
+    idp-exchange-service-registry:
+      #Link on registry wiremock
+      url: "http://registry-wiremock/"
+      ...
+external-systems:
+#REST external systems integration
+  diia:
+    #Link on registry wiremock
+    url: "http://registry-wiremock/"
+    ...
+  http-bin:
+    #Link on registry wiremock
+    url: "http://registry-wiremock/"
+    ...
+  secured-service:
+    #Link on registry wiremock
+    url: "http://registry-wiremock/"
+    ...
+----
+[IMPORTANT]
+Посилання змінюється лише для обраної системи на реєстровий WM
+
+* Додавання до реєстрового герріту, в проект registry-regulations власного мапінгу в папці mock-integration
+
+Для збереження мапінгів у реєстровому репозиторії необхідно слідувати структурі
+
+[plantuml, format=svg, align="center"]
+----
+skinparam Legend {
+	BackgroundColor transparent
+	BorderColor transparent
+}
+legend
+registry-regulatuins
+|_ mock-integration
+  |_ ${external_system_name}.json
+  |_ ${external_system_name}-${request_name}-response.json
+  |_ ....
+end legend
+----
+
+Приклад файлу мапінгів:
+[source, json]
+----
+    {
+        "mappings": [
+            {
+                "metadata": {
+                    "description": "REST Mapping Sample"
+                },
+                "request": {
+                    "method" : "GET",
+                    "url" : "/api/v1/public-service/damaged-property/filtered"
+                },
+                "response": {
+                    "status" : 200,
+                    "bodyFilePath" : "mock-integration/diia_damaged-property_response.json",
+                    "headers" : {
+                        "Content-Type" : "application/json"
+                    }
+                }
+            },
+            {
+                "metadata": {
+                    "description": "SOAP mapping sample"
+                },
+                "request": {
+                    "method" : "POST",
+                    "url" : "/mockEdr"
+                 },
+                "response": {
+                    "status" : 200,
+                    "bodyFilePath" : "mock-integration/edr_mockEdr_response.xml",
+                    "" : {
+                        "Content-Type" : "text/xml"
+                    }
+                }
+            }
+        ]
+    }
+----
+[TIP]
+https://wiremock.org/docs/stubbing/[Посилання на документацію за якою треба створювати власні мапінги]
+
+* Під час виконання пайплайну registry-regulations-management при наявності мапінгів виконується запит
+[source, bash]
+----
+curl -v -d @mapping.json http://registry-wiremock:8080/__admin/mappings/import
+----
+[IMPORTANT]
+Мапінги можуть зберігатись у декількох файлах, тому треба імпортувати за допомогою API усі файли з мапінгами
+
+== Управління конфігурацїєю мокування
+
+.[#trembita-link]#Налаштування взаємодії реєстру через Тримбіту для dev реєстру#
+image::architecture-workspace/platform-evolution/mocking/mock_trembita.png[registry-integrations-management, 500, align="center"]
+
+.Налаштування взаємодії з моком інтеграційних точок Трембіта для dev реєстру
+image::architecture-workspace/platform-evolution/mocking/enable_mock_trembita.png[registry-integrations-management, 500, align="center"]
+
+.[#external-system]#Налаштування взаємодії реєстру з зовнішньою системою#
+image::architecture-workspace/platform-evolution/mocking/mock_rest_system.png[registry-integrations-management, 500, align="center"]
+
+.Налаштування взаємодії реєстру з моком інтеграційних точок зовнішніх систем
+image::architecture-workspace/platform-evolution/mocking/enable_mock_rest_system.png[registry-integrations-management, 500, align="center"]
+
+
+== Приклад створення власного моку WMS
+
+Мапінг для імпорту можна створити у WMS, для цього треба:
+
+* Перейти до WMS та натиснути Mock API кнопку і обрати blank мок шаблон
+
+image::architecture-workspace/platform-evolution/mocking/wms_start.png[align="center"]
+
+* Перейти у вкладку Stubs та натиснути New
+
+image::architecture-workspace/platform-evolution/mocking/wms_template.png[align="center"]
+
+* Заповнити налаштування мапінгу
+
+image::architecture-workspace/platform-evolution/mocking/wms_create.png[align="center"]
+
+* Експортувати файл для завантаження його у реєстровий герріт
+
+image::architecture-workspace/platform-evolution/mocking/wms_export.png[align="center"]
+
+== Високорівневий план розробки
+
+=== Технічні експертизи
+
+* _DevOps_
+* _Dev_
+
+=== План розробки
+
+* Деплой WM та WMS під час розгортання тільки dev реєстрів
+* Оновлення CP console під нову функціональність
+* Додавання стейджу у registry-regulations пайплайну для імпорту мапінгів
+* Створення конг роуту на WMS
+* Розробка інструкцій користувачів
