@@ -43,6 +43,7 @@ image::architecture-workspace/platform-evolution/edit-data-model-version-candida
 - Редагування структури даних дата моделі відбувається тільки в createTables.xml файлі.
 - registry-regulation-management отримує та змінює createTables.xml через RestAPI відповідні методи.
 - Language Server підтримує Groovy та XML.
+- В переліку стану складових версії-кандидату зміна структури БД відображається єдиним пунктом без переліку детальних змін по кожній із таблиць моделі даних.
 
 === Зміна контракту опису дата моделі регламентур реєстру
 
@@ -74,10 +75,12 @@ include::partial$architecture-workspace/platform-evolution/data-model-version-ca
 
 === Розгортання XML LS
 
-Для розгортання XML Language Server необхідно використати https://github.com/eclipse/lemminx[lemminx language server].
-Даний LS публікується в `https://mvnrepository.com/artifact/org.eclipse.lemminx/org.eclipse.lemminx/0.23.2[maven central repository]`. Необхідно підключити наведений артефакт та використати `org.eclipse.lemminx.XMLLanguageServer` імплементацію LS в ddm-language-server модулі.
+- Для розгортання XML Language Server необхідно використати https://github.com/eclipse/lemminx[lemminx language server].
+Даний LS публікується в `https://mvnrepository.com/artifact/org.eclipse.lemminx/org.eclipse.lemminx/0.23.2[maven central repository]` (немає необхідності розміщовати код даного компоненту у себе в gerrit).
 
-Згідно зі https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocumentItem[специфікацією LS] URL для створення websocket повинен бути `/xml`.
+- Необхідно підключити наведений артефакт та використати `org.eclipse.lemminx.XMLLanguageServer` імплементацію LS в ddm-language-server модулі.
+
+- Згідно зі https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocumentItem[специфікацією LS] URL для створення websocket повинен бути `/xml`.
 
 
 === Робота з DDM XSD
@@ -158,8 +161,10 @@ Body:
 
 === Отримання та відображення змін в перегляді стану складових регламенту реєстру
 
-[WARNING]
-TODO: do we need to do this in a scope of this task? Can we treat data model structure as a single entity?
+Робота зі структурою БД реєстру ведеться в цілому редагуванням лише одного ресурсу в термінах RestAPI '/versions/candidates/{versionCandidateId}/data-model/tables'.
+Тому в переліку стану складових регламенту реєстру необхідно оперувати одним єдиним пунктом під назвою `Структура таблиць БД`.
+
+Даний пункт може мати єдиний стан `Змінено` в тому разі, якщо будь-які зміни були внесені в файл `data-model/createTables.xml` через адмін-портал або напряму через додавання патчсету в Gerrit у відповідний MR до версії-кандидату.
 
 == Високорівневий план розробки
 === Необхідні експертизи
@@ -173,12 +178,15 @@ TODO: do we need to do this in a scope of this task? Can we treat data model str
 - Налаштувати kong для роботи з XML LS.
 
 === Backend
-- Розширити RestAPI для отримання та збереження liquibase конфігурацій (для версій-кандидатів та мастер версії).
+- Розширити RestAPI для отримання та збереження liquibase конфігурацій (для версій-кандидатів та мастер версії). Додати RestAPI Optimistic locking headers до ендпоінтів `/versions/candidates/{versionCandidateId}/data-model/tables`.
 - Підключити XML lemminx LS. Розширити ddm-language-server для роботи з /xml websocket endpoint.
+- Додати інформацію про зміни структури БД моделі даних в `/versions/candidates/{versionCandidateId}/changes` RestAPI ендпоінт.
 
 === Frontend
 - Створити перспективу перегляду стану моделі даних та перспективу редагування таблиць моделі даних.
 - Інтегрувати monaco editor в перспективу редагування таблиць моделі даних. Налаштувати взаємодію з XML LS.
+- Забезпечити відображення та збереження liquibase конфігурації структури таблиць моделі даних (інтеграція з `/versions/candidates/{versionCandidateId}/data-model/tables` ендпоінтами). Забезпечити роботи з RestAPI Optimistic Locking механізмом.
+- Додати відображення інформації про зміни с структурі таблиць моделі даних в огляд версії-кандидату.
 
 === One TeamLead or One QALead
 - Створити інструкцію міграції інснуючих реєстрів. Опублікувати інструкцію, провести KT з DevOps командою.
