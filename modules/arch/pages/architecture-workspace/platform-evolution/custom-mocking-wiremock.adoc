@@ -140,46 +140,137 @@ registry-regulatuins
 end legend
 ----
 
-Приклад файлу мапінгів:
+=== Приклад файлів мапінгів та обробки респонсу
+WM підтримує як SOAP так і REST запити тому нижче наведено приклад обробки обох типів запитів
+
+** Файл з мапінгами для EDR моку __edr.json__
 [source, json]
 ----
     {
         "mappings": [
             {
-                "metadata": {
-                    "description": "REST Mapping Sample"
-                },
                 "request": {
-                    "method" : "GET",
-                    "url" : "/api/v1/public-service/damaged-property/filtered"
+                    "urlPath": "/mockEdr",
+                    "method": "POST"
                 },
                 "response": {
-                    "status" : 200,
-                    "bodyFilePath" : "mock-integration/diia_damaged-property_response.json",
-                    "headers" : {
-                        "Content-Type" : "application/json"
-                    }
-                }
-            },
-            {
-                "metadata": {
-                    "description": "SOAP mapping sample"
-                },
-                "request": {
-                    "method" : "POST",
-                    "url" : "/mockEdr"
-                 },
-                "response": {
-                    "status" : 200,
-                    "bodyFilePath" : "mock-integration/edr_mockEdr_response.xml",
-                    "" : {
-                        "Content-Type" : "text/xml"
-                    }
+                    "status": 200,
+                    "bodyFilePath": "mock-integration/edr-response.xml",
+                    "headers": {
+                        "Content-Type": "text/xml"
+                    },
+                    "transformers": [
+                        "response-template",
+                        "body-transformer"
+                    ]
                 }
             }
         ]
     }
 ----
+
+** Файл відповіді __mock-integration/edr-response.xml__
+[source, xml]
+----
+<soap11env:Envelope
+	xmlns:soap11env="http://schemas.xmlsoap.org/soap/envelope/"
+	xmlns:tns="http://nais.gov.ua/api/sevdeir/EDR"
+	xmlns:xroad="http://x-road.eu/xsd/xroad.xsd"
+	xmlns:id="http://x-road.eu/xsd/identifiers">
+	<soap11env:Header>
+		<tns:AuthorizationToken>token</tns:AuthorizationToken>
+		<xroad:userId>MDTUDDM</xroad:userId>
+		<xroad:client id:objectType="SUBSYSTEM">
+			<id:xRoadInstance>SEVDEIR-TEST</id:xRoadInstance>
+			<id:memberClass>GOV</id:memberClass>
+			<id:memberCode>43395033</id:memberCode>
+			<id:subsystemCode>IDGOV_TEST_01</id:subsystemCode>
+		</xroad:client>
+		<xroad:service id:objectType="SERVICE">
+			<id:xRoadInstance>SEVDEIR-TEST</id:xRoadInstance>
+			<id:memberClass>GOV</id:memberClass>
+			<id:memberCode>00015622</id:memberCode>
+			<id:subsystemCode>2_MJU_EDR_prod</id:subsystemCode>
+			<id:serviceCode>SearchSubjects</id:serviceCode>
+		</xroad:service>
+		<xroad:protocolVersion>4.0</xroad:protocolVersion>
+		<xroad:id>MDTUDDM</xroad:id>
+		<xroad:requestHash algorithmId="http://www.w3.org/2001/04/xmldsig-more#gost34311">YzS4MYmFiW8tkoncbQL624RllowfcK8B8FGNTWZ5QFE=</xroad:requestHash>
+	</soap11env:Header>
+	<soap11env:Body>
+		<tns:SearchSubjectsResponse>
+			<tns:SubjectList>
+                        <!--Темплейтинг мапінгу-->
+                        {{#each (soapXPath request.body '/SearchSubjects/code/text()') as |thing|}}
+                        {{#if (contains thing '101')}}
+                                <tns:state>1</tns:state>
+                                <tns:state_text>зареєстровано</tns:state_text>
+                                <tns:name>Сидоренко Василь Леонідович</tns:name>
+                                <tns:url>http://zqedr-api.nais.gov.ua/1.0/subjects/3</tns:url>
+                                <tns:code>{{thing}}</tns:code>
+                                <tns:id>3</tns:id>
+                        {{else if (contains thing '123213123')}}
+                                <tns:state>1</tns:state>
+                                <tns:state_text>зареєстровано</tns:state_text>
+                                <tns:name>Петренко Петро Петрович</tns:name>
+                                <tns:url>http://zqedr-api.nais.gov.ua/1.0/subjects/3</tns:url>
+                                <tns:code>{{thing}}</tns:code>
+                                <tns:id>3</tns:id>
+                        {{/if}}
+                        {{/each}}
+				<tns:SubjectInfo>
+				</tns:SubjectInfo>
+			</tns:SubjectList>
+		</tns:SearchSubjectsResponse>
+	</soap11env:Body>
+</soap11env:Envelope>
+----
+
+** Файл мапінгу __diia.json__
+[source, json]
+----
+    {
+        "mappings": [
+            {
+                "request": {
+                    "urlPath": "/api/partner-token/post-info",
+                    "method": "POST",
+                    "headers": {
+                            "Accept": {
+                                "contains": ".*"
+                                }
+                            },
+                    "bodyPatterns": [{
+                           "matchesJsonPath": "$.info"
+                    }]
+                },
+                "response": {
+                    "status": 200,
+                    "bodyFilePath": "mock-integration/dia-post_info-response.json",
+                    "headers": {
+                        "Content-Type": "text/xml"
+                    },
+                    "transformers": [
+                        "response-template",
+                        "body-transformer"
+                    ]
+                }
+            }
+        ]
+    }
+----
+
+** Файл відповіді __mock-integration/dia-post_info-response.json__
+[source, json]
+----
+{
+  "info": "string"
+}
+----
+
+[IMPORTANT]
+Користувач після додавання моку зможе піти за адресою http:registry-wiremock/mockEdr щоб отримати замокану відповідь
+
 [TIP]
 https://wiremock.org/docs/stubbing/[Посилання на документацію за якою треба створювати власні мапінги]
 
@@ -190,6 +281,34 @@ curl -v -d @mapping.json http://registry-wiremock:8080/__admin/mappings/import
 ----
 [IMPORTANT]
 Мапінги можуть зберігатись у декількох файлах, тому треба імпортувати за допомогою API усі файли з мапінгами
+
+== Приклад створення власного моку WMS
+
+Мапінг для імпорту можна створити у WMS, для цього треба:
+
+* Перейти до WMS та натиснути Mock API кнопку
+
+image::architecture-workspace/platform-evolution/mocking/mock-api.png[align="center", 500, 500]
+
+* Обрати пустий шаблон та заповнити назву
+
+image::architecture-workspace/platform-evolution/mocking/create-new-mock.png[align="center", 500, 500]
+
+* Перейти до вкладки Stubs
+
+image::architecture-workspace/platform-evolution/mocking/stubs.png[align="center", 500, 500]
+
+* Натиснути кнопку New
+
+image::architecture-workspace/platform-evolution/mocking/new-stub.png[align="center", 500, 500]
+
+* Заповнити налаштування мапінгу та зберегти його
+
+image::architecture-workspace/platform-evolution/mocking/save-stub.png[align="center", 500, 500]
+
+* Експортувати файл для завантаження його у реєстровий герріт
+
+image::architecture-workspace/platform-evolution/mocking/export-mock.png[align="center", 500, 500]
 
 == Управління конфігурацїєю мокування
 
@@ -204,35 +323,6 @@ image::architecture-workspace/platform-evolution/mocking/mock_rest_system.png[re
 
 .Налаштування взаємодії реєстру з моком інтеграційних точок зовнішніх систем
 image::architecture-workspace/platform-evolution/mocking/enable_mock_rest_system.png[registry-integrations-management, 200, align="center"]
-
-
-== Приклад створення власного моку WMS
-
-Мапінг для імпорту можна створити у WMS, для цього треба:
-
-* Перейти до WMS та натиснути Mock API кнопку
-
-image::architecture-workspace/platform-evolution/mocking/mock-api.png[align="center"]
-
-* Обрати пустий шаблон та заповнити назву
-
-image::architecture-workspace/platform-evolution/mocking/create-new-mock.png[align="center"]
-
-* Перейти до вкладки Stubs
-
-image::architecture-workspace/platform-evolution/mocking/stubs.png[align="center"]
-
-* Натиснути кнопку New
-
-image::architecture-workspace/platform-evolution/mocking/new-stub.png[align="center"]
-
-* Заповнити налаштування мапінгу та зберегти його
-
-image::architecture-workspace/platform-evolution/mocking/save-stub.png[align="center"]
-
-* Експортувати файл для завантаження його у реєстровий герріт
-
-image::architecture-workspace/platform-evolution/mocking/export-mock.png[align="center"]
 
 
 == Високорівневий план розробки
