@@ -1,3 +1,3 @@
-mediumZoom(document.querySelector('.doc img'), {
+mediumZoom(document.querySelectorAll('.doc img'), {
     background: '#fff'
 });
