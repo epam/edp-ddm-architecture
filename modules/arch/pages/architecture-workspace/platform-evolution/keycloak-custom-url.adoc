@@ -9,7 +9,8 @@ xref:architecture/platform/administrative/config-management/custom-dns.adoc[Ди
 в конфігурації також відповідного імені для сервісу управління користувачами та ролями (Keycloak) через адмін-консоль.
 
 Також, якщо кластер OpenShift створений повністю у приватній мережі, то перевірка сертифікатів на рівні підсистеми
-управління міжсервісною взаємодією та аутентифікація за допомогою Keycloak відбуваються не коректно з деякими компонентами реєстру.
+управління міжсервісною взаємодією та аутентифікація за допомогою Keycloak відбуваються не коректно з деякими
+компонентами реєстру.
 
 В цьому перехідному дизайні пропонується рішення для розв'язання цих проблем.
 
@@ -42,6 +43,7 @@ xref:architecture/platform/administrative/config-management/custom-dns.adoc[Ди
 * Адміністратор реєстру відповідальний за ротацію сертифікатів кабінетів (у випадку якщо вони були додані)
 * В системі має бути можливість редагувати встановлені раніше TLS-сертифікати та DNS-імена
 * Адмін-консоль має валідувати, що завантажений TLS сертифікат дійсно відповідає введеному домену та виводить підказку
+* Видалити існуючий домен для Keycloak можна тільки у випадку, якщо він не використовується реєстром
 
 == Дизайн існуючого рішення
 
@@ -70,6 +72,7 @@ xref:architecture/platform/administrative/config-management/custom-dns.adoc[Ди
 * Налаштування DNS-імені центрального компонента Keycloak відбувається з конфігурації реєстрів
 * Потребує багато ручних налаштувань (route, request auth, keycloak realm тощо)
 * Технічний адміністратор Платформи не контролює DNS налаштування платформного Keycloak
+* DNS-імена задаються на рівні компонента common-web-app, а не на рівні реєстрової конфігурації
 
 == Технічний дизайн рішення
 
@@ -91,55 +94,97 @@ image::architecture-workspace/platform-evolution/keycloak-dns/keycloak-url-subsy
 [source,yaml]
 ----
 keycloak:
-  customHost: keycloak.example.com
+  customHost:
+    host: keycloak.example.com
+    certificatePath: registry-kv/....
 ----
 
 .Приклад конфігурації на рівні values.yaml реєстрового репозиторія
 [source,yaml]
 ----
-sample
+portals:
+  officer:
+    customHost:
+       enabled: true
+       host: officer.example.com
+       certificatePath: registry-kv/.... #optional
 ----
 
 Платформні TLS сертифікати зберігаються у _HashiCorp Vault_ (*user-management:hashicorp-vault*) за шляхом, згенерованим згідно конвенції:
 [source]
 ----
-registry-kv/platform/<registry>/certs/<registry-name>
+registry-kv/cluster/domains/<domain-name>
+
+key:caCertificate value:<caValue>
+key:certificate value:<certificateValue>
+key:key value:<keyValue>
 ----
 
 Реєстрові TLS сертифікати зберігаються у _HashiCorp Vault_ (*user-management:hashicorp-vault*) за шляхом, згенерованим згідно конвенції:
 [source]
 ----
-registry-kv/platform/certs/<name>
-----
+registry-kv/registry/<registry-name>/domains/<portal-name>/<domain-name>
 
-При заданому кастомному DNS-імені для Keycloak та для кабінетів у відповідному реєстрі має відбутися:
-
-** конфігурація Redash Viewer
-+
-.Приклад конфігурації змінних оточення Redash Viewer
-[source,bash]
-----
-REDASH_SAML_METADATA_URL - дефолтний Keycloak URL OpenShift кластера
-REDASH_SAML_REDIRECT_URL - зовнішнє (кастомне Keycloak DNS-імʼя)
-----
-
-** конфігурація istio request authentication
-+
-.Приклад конфігурації змінних оточення Redash Viewer
-[source,bash]
-----
-REDASH_SAML_METADATA_URL - дефолтний Keycloak URL OpenShift кластера
-REDASH_SAML_REDIRECT_URL - зовнішнє (кастомне Keycloak DNS-імʼя)
+key:caCertificate value:<caValue>
+key:certificate value:<certificateValue>
+key:key value:<keyValue>
 ----
 
 .Верхньорівнева діаграма взаємодії на рівні розгортання конфігурації
 [plantuml, flow, svg]
 image::architecture-workspace/platform-evolution/keycloak-dns/keycloak-url-configuration-level.svg[keycloak-url-configuration-level]
 
-Під час розгортання конфігурації відбувається наступні налаштування:
+При заданому кастомному DNS-імені для Keycloak та для кабінетів у відповідному реєстрі має відбутися:
 
-** Створення ingress/route/service конфігурацій компонента Kong підсистеми управління зовнішнім трафіком
-**
+** конфігурація Redash Viewer:
++
+.Приклад конфігурації змінних оточення Redash Viewer
+[source,bash]
+----
+REDASH_SAML_METADATA_URL # дефолтний Keycloak URL OpenShift кластера
+REDASH_SAML_REDIRECT_URL # зовнішнє (кастомне Keycloak DNS-імʼя)
+----
+
+** конфігурація istio request authentication:
++
+.Приклад конфігурації Istio RequestAuthentication для компонентів реєстрів
+[source,bash]
+----
+jwtRules:
+    - forwardOriginalToken: true
+      fromHeaders:
+        - name: X-Access-Token
+      issuer: {{ template "issuer.officer" . }}    #дефолтний Keycloak URL OpenShift кластера
+      jwksUri: {{ template "jwksUri.officer" . }}  #зовнішнє (кастомне Keycloak DNS-імʼя)
+----
+
+** конфігурація Keycloak Frontend URL:
++
+.Приклад конфігурації Keycloak Frontend URL через KeycloakRealm CR
+[source,yaml]
++
+----
+spec:
+  frontendUrl: #зовнішнє (кастомне Keycloak DNS-імʼя)
+----
+
+** конфігурація Keycloak redash viewer client web URL:
+[source,yaml]
++
+----
+spec:
+  webUrl: #зовнішнє (кастомне Keycloak DNS-імʼя)
+----
+
+** конфігурація Kong OIDC plugin:
+[source,yaml]
++
+----
+config:
+  issuers_allowed: #дефолтний Keycloak URL OpenShift кластера
+  discovery: #зовнішнє (кастомне Keycloak DNS-імʼя)
+  introspection_endpoint: #дефолтний Keycloak URL OpenShift кластера
+----
 
 === Макети дизайну адмін-консолі
 
@@ -149,16 +194,19 @@ image::architecture-workspace/platform-evolution/keycloak-dns/keycloak-url-confi
 * DevOps
 
 === План розробки
-* sample
-* sample
+* Додати функціонал по налаштуванню Realm Frontend Url Keycloak оператором
+* Змінити UI адмін-консолі відповідно мокапам та загальним положенням
+* Розробити функціонал по налаштуванню DNS-імен в пайплайнах та чартах компонентів реєстру
 
 === Компоненти системи та їх призначення в рамках дизайну рішення
 |===
 |Компонент|Службова назва|Призначення / Суть змін| Статус
-|Веб-інтерфейс інтерфейс управління Платформою та реєстрами|control-plane-console|Зміни інтерфейсу за логіки по зберіганню сертифікатів в Vault|To Do
+|Веб-інтерфейс інтерфейс управління Платформою та реєстрами|control-plane-console|Зміни інтерфейсів та логіки по зберіганню сертифікатів в Vault|To Do
 |Розгортання платформи та реєстрів|edp-library-stages-fork|Зміна логіки по отриманню сертифікатів з Vault та розгортання Keycloak та реєстрів|To Do
-|Кабінети користувачів|common-web-app||To Do
-|Сервіс перегляду звітів|redash-viewer||To Do
+|Кабінети користувачів|common-web-app|Конфігурація Kong плагінів|Done
+|Сервіс перегляду звітів|redash-viewer|Конфігурація змінних оточення|To Do
+|Налаштування реєстру|registry-configuration|Налаштування Keycloak Frontend URL|To Do
+|Keycloak Оператор|keycloak-operator|Конфігурація Keycloak Frontend URL|To Do
 |===
 
 === Міграція даних при оновленні реєстру
