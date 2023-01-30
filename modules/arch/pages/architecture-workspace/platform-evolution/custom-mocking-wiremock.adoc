@@ -39,7 +39,87 @@ image::architecture-workspace/platform-evolution/mocking/current-mocking-solutio
 
 == Технічний дизайн рішення
 
-=== Інтеграційні сценарії
+=== Налаштування моків через Control Plane
+
+.Налаштування конфігурації моку зовнішньої точки інтеграції
+image::architecture-workspace/platform-evolution/mocking/enable-mocking-flow.svg[enable-mocking]
+
+Важливо відзначити, що після збереження конфігурації відбувається виконнаня флоу яке описане в рамках дизайну xref:architecture-workspace/platform-evolution/registry-regulation-secrets.adoc#_технічний_дизайн_рішення[Управління налаштуваннями та секретами зовнішніх інтеграцій] з врахуванням наступних ремарок:
+
+* [#required-changes]#Якщо користувач хоче замокувати зовнішню REST систему (не Трембіту) яка була створена - необхідно видалити service entry для неї#
+* Якщо користувач хоче додати мок зовнішньої REST системи - необхідно створити секрет без service entry
+
+==== Порядок дій для розгортання власного моку інтеграційної точки
+
+.Налаштування інтеграції реєстру з моком зовнішної точки інтеграції
+[plantuml,enable-mocking-flow, svg]
+----
+include::partial$architecture-workspace/platform-evolution/mocking/enable-mocking-for-registry.puml[enable-mocking-flow, align="center"]
+----
+
+* Адміністратор платформи додає зовнішню інтеграцію для dev реєстру з <<trembita-link, Трембіта>> або <<external-system, іншою зовнішньою системою>>
+
+* У герріті Control Plane Console оновився файл конфігурації для інтеграції з зовнішньою системою
+
+.control-plane-gerrit:<registry>.git/deployment-templates/values.yaml
+[source,yaml]
+----
+trembita:
+#SOAP external systems integration
+  registries:
+    edr-registry:
+      #Link on registry wiremock
+      url: "http://wiremock:9021/"
+      mock: true
+      ...
+    dracs-registry:
+      #Link on registry wiremock
+      url: "http://wiremock:9021/"
+      mock: true
+      ...
+    idp-exchange-service-registry:
+      #Link on registry wiremock
+      url: "http://wiremock:9021/"
+      mock: true
+      ...
+external-systems:
+#REST external systems integration
+  diia:
+    #Link on registry wiremock
+    url: "http://wiremock:9021/"
+    mock: true
+    ...
+  http-bin:
+    #Link on registry wiremock
+    url: "http://wiremock:9021/"
+    mock: true
+    ...
+  secured-service:
+    #Link on registry wiremock
+    url: "http://wiremock:9021/"
+    mock: true
+    ...
+----
+[IMPORTANT]
+Посилання змінюється лише для обраної системи на реєстровий WM доступ до якого здійснюється за адресю сервіса (http://wiremock:9021/).
+
+Якщо для зовніщньої системи обрене мокування то у файл зберігається флаг, який дозволяє ідентифікувати систему яка посилається на мок.
+
+==== Управління конфігурацїєю мокування
+
+.[#trembita-link]#Налаштування взаємодії реєстру через Тримбіту для dev реєстру#
+image::architecture-workspace/platform-evolution/mocking/mock_trembita.png[registry-integrations-management, 200, align="center"]
+
+.Налаштування взаємодії з моком інтеграційних точок Трембіта для dev реєстру
+image::architecture-workspace/platform-evolution/mocking/enable_mock_trembita.png[registry-integrations-management, 200, align="center"]
+
+.[#external-system]#Налаштування взаємодії реєстру з зовнішньою системою#
+image::architecture-workspace/platform-evolution/mocking/mock_rest_system.png[registry-integrations-management, 200, align="center"]
+
+.Налаштування взаємодії реєстру з моком інтеграційних точок зовнішніх систем
+image::architecture-workspace/platform-evolution/mocking/enable_mock_rest_system.png[registry-integrations-management, 200, align="center"]
+
+==== Інтеграційні сценарії
 |===
 |Назва системи|Рівень|Протокол|Вид інтеграції
 
@@ -58,26 +138,14 @@ image::architecture-workspace/platform-evolution/mocking/current-mocking-solutio
 |Реєстр
 |REST/SOAP
 |Зовнішня інтеграція
-
 |===
 
-На наступних діаграмах зображено залучені для реалізації вимог сервіси та взаємодію між ними. Додатково зображено важливі особливості, які необхідно брати до уваги в рамках реалізації.
+=== Додавання моку зовнішньої точки інтеграції
 
-.Налаштування конфігурації моку зовнішньої точки інтеграції
-image::architecture-workspace/platform-evolution/mocking/enable-mocking-flow.svg[enable-mocking]
-
-Важливо відзначити, що після збереження конфігурації відбувається виконнаня флоу яке описане в рамках дизайну xref:architecture-workspace/platform-evolution/registry-regulation-secrets.adoc#_технічний_дизайн_рішення[Управління налаштуваннями та секретами зовнішніх інтеграцій]
+Для мокування інтеграційних точок пропонується використовувати WM. За даним підходом можливо мокуватия як REST так і SOAP API.
 
 .Застосування власних моків для реєстру
 image::architecture-workspace/platform-evolution/mocking/import-mapping-flow.svg[align="center"]
-
-Для мокування інтеграційних точок пропонується використовувати WM та WMS. За даним підходом можливо мокуватия як REST так і SOAP API.
-
-.Налаштування інтеграції реєстру з моком зовнішної точки інтеграції
-[plantuml,enable-mocking-flow, svg]
-----
-include::partial$architecture-workspace/platform-evolution/mocking/enable-mocking-for-registry.puml[enable-mocking-flow, align="center"]
-----
 
 .Додавання власного моку для використання у реєстрі
 [plantuml,import-user-mocking-flow, svg]
@@ -113,56 +181,10 @@ include::partial$architecture-workspace/platform-evolution/mocking/import-user-m
 |__app.kubernetes.io/name=keycloak__
 |===
 
-=== Порядок дій для розгортання власного моку інтеграційної точки
 
-* Адміністратор платформи додає зовнішню інтеграцію для dev реєстру з <<trembita-link, Трембіта>> або <<external-system, іншою зовнішньою системою>>
+== Моделювання регламенту
 
-* У герріті Control Plane Console оновився файл конфігурації для інтеграції з зовнішньою системою
-
-.control-plane-gerrit:<registry>.git/deployment-templates/values.yaml
-[source,yaml]
-----
-trembita:
-#SOAP external systems integration
-  registries:
-    edr-registry:
-      #Link on registry wiremock
-      url: "http://registry-wiremock/"
-      mock: true
-      ...
-    dracs-registry:
-      #Link on registry wiremock
-      url: "http://registry-wiremock/"
-      mock: true
-      ...
-    idp-exchange-service-registry:
-      #Link on registry wiremock
-      url: "http://registry-wiremock/"
-      mock: true
-      ...
-external-systems:
-#REST external systems integration
-  diia:
-    #Link on registry wiremock
-    url: "http://registry-wiremock/"
-    mock: true
-    ...
-  http-bin:
-    #Link on registry wiremock
-    url: "http://registry-wiremock/"
-    mock: true
-    ...
-  secured-service:
-    #Link on registry wiremock
-    url: "http://registry-wiremock/"
-    mock: true
-    ...
-----
-[IMPORTANT]
-Посилання змінюється лише для обраної системи на реєстровий WM. Якщо для зовніщньої системи обрене мокування то у файл зберігається флаг, який дозволяє ідентифікувати систему яка посилається на мок
-
-=== Структура збереження мапінгів
-
+=== Додавання мапінгу
 Для збереження мапінгів у реєстровому репозиторії необхідно слідувати структурі. Файл з мапінгом зберігає і відповідь яку надає мок зовнішньої точки інтеграції
 
 .Приклад налаштування _mock-integrations_
@@ -229,7 +251,7 @@ curl -v -d @mapping.json http://registry-wiremock:8080/__admin/mappings/import
 * Оновити інструкції користувача для викроистання нових моків за бажанням користувача
 * Відмітити існуючі моки як ті компоненти які будуть замінені у наступних релізах
 
-== Приклад створення власного моку WMS
+=== Приклад створення власного моку WMS
 
 Мапінг для імпорту можна створити у WMS, для цього треба:
 
@@ -257,20 +279,6 @@ image::architecture-workspace/platform-evolution/mocking/save-stub.png[align="ce
 
 image::architecture-workspace/platform-evolution/mocking/export-mock.png[align="center", 500, 500]
 
-== Управління конфігурацїєю мокування
-
-.[#trembita-link]#Налаштування взаємодії реєстру через Тримбіту для dev реєстру#
-image::architecture-workspace/platform-evolution/mocking/mock_trembita.png[registry-integrations-management, 200, align="center"]
-
-.Налаштування взаємодії з моком інтеграційних точок Трембіта для dev реєстру
-image::architecture-workspace/platform-evolution/mocking/enable_mock_trembita.png[registry-integrations-management, 200, align="center"]
-
-.[#external-system]#Налаштування взаємодії реєстру з зовнішньою системою#
-image::architecture-workspace/platform-evolution/mocking/mock_rest_system.png[registry-integrations-management, 200, align="center"]
-
-.Налаштування взаємодії реєстру з моком інтеграційних точок зовнішніх систем
-image::architecture-workspace/platform-evolution/mocking/enable_mock_rest_system.png[registry-integrations-management, 200, align="center"]
-
 
 == Високорівневий план розробки
 
@@ -283,6 +291,7 @@ image::architecture-workspace/platform-evolution/mocking/enable_mock_rest_system
 
 * Деплой WM виконується тільки під час розгортання dev реєстрів
 * Оновлення Control Plane Console під нову функціональність
+* Оновити Control Plane Jenkins пайплайн для розгортання реєстру з урахуванням <<required_changes, описаних змін>>
 * Додавання стейджу у registry-regulations пайплайну для імпорту мапінгів
 * Розробити WM мапінги поточних рішень і постачати їх для нових реєстрів з empty-templates-registry
 * Розробка інструкцій користувачів
