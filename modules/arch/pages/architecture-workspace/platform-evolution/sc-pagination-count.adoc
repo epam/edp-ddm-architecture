@@ -1,6 +1,3 @@
-//:imagesdir: ..\..\..\images\
-//:includedir: ..\..\..\partials\
-
 = Повернення інформації про загальну кількість записів при пагінації критеріїв пошуку
 
 == Загальний опис
@@ -34,31 +31,31 @@
 
 == Цільовий дизайн
 === Схема та модуль розширення тегів Liquibase
-До наявних опцій _true_ і _false_ додається новий тип пагінації _springPageable_ в схему розширених тегів.
+В схемі розширених тегів, замість наявних опцій _true_ і _false_, створюються опції _offset_, _off_ та _page_.
 
 .Схема розширених тегів Liquibase
 [source, xml]
 ----
 	<xsd:simpleType name="paginationType">
 		<xsd:restriction base="xsd:string">
-			<xsd:enumeration value="false"/>
-			<xsd:enumeration value="true"/>
-			<xsd:enumeration value="springPageable"/>
+			<xsd:enumeration value="offset"/>
+			<xsd:enumeration value="page"/>
+			<xsd:enumeration value="off"/>
 		</xsd:restriction>
 	</xsd:simpleType>
   ....
 	<xsd:complexType name="selectSearchConditionType">
 		....
-		<xsd:attribute name="pagination" type="paginationType" use="optional" default="true"/>
+		<xsd:attribute name="pagination" type="paginationType" use="optional" default="offset"/>
 	</xsd:complexType>
 ----
 
-В модуль розширення тегів Liquibase  додається можливість запису типу пагінації _springPageable_ в таблицю метаданих `ddm_liquibase_metadata`, при обробці тегу _createSearchCondition_.
+В модуль розширення тегів Liquibase додається можливість запису значення атрибуту _pagination_ для нових типів пагінації в таблицю метаданих `ddm_liquibase_metadata`, при обробці тегу _createSearchCondition_. 
 
 === Сервіс генератор
-IMPORTANT: Якщо на критерій пошуку атрибут _pagination_ встановлено в true чи false, логіка генерації сервісів залишається незмінною.
+IMPORTANT: Значення _offset_ і _off_ є заміною для _true_ і _false_. Якщо на критерій пошуку атрибут _pagination_ встановлено в _offset_ чи _off_, логіка генерації сервісів залишається такою як вона я є для _true_ і _false_ відповідно.
 
-Якщо на критерій пошуку атрибут _pagination_ встановлено в _springPageable_, має бути згенерований сервіс який додатково до фільтрів заданих в критерії пошуку приймає:
+Якщо на критерій пошуку атрибут _pagination_ встановлено в _page_, має бути згенерований сервіс який додатково до фільтрів заданих в критерії пошуку приймає:
 
 pageSize:: бажана кількість елементів на сторінці. За замовчанням 10
 pageNo:: бажаний номер сторінки. За замовчанням 0
@@ -116,6 +113,14 @@ swagger::{attachmentsdir}/architecture-workspace/platform-evolution/sc-paginatio
 
 TIP: Spring має стандартні засоби для реалізації пагінації цього типу. Приклад імплементації https://www.petrikainulainen.net/programming/jooq/using-jooq-with-spring-sorting-and-pagination/[Using jOOQ With Spring: Sorting and Pagination]
 
+==== Міграція існуючих реєстрів
+Файли опису моделі даних в існуючих регламентах реєстрів повинні бути змінені у відповідності до нової схеми. Для цього атрибути _pagination_ тегу _createSearchCondition_ мають бути змінені наступним чином:
+ 
+ * _pagination="true"_ на _pagination="offset"_ 
+ * _pagination="false"_ на _pagination="off"_ 
+
+Доцільність створення автоматичної міграції має бути визначена після аналізу кількості регламентів в яких явно використовується атрибут _pagination_.
+
 === Компоненти системи та їх призначення в рамках дизайну рішення
 У даному розділі наведено перелік компонент системи, які задіяні або потребують змін/створення в рамках реалізації функціональних вимог згідно з технічним дизайном рішення.
 
@@ -138,7 +143,7 @@ TIP: Spring має стандартні засоби для реалізації
 
 == Моделювання регламенту реєстру
 === Моделювання критеріїв пошуку
-Адміністратору регламенту надається можливість обирати тип пагінації _springPageable_ при моделюванні критеріїв пошуку. 
+Адміністратору регламенту надається можливість обирати тип пагінації _page_ при моделюванні критеріїв пошуку. 
 
 .Структура регламенту реєстру
 [plantuml, registry-sc-regulation-structure, svg]
@@ -161,7 +166,7 @@ TIP: Spring має стандартні засоби для реалізації
 [source, xml]
 ----
     <changeSet author="registry owner" id="create pageable SC factor_chemical_host_contains_name">
-        <ext:createSearchCondition name="factor_chemical_host_contains_name_pageable"  pagination="springPageable">
+        <ext:createSearchCondition name="factor_chemical_host_contains_name_pageable"  pagination="page">
             <ext:table name="factor" alias="f">
                 <ext:column name="factor_id"/>
                 <ext:column name="name" sorting="asc" searchType="contains"/>
@@ -184,4 +189,5 @@ TIP: Spring має стандартні засоби для реалізації
 * Розширення схеми розширених тегів Liquibase.
 * Розширення модуля розширення тегів Liquibase.
 * Розширення сервіс генератору.
+* Розробка скрипта міграції файлів регламенту (якщо виявиться доцільним)
 * Розробка інструкцій для розробника регламенту та референтних прикладів.
