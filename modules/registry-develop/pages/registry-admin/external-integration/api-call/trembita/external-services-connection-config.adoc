@@ -1,8 +1,70 @@
-= Налаштування підключення для виклику зовнішніх SOAP-сервісів через ШБО "Трембіта"
+:toc-title: ЗМІСТ
+:toc: auto
+:toclevels: 5
+:experimental:
+:important-caption:     ВАЖЛИВО
+:note-caption:          ПРИМІТКА
+:tip-caption:           ПІДКАЗКА
+:warning-caption:       ПОПЕРЕДЖЕННЯ
+:caution-caption:       УВАГА
+:example-caption:           Приклад
+:figure-caption:            Зображення
+:table-caption:             Таблиця
+:appendix-caption:          Додаток
+:sectnums:
+:sectnumlevels: 5
+:sectanchors:
+:sectlinks:
+:partnums:
+
+= Конфігурація доступу до ШБО "Трембіта"
+
+== Загальні положення
 
 Щоб мати змогу використовувати розроблені на Платформі SOAP-інтеграційні конектори до зовнішніх сервісів та отримувати інформацію від інших реєстрів через ШБО "Трембіта", необхідно попередньо виконати конфігурації на рівні регламенту реєстру.
 
 Для цього потрібно налаштувати параметри `trembita-exchange-gateway` у конфігураційному файлі _bp-trembita/configuration.yml_.
+
+[NOTE]
+====
+* Налаштування підключення до "Трембіти" є частиною регламенту реєстру та зберігаються у файлі *_bp-trembita/configuration.yml_*.
+* Будь-які зміни у файлі *_bp-trembita/configuration.yml_* призводять до зміни (або створення у разі відсутності) *Config Map* `*trembita-configuration*` та перезапуску сервісу *`bpms`* у пайплайні публікацій.
+* Config Map `*trembita-configuration*` має один ключ -- `*trembita-configuration.yml*` та значення -- зміст файлу *bp-trembita/configuration.yml* із додаванням префікса `*_trembita-exchange-gateway*`.
+** Наприклад, при змісті файлу:
+*** `registries.edr-registry.trembita-url: trembita.cicd2.epam.com`
+** значення config map має бути наступне:
+*** `data:`
++
+`trembita-configuration.yml: |-
+trembita-exchange-gateway.registries.edr-registry.url:trembita.cicd2.epam.com`
+
+* Config Map `*trembita-configuration*` додається до контексту `bpms`, та визначена у Config Map конфігурація є доступною у процесі роботи сервісу.
+* Зміни у файлі *_bp-trembita/configuration.yml_* призводять до зміни `CR KeycloakAuthFlow` *`citizen-portal-dso-citizen-auth-flow`* у пайплайні публікацій.
+====
+
+[configuration-mapping]
+=== Мапінг конфігурації
+
+.Мапінг (зіставлення) конфігурації файлу *_bp-trembita/configuration.yml_* із параметрами з `*citizen-portal-dso-citizen-auth-flow*`
+|===
+|*citizen-portal-dso-citizen-auth-flow*|*bp-trembita/configuration.yml*
+
+|`trembitaUrl`|`trembita-exchange-gateway.registries.edr-registry.trembita-url`
+|`trembitaUserId`|`trembita-exchange-gateway.registries.edr-registry.user-id`
+|`trembitaProtocolVersion`|`trembita-exchange-gateway.registries.edr-registry.protocol-version`
+|`clientXRoadInstance`|`trembita-exchange-gateway.registries.edr-registry.client.x-road-instance`
+|`clientSubsystemCode`|`trembita-exchange-gateway.registries.edr-registry.client.subsystem-code`
+|`clientMemberCode`|`trembita-exchange-gateway.registries.edr-registry.client.member-code`
+|`clientMemberClass`|`trembita-exchange-gateway.registries.edr-registry.client.member-class`
+|`registryToken`|`trembita-exchange-gateway.registries.edr-registry.authorization-token`
+|`registryXRoadInstance`|`trembita-exchange-gateway.registries.edr-registry.service.x-road-instance`
+|`registryMemberClass`|`trembita-exchange-gateway.registries.edr-registry.service.member-class`
+|`registryMemberCode`|`trembita-exchange-gateway.registries.edr-registry.service.member-code`
+|`registrySubsystemCode`|`trembita-exchange-gateway.registries.edr-registry.service.subsystem-code`
+
+|===
+
+== Приклади конфігурації сервісів та опис структурних параметрів
 
 .Приклад конфігурації підключення до сервісу ЄДР
 [%collapsible]
@@ -61,9 +123,9 @@ trembita-exchange-gateway:
 trembita-exchange-gateway:
   registries:
     idp-exchange-service-registry:
-        trembita-url: 'http://localhost:7780/trembita-mock-server'
-        user-id: 'DDM'
-        protocol-version: '4.0'
+      trembita-url: 'http://localhost:7780/trembita-mock-server'
+      user-id: 'DDM'
+      protocol-version: '4.0'
       client:
         x-road-instance: 'CLIENT-TEST'
         member-class: 'GOV'
@@ -106,18 +168,38 @@ _На цей час версія протоколу 4.0_
 
 [#list-of-services-trembita]
 Перелік сервісів СЕВ ДЕІР "Трембіта", що використовуються на Платформі: ::
++
+[%collapsible]
+.Міністерство юстиції України
+====
 
-* Міністерство Юстицій:
-** Єдиний державний реєстр (ЄДР):
-*** link:https://directory-test.trembita.gov.ua:8443/SEVDEIR-TEST/GOV/00015622/2_MJU_EDR_prod/SearchSubjects[Сервіс пошуку суб'єкта в ЄДР (SearchSubjects)]
-*** link:https://directory-test.trembita.gov.ua:8443/SEVDEIR-TEST/GOV/00015622/2_MJU_EDR_prod/SubjectDetail[Сервіс отримання детальної інформації про суб'єкта в ЄДР (SubjectDetail)]
-** Державний реєстр актів цивільного стану (ДРАЦС):
-*** link:https://directory-test.trembita.gov.ua:8443/SEVDEIR-TEST/GOV/00015622/3_MJU_DRACS_prod/GetCertByNumRoleNames[Сервіс отримання даних Свідоцтва про народження за вказаними серією і номером Свідоцтва та ПІБ (GetCertByNumRoleNames)]
-*** link:https://directory-test.trembita.gov.ua:8443/SEVDEIR-TEST/GOV/00015622/3_MJU_DRACS_prod/GetCertByNumRoleBirthDate[Сервіс отримання даних Свідоцтва про народження за вказаними серією і номером Свідоцтва, та датою народження (GetCertByNumRoleBirthDate)]
-* Міністерство Соціальної Політики:
-** Єдина інформаційна база даних внутрішньо переміщених осіб (ЄІБДВПО):
-*** link:https://directory-test.trembita.gov.ua:8443/SEVDEIR-TEST/GOV/37567866/51_IDP_prod/IDPexchangeService[Сервіс пошуку довідки ВПО (IDPexchangeService)]
+.Єдиний державний реєстр (ЄДР)
+[%collapsible]
+=====
+* https://directory-test.trembita.gov.ua:8443/SEVDEIR-TEST/GOV/00015622/2_MJU_EDR_prod/SearchSubjects[Сервіс пошуку суб'єкта в ЄДР (SearchSubjects)]
+* https://directory-test.trembita.gov.ua:8443/SEVDEIR-TEST/GOV/00015622/2_MJU_EDR_prod/SubjectDetail[Сервіс отримання детальної інформації про суб'єкт в ЄДР (SubjectDetail)]
+=====
 
+.Державний реєстр актів цивільного стану (ДРАЦС):
+[%collapsible]
+=====
+* https://directory-test.trembita.gov.ua:8443/SEVDEIR-TEST/GOV/00015622/3_MJU_DRACS_prod/GetCertByNumRoleNames[Сервіс отримання даних Свідоцтва про народження за вказаними серією і номером Свідоцтва та ПІБ (GetCertByNumRoleNames)]
+* https://directory-test.trembita.gov.ua:8443/SEVDEIR-TEST/GOV/00015622/3_MJU_DRACS_prod/GetCertByNumRoleBirthDate[Сервіс отримання даних Свідоцтва про народження за вказаними серією і номером Свідоцтва, та датою народження (GetCertByNumRoleBirthDate)]
+=====
+====
+
++
+.Міністерство соціальної політики України
+[%collapsible]
+====
+
+.Єдина інформаційна база даних внутрішньо переміщених осіб (ЄІБДВПО)
+[%collapsible]
+=====
+* https://directory-test.trembita.gov.ua:8443/SEVDEIR-TEST/GOV/37567866/51_IDP_prod/IDPexchangeService[Сервіс пошуку довідки ВПО (IDPexchangeService)]
+=====
+====
++
 [TIP]
 ====
 Повний каталог вебсервісів системи ШБО "Трембіта", де можна отримати необхідні ідентифікатори, представлено за посиланнями:
