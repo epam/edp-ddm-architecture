@@ -17,7 +17,7 @@
 :sectlinks:
 :partnums:
 
-= Сценарії використання операції JOIN із додатковими умовами AND та OR
+= Сценарії поєднання таблиць за допомогою JOIN із додатковими умовами AND та OR
 
 == Загальний опис
 
@@ -47,33 +47,33 @@
 [source,xml]
 ----
 <changeSet id="table katottg" author="registry_owner">
-        <createTable tableName="katottg" ext:historyFlag="true" remarks="katottg">
-            <column name="katottg_id"  type="UUID" defaultValueComputed="uuid_generate_v4()"
-                    remarks="Ідентифікатор katottg">
-                <constraints nullable="false" primaryKey="true" primaryKeyName="pk_katottg_id"/>
-            </column>
+    <createTable tableName="katottg" ext:historyFlag="true" remarks="katottg">
+        <column name="katottg_id"  type="UUID" defaultValueComputed="uuid_generate_v4()"
+                remarks="Ідентифікатор katottg">
+            <constraints nullable="false" primaryKey="true" primaryKeyName="pk_katottg_id"/>
+        </column>
 
-            <column name="code" type="TEXT" remarks="Код">
-                <constraints nullable="true"/>
-            </column>
-			<column name="name" type="TEXT" remarks="Назва">
-                <constraints nullable="true"/>
-            </column>
-			<column name="category" type="TEXT" remarks="Категорія">
-                <constraints nullable="true"/>
-            </column>
-			<column name="level" type="INT">
-                <constraints nullable="false"/>
-            </column>
-			<column name="katottg_parent_id" type="UUID">
-                <constraints nullable="true"
-                             foreignKeyName="fk_katottg_parent"
-                             referencedTableName="katottg"
-                             referencedColumnNames="katottg_id"/>
-            </column>
-        </createTable>
-        <addUniqueConstraint tableName="katottg" columnNames="code"/>
-    </changeSet>
+        <column name="code" type="TEXT" remarks="Код">
+            <constraints nullable="true"/>
+        </column>
+        <column name="name" type="TEXT" remarks="Назва">
+            <constraints nullable="true"/>
+        </column>
+        <column name="category" type="TEXT" remarks="Категорія">
+            <constraints nullable="true"/>
+        </column>
+        <column name="level" type="INT">
+            <constraints nullable="false"/>
+        </column>
+        <column name="katottg_parent_id" type="UUID">
+            <constraints nullable="true"
+                         foreignKeyName="fk_katottg_parent"
+                         referencedTableName="katottg"
+                         referencedColumnNames="katottg_id"/>
+        </column>
+    </createTable>
+    <addUniqueConstraint tableName="katottg" columnNames="code"/>
+</changeSet>
 ----
 ====
 
@@ -82,20 +82,20 @@
 [source,xml]
 ----
 <changeSet id="table katottg_category" author="registry_owner">
-        <createTable tableName="katottg_category" ext:historyFlag="true" remarks="katottg_category">
-            <column name="katottg_category_id"  type="UUID" defaultValueComputed="uuid_generate_v4()"
-                    remarks="Ідентифікатор">
-                <constraints nullable="false" primaryKey="true" primaryKeyName="pk_katottg_category_id"/>
-            </column>
-            <column name="code" type="TEXT" remarks="Код">
-                <constraints nullable="false"/>
-            </column>
-			<column name="name" type="TEXT" remarks="Назва">
-                <constraints nullable="true"/>
-            </column>
-        </createTable>
-        <addUniqueConstraint tableName="katottg_category" columnNames="code"/>
-    </changeSet>
+    <createTable tableName="katottg_category" ext:historyFlag="true" remarks="katottg_category">
+        <column name="katottg_category_id"  type="UUID" defaultValueComputed="uuid_generate_v4()"
+                remarks="Ідентифікатор">
+            <constraints nullable="false" primaryKey="true" primaryKeyName="pk_katottg_category_id"/>
+        </column>
+        <column name="code" type="TEXT" remarks="Код">
+            <constraints nullable="false"/>
+        </column>
+        <column name="name" type="TEXT" remarks="Назва">
+            <constraints nullable="true"/>
+        </column>
+    </createTable>
+    <addUniqueConstraint tableName="katottg_category" columnNames="code"/>
+</changeSet>
 ----
 ====
 
@@ -349,3 +349,110 @@ FROM
 +
 .Результат запита за умовами JOIN + AND + OR
 image::data-modeling/data/physical-model/join-and-or-usage/join-and-or-usage-3.png[]
+
+== Інші приклади використання
+
+Функціональне розширення liquibase дозволяє додавати довільні умови до основних умов *`<ext:join>`*.
+
+=== Використання LEFT JOIN з однією додатковою умовою OR
+
+Наприклад, для операції поєднання двох таблиць *`cities`* та *`katottg_dictionary`*, за умови що *`katottg`* дорівнює _або_ *`level4`* _або_ *`add_level`*, в *`<ext:join>`* використовуються *`<ext:left>`* та *`<ext:right>`* для визначення основної умови -- *`katottg=level4`*, та *`<ext:condition>`* для визначення додаткової умови -- *`katottg=add_level`* та методу логічного поєднання умов -- *`OR`*.
+
+.XML-схема поєднання таблиць cities та katottg_dictionary з однією додатковою умовою OR
+====
+[source,xml]
+----
+<changeSet author="registry owner" id="or join">
+    <ext:createSearchCondition name="cities_4_or_5_level">
+        <ext:table name="cities" alias="ci">
+            <ext:column name="city_id" />
+            <ext:column name="name" searchType="startsWith" />
+            <ext:column name="katottg" searchType="equal" />
+        </ext:table>
+        <ext:table name="katottg_dictionary" alias="kd">
+            <ext:column name="name" alias="name_dict" />
+        </ext:table>
+        <ext:join type="left">
+            <ext:left alias="ci">
+                <ext:column name="katottg" />
+            </ext:left>
+            <ext:right alias="kd">
+                <ext:column name="level4" />
+            </ext:right>
+            <ext:condition logicOperator="or" columnName="ci.katottg" operator="eq" value="kd.add_level" />
+        </ext:join>
+    </ext:createSearchCondition>
+</changeSet>
+----
+====
+
+На виході Liquibase генерує наступний SQL-запит: ::
++
+.SQL-запит. Використання LEFT JOIN з умовою OR
+====
+[source,sql]
+----
+SELECT ci.city_id, ci.name, ci.katottg, kd.name AS name_dict
+  FROM cities AS ci LEFT JOIN katottg_dictionary AS kd
+    ON (ci.katottg = kd.level4) or (ci.katottg = kd.add_level);
+----
+====
+
+=== Використання LEFT JOIN з декількома додатковими умовами AND та OR
+
+Також за допомогою *`<ext:condition>`* можна моделювати складніші умови поєднання таблиць.
+
+Наприклад, для тих самих таблиць *`cities`* та *`katottg_dictionary`*, якщо умова з'єднання -- *`katottg`* дорівнює *`level4`*, коли *`category`* не дорівнює *`'B'`*, _або_ *`katottg`* дорівнює *`add_level`*, коли *`category`* дорівнює *`'B'`*, то схема критерію пошуку виглядатиме наступним чином:
+
+.XML-схема поєднання таблиць cities та katottg_dictionary з декількома додатковими умовами AND та OR
+====
+[source,xml]
+----
+<changeSet author="registry owner" id="or join by category">
+    <ext:createSearchCondition name="cities_4_or_5_level_by_category">
+        <ext:table name="cities" alias="ci">
+            <ext:column name="city_id" />
+            <ext:column name="name" searchType="startsWith" />
+            <ext:column name="katottg" searchType="equal" />
+        </ext:table>
+        <ext:table name="katottg_dictionary" alias="kd">
+            <ext:column name="name" alias="name_dict" />
+        </ext:table>
+        <ext:join type="left">
+            <ext:left alias="ci">
+                <ext:column name="katottg" />
+            </ext:left>
+            <ext:right alias="kd">
+                <ext:column name="level4" />
+            </ext:right>
+            <ext:condition logicOperator="and" columnName="kd.category" operator="ne" value="'B'">
+                <ext:condition logicOperator="or" columnName="ci.katottg" operator="eq" value="kd.add_level" />
+                <ext:condition logicOperator="and" columnName="kd.category" operator="eq" value="'B'"/>
+            </ext:condition>
+        </ext:join>
+    </ext:createSearchCondition>
+</changeSet>
+----
+====
+
+На виході Liquibase генерує наступний SQL-запит: ::
++
+.SQL-запит. Використання LEFT JOIN з декількома додатковими умовами AND та OR
+====
+[source,sql]
+----
+SELECT ci.city_id, ci.name, ci.katottg, kd.name AS name_dict
+  FROM cities AS ci LEFT JOIN katottg_dictionary AS kd
+    ON (ci.katottg = kd.level4) and (kd.category = 'B')
+       or ((ci.katottg = kd.add_level) and (kd.category <> 'B'));
+----
+====
+
+[NOTE]
+====
+Зверніть увагу, що вкладені умови `<ext:condition>` у коді групуються дужками *`()`*.
+
+Для цього прикладу групування не є обов'язковим: без дужок код виконається так само як і з дужками, оскільки умови `AND` мають вище положення за пріоритетом, ніж `OR`, і будуть визначені першими.
+
+Зверніть увагу на цю особливість для можливого використання за інших умов.
+====
