@@ -90,14 +90,13 @@ scrape_configs:
 * Необхідно розглянути альтернативну опцію гранулярного налаштування інтервалу для виконання запиту на отримання актуального значення метрики з ціллю зменшення сумарного навантаження за допомогою _Spring Task Scheduling_ та _@Scheduled(fixedRate = <?>)_.
 --
 
-.Приклад реєстрації метрик
+.Приклад реєстрації метрик з оновленням за інтервалом, налаштованим на рівні _Prometheus_
 [source,java]
 ----
-public class CamundaMetricsBinder implements MeterBinder {
-    private ProcessEngine processEngine;
+class CamundaMetricsBinder implements MeterBinder {
+    ProcessEngine processEngine;
 
-    @Override
-    public void bindTo(MeterRegistry registry) {
+    void bindTo(MeterRegistry registry) {
         Gauge.builder("<metric.key.name>", processEngine.getHistoryService().createHistoricProcessInstanceQuery(), Query::count)
                 .tag("<dimension.tag.one>", "<value>")
                 .tag("<dimension.tag.two>", "<value>")
@@ -109,6 +108,25 @@ public class CamundaMetricsBinder implements MeterBinder {
                 .tag("<dimension.tag.two>", "<value>")
                 .description("<metric description>")
                 .register(registry);
+    }
+}
+----
+
+.Приклад реєстрації метрик з оновленням за інтервалом, налаштованим на рівні окремої метрики
+[source,java]
+----
+class CamundaMetricsBinder implements MeterBinder {
+    ProcessEngine processEngine;
+
+    AtomicLong metricGaugeNumber;
+
+    void bindTo(MeterRegistry registry) {
+        this.metricGaugeNumber = registry.gauge("<metric.key.name>", new AtomicLong(0));
+    }
+
+    @Scheduled(fixedRate = 60000L)
+    void updateMetricNumber(){
+        metricGaugeNumber.set(processEngine.getHistoryService().createHistoricProcessInstanceQuery().count());
     }
 }
 ----
