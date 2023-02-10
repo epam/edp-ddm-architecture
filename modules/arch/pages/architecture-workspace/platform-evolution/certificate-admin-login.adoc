@@ -23,10 +23,8 @@
 
 * При автентифікації в сервіси зміни регламенту адміністратору необхідно використати КЕП.
 * При автентифікації в сервіси зміни конфігурації реєстру адміністратору необхідно використати КЕП.
-* При створенні реєстру та під час експлуатації існує перелік ЄДРПОУ організацій представники яких можуть здійснювати адміністрування даного реєстру.
 * При створенні адміністратора вказуються додаткові атрибути: номер в ДРФО, ЄДРПОУ організації та ПІБ які вказані в КЕП.
-* Під час створення адміністратор відбувається перевірка чи належить організація до переліку тих що можуть здійснювати адміністрування.
-* У разі технічної неможливості використання сервісів для входу за допомогою КЕП, технічний адміністратор платформи може відключити необхідність використання КЕП для конкретного реєстру.
+* У разі технічної неможливості використання сервісів для входу за допомогою КЕП, технічний адміністратор платформи може відключити необхідність використання КЕП для окремих адміністраторів.
 * Автентифікація адміністраторів через КЕП можлива з використанням ІІТ віджета або через id.gov.ua.
 
 
@@ -36,102 +34,175 @@
 * Автентифікація по логіну і паролю є варіантом за замовченням і достатнім при розробці.
 * В реєстрах які знаходяться в промисловій експлуатації обовʼязковим є використання другого персоніфікованого фактора для автентифікації.
 * Відключення другого фактора для автентифікації в реєстрах з промисловим використанням є виключною ситуацією і можливе тільки у разі технічної неможливості використання другого фактору.
-* Необхідність використання додаткового фактора для автентифікації за допомогою КЕП визначається на рівні реєстру.
-* Конфігурація другого фактору здійснюється на рівні реєстру.
+* Необхідність використання додаткового фактора для автентифікації за допомогою КЕП визначається на рівні користувача.
+* Конфігурація другого фактору здійснюється на рівні платформи.
 * Можливе використання двох варіантів у якості другого фактора для автентифікації це — ІІТ Віджет та `id.gov.ua`.
 * На платформі передбачена можливість співіснування реєстрів, що знаходяться в промисловій експлуатації та на стадії розробки.
-
-
 * Всі адміністратори знаходяться в одному `realm` (`openshift`).
 * Послідовність для автентифікації вказується на рівні налаштувань `realm`.
-* Приналежність адміністратора до реєстру або платформи визначається за наявністю у нього відповідної ролі (`cp-registry-admin-%namespce%` - для адміністратора реєстру, або `cp-cluster`)
-// [TODO] СПИСАТИ НАЗВИ РОЛЕЙ
-
-
+* Приналежність адміністратора до реєстру або платформи визначається за наявністю у нього відповідної ролі (`cp-registry-admin-%namespce%` - для адміністратора реєстру, або `cp-cluster-mgmnt`)
 * Один адміністратор може мати доступ до декілька реєстрів за допомогою одного або декількох користувачів.
 * Користувач з унікальним e-mail може мати тільки один набір атрибутів, не допускається використання одного e-mail для декількох осіб або для декількох організацій.
-
+* Авторизація до ресурсів реєстру відбувається за рахунок надання користувачам відповідних ролей користувачу.
 
 
 == Високорівневий дизайн рішення
 
 image::architecture-workspace/platform-evolution/certificate-admin-login/user-managment-components.svg[]
 
-=== Автентифікація технічного адміністратора реєстру
+.Нові компоненти
+|===
+|Назва |Призначення
 
+|admin login page
+|Стилізована сторінка для автентифікації за логіном і паролем
 
+|admin OTP page
+|Стилізована сторінка для автентифікації за допомогою КЕП
+
+|Admin authenticator
+|Автентифікатор який використовується openshift realm-ом і в залежності від конфігурації
+|===
 
 [plantuml]
 ----
 actor "Адміністратор" as admin
-participant "Веб браузер" as browser
-participant "Адмін консоль,\nKiali, Jager,\nKibana, etc. " as admin_tool
-participant "Кластер\nOpenShift" as openshift
-participant "Keycloak" as keycloak
-participant "Digital Signature Ops" as dso
-participant "ID.GOV.UA" as idgovua
-admin -> browser: запит до адміністративної консолі
-browser -> admin_tool: запит захищеного ресурсу
-admin_tool -> openshift: перевірка чи користувач автентифікований
-return сесію не знайдено
-admin_tool -> browser: посилання для перенаправлення
-browser -> openshift: перенаправлення на сторінку для автентифікації
-return сторінка для логіну
-browser --> admin: варіанти для автентифікації
-admin -> browser: SSO
-browser -> keycloak: запит сторінки логіну
-keycloak --> browser: login
-browser --> admin: сторінка для першого вактору автентифікації
-admin -> browser: логін і пароль
-browser -> keycloak: автентифікація за логіном і паролем
-keycloak -> keycloak: перевірка відповідності логіну і паролю
+participant "Веб-інтерфейс інтерфейс\nуправління платформою\nта реєстрами" as cp
+participant "Сервіс інспекції та\nзберігання змін конфігурації" as gerrit
+participant "Сервіс розгортанн\n конфігурації" as jenkins
+participant "OpenShift" as os
+participant "Сервіс управління\nсекретами та шифруванням" as vault
 
-== Вибір другого фактору ==
-keycloak -> keycloak: перевірка атрибутів користувача\nвизначення необхідності другого фактору
-keycloak -> keycloak: визначення параметрів другого фактору\nІІТ віджет або id.gov.ua
-keycloak --> browser: сторінка другого фактору
-browser --> admin: форма для автентифікації через КЕП
-
-
-
+admin ->  cp: створення адміністратора
+cp -> gerrit: зміна конфігурації реєстру (`values.yaml`)
+cp -> vault: збереження початкового паролю та персональних даних
+cp --> admin: адміністратора створено
+gerrit -> jenkins: тригер внесення зміни
+jenkins -> vault: читання персональних даних адміністратора
+jenkins -> jenkins: складання атрибутів
+jenkins -> os: створення або оновлення\nресурсу `KeycloakRealmUser`
 ----
 
-=== Автентифікація розробника/моделювальника регламенту
 
-* Створення окремого екрану для автентифікації
+.Загальний підхід до автентифікації адміністраторів
+[plantuml]
+----
+@startuml
+start
+if (Правельний пароль) then (так)
+    if (код клієнта вказує\nна інший реєстр) then (так)
+        if (даний код існує серед\nзначень атрибуту\nдвофакторної автентифікації) then (так)
+            :Вхід через КЕП;
+        else (ні)
+            :Вхід успішний;
+            end;
+        endif
+    else (ні)
+        if (атрибут двофакторної\nавтентифікації існує у\nкористувача?) then (так)
+            :Вхід через КЕП;
+        else (ні)
+            :Вхід успішний;
+            end;
+        endif
+    endif
+else (ні)
+    :Не успішний вхід;
+    end;
+endif
 
-
-=== Діаграма міжсервісної взаємодії
+if (:Отримання конфігурації другого фактору) then (віджкт ІІТ)
+    :Сторінка для входу з віджетом ІІТ;
+else (id.gov.ua)
+    :Перенаправлення на id.gov.ua;
+endif;
+:Автентифікація згідно вибраної опції;
+end;
+@enduml
+----
 
 === Сервіси та їх призначення
 
+.Перелік адміністративних засобів
+[plantuml, types, svg]
+----
+@startmindmap
+* Застосунки доступні\nдля адміністраторів
+** Центральні компоненти
+*** Автентифікація через OpenShift
+*** Автентифікація через openshift realm
+** Компоненти реєстру
+*** Автентифікація через admin realm
+@endmindmap
+----
+
+Ресурси доступні можна розділити на дві категорії - адміністративні ресурси реєстру та адміністративні ресурси платформи.
+
+Доступ до адміністративних ресурсів реєстру надається після автентифікації в адміністративній (`admin realm`) зоні сервісу управління ідентифікацією та доступом.
+
+Доступ до адміністративних ресурсів платформи надається через автентифікацію в кластері OpenShift або зоні `openshift realm` сервісу управління ідентифікацією та доступом..
 
 === Ключові сценарії взаємодії сервісів
 
-// [plantuml]
-// ----
-// actor "Технічний\nадміністратор\nреєстру" as admin
-// participant "Адмін консоль,\nKiali, Jager,\nKibana, etc. " as controlplane
-// participant "Кластер\nOpenShift" as openshift
-// participant "Keycloak" as keycloak
-// admin -> controlplane
-// controlplane -> openshift
-// openshift -> keycloak
-// keycloak -> keycloak: пошук і автентифікація\nкористувача в\nrealm "OpenShift"
-// ----
+.Автентифікація через admin realm
+[plantuml]
+----
+actor "Адміністратор" as admin
+actor "Веб-браузер" as browser
+participant "Адміністративна зона\nпідсистеми реєстру" as admin_tool
+participant "Сервіс управління\nідентифікацією та доступом" as key
 
-[TIP]
-Опис та діаграми послідовності, тощо.
+admin -> browser: Автентифікація
+browser -> admin_tool: запит до захищенного ресурсу
+return перенаправлення до сервісу управління\nідентифікацією та доступом
+browser -> key: https://platform-keycloak/auth/realms/<color:red>%admin-realm%</color>
+return форма для автентифікації
+browser --> admin: форма для автентифікації
+admin -> browser: вибір входу через openshift-sso
+browser -> key: https://platform-keycloak/auth/realms/<color:red>%admin-realm%</color>/broker/openshift/login?client_id=<color:red>%tool-name%</color>
+return пренапрвлення до центрального openshift realm
+browser -> key: https://platform-keycloak/auth/realms/openshift/protocol/openid-connect/auth
+return форма для автентифікації
+browser --> admin: форма для автентифікації
+admin --> browser: логін та пароль
+browser -> key: https://platform-keycloak/auth/realms/openshift/login-actions/authenticate?client_id=<color:red>%admin-realm%</color>
+==Початок послідовності автентифікатора==
+key -> key: перевірка логіну і паролю
+key -> key: визначення походження клієнта
+key -> key: перевірка атрибутів користувача
+key -> key: визначення необхідності використання другого фактору
+alt id.gov.ua
+key --> browser: перенаправлення на id.gov.ua
+browser -> id.gov.ua
+id.gov.ua --> browser: сторінка автентифікації
+browser --> admin: сторінка автентифікації
+admin -> browser: логін за допомогою КЕП
+browser -> id.gov.ua: послідовність автентифікації
+id.gov.ua -> key: закінчення послідовності
+else віджет ІІТ
+key --> browser: сторінка з віджетом
+browser --> admin: сторінка з віджетом
+admin -> browser: логін за допомогою КЕП
+browser -> browser: підписання даних
+browser -> dso: послідовність автентифікації
+dso -> key: закінчення послідовності
+end
 
+==Кінець послідовності автентифікатора==
+key --> browser: перенаправлення до https://platform-keycloak/auth/realms/<color:red>%admin-realm%</color>/broker/openshift/endpoint
+browser -> key: https://platform-keycloak/auth/realms/<color:red>%admin-realm%</color>/broker/openshift/endpoint
+return перенаправлення до https://admin-tools/<color:red>%tool-name%</color>/oauth
+browser -> admin_tool: https://admin-tools/<color:red>%tool-name%</color>/oauth
+return  перенаправлення до захищенного ресурсу
+browser -> admin_tool: запит захищенного ресурсу
+return захищенний рксурс
+browser --> admin: сторінка захищенного ресурсу
+----
 
 == Управління конфігурацією реєстру
 
-
-
-
 === Конфігурація реєстру
 
-.Варіант з розширенням конфігурації
+.Поточна схема створення адміністратора
 [%collapsible]
 ====
 [source, yaml]
@@ -143,18 +214,10 @@ administrators:
       lastName: Adminchenko
       passwordVaultSecret: registry-kv/registry/%registry_name%/administrators/admin@platform.ua
       passwordVaultSecretKey: password
-      #Новий блок конфігурації
-      mfaRequired: %true/false%
-      mfaType: %id.gov.ua/widget%
-      mfaDetailsVaultSecret: registry-kv/registry/%registry_name%/administrators/admin@platform.ua
-      mfaDetailsVaultEdrpuoKey: edrpuo
-      mfaDetailsVaultDrfoKey: drfo
-      mfaDetailsVaultFullnameKey: fullName
-
 ----
 ====
 
-.Варіант з еволюцією
+.Схема створення адміністратора для автентифікації з КЕП
 [%collapsible]
 ====
 [source, yaml]
@@ -164,14 +227,13 @@ administrators:
       email: admin@platform.ua
       firstName: Admin
       lastName: Adminchenko
-      #Зміна конфігурації
+      #Розширення конфігурації
       authVaultSecret: registry-kv/registry/%registry_name%/administrators/admin@platform.ua
       passwordVaultSecretKey: password
       mfaDetailsVaultEdrpuoKey: edrpuo
       mfaDetailsVaultDrfoKey: drfo
       mfaDetailsVaultFullnameKey: fullName
       mfaRequired: %true/false%
-      mfaType: %id.gov.ua/widget%
 ----
 ====
 
@@ -189,7 +251,12 @@ metadata:
   namespace: user-management
 spec:
   #Розширення шаблону
-  attributes: ${attributes}
+  attributes:
+    mfa: "admin-mfa##admin-mfa-prod"
+    drfo: "%drfo%"
+    edrpuo: "%edrpuo%"
+    fullName: "%fullName%"
+  #Існуюча конфігурація
   firstName: ${firstName}
   lastName: ${lastName}
   username: ${username}
@@ -209,48 +276,19 @@ spec:
 
 ==== Налаштування другого фактору
 
+.Приклади екранів конфігурації параметрів другого фактору автентифікації для адміністраторів
+[%collapsible]
+====
 image:arch:architecture-workspace/platform-evolution/certificate-admin-login/platform-mfa-config-options.png[]
 image:arch:architecture-workspace/platform-evolution/certificate-admin-login/platform-mfa-config-idgovua.png[]
 image:arch:architecture-workspace/platform-evolution/certificate-admin-login/platform-mfa-config-widget.png[]
+====
 
 ==== Створення адміністратора
 
-[NOTE]
-Можливе розширення користувачів специфічними для актора ролями.
-
+.Приклади екранів створення адміністратора з та без другого фактору
+[%collapsible]
+====
 image:arch:architecture-workspace/platform-evolution/certificate-admin-login/admin-creation.png[]
 image:arch:architecture-workspace/platform-evolution/certificate-admin-login/admin-creation-mfa-config.png[]
-
-
-
-[plantuml]
-----
-actor "admin" as admin
-participant "browser" as browser
-participant "Control plane" as cp
-participant "OpenShift" as os
-participant "Key" as key
-admin -> browser: enter url
-return start page
-admin -> browser: click auth
-browser -> cp: go to /admin/dashboard
-return refirect to OpenShift  client_id=admin-console-client \n redirect_uri=https://control-plane-console-control-plane-platform-main.apps.envone.dev.registry.eua.gov.ua/auth/callback&\nresponse_type=code&\nscope=user/check-access+user/full+user/info+user/list-projects+user/list-scoped-projects&state=state-1675615843
-browser -> admin: openshift login page
-admin -> browser: auth over key
-browser -> os: https://oauth-openshift.apps.envone.dev.registry.eua.gov.ua/oauth/authorize\nclient_id=admin-console-client&\nidp=keycloak&\nredirect_uri=https://control-plane-console-control-plane-platform-main.apps.envone.dev.registry.eua.gov.ua/auth/callback&response_type=code&\nscope=user/check-access+user/full+user/info+user/list-projects+user/list-scoped-projects&state=state-1675615843
-return redirect to keycloack https://platform-keycloak.apps.envone.dev.registry.eua.gov.ua/auth/realms/openshift/protocol/openid-connect/auth?\nclient_id=web-console-keycloak-client&\nredirect_uri=https://oauth-openshift.apps.envone.dev.registry.eua.gov.ua/oauth2callback/keycloak&response_type=code&scope=openid&state=..
-browser -> key
-return login page
-browser --> admin: login form
-admin -> browser: submit login form
-browser -> key: https://platform-keycloak.apps.envone.dev.registry.eua.gov.ua\n/auth/realms/openshift/login-actions/authenticate?session_code=z9QXUvHf-ViEItwPCaaeIzMkBRyGDJyjyLBFo9UGZs8&execution=d5ac6b06-7a9e-4c35-8d27-7e6545e41663&\nclient_id=web-console-keycloak-client\n&tab_id=Jys4NyDZn58
-return redirect to https://oauth-openshift.apps.envone.dev.registry.eua.gov.ua\n/oauth2callback/keycloak?state=...&session_state=4adce477-7a95-41e6-93f3-867024c10003\n&code=62edd09a-63b3-4aa3-b494-9e845792ee41.4adce477-7a95-41e6-93f3-867024c10003.7d175d78-cb8c-48f0-a6cc-1cac3c9586b3
-browser -> os
-return redirect /oauth/authorize?client_id=admin-console-client&\nidp=keycloak&\nredirect_uri=https://control-plane-console-control-plane-platform-main.apps.envone.dev.registry.eua.gov.ua\n/auth/callback&response_type=code&scope=user/check-access+user/full+user/info+user/list-projects+user/list-scoped-projects&state=state-1675615843
-browser -> cp: https://control-plane-console-control-plane-platform-main.apps.envone.dev.registry.eua.gov.ua/auth/callback?code=sha256~A1Z2KrBOkL8HjB0Zt834qOqF8npNaVhO8bQ5u6JAeuM&state=state-1675615843
-return redirect /admin/registry/overview
-browser -> cp: go to /admin/registry/overview
-return page
-browser --> admin
-----
-
+====
