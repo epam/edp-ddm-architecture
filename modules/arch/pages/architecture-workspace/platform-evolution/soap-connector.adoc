@@ -1,0 +1,291 @@
+= Універсальний SOAP-конектор для взаємодії з ШБО "Трембіта"
+
+== Загальний опис
+
+Необхідно надати можливість інтеграції реєстрів з сервісами ШБО "Трембіта" без залучення команд розробки платформи для розширення точок інтеграції.
+
+== Функціональні сценарії
+
+* Створення технічним адміністратором реєстру нових конфігурацій з параметрами для інтеграцій з іншими учасниками обміну через ШБО "Трембіта"
+* Моделювання БП з використанням можливості виклику JUEL-функцій для отримання авторизаційного токену.
+* Зміна технічним адміністратором реєстру конфігурацій вже наявних інтеграцій.
+* Видалення створених конфігурацій взаємодії з реєстрами через ШБО "Трембіта"
+
+== Ролі користувачів
+
+* Розробник регламенту
+* Технічний адміністратор реєстру
+
+== Загальні принципи та положення
+
+* Мета розширення спрощення моделювання та конфігурації і зменшення написання `boilerplate`-коду
+* Дані які є секретними не можуть зберігатись у відкритому вигляді в системі контролю версій
+
+
+== Високорівневий дизайн рішення
+
+Дана функціональність використовує механізми закладені в дизайні xref:arch:architecture-workspace/platform-evolution/registry-regulation-secrets.adoc[управління налаштуваннями та секретами зовнішніх інтеграцій].
+
+
+== Управління конфігурацією реєстру
+
+=== Конфігурація реєстру
+
+.control-plane-gerrit:<registry>.git
+[%collapsible]
+====
+.deployment-templates/values.yaml
+[source,yaml]
+----
+trembita:
+  registries:
+    edrlike-registry:
+      user-id: "DDM"
+      protocol-version: "4.0"
+      url: "https://trembita.mdtu-ddm.projects.epam.com"
+      type: "registry" # новий тип
+      protocol: "SOAP"
+      client:
+        x-road-instance: "THIS-REGISTRY"
+        member-class: "GOV"
+        member-code: "1488"
+        subsystem-code: "Platform-registry"
+      service:
+        x-road-instance: "THAT-REGISTRY"
+        member-class: "GOV"
+        member-code: "42"
+        subsystem-code: "Edrllike-system"
+      # опційний блок авторизації
+      auth:
+        type: "AUTH_TOKEN"
+        secret: "vault:registry-kv/registry/<registry>/trembita-registries/<trembita-registry-name>"
+    new-registry:
+      user-id: "DDM"
+      protocol-version: "4.0"
+      url: "https://trembita.mdtu-ddm.projects.epam.com"
+      type: "registry" # новий тип
+      protocol: "SOAP"
+      client:
+        x-road-instance: "THIS-REGISTRY"
+        member-class: "GOV"
+        member-code: "1488"
+        subsystem-code: "Platform-registry"
+      service:
+        x-road-instance: "THAT-REGISTRY"
+        member-class: "GOV"
+        member-code: "13"
+        subsystem-code: "New-system"
+----
+====
+
+=== Інтерфейси адміністратора
+Перелік налаштувань взаємодії з реєстрами через Трембіту розширюється:
+
+* Новим типом для атрибуту `Рівень` - `Реєстровий`
+* Можливістю додавання нових взаємодій на рівні реєстру
+* Можливістю видалення створених для поточного реєстру взаємодій
+
+.Екран конфігурації реєстру
+[%collapsible]
+====
+.Загальний вигляд блоку налаштувань
+image::architecture-workspace/platform-evolution/soap-connector/control-plane-main.png[]
+====
+
+.Додавання нової конфігурації
+[%collapsible]
+====
+.Додавання нової конфігурації з авторизаційним токеном
+image::architecture-workspace/platform-evolution/soap-connector/control-plane-create-trembita-auth.png[]
+
+.Додавання нової конфігурації без додаткової авторизації
+image::architecture-workspace/platform-evolution/soap-connector/control-plane-create-trembita-no-auth.png[]
+====
+
+[IMPORTANT]
+З міркувань безпеки, `Службова назва реєстру` не може бути змінена після збереження конфігурації, та має бути унікальна в рамках реєстру
+
+
+== Моделювання регламенту реєстру
+
+=== Розширення для моделювання
+
+image:architecture-workspace/platform-evolution/soap-connector/bp-modeling-process.png[]
+
+== Низькорівневий дизайн сервісів
+
+=== Розширення бібліотеки JUEL-функцій `ddm-starter-juel-function`
+
+Отримання авторизаційного токена через JUEL-функцію в БП
+
+.Приклад використання
+[source]
+----
+obtain_trembita_auth_token('edrlike-registry')
+----
+
+Результатом виконання JUEL-функції є значення поля секрету `trembita-registries-secrets` за маскою `trembita.registries.<registry-name>.auth.secret.token`
+
+=== Розширення переліку конекторів для моделювання БП
+
+Розширення даних запиту до ШБО "Трембіта" службовими тегами в конекторі.
+
+Значення для параметрів беруться з ConfigMap `trembita-registries-configuration`
+
+
+|===
+|Конфігураційний параметр |Вхідний/Вихідний |Тип |Опис
+
+|Службова назва реєстру учаснику ШБО "Трембіта"
+|in
+|string
+|Назва яка була вказана в якості службової при створенні конфігурації в адміністративній консолі
+
+|Дані запиту
+|in
+|string
+|Дані для запиту без службових полів
+
+|Вихідний результат запиту
+|out
+|string
+|Строкове представлення відповіді від ШБО "Трембіта"
+
+|===
+
+
+[source, yaml]
+----
+trembita:
+  registries:
+    <edrlike-registry>
+      user-id: "..."
+      protocol-version: "..."
+      ...
+    <new-registry>
+      user-id: "..."
+      protocol-version: "..."
+      ...
+----
+
+.Перелік і структура службових тегів обовʼязкових для запиту до ШБО "Трембіта"
+[source, xml]
+----
+<xro:client iden:objectType="?" xmlns:xro="http://x-road.eu/xsd/xroad.xsd" xmlns:iden="http://x-road.eu/xsd/identifiers">
+    <iden:xRoadInstance>?</iden:xRoadInstance>
+    <iden:memberClass>?</iden:memberClass>
+    <iden:memberCode>?</iden:memberCode>
+    <iden:subsystemCode>?</iden:subsystemCode>
+</xro:client>
+<xro:service iden:objectType="SERVICE" xmlns:xro="http://x-road.eu/xsd/xroad.xsd" xmlns:iden="http://x-road.eu/xsd/identifiers">
+    <iden:xRoadInstance>?</iden:xRoadInstance>
+    <iden:memberClass>?</iden:memberClass>
+    <iden:memberCode>?</iden:memberCode>
+    <iden:subsystemCode>?</iden:subsystemCode>
+    <iden:serviceCode>?</iden:serviceCode>
+    <iden:serviceVersion>?</iden:serviceVersion>
+</xro:service>
+<xro:userId xmlns:xro="http://x-road.eu/xsd/xroad.xsd">?</xro:userId>
+<xro:id xmlns:xro="http://x-road.eu/xsd/xroad.xsd">?</xro:id>
+<xro:protocolVersion xmlns:xro="http://x-road.eu/xsd/xroad.xsd">?</xro:protocolVersion>
+----
+
+==== Виконання запиту що містить дані тільки в секції `Body`
+
+.Вхідний запит до універсального конектора з відсутністю корінного тега
+[source, xml]
+----
+<new:tag1 xmlns:new="http://new.gov.ua/api/sevdeir/newregistry">?</new:tag1>
+<new:tag2 xmlns:new="http://new.gov.ua/api/sevdeir/newregistry">?</new:tag2>
+<new:tag3 xmlns:new="http://new.gov.ua/api/sevdeir/newregistry">?</new:tag3>
+<new:tag4 xmlns:new="http://new.gov.ua/api/sevdeir/newregistry">?</new:tag4>
+----
+
+.Формат відповідного запиту до ШБО "Трембіта"
+[source, xml]
+----
+<Envelope xmlns="http://schemas.xmlsoap.org/soap/envelope/">
+   <Header>
+        <!-- Обовʼязковий блок який формується в конекторі-->
+        <!-- ... -->
+   </Header>
+   <Body>
+        <new:tag1 xmlns:new="http://new.gov.ua/api/sevdeir/newregistry">?</new:tag1>
+        <new:tag2 xmlns:new="http://new.gov.ua/api/sevdeir/newregistry">?</new:tag2>
+        <new:tag3 xmlns:new="http://new.gov.ua/api/sevdeir/newregistry">?</new:tag3>
+        <new:tag4 xmlns:new="http://new.gov.ua/api/sevdeir/newregistry">?</new:tag4>
+   </Body>
+</Envelope>
+----
+
+.Вхідний запит до універсального конектора з корінним тегом
+[source, xml]
+----
+<new:parent xmlns:new="http://new.gov.ua/api/sevdeir/newregistry">
+    <new:tag1>?</new:tag1>
+    <new:tag2>?</new:tag2>
+    <new:tag3>?</new:tag3>
+    <new:tag4>?</new:tag4>
+</new:parent>
+----
+
+.Формат відповідного запиту до ШБО "Трембіта"
+[source, xml]
+----
+<Envelope xmlns="http://schemas.xmlsoap.org/soap/envelope/">
+   <Header>
+        <!-- Обовʼязковий блок який формується в конекторі-->
+        <!-- ... -->
+   </Header>
+   <Body>
+        <new:parent xmlns:new="http://new.gov.ua/api/sevdeir/newregistry">
+            <new:tag1>?</new:tag1>
+            <new:tag2>?</new:tag2>
+            <new:tag3>?</new:tag3>
+            <new:tag4>?</new:tag4>
+        </new:parent>
+   </Body>
+</Envelope>
+----
+
+==== Виконання запиту що містить дані в різних саб-секціях
+
+.Вхідний запит до універсального конектора з відсутністю корінного тега
+[source, xml]
+----
+<Envelope xmlns="http://schemas.xmlsoap.org/soap/envelope/">
+   <Header>
+      <edr:AuthorizationToken xmlns:edr="http://nais.gov.ua/api/sevdeir/EDR">?</edr:AuthorizationToken>
+   </Header>
+   <Body>
+      <edr:SubjectStateDict2Ext xmlns:edr="http://nais.gov.ua/api/sevdeir/EDR">?</edr:SubjectStateDict2Ext>
+   </Body>
+</Envelope>
+----
+
+.Формат відповідного запиту до ШБО "Трембіта"
+[source, xml]
+----
+<Envelope xmlns="http://schemas.xmlsoap.org/soap/envelope/">
+   <Header>
+        <!-- Обовʼязковий блок який формується в конекторі-->
+        <!-- ... -->
+        <edr:AuthorizationToken xmlns:edr="http://nais.gov.ua/api/sevdeir/EDR">?</edr:AuthorizationToken>
+   </Header>
+   <Body>
+        <edr:SubjectStateDict2Ext xmlns:edr="http://nais.gov.ua/api/sevdeir/EDR">?</edr:SubjectStateDict2Ext>
+   </Body>
+</Envelope>
+----
+
+== Високорівневий план розробки
+
+=== Технічні експертизи
+
+* _BE_ (Java, Go)
+
+=== План розробки
+
+* Розширення бібліотеки ddm-starter-juel-function
+
+
