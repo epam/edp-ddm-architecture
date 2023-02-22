@@ -25,7 +25,8 @@
 * Зі всіх інших IP-адрес доступ до роутів _bp-webservice-gateway_ та _registry-soap-api_ обмежений
 * Дозволено введення тільки IP-адрес, а не підмереж (CIDR)
 * Кількість IP-адрес обмежена 10
-* Внесені IP-адреси повинні перевірятись на що це дійсно валідна IP-адреса без маски підмережі
+* Внесені IP-адреси повинні перевірятись на що це дійсно валідна IP-адреса без маски підмережі на рівні адмін-консолі та
+Jenkins-пайплайна
 * Технічний адміністратор відповідальний за коректність налаштувань та що за внесеними адресами дійсно Трембіта
 * Якщо перелік `ipList` не містить жодної IP-адреси, то доступу до SOAP API немає взагалі (роут не створюється)
 
@@ -70,6 +71,30 @@ image::architecture-workspace/platform-evolution/api-access-from-trembita/soap-a
 |Компонент|Хост|Шлях|Сервіс
 |bp-webservice-gateway|bp-webservice-gateway-<registry-name>.<dns-wildcard>|/ws|bp-webservice-gateway
 |===
+
+.Послідовність конфігурації
+[plantuml, config, svg]
+----
+@startuml
+actor "Технічний адміністратор реєстру" as admin
+participant "Інтерфейс адмін-консолі" as cp
+participant "Система контролю версій\nGerrit" as vcs
+participant "Сервіс розгортання\nконфігурацій Jenkins" as jenkins
+participant "bp-webservice-gateway" as gateway
+participant "registry-soap-api" as soap
+admin -> cp: * ввімкнення доступу до API\n*перелік IP-адрес
+cp -> cp: валідація IP-адрес
+cp --> admin: валідаційне повідомлення
+cp -> vcs: оновлення values.yaml
+return запит створено та інтегровано
+vcs -> jenkins: *перелік IP-адрес
+jenkins -> jenkins: валідація IP-адрес
+jenkins --> admin: валідаційне повідомлення
+jenkins -> gateway: *розгортання конфігурації
+jenkins -> soap: *розгортання конфігурації
+jenkins --> admin: статус розгортання конфігурації
+@enduml
+----
 
 === Орієнтовні макети дизайну адмін-консолі
 
