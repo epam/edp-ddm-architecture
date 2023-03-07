@@ -193,11 +193,11 @@ GRANT SELECT ON pd_subject_role TO application_role;
 [#create-sc]
 == Схема моделювання критеріїв пошуку в базі даних
 
-TIP: Критерії пошуку в базі даних іменуються Search Conditions.
+TIP: Критерії пошуку в базі даних називаються *Search Conditions*.
 
-Схема моделювання критеріїв пошуку в БД описує правила XML-шаблону `searchConditions` для генерації відповідних SQL-сценаріїв створення розрізів даних (Views) та індексів підтримки пошуку.
+Схема моделювання критеріїв пошуку в БД описує правила XML-шаблону `*searchConditions*` для генерації відповідних SQL-сценаріїв створення розрізів даних (Views) та індексів підтримки пошуку.
 
-На основі кожного `searchCondition` генерується відповідний REST-ендпоінт на рівні API платформи даних, через який запити в подальшому потрапляють до бази даних.
+На основі кожного `*searchCondition*` генерується відповідний REST-ендпоінт на рівні API платформи даних, через який запити надалі потрапляють до бази даних.
 
 === Передумови
 
@@ -257,112 +257,6 @@ WARNING: Якщо тег `<ext:condition>` вкладений в інший, т�
 - Value - якщо потрібно передати текстове значення, то потрібно це значення обгорнути в одинарні лапки;
 - `<ext:function>` - дозволяє використовувати агрегатні функції (`min()`, `max()`, `avg()`, `count()`, `sum()`), при цьому поля таблиці, які використовуються в цих функціях, вилучаються з виводу (SELECT). Всі інші поля включаються в групування (GROUP BY).
 
-=== Повний XML-шаблон дизайну критеріїв пошуку
-
-.**Натисніть, щоб розгорнути блок**
-[%collapsible]
-====
-[source, xml]
-----
-<?xml version="1.0" encoding="UTF-8" standalone="no"?>
-
-<databaseChangeLog
-        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
-        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-        xmlns:ext="http://www.liquibase.org/xml/ns/dbchangelog-ext"
-        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.2.xsd
-        http://www.liquibase.org/xml/ns/dbchangelog-ext xsd/dbchangelog-ext.xsd">
-
-    <changeSet author="registry owner" id="searchCondition pd_processing_consent_simple">
-        <comment>CREATE search condition pd_processing_consent_simple</comment>
-        <ext:createSimpleSearchCondition name="pd_processing_consent_simple" indexing="like:text" limit="all">
-            <ext:table name="pd_processing_consent" alias="c" searchColumn="person_full_name"/>
-        </ext:createSimpleSearchCondition>
-    </changeSet>
-
-    <changeSet author="registry owner" id="searchCondition pd_processing_consent_1">
-        <comment>CREATE search condition pd_processing_consent_1</comment>
-        <ext:createSearchCondition name="pd_processing_consent_1" indexing="like">
-            <ext:table name="pd_processing_consent" alias="c">
-                <ext:column name="person_full_name" returning="true"  searching="true" type="text"/>
-                <ext:column name="person_pass_number" returning="true"  searching="true" type="varchar"/>
-                <ext:column name="consent_date" returning="true" />
-            </ext:table>
-            <ext:table name="pd_processing_consent_subject" alias="cs">
-                <ext:column name="legal_entity_name" alias="srch_legal_entity_name" returning="true" searching="true"/>
-                <ext:column name="edrpou" alias="srch_edrpou" returning="true" searching="true"/>
-            </ext:table>
-            <ext:join type="inner">
-                <ext:left alias="c">
-                    <ext:column name="consent_id"/>
-                </ext:left>
-                <ext:right alias="cs">
-                    <ext:column name="consent_id"/>
-                </ext:right>
-            </ext:join>
-        </ext:createSearchCondition>
-    </changeSet>
-
-    <changeSet author="registry owner" id="searchCondition pd_processing_consent_2">
-        <comment>CREATE search condition pd_processing_consent_2</comment>
-        <ext:createSearchCondition name="pd_processing_consent_2" limit="1">
-            <ext:table name="pd_processing_consent" alias="c">
-                <ext:column name="person_full_name" returning="true" searching="true"/>
-                <ext:column name="person_pass_number" returning="true" searching="true"/>
-                <ext:column name="consent_date" returning="true" sorting="desc"/>
-            </ext:table>
-            <ext:table name="pd_processing_consent_subject" alias="cs">
-                <ext:column name="legal_entity_name" returning="true"/>
-                <ext:column name="edrpou" returning="true"/>
-            </ext:table>
-            <ext:join type="inner">
-                <ext:left alias="c">
-                    <ext:column name="consent_id"/>
-                </ext:left>
-                <ext:right alias="cs">
-                    <ext:column name="consent_id"/>
-                </ext:right>
-            </ext:join>
-        </ext:createSearchCondition>
-    </changeSet>
-
-<changeSet author="registry owner" id="SearchCondition">
-    <ext:createSearchCondition name="SearchCondition" limit="1">
-        <ext:table name="table_one" alias="to">
-            <ext:column name="name" alias="to_name"/>
-            <ext:column name="type" searchType="equal"/>
-            <ext:function name="count" alias="cnt" columnName="uuid"/>
-        </ext:table>
-        <ext:table name="table_two" alias="tt">
-            <ext:column name="name" alias="tt_name"/>
-            <ext:column name="code" searchType="contains"/>
-            <ext:function name="sum" alias="sm" columnName="code"/>
-        </ext:table>
-        <ext:join type="left">
-            <ext:left alias="np">
-                <ext:column name="level2"/>
-            </ext:left>
-            <ext:right alias="rn">
-                <ext:column name="code"/>
-            </ext:right>
-        </ext:join>
-        <ext:where>
-            <ext:condition tableAlias="to" columnName="type" operator="eq" value="'char'">
-                <ext:condition logicOperator="or" tableAlias="to" columnName="type" operator="eq" value="'text'"/>
-            </ext:condition>
-            <ext:condition logicOperator="and" tableAlias="tt" columnName="code" operator="similar" value="'{80}'"/>
-        </ext:where>
-    </ext:createSearchCondition>
-</changeSet>
-
-    <changeSet author="registry owner" id="drop report_research view">
-        <ext:dropSearchCondition name="report_research"/>
-    </changeSet>
-
-</databaseChangeLog>
-----
-====
-
 [#create-sc-simple]
 === XML-шаблон дизайну простого критерію пошуку (Сценарій 1)
 
@@ -371,11 +265,11 @@ WARNING: Якщо тег `<ext:condition>` вкладений в інший, т�
 [source,XML]
 ----
 <changeSet author="registry owner" id="searchCondition pd_processing_consent_simple">
-        <comment>CREATE search condition pd_processing_consent_simple</comment>
-        <ext:createSimpleSearchCondition name="pd_processing_consent_simple" indexing="like:text" limit="all">
-            <ext:table name="pd_processing_consent" alias="c" searchColumn="person_full_name"/>
-        </ext:createSimpleSearchCondition>
-    </changeSet>
+    <comment>CREATE search condition pd_processing_consent_simple</comment>
+    <ext:createSimpleSearchCondition name="pd_processing_consent_simple" indexing="true" limit="all">
+        <ext:table name="pd_processing_consent" alias="c" searchType="equal" searchColumn="person_full_name"/>
+    </ext:createSimpleSearchCondition>
+</changeSet>
 ----
 
 [sc-scenario-1-sql-output]
@@ -388,8 +282,12 @@ AS
   SELECT c.*
   FROM   pd_processing_consent c;
 
-CREATE INDEX ix_pd_processing_consent_simple ON pd_processing_consent(
-person_full_name text_pattern_ops);
+CREATE INDEX ix_pd_processing_consent_simple_pd_processing_consent_person_full_name ON pd_processing_consent(
+  lower(
+    cast(person_full_name as varchar)
+  )
+);
+
 ----
 
 [#create-sc-uc2]
@@ -400,27 +298,27 @@ person_full_name text_pattern_ops);
 [source, xml]
 ----
 <changeSet author="registry owner" id="searchCondition pd_processing_consent_1">
-        <comment>CREATE search condition pd_processing_consent_1</comment>
-        <ext:createSearchCondition name="pd_processing_consent_1" indexing="like">
-            <ext:table name="pd_processing_consent" alias="c">
-                <ext:column name="person_full_name" returning="true"  searching="true" type="text"/>
-                <ext:column name="person_pass_number" returning="true"  searching="true" type="varchar"/>
-                <ext:column name="consent_date" returning="true" />
-            </ext:table>
-            <ext:table name="pd_processing_consent_subject" alias="cs">
-                <ext:column name="legal_entity_name" alias="srch_legal_entity_name" returning="true" searching="true"/>
-                <ext:column name="edrpou" alias="srch_edrpou" returning="true" searching="true"/>
-            </ext:table>
-            <ext:join type="inner">
-                <ext:left alias="c">
-                    <ext:column name="consent_id"/>
-                </ext:left>
-                <ext:right alias="cs">
-                    <ext:column name="consent_id"/>
-                </ext:right>
-            </ext:join>
-        </ext:createSearchCondition>
-    </changeSet>
+    <comment>CREATE search condition pd_processing_consent_1</comment>
+    <ext:createSearchCondition name="pd_processing_consent_1" indexing="true">
+        <ext:table name="pd_processing_consent" alias="c">
+            <ext:column name="person_full_name" searchType="equal" returning="true" type="text"/>
+            <ext:column name="person_pass_number" returning="true" type="varchar"/>
+            <ext:column name="consent_date" returning="true"/>
+        </ext:table>
+        <ext:table name="pd_processing_consent_subject" alias="cs">
+            <ext:column name="legal_entity_name" alias="srch_legal_entity_name" returning="true"/>
+            <ext:column name="edrpou" alias="srch_edrpou" returning="true"/>
+        </ext:table>
+        <ext:join type="inner">
+            <ext:left alias="c">
+                <ext:column name="consent_id"/>
+            </ext:left>
+            <ext:right alias="cs">
+                <ext:column name="consent_id"/>
+            </ext:right>
+        </ext:join>
+    </ext:createSearchCondition>
+</changeSet>
 ----
 
 [sc-scenario-2-sql-output]
@@ -428,19 +326,23 @@ person_full_name text_pattern_ops);
 
 [source, SQL]
 ----
- CREATE OR replace VIEW pd_processing_consent_1_v
-AS
-  SELECT c.person_full_name,
-         c.person_pass_number,
-         c.consent_date,
-         cs.legal_entity_name,
-         cs.edrpou
-  FROM   pd_processing_consent c
-         join pd_processing_consent_subject cs
-           ON c.consent_id = cs.consent_id;
+CREATE
+OR REPLACE VIEW pd_processing_consent_1_v AS
+SELECT
+  c.person_full_name,
+  c.person_pass_number,
+  c.consent_date,
+  cs.legal_entity_name AS srch_legal_entity_name,
+  cs.edrpou AS srch_edrpou
+FROM
+  pd_processing_consent AS c
+  INNER JOIN pd_processing_consent_subject AS cs ON (c.consent_id = cs.consent_id);
+CREATE INDEX IF NOT EXISTS ix_pd_processing_consent__person_full_name ON pd_processing_consent(
+  lower(
+    cast(person_full_name as varchar)
+  )
+);
 
-CREATE INDEX ix_pd_processing_consent_1
-  ON pd_processing_consent_subject(legal_entity_name, edrpou);
 ----
 
 [#create-sc-uc3]
@@ -451,27 +353,27 @@ CREATE INDEX ix_pd_processing_consent_1
 [source, xml]
 ----
 <changeSet author="registry owner" id="searchCondition pd_processing_consent_2">
-        <comment>CREATE search condition pd_processing_consent_2</comment>
-        <ext:createSearchCondition name="pd_processing_consent_2" limit="1">
-            <ext:table name="pd_processing_consent" alias="c">
-                <ext:column name="person_full_name" returning="true" searching="true"/>
-                <ext:column name="person_pass_number" returning="true" searching="true"/>
-                <ext:column name="consent_date" returning="true" sorting="desc"/>
-            </ext:table>
-            <ext:table name="pd_processing_consent_subject" alias="cs">
-                <ext:column name="legal_entity_name" returning="true"/>
-                <ext:column name="edrpou" returning="true"/>
-            </ext:table>
-            <ext:join type="inner">
-                <ext:left alias="c">
-                    <ext:column name="consent_id"/>
-                </ext:left>
-                <ext:right alias="cs">
-                    <ext:column name="consent_id"/>
-                </ext:right>
-            </ext:join>
-        </ext:createSearchCondition>
-    </changeSet>
+    <comment>CREATE search condition pd_processing_consent_2</comment>
+    <ext:createSearchCondition name="pd_processing_consent_2" limit="1">
+        <ext:table name="pd_processing_consent" alias="c">
+            <ext:column name="person_full_name" searchType="equal" returning="true"/>
+            <ext:column name="person_pass_number" returning="true"/>
+            <ext:column name="consent_date" returning="true" sorting="desc"/>
+        </ext:table>
+        <ext:table name="pd_processing_consent_subject" alias="cs">
+            <ext:column name="legal_entity_name" returning="true"/>
+            <ext:column name="edrpou" returning="true"/>
+        </ext:table>
+        <ext:join type="inner">
+            <ext:left alias="c">
+                <ext:column name="consent_id"/>
+            </ext:left>
+            <ext:right alias="cs">
+                <ext:column name="consent_id"/>
+            </ext:right>
+        </ext:join>
+    </ext:createSearchCondition>
+</changeSet>
 ----
 
 [sc-scenario-3-sql-output]
@@ -479,17 +381,19 @@ CREATE INDEX ix_pd_processing_consent_1
 
 [source, SQL]
 ----
-CREATE OR replace VIEW pd_processing_consent_2_v
-AS
-  SELECT c.person_full_name   AS srch_person_full_name,
-         c.person_pass_number AS srch_person_pass_number,
-         c.consent_date,
-         cs.legal_entity_name,
-         cs.edrpou
-  FROM   pd_processing_consent c
-         join pd_processing_consent_subject cs
-           ON c.consent_id = cs.consent_id
-  ORDER  BY c.consent_date DESC;
+CREATE
+OR REPLACE VIEW pd_processing_consent_2_v AS
+SELECT
+  c.person_full_name,
+  c.person_pass_number,
+  c.consent_date,
+  cs.legal_entity_name,
+  cs.edrpou
+FROM
+  pd_processing_consent AS c
+  INNER JOIN pd_processing_consent_subject AS cs ON (c.consent_id = cs.consent_id)
+ORDER BY
+  c.consent_date DESC;
 ----
 
 [#create-sc-uc4]
@@ -587,6 +491,112 @@ AND    (
   EXECUTE txt;
 ENDIF;END;$$;
 ----
+
+=== Повний XML-шаблон дизайну критеріїв пошуку
+
+._Натисніть, щоб розгорнути або згорнути блок_
+[%collapsible]
+====
+[source, xml]
+----
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xmlns:ext="http://www.liquibase.org/xml/ns/dbchangelog-ext"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.2.xsd
+        http://www.liquibase.org/xml/ns/dbchangelog-ext xsd/dbchangelog-ext.xsd">
+
+    <changeSet author="registry owner" id="searchCondition pd_processing_consent_simple">
+        <comment>CREATE search condition pd_processing_consent_simple</comment>
+        <ext:createSimpleSearchCondition name="pd_processing_consent_simple" indexing="true" limit="all">
+            <ext:table name="pd_processing_consent" alias="c" searchType="equal" searchColumn="person_full_name"/>
+        </ext:createSimpleSearchCondition>
+    </changeSet>
+
+    <changeSet author="registry owner" id="searchCondition pd_processing_consent_1">
+        <comment>CREATE search condition pd_processing_consent_1</comment>
+        <ext:createSearchCondition name="pd_processing_consent_1" indexing="true">
+            <ext:table name="pd_processing_consent" alias="c">
+                <ext:column name="person_full_name" searchType="equal" returning="true" type="text"/>
+                <ext:column name="person_pass_number" returning="true" type="varchar"/>
+                <ext:column name="consent_date" returning="true"/>
+            </ext:table>
+            <ext:table name="pd_processing_consent_subject" alias="cs">
+                <ext:column name="legal_entity_name" alias="srch_legal_entity_name" returning="true"/>
+                <ext:column name="edrpou" alias="srch_edrpou" returning="true"/>
+            </ext:table>
+            <ext:join type="inner">
+                <ext:left alias="c">
+                    <ext:column name="consent_id"/>
+                </ext:left>
+                <ext:right alias="cs">
+                    <ext:column name="consent_id"/>
+                </ext:right>
+            </ext:join>
+        </ext:createSearchCondition>
+    </changeSet>
+
+    <changeSet author="registry owner" id="searchCondition pd_processing_consent_2">
+        <comment>CREATE search condition pd_processing_consent_2</comment>
+        <ext:createSearchCondition name="pd_processing_consent_2" limit="1">
+            <ext:table name="pd_processing_consent" alias="c">
+                <ext:column name="person_full_name" searchType="equal" returning="true"/>
+                <ext:column name="person_pass_number" returning="true"/>
+                <ext:column name="consent_date" returning="true" sorting="desc"/>
+            </ext:table>
+            <ext:table name="pd_processing_consent_subject" alias="cs">
+                <ext:column name="legal_entity_name" returning="true"/>
+                <ext:column name="edrpou" returning="true"/>
+            </ext:table>
+            <ext:join type="inner">
+                <ext:left alias="c">
+                    <ext:column name="consent_id"/>
+                </ext:left>
+                <ext:right alias="cs">
+                    <ext:column name="consent_id"/>
+                </ext:right>
+            </ext:join>
+        </ext:createSearchCondition>
+    </changeSet>
+
+    <changeSet author="registry owner" id="SearchCondition">
+        <ext:createSearchCondition name="SearchCondition" limit="1">
+            <ext:table name="table_one" alias="to">
+                <ext:column name="name" alias="to_name"/>
+                <ext:column name="type" searchType="equal"/>
+                <ext:function name="count" alias="cnt" columnName="uuid"/>
+            </ext:table>
+            <ext:table name="table_two" alias="tt">
+                <ext:column name="name" alias="tt_name"/>
+                <ext:column name="code" searchType="contains"/>
+                <ext:function name="sum" alias="sm" columnName="code"/>
+            </ext:table>
+            <ext:join type="left">
+                <ext:left alias="np">
+                    <ext:column name="level2"/>
+                </ext:left>
+                <ext:right alias="rn">
+                    <ext:column name="code"/>
+                </ext:right>
+            </ext:join>
+            <ext:where>
+                <ext:condition tableAlias="to" columnName="type" operator="eq" value="'char'">
+                    <ext:condition logicOperator="or" tableAlias="to" columnName="type" operator="eq" value="'text'"/>
+                </ext:condition>
+                <ext:condition logicOperator="and" tableAlias="tt" columnName="code" operator="similar" value="'{80}'"/>
+            </ext:where>
+        </ext:createSearchCondition>
+    </changeSet>
+
+    <changeSet author="registry owner" id="drop report_research view">
+        <ext:dropSearchCondition name="report_research"/>
+    </changeSet>
+
+</databaseChangeLog>
+----
+====
 
 [#create-many2many]
 == Схема моделювання зв'язків між сутностями в БД
