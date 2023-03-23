@@ -34,11 +34,11 @@
 
 Додавання зовнішніх систем для інтеграції не вимагає ручних налаштувань мережевих політик. Усі конфігурації застосовуються автоматично, після налаштувань в адмін-панелі.
 
-NOTE: Міжреєстрова інтеграція через "Трембіту" реалізується у вигляді каталогу типових розширень-конекторів до реєстрів та не потребує додаткової конфігурації на рівні регламенту.
+NOTE: Міжреєстрова інтеграція через "Трембіту" реалізується у вигляді каталогу типових розширень-конекторів до реєстрів та не потребує додаткової конфігурації на рівні регламенту (_див. детальніше -- xref:bp-modeling/external-integration/api-call/connectors-external-registry.adoc[]_).
 
 == Приклади конфігурації сервісів та опис структурних параметрів
 
-Наразі на Платформі через "Трембіту" можна налаштувати інтеграцію із 5-ма сервісами 3-х реєстрів, які підпорядковуються 2-м міністерствам.
+Наразі на Платформі через "Трембіту" можна _за замовчуванням_ налаштувати інтеграцію із 5-ма сервісами 3-х реєстрів, які підпорядковуються 2-м міністерствам. Також можна додавати нові інтеграції із будь-якими сервісами-учасниками СЕВ ДЕІР "Трембіта".
 
 [#list-of-services-trembita]
 Перелік сервісів СЕВ ДЕІР "Трембіта", що використовуються на Платформі: ::
@@ -91,13 +91,15 @@ TIP: Перегляньте також сторінку xref:registry-admin/exte
 .Приклад конфігурації підключення до сервісів ЄДР
 [%collapsible]
 ====
+.deploy-templates/values.yaml
 [source,yaml]
 ----
-trembita-exchange-gateway:
+trembita:
   registries:
     edr-registry:
       user-id: 'DDM'
       protocol-version: '4.0'
+      protocol: "SOAP"
       trembita-url: 'https://trembita-edr-registry-mock.apps.envone.dev.registry.eua.gov.ua/mockEDRService'
       secret-name: 'trembita-registries-secrets'
       client:
@@ -110,6 +112,10 @@ trembita-exchange-gateway:
         member-class: 'GOV'
         member-code: '00015622'
         subsystem-code: '2_MJU_EDR_prod'
+      # Опційний блок авторизації, залежить від сервісу
+      auth:
+        type: "AUTH_TOKEN"
+        secret: "vault:registry-kv/registry/<registry>/trembita-registries/<trembita-registry-name>"
 ----
 ====
 +
@@ -117,13 +123,15 @@ trembita-exchange-gateway:
 [%collapsible]
 ====
 [source,yaml]
+.deploy-templates/values.yaml
 ----
-trembita-exchange-gateway:
+trembita:
   registries:
     dracs-registry:
           trembita-url: 'https://trembita-dracs-registry-mock.apps.envone.dev.registry.eua.gov.ua/dracsMock'
           user-id: 'DDM'
           protocol-version: '4.0'
+          protocol: "SOAP"
           client:
             x-road-instance: 'SEVDEIR-TEST'
             member-class: 'GOV'
@@ -141,13 +149,16 @@ trembita-exchange-gateway:
 [%collapsible]
 ====
 [source,yaml]
+.deploy-templates/values.yaml
 ----
-trembita-exchange-gateway:
+trembita:
   registries:
     idp-exchange-service-registry:
           trembita-url: https://trembita-idp-mock-server.apps.envone.dev.registry.eua.gov.ua/idpMock
           user-id: DDM
           protocol-version: '4.0'
+          type: "registry"
+          protocol: "SOAP"
           client:
             x-road-instance: SEVDEIR-TEST
             member-class: GOV
@@ -161,18 +172,73 @@ trembita-exchange-gateway:
 ----
 ====
 +
+.Приклад конфігурації підключення до довільних SOAP-сервісів "Трембіти"
+[%collapsible]
+====
+[source,yaml]
+.deploy-templates/values.yaml
+----
+trembita:
+  registries:
+    edrlike-registry:
+      user-id: "DDM"
+      protocol-version: "4.0"
+      url: "https://trembita.mdtu-ddm.projects.epam.com"
+      type: "registry" # Вказує на рівень взаємодії - реєстровий
+      protocol: "SOAP"
+      client:
+        x-road-instance: "THIS-REGISTRY"
+        member-class: "GOV"
+        member-code: "1488"
+        subsystem-code: "Platform-registry"
+      service:
+        x-road-instance: "THAT-REGISTRY"
+        member-class: "GOV"
+        member-code: "42"
+        subsystem-code: "Edrllike-system"
+      # опційний блок авторизації
+      auth:
+        type: "AUTH_TOKEN"
+        secret: "vault:registry-kv/registry/<registry>/trembita-registries/<trembita-registry-name>"
+    new-registry:
+      user-id: "DDM"
+      protocol-version: "4.0"
+      url: "https://trembita.mdtu-ddm.projects.epam.com"
+      type: "registry" # Вказує на рівень взаємодії - реєстровий
+      protocol: "SOAP"
+      client:
+        x-road-instance: "THIS-REGISTRY"
+        member-class: "GOV"
+        member-code: "1488"
+        subsystem-code: "Platform-registry"
+      service:
+        x-road-instance: "THAT-REGISTRY"
+        member-class: "GOV"
+        member-code: "13"
+        subsystem-code: "New-system"
+        # Опціональний параметр
+        service-code: "Service code"
+        # Опціональний параметр
+        service-version: "Service version"
+----
+====
++
 .Опис структурних параметрів
 [width="100%",cols="30%,70%",options="header",]
 |===
 |Параметр|Опис
 
 |`registries`|Назва реєстру, до якого буде сформовано запит
+
 2+|_Заголовки, що ідентифікують користувача, який робить запит_
 |`trembita-url`|Адреса до ШБО
 |`user-id`|Ідентифікатор користувача, який ініціює запит
-|`protocol-version`|Версія протоколу, за яким обмінюються повідомлення ШБО.
-
+|`protocol-version`|Версія протоколу, за яким обмінюються повідомлення ШБО. +
 _На цей час версія протоколу 4.0_
+|`type`| Вказує на рівень взаємодії. +
+При створенні нових SOAP-інтеграцій через "Трембіту" (додавання нової системи), рівень взаємодії завжди _реєстровий_ -- *`type: "registry"`*.
+|`protocol`| Протокол інтеграційної взаємодії. +
+Встановлюється за замовчуванням -- завжди `"SOAP"`.
 
 2+|_Заголовок (client), який ідентифікує учасника сервісу_
 |`x-road-instance`|Код середовища, який ідентифікує екземпляр учасника
@@ -185,6 +251,15 @@ _На цей час версія протоколу 4.0_
 |`member-class`|Ідентифікатор класу сервісу
 |`member-code`|Ідентифікатор сервісу
 |`subsystem-code`|Код, який ідентифікує підсистему сервісу, якщо сервіс надається підсистемою
+|`service-code`| _(Опціональний параметр)_. +
+Визначає специфічний код конкретного сервісу, що викликається. Використовується для однозначної ідентифікації певної служби.
+|`service-version`| _(Опціональний параметр)_ +
+Визначає номер версії сервісу, що викликається. Забезпечення доступ до правильної версії сервісу, якщо їх декілька.
+
+2+|_(Опціональний блок) Заголовок (auth), який визначає параметри авторизації_
+|`type`| Тип автентифікації. +
+_Доступні значення для SOAP-взаємодії: `*AUTH_TOKEN*` і **`NO_AUTH`**_.
+|`secret`| Шлях до секрету рівня реєстру у Vault
 |===
 
 TIP: Конкретні приклади налаштувань взаємодії із реєстрами через ШБО "Трембіта" ви можете переглянути у відповідних підрозділах нижче.
@@ -223,7 +298,7 @@ image::registry-admin/external-integration/cp-integrate-trembita/cp-integrate-tr
 +
 [NOTE]
 ====
-* Службова назва реєстру, протокол інтеграції й тип автентифікації встановлюються за замовчуванням та не можуть бути змінені.
+* Службова назва реєстру, протокол інтеграції й тип автентифікації встановлюються за замовчуванням та не можуть бути змінені з міркувань безпеки.
 
 * Наразі підтримується лише SOAP-протокол інтеграції.
 
@@ -284,7 +359,7 @@ image::registry-admin/external-integration/cp-integrate-trembita/cp-integrate-tr
 +
 [NOTE]
 ====
-* Службова назва реєстру, протокол інтеграції й тип автентифікації встановлюються за замовчуванням та не можуть бути змінені.
+* Службова назва реєстру, протокол інтеграції й тип автентифікації встановлюються за замовчуванням та не можуть бути змінені з міркувань безпеки.
 
 * Наразі підтримується лише SOAP-протокол інтеграції.
 
@@ -339,7 +414,7 @@ image::registry-admin/external-integration/cp-integrate-trembita/cp-integrate-tr
 +
 [NOTE]
 ====
-* Службова назва реєстру, протокол інтеграції й тип автентифікації встановлюються за замовчуванням та не можуть бути змінені.
+* Службова назва реєстру, протокол інтеграції й тип автентифікації встановлюються за замовчуванням та не можуть бути змінені з міркувань безпеки.
 
 * Наразі підтримується лише SOAP-протокол інтеграції.
 
@@ -361,6 +436,35 @@ image:registry-admin/external-integration/cp-integrate-ext-system/cp-ext-sys-4.p
 image::registry-admin/external-integration/cp-integrate-trembita/cp-integrate-trembita-10.png[]
 
 <<<
+
+=== Налаштування взаємодії із довільними SOAP-сервісами СЕВ ДЕІР "Трембіта"
+
+Механізм налаштування інтеграційної взаємодії із сервісами-учасниками СЕВ ДЕІР "Трембіта" є однаковим для усіх систем (_детальніше див. у попередніх розділах цього документа_). Єдиними відмінностями є такі:
+
+* Ви можете _додавати_ нові інтеграційні взаємодії на рівні реєстру.
+* Ви можете _видаляти_ створені інтеграційні взаємодії для поточного реєстру.
+* При додаванні нової взаємодії, у налаштуваннях реєстру _deploy-templates/values.yaml_ додається атрибут *`type: "registry"`*, який вказує на _реєстровий_ рівень взаємодії.
+* Взаємодії, які розгортаються автоматично разом із реєстром (ЄДР, ДРАЦС та ЄІБДВПО), можливо лише редагувати й неможливо видалити. Для таких інтеграцій рівень взаємодії завжди _системний_.
+
+._Екран конфігурації реєстру у Control Plane_
+[%collapsible]
+====
+.Загальний вигляд блоку налаштувань
+image::arch:architecture-workspace/platform-evolution/soap-connector/control-plane-main.png[]
+====
+
+._Додавання нової конфігурації у Control Plane_
+[%collapsible]
+====
+.Додавання нової конфігурації з авторизаційним токеном
+image::arch:architecture-workspace/platform-evolution/soap-connector/control-plane-create-trembita-auth.png[]
+
+.Додавання нової конфігурації без додаткової авторизації
+image::arch:architecture-workspace/platform-evolution/soap-connector/control-plane-create-trembita-no-auth.png[]
+====
+
+[IMPORTANT]
+З міркувань безпеки, `Службова назва реєстру` не може бути змінена після збереження конфігурації, та має бути унікальна в рамках реєстру
 
 == Перегляд налаштувань інтеграції та розгортання змін до реєстру
 
