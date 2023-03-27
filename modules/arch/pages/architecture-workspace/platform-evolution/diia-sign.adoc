@@ -1,0 +1,183 @@
+= _<Назва предмету "transition"-дизайну>_
+
+== Загальний опис
+
+Для спрощення процесу отримання доступу до платформи необхідно надати можливість отримувачам послуг автентифікуватись та підписувати документи за допомогою _Дія.Підпису_
+
+== Функціональні сценарії
+
+* Автентифікація отримувача послуг за допомогою _Дія.Підпису_ через портал `id.gov.ua`
+* Автентифікація отримувача послуг за допомогою _Дія.Підпису_ через `ІІТ віджет`
+* Підписання документа в бізнес-процесі за допомогою _Дія.Підпису_ через `ІІТ віджет`
+* Налаштування варіантів автентифікації та підпису для реєстру
+
+
+== Ролі користувачів
+
+* Отримувач послуг
+* Технічний адміністратор реєстру
+* Технічний адміністратор платформи
+
+== Загальні принципи та положення
+
+
+* Інтеграція з `id.gov.ua` для отримувачів послуг налаштовується на рівні платформи.
+* Підписання документів можливо лише за допомогою `ІІТ віджету`.
+* Автентифікація та підпис документів може здійснюватись за допомогою різних конфігурацій `ІІТ віджету`.
+* Автентифікація може здійснюватись через сервіс `id.gov.ua`, а підпис документів через `ІІТ віджету` який налаштований на роботу з безпосередньо `ІІТ`.
+* Стилізація віджета для чорної теми поза межами цього дизайну.
+* Тестового оточення для інтеграції з _Дія.Підписом_ не існує, тому на всіх середовищах може використовуватись тільки виробнича версія.
+* Екрани для налаштування інтеграції платформи з `id.gov.ua` через адміністративну консоль поза межами цього дизайну.
+
+== Низькорівневий дизайн сервісів
+
+== Ключові сценарії
+
+_Автентифікація отримувача послуг за допомогою `Дія.Підпису` через портал `id.gov.ua`_
+
+Конфігурація опцій для автентифікації вказується за рахунок переліку можливих опцій параметру `auth_type`. Згідно з документації цей параметр може приймати три значення `dig_sign`, `bank_id`, `diia_id`. В поточній реалізації на рівні коду автентифікатора центрального реалма `id.gov.ua` прописане використання двох можливих  опцій.
+Для забезпечення кращої конфігурабельності пропонується екстерналізувати налаштування на рівні конфігурації платформи, а саме компонента `user-managment`.
+Та внести відповідні зміни у автентифікатор.
+
+.Приклад розширення конфігурації
+[source, java]
+----
+public class IdGovUaIdentityProviderConfig extends OAuth2IdentityProviderConfig {
+
+  private static final String URL_CONFIG_NAME = "url";
+
+  public URL getUrl() {
+    String urlString = getConfig().get(URL_CONFIG_NAME);
+    return new URL(urlString);
+  }
+}
+----
+
+.Приклад коду, де налаштування `auth_type` винесено на рівень конфігурації посилання
+[source, java]
+----
+public class IdGovUaIdentityProvider
+    extends AbstractOAuth2IdentityProvider<IdGovUaIdentityProviderConfig> {
+  public IdGovUaIdentityProvider(
+      KeycloakSession session,
+      IdGovUaIdentityProviderConfig config,
+      DsoClient dsoClient,
+      KeycloakHttpClient keycloakHttpClient) {
+    super(session, config);
+    this.dsoClient = dsoClient;
+    this.keycloakHttpClient = keycloakHttpClient;
+
+    // виділення базового посилання з конфігурації
+    URL idGovUaUrl = new URL(config.getUrl());
+    this.baseUrl = idGovUaUrl.getProtocol() + idGovUaUrl.getHost();
+
+    config.setAuthorizationUrl(baseUrl);
+    config.setTokenUrl(baseUrl + TOKEN_RESOURCE);
+    config.setUserInfoUrl(baseUrl + PROFILE_RESOURCE);
+  }
+
+    @Override
+  protected UriBuilder createAuthorizationUrl(AuthenticationRequest request) {
+
+    var urlBuilder = super.createAuthorizationUrl(request);
+    // конфігурації можливих типів автентифікації
+    urlBuilder.queryParam(
+        AUTH_TYPE_QUERY_PARAM, getConfig().getUrl().getQuery());
+
+    String decodedSessionState = request.getState().getEncoded();
+    urlBuilder.replaceQueryParam(
+        OAUTH2_PARAMETER_STATE,
+        Base64.getUrlEncoder()
+            .withoutPadding()
+            .encodeToString(decodedSessionState.getBytes(StandardCharsets.UTF_8)));
+    return urlBuilder;
+  }
+
+
+}
+----
+
+_Використання `Дія.Підпису` для автентифікації та підпису через `ІІТ віджет`_
+
+.Високорівнева послідовність автентифікації або підпису документа за допомогою Дія.Підпису
+[plantuml]
+----
+actor "Отримувач послуг" as citizen
+participant "Мобільний додаток\nДія" as diia
+participant "Портал\nотримувача послуг" as portal
+
+citizen -> portal: автентифікація/підпис даних
+return QR-код
+
+citizen -> diia:  сканування QR-коду
+return запит на підписання документу
+citizen -> diia: процес підписання
+return успішне підписання
+
+portal -> portal: відправка віджетом події\nуспішного підписання документу
+
+portal --> citizen: успішний вхід/підписання
+----
+
+При успішній автентифікації через Дія.Підпис віджет генерує відповідну подію, яка має оброблятись на стороні кабінету отримувача послуг.
+
+[NOTE]
+SPIKE IN PROGRESS
+
+== Управління конфігурацією реєстру
+
+=== Конфігурація реєстру
+
+В поточній реалізації зміна посилання до сервісу `id.gov.ua` відбувається шляхом зміни значення флагу `sandbox`
+[source, yaml]
+----
+idgovua:
+  sandbox: {{ env "idgovuaSandbox" | default "on" }}
+  clientId: {{ env "idgovuaClientId" | default "mock" }}
+  clientSecret: {{ env "idgovuaClientSecret" | default "mock" }}
+----
+
+Для забезпечення зворотньої сумісності
+
+[source, yaml]
+----
+idgovua:
+  sandbox: {{ env "idgovuaSandbox" | default "on" }}
+  url: {{ env "idgovuaUrl" | "" }}
+  clientId: {{ env "idgovuaClientId" | default "mock" }}
+  clientSecret: {{ env "idgovuaClientSecret" | default "mock" }}
+----
+
+.Приклад зміни шаблона для конфігурації інтеграції платформи з `id.gov.ua`
+[source, yaml]
+----
+apiVersion: v1.edp.epam.com/v1alpha1
+kind: KeycloakRealmIdentityProvider
+metadata:
+  name: id-gov-ua
+spec:
+  config:
+    clientId: {{ .Values.idgovua.clientId }}
+    clientSecret: {{ .Values.idgovua.clientSecret }}
+    url: {{ if eq .Values.idgovua.url "" }}
+           {{ if eq .Values.idgovua.sandbox "on" }}
+             "https://test.id.gov.ua?auth_type=..."
+           {{ else }}
+             "https://id.gov.ua?auth_type=..."
+           {{ end }}
+         {{ else }}
+           {{ .Values.idgovua.url | squote }}
+         {{ end }}
+
+    syncMode: "IMPORT"
+    useJwksUrl: "true"
+----
+
+=== Інтерфейси адміністратора
+
+Налаштування автентифікації і підпису.
+
+image::architecture-workspace/platform-evolution/diia-sign/platform_auth_sign.png[]
+image::architecture-workspace/platform-evolution/diia-sign/widget_auth_sign.png[]
+image::architecture-workspace/platform-evolution/diia-sign/widget_same_auth_sign.png[]
+
