@@ -1,0 +1,179 @@
+== Процес роботи інсталятора Платформи
+
+.Діаграма послідовності роботи інсталятора Платформи в режимах install та update
+[plantuml, update, svg]
+----
+@startuml
+autoactivate on
+skinparam sequenceMessageAlign center
+skinparam legendBackgroundColor #FFFFFF
+skinparam legendBorderColor #FFFFFF
+skinparam legendEntrySeparator #FFFFFF
+
+legend right
+    <#FFFFFF,#FFFFFF>|<#orange>| Сервіси AWS|
+    |<#lightskyblue>     | Компонент підсистеми розгортання\n та налаштування Платформи та Реєстрів|
+    |<#lightgray>| Компонент інсталятора з яким\nвзаємодіє адміністратор|
+    |<#orangered>| OpenShift платформа як сервіс|
+end legend
+
+actor "технічний адміністратор\nПлатформи" as admin #lightgray
+participant "AWS S3\nсховище артефактів" as s3 #orange
+participant "control-plane-installer\n docker контейнер" as installer #lightgray
+participant "\nOpenShift\n" as okd #orangered
+participant "\nAWS\n" as aws #orange
+participant "\ncontrol-plane-nexus\n" as nexus #lightskyblue
+participant "\nадмін-консоль\n" as console #lightskyblue
+
+admin -> s3: запит на завантаження
+activate s3 #orange
+return zip архів Платформи
+opt sha256sum
+deactivate s3
+destroy s3
+admin -> admin: перевірка цілісності\nархіву Платформи
+end
+admin -> admin: розпакування архіву Платформи
+
+admin -> installer: запуск інсталятора Платформи
+|||
+alt "Запуск інсталятора Платформи з флагом --install"
+installer -> okd: ввімкнення шифрування etcd
+activate okd #orangered
+return успішно ввімкнено
+deactivate okd
+end
+|||
+installer -> okd: оновлення MachineSet для control-plane та cluster-mgmt ресурсів
+note over okd
+**helm charts:**
+    machine-config
+end note
+activate okd #orangered
+return успішно оновлено
+deactivate okd
+|||
+alt "Запуск інсталятора Платформи з флагом --install"
+installer -> okd: розгортання cluster-mgmt ресурсів
+note over okd
+**helm charts:**
+    **RedHat репозиторії:**
+        catalog-source
+    **Підсистема розподіленого**
+    **зберігання файлів:**
+        ocs-nodes
+        ocs-operator
+        ocs-instance
+        ceph-object-store
+        noobaa-backingstore
+        ocs-resources
+    **Розгортання Custom**
+    **Resource Definitions:**
+        customresourcedefinitions
+        platform-vault-and-minio-resources
+    **Підсистема журналювання подій**
+        logging-operator
+        elasticsearch
+        logging-instance
+        logging-nodes
+    **Підсистема трасування запитів**
+        kiali-operator
+        jaeger-operator
+        istio-instance
+        kiali-instance
+        istio-operator
+        jaeger-instance
+        ip-restriction
+        prometheus
+        istio-resources
+        ingresscontroller-forwardedheaderpolicy
+end note
+activate okd #orangered
+return успішно розгорнуто
+deactivate okd
+end
+|||
+alt "Запуск інсталлятора Платформи з флагом --install"
+installer -> okd: розгортання центрального control-plane-nexus
+note over okd
+**helm charts:**
+    nexus-operator
+    nexus-prerequisites
+end note
+activate okd #orangered
+return успішно розгорнуто
+deactivate okd
+end
+|||
+installer -> aws: оновлення центрального Vault
+activate aws #orange
+return успішно оновлено
+deactivate aws
+|||
+installer -> aws: оновлення MinIO
+activate aws #orange
+return успішно оновлено
+deactivate aws
+|||
+installer -> nexus: завантаження оновлених версій docker компонентів
+activate nexus #lightskyblue
+nexus --> installer: успішно завантажено
+deactivate nexus
+|||
+alt "Запуск інсталятора Платформи з флагом --install"
+installer -> okd: Створення digital-signature-ops секретів
+activate okd #orangered
+return успішно оновлено
+deactivate okd
+end
+|||
+installer -> okd: розгортання control-plane ресурсів
+note over okd
+**helm charts:**
+     customresourcedefinitions
+     platform-vault-and-minio-resources
+     machine-config
+     codebase-operator-resources
+     keycloak-operator-resources
+     keycloak-idps
+     nexus-operator-resources
+     keycloak-operator
+     codebase-operator
+     control-plane-gerrit
+     control-plane-console
+     control-plane-jenkins
+     infrastructure-jenkins-agent
+     ddm-architecture
+     cluster-mgmt-resources
+end note
+activate okd #orangered
+return успішно розгорнуто
+deactivate okd
+|||
+installer -> nexus: завантаження business-process-modeler-extensions до nexus
+activate nexus #lightskyblue
+nexus --> installer: успішно завантажено
+deactivate nexus
+|||
+installer -> nexus: завантаження liquibase-ext-schema до nexus
+activate nexus #lightskyblue
+return успішно завантажено
+deactivate nexus
+|||
+alt "Запуск інсталятора Платформи з флагом --install"
+installer -> okd: створення secret with backup credential
+activate okd #orangered
+return успішно створено
+deactivate okd
+end
+|||
+
+installer -> admin: оновлення Платформи доступно
+@enduml
+----
+
+== Кастомне оновлення control-plane компонентів
+
+=== Кластера, що оновлюються та керуються з CICD2
+
+=== Інші кластера
