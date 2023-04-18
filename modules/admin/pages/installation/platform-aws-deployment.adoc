@@ -1,5 +1,5 @@
 :toc-title: ЗМІСТ
-:toc: preamble
+:toc: auto
 :toclevels: 5
 :experimental:
 :important-caption:     ВАЖЛИВО
@@ -29,75 +29,91 @@
 
 Перед початком будь-яких дій потрібно мати в наявності набір ресурсів, які обов'язкові для подальших кроків:
 
-* документ "What`s new";
-* документ "Release notes";
-* документ із незворотніми змінами;
-* документ "Special steps" із додатковими кроками для обраної версії релізу Платформи. Він потрібен тільки для процедури оновлення Платформи;
-* DSO (digital-signature-ops) сертифікати:
-** Key-6.dat - приватний ключ організації;
-** allowed-key.yaml - перелік всіх виданих ключів. Спочатку це тільки первинний Key-6.dat. При зміні ключа, туди додається інформація про новий ключ, не видаляючи старий;
-** CAs.json - перелік всіх АЦСК, береться з сайту https://iit.com.ua/downloads[ІІТ];
-** CACertificates.p7b - публічний ключ, береться з сайту https://iit.com.ua/downloads[ІІТ]; +
-Файли конфігурації для Гряди:
-** osplm.ini;
-** sign.key.device-type;
-** sign.key.file.issuer;
-** sign.key.file.password;
-** sign.key.hardware.device;
-** sign.key.hardware.password;
-** sign.key.hardware.type;
-* docker образ openshift-install контейнера;
-* завантажений Інсталер.
+Документація: ::
+
+* [*] Документ xref:release-notes:release-notes.adoc[Примітки до релізу];
+* [*] Документ xref:release-notes:backward-incompatible-changes.adoc[Зворотно несумісні зміни];
+* [*] Документ xref:1.9.3@admin:update/special-steps-for-update.adoc[] із додатковими кроками для обраної версії релізу Платформи. Він потрібний лише для процедури оновлення Платформи.
+
+Сертифікати цифрового підпису (digital-signature-ops сертифікати): ::
+
+* [*] *_Key-6.dat_* -- приватний ключ організації;
+* [*] *_allowed-key.yaml_* -- перелік усіх виданих ключів. Спочатку це лише первинний _Key-6.dat_. При зміні ключа, туди додається інформація про новий ключ, не видаляючи старий;
+* [*] *_CAs.json_* -- перелік всіх АЦСК, береться з сайту https://iit.com.ua/downloads[ІІТ];
+* [*] *_CACertificates.p7b_* - публічний ключ, береться з сайту https://iit.com.ua/downloads[ІІТ].
+
+Файли конфігурації для мережного криптомодуля "Гряда": ::
+
+* 3 файли, заповнені значеннями (_див. закріплені приклади_):
+
+* [*] _link:{attachmentsdir}/aws-deployment/sign.key.device-type[sign.key.device-type]_ -- вкажіть тип носія для ключа (файловий);
+* [*] _link:{attachmentsdir}/aws-deployment/sign.key.file.issuer[ sign.key.file.issuer]_ -- вкажіть АЦСК, що видав ключ (замініть у файлі значення на своє);
+* [*] _link:{attachmentsdir}/aws-deployment/sign.key.file.password[sign.key.file.password]_ -- вкажіть пароль до файлового ключа (замініть у файлі значення на своє).
++
+4 файли із порожніми значеннями (_створіть 4 порожні файли із відповідними назвами_):
+
+* [*] *_sign.key.hardware.device_* -- тип носія для ключа (апаратний);
+* [*] *_sign.key.hardware.password_* --  пароль апаратного ключа;
+* [*] *_sign.key.hardware.type_* -- тип ключа;
+* [*] *_osplm.ini_* -- INI-конфігурація.
+
++
+TIP: Детальніше про особливості завантаження/оновлення ключів та сертифікатів цифрового підпису ви можете переглянути на сторінці xref:registry-management/system-keys/control-plane-platform-keys.adoc[].
+
+* [*] docker-образ контейнера *`openshift-install`* (_див. детальніше у розділі xref:#launch-openshift-install[])_;
+* [*] завантажений Інсталер -- скрипт для розгортання Платформи (_див. детальніше у розділі xref:#installer-preparation-launch[])_.
 
 === Створення облікового запису AWS
 
-Перед встановленням OpenShift Container Platform на Amazon Web Services (AWS) необхідно створити обліковий запис AWS.
+Перед встановленням OpenShift Container Platform на Amazon Web Services (AWS), необхідно створити обліковий запис AWS.
 
-Це можна зробити користуючись офіційною документацією на сайті AWS: https://aws.amazon.com/premiumsupport/knowledge-center/create-and-activate-aws-account/[How do I create and activate a new AWS account?]
+Це можна зробити, користуючись офіційною документацією на сайті AWS: https://aws.amazon.com/premiumsupport/knowledge-center/create-and-activate-aws-account/[How do I create and activate a new AWS account?]
 
 === Налаштування облікового запису AWS
 
 Перш ніж встановити OpenShift Container Platform, потрібно налаштувати обліковий запис Amazon Web Services (AWS).
 
+[#setup-route-53]
 ==== Налаштування Route 53
 
-Щоб встановити OpenShift Container Platform, потрібно зареєструвати домен. Це можна зробити в сервісі Route 53 або ж використати будь-який інший реєстратор доменних імен.
+Щоб встановити OpenShift Container Platform, потрібно зареєструвати домен. Це можна зробити у сервісі *Route 53*, або ж використати будь-який інший реєстратор доменних імен.
 
 Також обліковий запис Amazon Web Services (AWS), який використовується, повинен мати виділену публічну зону хостингу в сервісі Route 53.
 
 TIP: Докладніше описано в офіційній документації на сайті OKD: https://docs.openshift.com/container-platform/4.11/installing/installing_aws/installing-aws-account.html#installation-aws-route53_installing-aws-account[Configuring Route 53].
 
+[#setup-external-domain]
 ==== Налаштування зовнішнього домену
 
-Якщо ж для створення домену було використано не AWS Route 53, а зовнішній реєстратор доменних імен, то потрібно виконати делегування домену. Для цього потрібно виконати наступні дії:
+Якщо для створення домену було використано _не_ AWS Route 53, а зовнішній реєстратор доменних імен, то необхідно виконати делегування домену. Для цього виконайте наступні дії:
 
-* перейти в створенний обліковий запис AWS та створити публічну зону хостингу в сервісі Route 53 (як було описано в п. 1.2.1). Назвати її необхідно так само, як і зовнішній створенний домен;
-* зайти в створену публічну зону хостингу та переглянути запис із типом NS (Name Servers - це сервери імен, які відповідають на DNS-запити для домену). В значенні будуть вказані сервери імен. Необхідно зберегти назви цих серверів для подальшого використання в наступних кроках;
-* перейти в зовнішній реєстратор доменних імен, в якому було створено домен;
-* відкрити налаштування цього домену та знайти налаштуваня стосовно NS серверів;
-* відредагувати NS сервери відповідно до NS серверів, які були взяті із публічної зони хостингу з облікового запису AWS.
+* Перейдіть у створений обліковий запис AWS та створіть публічну зону хостингу у сервісі *Route 53* (як було описано у п. xref:#setup-route-53[]). Назвати її необхідно так само як і зовнішній створений домен.
+* Увійдіть до створеної публічної зони хостингу та перегляньте запис із типом *`NS`* (*Name Servers* -- це сервери імен, які відповідають на DNS-запити для домену). У значенні будуть вказані сервери імен. Необхідно зберегти назви цих серверів для подальшого використання у наступних кроках.
+* Перейдіть до зовнішнього реєстратора доменних імен, в якому було створено домен.
+* Відкрийте налаштування цього домену та знайдіть налаштування, що стосуються NS-серверів;
+* Відредагуйте NS-сервери відповідно до NS-серверів, які взято із публічної зони хостингу з облікового запису AWS.
 
 ==== Ліміти облікового запису AWS
 
-Кластер OpenShift Container Platform використовує ряд компонентів Amazon Web Services (AWS), і стандартні Обмеження послуг впливають на можливість встановлення кластеру.
+Кластер OpenShift Container Platform використовує ряд компонентів Amazon Web Services (AWS), і стандартні _обмеження послуг_ впливають на можливість встановлення кластера.
 
-Перелік компонентів AWS, обмеження яких можуть вплинути на можливість встановлення та запуску кластеру OpenShift Container Platform наведені у наступній документації на сайті OKD: https://docs.openshift.com/container-platform/4.11/installing/installing_aws/installing-aws-account.html#installation-aws-limits_installing-aws-account[AWS account limits].
+Перелік компонентів AWS, обмеження яких можуть вплинути на можливість встановлення та запуску кластера OpenShift Container Platform, наведено у документації на сайті OKD: https://docs.openshift.com/container-platform/4.11/installing/installing_aws/installing-aws-account.html#installation-aws-limits_installing-aws-account[AWS account limits].
 
-Також обов'язково потрібно збільшити обмеження CPU для on-demand віртуальних машин в обліковому записі Amazon Web Services (AWS). Необхідіні для цього дії описані в офіціальній документації на сайті AWS: https://aws.amazon.com/premiumsupport/knowledge-center/ec2-on-demand-instance-vcpu-increase/[How do I request an EC2 vCPU limit increase for my On-Demand Instance?]
+NOTE: Також обов'язково потрібно збільшити обмеження CPU для *_on-demand_* віртуальних машин в обліковому записі Amazon Web Services (AWS). Необхідні для цього дії описані в офіційній документації на сайті AWS: https://aws.amazon.com/premiumsupport/knowledge-center/ec2-on-demand-instance-vcpu-increase/[How do I request an EC2 vCPU limit increase for my On-Demand Instance?]
 
 ==== Створення користувача IAM
 
-. Перед встановленням OpenShift Container Platform створіть користувача IAM, користуючись офіційною документацією на сайті AWS: https://docs.aws.amazon.com/IAM/latest/UserGuide/id_users_create.html[Creating an IAM user in your AWS account].
+. Перед встановленням OpenShift Container Platform, створіть _користувача **IAM**_, користуючись офіційною документацією на сайті AWS: https://docs.aws.amazon.com/IAM/latest/UserGuide/id_users_create.html[Creating an IAM user in your AWS account].
 
-. Окрім цього потрібно виконати наступні важливі вимоги.
+. Окрім цього виконайте наступні важливі вимоги:
 
-* Потрібно видалити будь-які обмеження Service control policies (SCPs) з облікового запису AWS.
+* Видаліть будь-які обмеження *Service control policies (SCPs*) з облікового запису AWS.
 +
-Під час створення кластеру, також створюється асоційований постачальник ідентичностей AWS OpenID Connect (OIDC). Ця конфігурація постачальника OIDC базується на відкритому ключі, який знаходиться в регіоні AWS us-east-1. Клієнти з AWS SCP повинні дозволити використання регіону AWS us-east-1, навіть якщо кластер буде розгорнуто в іншому регіоні. Без правильного налаштування цих політик, одразу можуть виникнути помилки з дозволами, оскільки інсталятор OKD перевіряє корректність їх налаштування.
+NOTE: Під час створення кластера, також створюється асоційований постачальник ідентичностей AWS OpenID Connect (OIDC). Ця конфігурація постачальника OIDC базується на відкритому ключі, який знаходиться в регіоні AWS *`us-east-1`*. Клієнти з AWS SCP повинні дозволити використання регіону AWS *`us-east-1`* навіть якщо кластер буде розгорнуто в іншому регіоні. Без правильного налаштування цих політик, одразу можуть виникнути помилки з дозволами, оскільки інсталятор OKD перевіряє правильність їх налаштування.
 +
 TIP: Детальну інформацію можна отримати в офіційний документації, у пункті *1.1. DEPLOYMENT PREREQUISITES* документа https://access.redhat.com/documentation/en-us/red_hat_openshift_service_on_aws/4/pdf/prepare_your_environment/red_hat_openshift_service_on_aws-4-prepare_your_environment-en-us.pdf[Red Hat OpenShift Service on AWS 4. Prepare your environment].
 
-* Потрібно правильно налаштувати *_permissions boundary_* у створеного IAM-користувача.
+* Правильно налаштуйте *_permissions boundary_* у створеного IAM-користувача.
 +
 Нижче наведено приклад політики permissions boundary. Можна використати її, або зовсім видалити будь-які permissions boundary.
 +
@@ -196,13 +212,14 @@ TIP: Детальну інформацію можна отримати в офі
 ----
 ====
 
-TIP: Докладніше процес створення IAM-користувача описаний в офіційній документації на сайті OKD: https://docs.openshift.com/container-platform/4.11/installing/installing_aws/installing-aws-account.html#installation-aws-iam-user_installing-aws-account[Creating an IAM user].
+TIP: Докладніше процес створення IAM-користувача описано в офіційній документації на сайті OKD: https://docs.openshift.com/container-platform/4.11/installing/installing_aws/installing-aws-account.html#installation-aws-iam-user_installing-aws-account[Creating an IAM user].
 
 ==== Необхідні дозволи AWS для користувача IAM
 
 Для розгортання всіх компонентів кластера OpenShift Container Platform користувачеві IAM потрібні дозволи, які необхідно прикріпити до цього користувача. +
 Приклад таких дозволів наведено у наступній документації на сайті OKD: https://docs.openshift.com/container-platform/4.11/installing/installing_aws/installing-aws-account.html#installation-aws-permissions_installing-aws-account[Required AWS permissions for the IAM user].
 
+[#create-additional-accounts]
 === Створення додаткових облікових записів
 
 Перед встановленням OpenShift Container Platform на Amazon Web Services (AWS), необхідно створити обліковий запис Docker Hub та Red Hat. +
@@ -212,14 +229,15 @@ TIP: Докладніше процес створення IAM-користува
 
 * Деякі сервіси використовують images, які знаходяться у репозиторіях на Docker Hub. Для того, щоб мати можливість їх використовувати, потрібно створити акаунт, користуючись офіційною документацією на сайті Docker: https://docs.docker.com/docker-id/[Docker ID accounts].
 
-* Окрім цього, виникнуть проблеми із лімітом на кількість завантаженнь images на день. Це призведе до того, що сервіси не зможуть запуститися. Щоб цього уникнути, необхідно оновити підписку до рівня Pro. Це допоможе змінити обмеження на кількість пулів із 200/6 годин (200 image pulls per 6 hours) до 5000/день. Це можливо зробити користуючись офіційною документацією на сайті Docker: https://docs.docker.com/subscription/upgrade/[Upgrade your subscription].
+* Окрім цього, виникнуть проблеми із лімітом на кількість завантажень images на день. Це призведе до того, що сервіси не зможуть запуститися. Щоб цього уникнути, необхідно оновити підписку до рівня Pro. Це допоможе змінити обмеження на кількість пулів із 200 docker-образів/6 годин до 5000 docker-образів/день. Це можливо зробити користуючись офіційною документацією на сайті Docker: https://docs.docker.com/subscription/upgrade/[Upgrade your subscription].
 
 ==== Створення облікового запису Red Hat
 
 Для того, щоб завантажити необхідні images для встановлення OpenShift Container Platform, необхідно створити Red Hat Account. Докладніше про те, як це зробити, описано в офіційній документації: https://access.redhat.com/articles/5832311[Red Hat Login ID and Account].
 
-Це необхідно для того, щоб завантажити сформований pull secret пізніше (докладніше описано в п. 3). Він дозволить пройти автентифікацію та завантажити образи контейнерів для компонентів OpenShift Container Platform.
+Це необхідно для того, щоб завантажити сформований pull secret пізніше (докладніше описано у розділі xref:#okd-aws-install-preparation[]). Він дозволить пройти автентифікацію та завантажити образи контейнерів для компонентів OpenShift Container Platform.
 
+[#deploy-additional-recources-for-okd]
 == Розгортання додаткових ресурсів для інсталяції OKD-кластера в AWS
 
 Для вдалого встановлення кластера та платформи, потрібно підняти наступні ресурси в AWS. На малюнку нижче зображена схема інфраструктури із ними.
@@ -796,11 +814,11 @@ variable "tags" {
 
 [NOTE]
 ====
-IP адреса ::
-Для підключення через SSH до додаткової віртуальної машини потрібно додати в файл terraform.tfvars необхідну IP адресу. Якщо потрібно відкрити для підключення декілька адрес, то потрібно створити префікс ліст та використовувати його.
+IP-адреса ::
+Для підключення через SSH до додаткової віртуальної машини потрібно додати в файл terraform.tfvars необхідну IP адресу. Якщо потрібно відкрити для підключення декілька адрес, то потрібно створити префікс **``prefix-list ``**та використовувати його.
 ====
 
-WARNING: Якщо для підняття додаткових компонентів використано Terraform-код, то перейдіть одразу до пункту 2.6.
+WARNING: Якщо для підняття додаткових компонентів використано Terraform-код, то перейдіть одразу до пункту xref:#launch-openshift-install[].
 
 === Рекомендовані налаштування бастіону
 
@@ -976,6 +994,7 @@ credential_source = Ec2InstanceMetadata
 EOT
 ----
 
+[#launch-openshift-install]
 === Запуск контейнера openshift-install
 
 Щоб використовувати docker image контейнера *`openshift-install`* для встановлення кластера, потрібно виконати кроки, подані нижче.
@@ -1028,6 +1047,7 @@ $ sudo docker run --rm -it --name openshift-install-v3 \
     openshift-install:v3 bash
 ----
 
+[#okd-aws-install-preparation]
 == Підготовка до встановлення OKD-кластера в AWS
 
 У версії `4.11` OpenShift Container Platform можливо встановити кастомізований кластер на інфраструктуру, яка передбачена програмою встановлення на Amazon Web Services (AWS).
@@ -1109,15 +1129,15 @@ pullSecret: <PULL_SECRET>(4)
 sshKey: <SSHKEY>(3)
 ----
 
-* (1) `<BASE_DOMAIN`> -- домен, який було створено та налаштовано в п. 1.2.1 та п. 1.2.2.
+* (1) `<BASE_DOMAIN`> -- домен, який було створено та налаштовано у підрозділах xref:#setup-route-53[] та xref:#setup-external-domain[].
 
 * (2) `<CLUSTER_NAME>` -- ім'я майбутнього OKD-кластера.
 
-* (3) `<SSHKEY>` - ключ або ключі SSH для автентифікації доступу до машин кластера. Можна використати той самий ключ, що був створений під час встановлення OKD-кластера, або будь-який інший.
+* (3) `<SSHKEY>` -- ключ або ключі SSH для автентифікації доступу до машин кластера. Можна використати той самий ключ, що був створений під час встановлення OKD-кластера, або будь-який інший.
 +
 TIP: Докладніше описано в офіційній документації на сайті OKD: https://docs.openshift.com/container-platform/4.11/installing/installing_aws/installing-aws-customizations.html#installation-configuration-parameters-optional_installing-aws-customizations[Optional configuration parameters].
 
-* (4) <PULL_SECRET> - секрет, який було створено в п. 1.3. Потрібно отримати цей секрет із Red Hat OpenShift Cluster Manager.
+* (4) <PULL_SECRET> -- секрет, який було створено у п. xref:#create-additional-accounts[]. Потрібно отримати цей секрет із Red Hat OpenShift Cluster Manager.
 +
 TIP: Докладніше про це описано в п. 5 офіційної документації на сайті OKD: https://docs.openshift.com/container-platform/4.11/installing/installing_aws/installing-aws-customizations.html#installation-obtaining-installer_installing-aws-customizations[Obtaining the installation program].
 +
@@ -1166,7 +1186,6 @@ TIP: Докладніше про це описано в п. 5 офіційної
 ._Приклад *pull secret* в один рядок_
 [%collapsible]
 =====
-[source,json]
 ----
 '{"auths":{"cloud.openshift.com":{"auth":"b3Blb=","email":"test@example.com"},"quay.io":{"auth":"b3Blb=","email":"test@example.com"},"registry.connect.redhat.com":{"username":"test","password":"test","auth":"b3Blb=","email":"test@example.com"},"registry.redhat.io":{"username":"test","password":"test","auth":"b3Blb=","email":"test@example.com"},"index.docker.io/v2/":{"username":"test","password":"test","auth":"b3Blb=","email":"test@example.com"}}}'
 ----
@@ -1251,7 +1270,7 @@ mkdir -p ${CERTDIR}
 
 # Перенесення сертифікатів із шляху acme.sh за замовчуванням (default path) до більш зручної директорії, за допомогою --install-cert - ключа
 ${CERT_HOME}/acme.sh/acme.sh --install-cert -d ${LE_API} -d *.${LE_WILDCARD} --cert-file ${CERTDIR}/cert.pem --key-file ${CERTDIR}/key.pem --fullchain-file ${CERTDIR}/fullchain.pem --ca-file ${CERTDIR}/ca.cer
-# Cтворення секрету
+# Створення секрету
 oc create secret tls router-certs --cert=${CERTDIR}/fullchain.pem --key=${CERTDIR}/key.pem -n openshift-ingress
 # Оновлення Custom Resource для Router
 oc patch ingresscontroller default -n openshift-ingress-operator --type=merge --patch='{"spec": { "defaultCertificate": { "name": "router-certs" }}}'
@@ -1279,106 +1298,82 @@ $ bash -x ./letsencrypt.sh
 $ exit
 ----
 
-== Підготовка та запуск Інсталера для розгортання Платформи в OKD-кластері
+[#installer-preparation-launch]
+== Підготовка та запуск Інсталера для розгортання та оновлення Платформи в OKD-кластері
 
-Для запуску Інсталера необхідно виконати ряд умов з підготовки робочої станції, з якої запускатиметься Інсталер.
+Для запуску _Інсталера_ необхідно виконати ряд умов з підготовки робочої станції, з якої запускатиметься Інсталер.
 
-[width="100%",cols="16%,42%,42%",options="header",]
-|===
-|*Крок* |*AWS* |
-| |*Розгортання з 0* |*Оновлення*
-a|
-[preconditions]
-=== 6.1. Передумови
+=== Розгортання з нуля
 
-2+| Перед запуском скрипту з інсталювання Платформи, необхідно виконати наступні кроки:
+==== Передумови
 
-1. Завантажте Інсталер відповідної версії, послідовно виконавши наступні команди:
+Перед запуском скрипту з інсталювання Платформи, необхідно виконати наступні кроки:
 
+. Завантажте Інсталер відповідної версії, послідовно виконавши наступні команди.
++
+[source,bash]
+----
 $ mkdir ~/installer
 
 $ cd ~/installer
 
 $ sudo aws s3 cp --profile cross-account-role s3://mdtu-ddm-platform-installer/<VERSION>/mdtu-ddm-platform-<VERSION>.zip mdtu-ddm-platform-<VERSION>.zip
+----
 
-_2. Розпакуйте Інсталер в окрему директорію:_
-
+. Розпакуйте Інсталер в окрему директорію.
++
+[source,bash]
+----
 $ unzip mdtu-ddm-platform-(version).zip -d ./installer-<VERSION>
+----
 
-_3. Перенесіть *kubeconfig* від встановленого кластера:_
-
+. Перенесіть *_kubeconfig_* від встановленого кластера.
++
+----
 $ cp ~/openshift-cluster/cluster-state/auth/kubeconfig ./installer-<VERSION>
+----
 
-_4. Перенесіть сертифікати та допоміжні файли сервісу `digital-signature-ops` в директорію *certificates* та увійдіть до директорії з Інсталером:_
-
+. Перенесіть сертифікати та допоміжні файли сервісу `digital-signature-ops` в директорію *_certificates_* та увійдіть до директорії з Інсталером.
++
+[source,bash]
+----
 $ cp -r /path/to/folder/certificates/ ./installer-<VERSION>
 
 $ cd installer-<VERSION>
+----
 
-a|
+==== Налаштування для Minio
 
-[settings-minio]
-=== 6.2. Налаштування для Minio
+Під час запуску Інсталера та розгортання Платформи з нуля додаткові налаштування для Minio не потрібні.
 
-|Під час запуску Інсталера та розгортання Платформи з нуля ніякі додаткові налаштування для Minio не потрібні.
+==== Налаштування для Vault
 
-a|
-. Перенесіть terraform state minio з минулого релізу.
+Під час запуску Інсталера та розгортання Платформи з нуля додаткові налаштування для Vault не потрібні.
+
+[#deploy-platform-installer-scratch]
+==== Розгортання Платформи з Інсталера
+
+. Виконайте наступні команди:
 +
-```bash
-$ cp ~/installer/installer-<VERSION>/terraform/minio/aws/terraform.tfstate ./terraform/minio/aws/
-```
-
-. Перенесіть ключ від minio з минулого релізу.
-+
-```
-$ cp ~/installer/installer-<VERSION>/terraform/minio/aws/private_minio.key ./terraform/minio/aws/
-```
-
-a|
-[settings-vault]
-=== 6.3. Налаштування для Vault
-
-|Під час запуску Інсталера та розгортання Платформи з нуля ніякі додаткові налаштування для Vault не потрібні.
-
-a|
-. Перенесіть terraform state vault з минулого релізу.
-+
-```bash
-$ cp ~/installer/installer-<VERSION>/terraform/vault/aws/terraform.tfstate ./terraform/vault/aws/
-```
-
-. Перенесіть ключ від vault з минулого релізу.
-+
-```
-$ ~/installer/installer-<VERSION>/terraform/vault/aws/private.key ./terraform/vault/aws/
-```
-
-a|
-[installer-deploy]
-=== 6.4. Розгортання Платформи з Інсталера
-
-a| . Виконайте наступні команди:
-+
-```bash
+[source,bash]
+----
 $ IMAGE_CHECKSUM=$(sudo docker load -i control-plane-installer.img \| sed -r "s#.*sha256:(.*)#\\1#" \| tr -d '\n')
-```
+----
 +
-```
+[source,bash]
+----
 $ echo $IMAGE_CHECKSUM
-```
+----
 +
-```
+[source,bash]
+----
 $ sudo docker tag ${IMAGE_CHECKSUM} control-plane-installer:<VERSION>
-```
+----
 
 . Запустіть процес інсталювання нової Платформи з образами (images):
-
-* --rm -- цей параметр автоматично видалить контейнер після завершення його роботи. Параметр можна прибрати, якщо потрібно дізнатися статус та завершеного контейнера або при нестабільному інтернет-з'єднанні.
-* DEPLOYMENT_MODE -- може бути development чи production.
-
 +
-```bash
+[source,bash]
+----
 $ sudo docker run --rm \
     --name control-plane-installer-<VERSION> \
     --user root:$(id -g) \
@@ -1391,29 +1386,151 @@ $ sudo docker run --rm \
     --env deploymentMode=<DEPLOYMENT_MODE> \
     --entrypoint "/bin/sh" control-plane-installer:<VERSION> \
     -c "./install.sh -i"
-```
+----
++
+[NOTE]
+====
+* *`--rm`* -- цей параметр автоматично видалить контейнер після завершення його роботи. Параметр можна прибрати, якщо потрібно дізнатися статус та завершеного контейнера або при нестабільному інтернет-з'єднанні.
+* *`DEPLOYMENT_MODE`* -- може бути *`development`* чи *`production`*.
+====
 
-a| . Виконайте наступні команди:
+==== Статус розгортання
+
+Зображений нижче фінальний лог свідчить про вдале завершення процесу оновлення Платформи:
+
+image:admin:installation/aws/installation-aws-3.png[image,width=468,height=178]
+
+Якщо у п. xref:#deploy-platform-installer-scratch[] було прибрано опцію *`--rm`*, необхідно: ::
 +
-```bash
+. Виконати наступну команду, щоб впевнитися, що контейнер завершився зі статусом 0 (статус контейнера, що свідчить про те, що він успішно завершив роботу).
++
+[source,bash]
+----
+$ docker ps --all --latest
+----
++
+image:admin:installation/aws/installation-aws-4.png[image,width=468,height=26]
+
+. Видалити контейнер наступною командою:
++
+[source,bash]
+----
+$ docker rm $(docker ps --latest -q)
+----
+
+==== Необхідні кроки після розгортання
+
+. Після встановлення Платформи потрібно перевірити, що запустився пайплайн *`cluster-management`*, та впевнитися, що він пройшов успішно (має зелений статус). [.underline]#_Після цього Платформа стане придатною для розгортання реєстрів. Без цієї дії реєстри не розгорнуться_#.
++
+Пайплайн *`cluster-management`* можна знайти за наступним шляхом:
++
+*_OKD Web UI > control-plane NS > Routes > jenkins url > cluster-mgmt > MASTER-Build-cluster-mgmt_*.
+
+. Виконайте запит щодо надання доступу до IIT-віджета, а саме https://eu.iit.com.ua/sign-widget/v20200922/.
+
+[NOTE]
+====
+Стан додаткових ресурсів ::
+
+Після виконання усіх дій, бастіон та додаткову віртуальну машину можна вимкнути.
+====
+
+=== Оновлення
+
+==== Передумови
+
+Перед запуском скрипту з інсталювання Платформи, необхідно виконати наступні кроки:
+
+. Завантажте Інсталер відповідної версії, послідовно виконавши наступні команди.
++
+[source,bash]
+----
+$ mkdir ~/installer
+
+$ cd ~/installer
+
+$ sudo aws s3 cp --profile cross-account-role s3://mdtu-ddm-platform-installer/<VERSION>/mdtu-ddm-platform-<VERSION>.zip mdtu-ddm-platform-<VERSION>.zip
+----
+
+. Розпакуйте Інсталер в окрему директорію.
++
+[source,bash]
+----
+$ unzip mdtu-ddm-platform-(version).zip -d ./installer-<VERSION>
+----
+
+. Перенесіть *_kubeconfig_* від встановленого кластера.
++
+----
+$ cp ~/openshift-cluster/cluster-state/auth/kubeconfig ./installer-<VERSION>
+----
+
+. Перенесіть сертифікати та допоміжні файли сервісу `digital-signature-ops` в директорію *_certificates_* та увійдіть до директорії з Інсталером.
++
+[source,bash]
+----
+$ cp -r /path/to/folder/certificates/ ./installer-<VERSION>
+
+$ cd installer-<VERSION>
+----
+
+==== Налаштування для Minio
+
+. Перенесіть terraform state minio з минулого релізу.
++
+[source,bash]
+----
+$ cp ~/installer/installer-<VERSION>/terraform/minio/aws/terraform.tfstate ./terraform/minio/aws/
+----
+
+. Перенесіть ключ від minio з минулого релізу.
++
+[source,bash]
+----
+$ cp ~/installer/installer-<VERSION>/terraform/minio/aws/private_minio.key ./terraform/minio/aws/
+----
+
+[#platform-update-vault]
+==== Налаштування для Vault
+
+. Перенесіть terraform state vault з минулого релізу.
++
+[source,bash]
+----
+$ cp ~/installer/installer-<VERSION>/terraform/vault/aws/terraform.tfstate ./terraform/vault/aws/
+----
+
+. Перенесіть ключ від vault з минулого релізу.
++
+[source,bash]
+----
+$ ~/installer/installer-<VERSION>/terraform/vault/aws/private.key ./terraform/vault/aws/
+----
+
+[#update-platform-installer]
+==== Оновлення платформи з Інсталера
+
+. Виконайте наступні команди:
++
+[source,bash]
+----
 $ IMAGE_CHECKSUM=$(sudo docker load -i control-plane-installer.img \| sed -r "s#.*sha256:(.*)#\\1#" \| tr -d '\n')
-```
+----
 +
-```bash
+[source,bash]
+----
 $ echo $IMAGE_CHECKSUM
-```
+----
 +
-```bash
+[source,bash]
+----
 $ sudo docker tag ${IMAGE_CHECKSUM} control-plane-installer:<VERSION>
-```
+----
 
 . Оновіть версію платформи з образами (images)
-
-* --rm -- цей параметр автоматично видалить контейнер після завершення його роботи. Параметр можна прибрати, якщо потрібно дізнатися статус та лог завершеного контейнера або при нестабільному інтернет-з'єднанні.
-* DEPLOYMENT_MODE -- може бути development чи production (залежить від минулого запуску)
-
 +
-```bash
+[source,bash]
+----
 $ sudo docker run --rm \
     --name control-plane-installer-<VERSION> \
     --user root:$(id -g) \
@@ -1426,50 +1543,47 @@ $ sudo docker run --rm \
     --env deploymentMode=<DEPLOYMENT_MODE> \
     --entrypoint "/bin/sh" control-plane-installer:<VERSION> \
     -c "./install.sh -u"
-```
+----
++
+[NOTE]
+====
+* *`--rm`* -- цей параметр автоматично видалить контейнер після завершення його роботи. Параметр можна прибрати, якщо потрібно дізнатися статус та лог завершеного контейнера або при нестабільному інтернет-з'єднанні.
+* *`DEPLOYMENT_MODE`* -- може бути development чи production (залежить від минулого запуску).
+====
 
-a|
-[update-status]
-=== 6.5. Статус оновлення
+==== Статус оновлення
 
-2+|
 Зображений нижче фінальний лог свідчить про вдале завершення процесу оновлення Платформи:
 
 image:admin:installation/aws/installation-aws-3.png[image,width=468,height=178]
 
-__Якщо у п. 6.4 було прибрано опцію *`--rm`*, необхідно:
-__
-
-1. Виконати наступну команду, щоб впевнитися, що контейнер завершився зі статусом 0 (статус контейнера, що свідчить про те, що він успішно завершив роботу).
-
-``
+Якщо у п. xref:#update-platform-installer[] було прибрано опцію *`--rm`*, необхідно: ::
++
+. Виконати наступну команду, щоб впевнитися, що контейнер завершився зі статусом 0 (статус контейнера, що свідчить про те, що він успішно завершив роботу).
++
+[source,bash]
+----
 $ docker ps --all --latest
-``
-
+----
++
 image:admin:installation/aws/installation-aws-4.png[image,width=468,height=26]
 
-2. Видалити контейнер наступною командою:
-
-``
+. Видалити контейнер наступною командою:
++
+[source,bash]
+----
 $ docker rm $(docker ps --latest -q)
-``
+----
 
-a|
-[required-steps-after-update]
-=== 6.6. Необхідні кроки після оновлення
+==== Необхідні кроки після оновлення
 
-2+|
-
-1. Після встановлення Платформи потрібно перевірити, що запустився пайплайн *`cluster-management`*, та впевнитися, що він пройшов успішно (має зелений статус). [.underline]#_Після цього Платформа стане придатною для розгортання реєстрів. Без цієї дії реєстри не розгорнуться_#.
-
+. Після встановлення Платформи потрібно перевірити, що запустився пайплайн *`cluster-management`*, та впевнитися, що він пройшов успішно (має зелений статус). [.underline]#_Після цього Платформа стане придатною для розгортання реєстрів. Без цієї дії реєстри не розгорнуться_#.
++
 Пайплайн *`cluster-management`* можна знайти за наступним шляхом:
-
++
 *_OKD Web UI > control-plane NS > Routes > jenkins url > cluster-mgmt > MASTER-Build-cluster-mgmt_*.
 
-2. Зробити запит на надання доступу до IIT віджету, а саме https://eu.iit.com.ua/sign-widget/v20200922/.
-
-|
-|===
+. Виконайте запит щодо надання доступу до IIT-віджета, а саме https://eu.iit.com.ua/sign-widget/v20200922/.
 
 [NOTE]
 ====
@@ -1547,8 +1661,8 @@ image:installation/aws/installation-aws-6.png[image,width=468,height=182]
 $ systemctl restart vault
 ----
 
-. Якщо ця помилка сталася під час оновлення Платформи, то перевірте, чи було перенесено ключ від Vault з минулого релізу, як описано у п. 6.3.
-. Спробуйте ще раз запустити процес встановлення Платформи, як описано у п. 6.4.
+. Якщо ця помилка сталася під час оновлення Платформи, то перевірте, чи було перенесено ключ від Vault з минулого релізу, як описано у п. xref:#platform-update-vault[].
+. Спробуйте ще раз запустити процес оновлення Платформи, як описано у xref:update-platform-installer[].
 
 === Помилка із Minio SSL-сертифікатом під час розгортання Платформи
 
@@ -1603,7 +1717,7 @@ $ terraform init
 $ terraform destroy -var cluster_name="${clusterNameShort}" -var baseDomain="${route53HostedZone}" -auto-approve
 ----
 
-. Дочекайтеся видалення Minio. Вийдіть із контейнера та спробуйте ще раз запустити процес встановлення Платформи, як описано у п. 6.4.
+. Дочекайтеся видалення Minio. Вийдіть із контейнера та спробуйте ще раз запустити процес встановлення Платформи, як описано у п. xref:#deploy-platform-installer-scratch[], якщо ви розгортаєте платформу з нуля, або п. xref:#update-platform-installer[], якщо ви оновлюєте платформу.
 
 === Помилка при відправленні образів до Nexus під час розгортання Платформи
 
@@ -1619,4 +1733,4 @@ image:installation/aws/installation-aws-8.png[image,width=468,height=228]
 [send-images-to-nexus-issue-resolving]
 ==== Розв'язання
 
-Виконувати встановлення Платформи із додаткової віртуальної машини, як описано в п. 2.
+Виконувати встановлення Платформи із додаткової віртуальної машини, як описано в п. xref:#deploy-additional-recources-for-okd[].
