@@ -1,4 +1,4 @@
-= Публічний API для читання даних.
+= Публічний API та rate-limits для читання даних.
 
 == Загальний опис
 
@@ -8,10 +8,11 @@
 == Функціональні сценарії
 
 * Публікація пошукових запитів
-* Отримання документації та використання публічного API
-* Моніторинг стану та використання публічних пошукових критеріїв
 * Конфігурація ресурсів публічного API
-* Створення роута для публічного АПІ технічним адміністратором регламенту.
+* Створення точок інтеграції для публічного API технічним адміністратором реєстру.
+* Отримання документації та використання публічного API.
+* Моніторинг стану та використання публічних пошукових критеріїв.
+* Зміна `rate-limit`-ів для існуючих точок інтеграції.
 
 == Ролі користувачів
 
@@ -24,7 +25,7 @@
 * Публічним вважаються той API який не потребує автентифікації з боку клієнта.
 * Запити до Дата Фабрики здійснюються від імені системного користувача
 * В якості публічного API може бути представлені тільки пошукові запити (`search conditions`)
-* Обмеження доступу до публічного API (rate limits, ip blacklist, geoip, захист від ddos-атак) поза межами даного дизайну
+* Обмеження доступу до публічного API (ip blacklist, geoip, захист від ddos-атак) поза межами даного дизайну
 
 
 == Високорівневий дизайн рішення
@@ -79,7 +80,6 @@ g --> user:
 == Розгортання сервісів
 
 Для забезпечення відмовостійкості та відокремлення публічних запитів від інших задля підвищення безпеки розгортається окремий екземпляр сервісу `rest-api`.
-Налаштування
 
 === Конфігурація NetworkPolicy
 
@@ -105,11 +105,71 @@ g --> user:
 |Конфігурація та створення ресурсів реєстру
 |===
 
-=== Ключові сценарії
+=== Моніторинг стану та навантаження для публічних API
 
-==== Моніторинг стану та навантаження для публічних API
+Для моніторингу актуального стану API метрики знімаються з `API Gateway` (`Kong`) за допомогою плагіну:
 
+[source, yaml]
+----
+apiVersion: configuration.konghq.com/v1
+kind: KongClusterPlugin
+metadata:
+  name: kong-prometheus-plugin
+  annotations:
+    kubernetes.io/ingress.class: kong
+  labels:
+    global: "true"
+config:
+  status_code_metrics: true
+  latency_metrics: true
+  bandwidth_metrics: true
+  per_consumer: true
+plugin: prometheus
+----
+
+[WARNING]
+Дана конфігурація буде застосована до всіх абсолютно точок інтеграції, які виставлені через `API Gateway`.
+Згідно з документацією дані налаштування можуть призводити до погіршення швидкодії `API Gateway`-ю, тому при суттєвій деградації швидкодії перелік метрик можна переглянути в бік зменшення, і винести їх конфігурацію на рівень окремих точок інтеграції.
+
+Створення сервісу для збирання метрик
+[source, yaml]
+----
+apiVersion: v1
+kind: Service
+metadata:
+  name: kong-prometheus-monitoring
+  labels:
+    app: kong-prometheus-monitoring
+spec:
+  selector:
+    app.kubernetes.io/name: kong
+  type: ClusterIP
+  ports:
+  - name: metrics
+    protocol: TCP
+    port: 8100
+    targetPort: 8100
+----
+
+та `ServiceMonitor`
+[source, yaml]
+----
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: kong-service-monitor
+spec:
+  namespaceSelector:
+    any: true
+  endpoints:
+  - port: metrics
+  selector:
+    matchLabels:
+      app: kong-prometheus-monitoring
+----
+За основу Grafana Dashboard пропонується взяти https://grafana.com/grafana/dashboards/7424-kong-official/[офіційну].
 Створення `ConfigMap` з дашбордом для моніторингу
+
 .monitoring/deploy-templates/dashboard/public-api.yaml
 [source, yaml]
 ----
@@ -138,13 +198,14 @@ dashboardsConfigMaps:
 * Кількість успішних 2хх кодів, помилок сервера 5хх, та помилок клієнту 4хх, всі інші коди можуть бути винесені в окрему групу
 * Статистика швидкодії (найдовший запит, середні, найшвидший )
 
-==== Отримання документації до публічного API
+=== Отримання документації до публічного API
 Отримання специфікації (`OpenAPI`) для API який був позначений як публічний. (https://springdoc.org/faq.html#how-can-i-agreagte-external-endpoints-exposing-openapi-3-spec-inside-one-single-application[приклад])
 
 
-==== Створення користувача
+=== Створення сервісного облікового запису для виконання публічних запитів.
 
-Створення службового користувача `public-user` для реєстру.
+Попри те що формально точки інтеграції є публічними, для підтримання однорідності аудиту та логування в середині платформи, такі запити будуть здійснюватись від імені службового користувача з `realm`-у `external-system`.
+Створення службового користувача `public-user` для авторизації на рівні `platform-gateway`.
 
 .general/registry-configuration/values.yaml
 [source, yaml]
@@ -159,4 +220,99 @@ dashboardsConfigMaps:
     ...
 ----
 
-Також налаштування JVM машини доступні для конфігурації Технічному адміністратору реєстру через технічну консоль адміністратора.
+== Адміністративний доступ
+
+Задля запобігання помилкового виставлення API в якості публічного, передбачається необхідність конфігурації таких точок інтеграції не тільки моделювальником регламенту, але і технічним адміністратором реєстру. Також технічний адміністратор реєстру має виставити `rate limit`-и.
+
+== Управління конфігурацією реєстру
+
+Управління здійснюється шляхом додавання технічним адміністратором реєстру шляхів до списку `Доступ для реєстрів платформи та зовнішніх систем`, також можлива конфігурація "/*" що дозволить виставити всі точки інтеграції які позначені в регламенті моделювальником як публічні та застосувати до них спільні налаштування `rate limit`-ів.
+
+[WARNING]
+Створення wildcard (`/*`) записів не є рекомендованим підходом, оскільки в такій конфігурації зміна переліку публічних пошукових запитів конфігурується лише в регламенті.
+
+=== Конфігурація реєстру
+
+В `Helm` чарті `registry-configurations` секція публічне `API` яка передбачає конфігурацію технічної назви для публічного `API`, відносного шляху до точки інтеграції в `public-rest-api` та лімітів.
+[source, yaml]
+----
+publicService:
+  - name: city-lab
+    url: /search-laboratories-by-city
+    limits:
+        second: 5
+        hour: 100
+  - ...
+----
+
+Поточні значення використовуються для створення `kong` сервісу та конфігурації `rate-limit` плагіна до нього.
+
+Для всіх `url` з переліку має бути вимкнена перевірка заголовків автентифікації.
+
+Налаштування сервіса мають бути такими щоб `GET` запит до https://{domin}/api/public/data-factory/search-laboratories-by-city
+здійснював запит до `registry-rest-api-public.{registry-namespace}.svc.cluster.local:8080/search-laboratories-by-city`
+
+.Приклад спрощеної конфігурації
+[source, yaml]
+----
+apiVersion: v1
+kind: Service
+metadata:
+  name: public-city-lab-route
+  labels:
+    app: registry-rest-api-public
+  annotations:
+    konghq.com/plugins: post-transformer, city-lab-rate-limiting
+    konghq.com/override: registry-rest-api-public:/search-laboratories-by-city
+    konghq.com/path: /search-laboratories-by-city
+spec:
+  ports:
+  - port: 80
+    targetPort: 8080
+    protocol: TCP
+    name: registry-rest-api-public
+  selector:
+    app: registry-rest-api-public
+----
+
+[source, yaml]
+----
+apiVersion: configuration.konghq.com/v1
+kind: KongPlugin
+metadata:
+  name: city-lab-rate-limiting
+plugin: rate-limiting
+config:
+  second: 5
+  hour: 100
+  limit_by: ip
+  policy: redis
+  ...
+----
+
+=== Інтерфейси адміністратора
+
+image::architecture-workspace/platform-evolution/public-api/public-api-add.png[]
+image::architecture-workspace/platform-evolution/public-api/public-api-list.png[]
+
+== Високорівневий план розробки
+
+=== Технічні експертизи
+
+* FE
+* BE
+
+=== План розробки
+
+* Публічне API
+** Розширення схеми та бібліотеки `Liquibase`.
+** Зміна шаблону розгортання для `registry-rest-api`.
+** Додавання плагіну для збирання метрик з `API Gateway`.
+** Адаптація та розгортання дашборд Grafana.
+** Додавання секції для конфігурації публічного `API` в `registry-configuration`.
+** Додавання типу інтеграції "Публічний доступ" на рівні Технічної консолі адміністратора та конфігурації `registry-configuration` з конфігурації реєстру.
+* Rate limits
+** Зміна шаблону розгортання та створення плагінів `rate limit`-ів в `registry-configuration`
+** Розширення секції конфігурації публічне API `rate limit`-ами.
+** Винесення налаштувань на рівень конфігурації реєстру.
+** Додавання можливості конфігурації через адміністративну консоль.
