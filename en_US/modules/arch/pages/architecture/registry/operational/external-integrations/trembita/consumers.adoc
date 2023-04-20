@@ -1,0 +1,313 @@
+= Керування зовнішніми клієнтами в системі
+
+== Базові принципи
+* Зовнішні системи мають можливість інтегруватись з платформою через ШБО Трембіта
+* Керування правами доступу до підсистем тенанта платформи з боку інших зареєстрованих підсистем-учасників
+обміну виконується на рівні ШБО Трембіти адміністратором тенанту
+* Керування правами доступу до бізнес-процесів та даних окремого тенанта з боку зареєстрованих
+підсистем-учасників, яким дозволена взаємодія з підсистемами тенанта виконується на рівні регламента
+реєстру адміністратором регламента
+* Регламент налаштувань зовнішніх підсистем-учасників проходить валідацію в процесі проходження
+пайплайну публікації змін до регламенту
+* Кожному зовнішньому клієнту (підсистемі-учаснику обміну) надається унікальне ім'я-ідентифікатор
+при реєстрації в регламенті реєстру для подальшого створення окремої ролі та її використання
+у визначенні прав доступу на рівні бізнес-процесів та даних реєстру
+* Пароль для сервіс аккаунту генерується автоматично та не задається розробником регламенту при
+реєстрації нового клієнту
+* Кожен сервіс-аккаунт зовнішнього клієнта має відповідну роль, яка є доступною в access token, назва
+якої автоматично генерується згідно конвенції
+*external-system-role-_<унікальнe ім'я-ідентифікатор зовнішнього клієнта>_*
+* Усі сервіс аккаунти зовнішніх клієнтів мають роль за замовчуванням *trembita_invoker*
+* Ідентифікація зовнішнього клієнта виконується використовуючи системні заголовки виклику Трембіти,
+а саме *subsystemCode*, *memberClass* та *memberCode*
+
+== Реєстрація в регламенті
+[plantuml, consumers-regisrtation, svg]
+----
+include::partial$architecture/registry/operational/external-integrations/trembita/consumers-registration.puml[]
+----
+
+=== Структура файлів регламенту
+[plantuml]
+----
+@startsalt
+{
+{T
++ <&folder> registry-regulations
+++ <&folder> bpmn
+++ <&folder> dmn
+++ ...
+
+++ <&folder> trembita
++++ <&file> consumers.yml
++++ ...
+}
+}
+@endsalt
+----
+
+.Приклад файлу конфігурації зовнішніх клієнтів
+[source, yaml]
+----
+trembita:
+  consumers:
+    drrp: # name
+      description: Державний реєстр речових прав на нерухоме майно
+      subsystemCode: 6_MJU_DRRP_cons
+      memberClass: GOV
+      memberCode: 00015622
+    berdyansk-rtg: # name
+      description: РТГ Бердянської територіальної громади
+      subsystemCode: 63_BerdyanskRTG_cons
+      memberClass: GOV
+      memberCode: 02140805
+----
+
+=== Опис структури елементів
+==== Consumer
+|===
+
+|Назва |Схема |Коментар
+
+|name
+|string
+|Унікальне ім'я клієнта в системі на базі якого буде створений сервіс аккаунт та роль у реалмі
+*external-system*
+
+|description
+|string
+|Короткий опис зовнішнього клієнта
+
+|subsystemCode
+|string
+|Системний заголовок виклику з ШБО Трембіта який вказує на *Код підсистеми*
+
+|memberClass
+|string
+|Системний заголовок виклику з ШБО Трембіта який вказує на *Клас учасника*
+
+|memberCode
+|string
+|Системний заголовок виклику з ШБО Трембіта який вказує на *Код учасника*
+
+|===
+
+=== Правила валідації при обробці файлу в пайплані публікації
+
+* Ім'я зовнішнього клієнту (поле *external client name*) повинно бути унікальним для регламенту реєстру.
+* Системні заголовки з ШБО Трембіта утворюють складений ключ який також повинен бути унікальним.
+* При непроходженні валідації пайплайн публікації повинен закінчитися з помилкою
+
+=== Keycloak об'єкти
+
+==== Ролі
+
+* Для кожного зовнішнього клієнта в регламенті створюється окрема роль
+* Керування ролями відбуваються шляхом використання KeycloakRealmRoleBatch CR (https://github.com/epam/edp-keycloak-operator/tree/master#keycloak-operator[Keycloak operator])
+
+.Мапінг полей з файлу конфігурацій
+|===
+|KeycloakRealmRoleBatch |Значення |Коментар
+
+|metadata.name
+|external-system-roles
+|Статичне значення
+
+|spec.realm
+|external-system
+|Статичне значення
+
+|spec.roles[].name
+|external-system-role-_<trembita.consumers.*name*>_
+|_<trembita.consumers.*name*>_ - значення з файлу конфігурацій. Використання префіксу потрібно для
+запобігання можливих колізій при використанні в системі декількох реалмів
+
+|spec.roles[].description
+|_<trembita.consumers.*name*.description>_
+|_<trembita.consumers.*name*.description>_ - значення з файлу конфігурацій.
+
+|===
+
+.Приклад KeycloakRealmRoleBatch CR для файлу конфігурацій
+[source, yaml]
+----
+apiVersion: v1.edp.epam.com/v1alpha1
+kind: KeycloakRealmRoleBatch
+metadata:
+  name: external-system-roles
+spec:
+  realm: external-system
+  roles:
+    - name: external-system-role-drrp
+      description: 'Державний реєстр речових прав на нерухоме майно'
+    - name: external-system-role-berdyansk-rtg
+      description: 'РТГ Бердянської територіальної громади'
+----
+
+==== Сервіс аккаунт
+
+* Для кожного зовнішнього клієнта створюється окремий сервіс аккаунт у реалмі *external-system*
+* Керування сервіс аккаунтами виконується шляхом використання KeycloakClient CR
+(https://github.com/epam/edp-keycloak-operator/tree/master#keycloak-operator[Keycloak operator])
+* Кожний сервіс аккаунт має відповідний KeycloakClient CR
+
+.Мапінг полей з файлу конфігурацій
+|===
+|KeycloakClient |Значення |Коментар
+
+|metadata.name
+|external-system-sa-_<trembita.consumers.*name*>_
+|_<trembita.consumers.*name*>_ - значення з файлу конфігурацій.
+
+|spec.clientId
+|_<trembita.consumers.*name*>_
+|_<trembita.consumers.*name*>_ - значення з файлу конфігурацій.
+
+|spec.serviceAccount.enabled
+|true
+|Параметр для створення сервіс аккаунта для клієнту Кейклоак
+
+|spec.serviceAccount.realmRoles
+|external-system-role-_<trembita.consumers.*name*>_
+|_<trembita.consumers.*name*>_ - значення з файлу конфігурацій. Роль *trembita-invoker* не задається
+тому що надається за замовчуванням в реалмі *external-system*
+
+|spec.serviceAccount.attributes.drfo
+|0
+|Статичне значення-заглушка
+
+|spec.serviceAccount.attributes.edrpou
+|0
+|Статичне значення-заглушка
+
+|spec.serviceAccount.attributes.edrpou
+|0
+|Статичне значення-заглушка
+
+|spec.serviceAccount.attributes.fullName
+|_<trembita.consumers.*name*.description>_
+|_<trembita.consumers.*name*.description>_ - значення з файлу конфігурацій.
+
+|spec.serviceAccount.attributes.subsystemCode
+|_<trembita.consumers.*name*.subsystemCode>_
+|_<trembita.consumers.*name*.subsystemCode>_ - значення з файлу конфігурацій.
+
+|spec.serviceAccount.attributes.memberClass
+|_<trembita.consumers.*name*.memberClass>_
+|_<trembita.consumers.*name*.memberClass>_ - значення з файлу конфігурацій.
+
+|spec.serviceAccount.attributes.memberCode
+|_<trembita.consumers.*name*.memberCode>_
+|_<trembita.consumers.*name*.memberCode>_ - значення з файлу конфігурацій.
+
+|spec.serviceAccount.targetRealm
+|_<trembita.consumers.*name*.memberCode>_
+|_<trembita.consumers.*name*.memberCode>_ - значення з файлу конфігурацій.
+
+|===
+
+.Приклад KeycloakClient CR для файлу конфігурацій
+[source, yaml]
+----
+apiVersion: v1.edp.epam.com/v1alpha1
+kind: KeycloakClient
+metadata:
+  name: external-system-sa-drrp
+spec:
+  clientId: drrp
+  serviceAccount:
+    enabled: true
+    realmRoles:
+      - external-system-role-drrp
+    attributes:
+      drfo: '0' # Значення заглушки
+      edrpou: '0' # Значення заглушки
+      fullName: 'Державний реєстр речових прав на нерухоме майно'
+      subsystemCode: 6_MJU_DRRP_cons
+      memberClass: GOV
+      memberCode: 00015622
+  targetRealm: mdtu-ddm-edp-cicd-lowcode-dev-dev-external-system
+---
+apiVersion: v1.edp.epam.com/v1alpha1
+kind: KeycloakClient
+metadata:
+  name: external-system-sa-berdyansk-rtg
+spec:
+  clientId: berdyansk-rtg
+  serviceAccount:
+    enabled: true
+    realmRoles:
+      - external-system-role-berdyansk-rtg
+    attributes:
+      drfo: '0' # Значення заглушки
+      edrpou: '0' # Значення заглушки
+      fullName: 'РТГ Бердянської територіальної громади'
+      subsystemCode: 63_BerdyanskRTG_cons
+      memberClass: GOV
+      memberCode: 02140805
+  targetRealm: mdtu-ddm-edp-cicd-lowcode-dev-dev-external-system
+----
+
+==== Автентифікація
+
+* Отримання токену сервіс аккаунта проходить з використанням Grant Type *client_credentials*
+* Client Secret для автентифікації генерується в процесі створення Keycloak Client
+* Значення для Client Secret зберігається в OpenShift Secret
+* Посилання на OpenShift Secret зберігається в полі *status.clientSecretName* відповідного
+KeycloakCLient CR
+
+.Канонічний вигляд структури Access Token (decoded)
+[source, json]
+----
+{
+  "realm_access": {
+    "roles": [
+      "external-system-role-drrp",
+      "trembita-invoker"
+    ]
+  },
+  "clientId": "drrp",
+  "edrpou": "0",
+  "drfo": "0",
+  "fullName": "Державний реєстр речових прав на нерухоме майно",
+  "subsystemCode": "6_MJU_DRRP_cons",
+  "memberClass": "GOV",
+  "memberCode": "00015622",
+  "preferred_username": "service-account-drrp"
+}
+----
+
+== Розгортання тенанту реєстру
+
+В процесі розгортання тенанту реєстру виконуються наступні налаштування для зовнішніх клієнтів:
+
+* Розгортання окремого реалму для зовнішніх клієнтів *external-system*
+* Створення ролі *trembita_invoker* у реалмі *external-system* та встановлення ії як
+дефолтної для користувачів реалму. Ця роль використовується для можливості налаштування єдиних
+авторизаційних правил для всіх зовнішніх клієнтів
+* Створення Client Scope *external-system-attributes* з переліком Mappers що надані нижче.
+Використання Client Scope для групування мапперів надає можливість перевикористати налаштування для
+додавання атрибутів в access token клієнту
+** Атрибути, що не мають реальних значень, але повинні бути присутні для можливості аудиту
+фабрики даних:
+*** edrpou
+*** drfo
+** Системні заголовки викликів з Трембіта
+*** subsystemCode
+*** memberClass
+*** memberCode
+** Короткий опис зовнішнього клієнта з файла конфігурацій:
+*** fullName
+* Визначення Client Scope *external-system-attributes* як дефолтного. Усі зовнішні клієнти, що будуть
+згодом створені будуть мати набір маперів з попереднього пункту
+
+== Визначення сервіс аккаунту в системі
+
+При зовнішньому виклику в системі відбувається автентифікація завнішнього користувача. Флоу визначення
+та отримання токену приведений на діаграмі:
+
+=== Автентифікація зовнішнього клієнта
+[plantuml, consumers-auth, svg]
+----
+include::partial$architecture/registry/operational/external-integrations/trembita/consumers-auth.puml[]
+----

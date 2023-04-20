@@ -1,0 +1,56 @@
+== Функціональні можливості
+
+З метою надання можливості використання власного DNS імені для публічних кабінетів чиновника або громадянина, в платформі є можливість їх налаштувань за допомогою інтерфейсу адміністрування.
+
+=== Початкові вимоги
+
+. Мати зареєстроване доменне імʼя. Наприклад `registry.example.com`
+. Мати SSL-сертифікат для домену/субдомену `registry.example.com` або одночасно для всіх субдоменів першого рівня `*.example.com.
+
+=== Процес налаштування
+. За допомогою інтерфейсу адміністрування платформи реєстрів, на сторінці редагування реєстру, адміністратор може ввести власне DNS імʼя та завантажити PEM (Privacy Encoded Mail) сертифікат.
+. Інтерфейс адміністрування розділяє отриманий сертифікат на CA (Certificate Authority), сертифікат і ключ та зберігає їх в центральному HashiCorp Vault використовуючи KV engine та додає отримані DNS імена до `values.yaml` в форматі:
++
+[source, yaml]
+----
+global:
+  customDNS:
+    officerPortal: "officer.example.com"
+    citizenPortal: "citizen.example.com"
+----
+
+. Реєстровий пайплайн отримує з HashiCorp Vault дані  сертифікату та створює додаткові кастомні ресурси типу `Ingress` для конфігурації Kong Gateway та кастомний роут на istio-ingressgateway з доданим сертифікатом. Приклад:
++
+[source,yaml]
+----
+kind: Route
+apiVersion: route.openshift.io/v1
+metadata:
+  name: custom-host-registry-kong-proxy
+  namespace: registry
+spec:
+  host: registry.example.com
+  to:
+    kind: Service
+    name: istio-ingressgateway-main
+    weight: 100
+  port:
+    targetPort: http2
+  tls:
+    termination: edge
+    certificate: |
+      -----BEGIN CERTIFICATE-----
+      -----END CERTIFICATE-----
+    key: |-
+      -----BEGIN PRIVATE KEY-----
+      -----END PRIVATE KEY-----
+    caCertificate: |-
+      -----BEGIN CERTIFICATE-----
+      -----END CERTIFICATE-----
+      -----BEGIN CERTIFICATE-----
+      -----END CERTIFICATE-----
+    insecureEdgeTerminationPolicy: Redirect
+  wildcardPolicy: None
+----
+
+. Виконати зовнішню конфігурацію за межами OpenShift кластеру та реєстру.

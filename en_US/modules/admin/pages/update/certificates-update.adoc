@@ -1,0 +1,105 @@
+= Оновлення сертифікатів кластера OpenShift
+
+Цей документ описує процедуру оновлення сертифікатів роутера
+та API OpenShift 4.х кластера з використанням сертифікатів https://letsencrypt.org/[Let's Encrypt].
+
+== Передумови
+
+Для проведення процедури оновлення сертифікатів мають бути виконані
+наступні умови:
+
+. Роль в кластері має бути `cluster-admin`.
+. Встановлено `oc cli`.
+. Є можливість створення та редагування DNS-записів у hosted zone,
+до якої відноситься доменне ім'я кластера (далі -- `DNS_WILDCARD`).
+. Встановлено Certbot. +
+Для інсталювання Certbot зверніться до https://certbot.eff.org/lets-encrypt/osx-other[офіційного сайту].
+
+[NOTE]
+
+При цьому слід обрати опцію *"My HTTP website is running: None of the above on <Ваша операційна система>"*.
+
+Змінну `<Ваша операційна система>` заповніть значенням вашої операційної системи (наприклад, `macOS`).
+
+.Сторінка завантаження certbot
+image::certificates-update/certificates-update-1.png[Сторінка завантаження certbot]
+
+CAUTION: Виконувати будь-які кроки інструкції, крім власне інсталяції сertbot, не є необхідним.
+
+== Процедура оновлення
+
+1. Запустіть консоль з правами адміністратора / `sudo`.
+2. Виконайте наступну команду:
+
+[source, bash]
+----
+certbot certonly --manual
+----
+
+[start=3]
+3. На вимогу, **тільки при першому запуску**, введіть свій Email і погодьтеся з умовами використання, та погодьтеся або відмовтеся від поширення вашого Email з Electronic Frontier Foundation. +
+
+*Вкажіть доменні імена для сертифікатів:*
+
+* `*.<DNS_WILDCARD>`.
+
+TIP: Наприклад, доменне ім'я може виглядати наступним чином: `*.openshift.example.com`.
+[start=b]
+* `*.apps.<DNS_WILDCARD>`.
+
+TIP: Наприклад, доменне ім'я може виглядати наступним чином: `*.apps.openshift.example.com`.
+
+[start=4]
+. *Опціонально:* +
+
+Якщо ви бачите повідомлення зі змістом: +
+`"You have an existing certificate that has exactly the same domains or
+certificate name you requested and isn't close to expiry."`, +
+слід обрати варіант **Renew & replace the certificate**.
+
+[start=5]
+. У hosted zone, до якої відноситься `DNS_WILDCARD` кластера, створіть TXT-записи, що вимагає certbot. При цьому, перед тим, як продовжувати (вводити `Enter`), перевірте, що запис створено і він актуальний,
+за допомогою виконання наступної команди в іншій, одночасно відкритій консолі:
+
+[source,bash]
+----
+nslookup -type=txt <dns_record>
+----
+
+.Перевірка створеного запису
+image::certificates-update/certificates-update-2.png[Перевірка створеного запису]
+
+[start=6]
+. У випадку успішної видачі сертифікату, ви отримаєте відповідне
+повідомлення, в якому можна побачити шлях до файлів із ключем і ланцюжком сертифікатів:
+
+.Успішне отримання сертифікату
+image::certificates-update/certificates-update-3.png[Успішне отримання сертифікату]
+
+[start=7]
+. Видаліть старий `secret` роутера та API, виконавши наступні команди:
+
+[#id-for-listing-block]
+----
+oc delete secret router-certs -n openshift-ingress
+oc delete secret router-certs -n openshift-config
+----
+
+[start=8]
+. Створіть новий `secret` роутера і API, виконавши наступні команди:
+
+[#id-for-listing-block]
+----
+oc create secret tls router-certs --cert=<fullchain.pem>
+--key=<privkey.pem> -n openshift-ingress
+oc create secret tls router-certs --cert=<fullchain.pem>
+--key=<privkey.pem> -n openshift-config
+----
+
+[start=9]
+. Видаліть поди роутера за допомогою наступної команди:
+
+[#id-for-listing-block]
+----
+oc delete pods --all -n openshift-ingress
+----

@@ -1,0 +1,646 @@
+= Історичність виконання бізнес-процесів
+
+== Загальний контекст
+
+_Сервіс виконання бізнес-процесів_ зберігає мінімально необхідний та достатній набір даних про стан виконання окремих екземплярів БП у сховищі даних у вигляді окремої групи службових таблиць з умовною назвою _Runtime Database_.
+
+Додатково, для реалізації вимог аудиту, формується окремий лог значущих подій _History Event Stream_, який за замовчуванням зберігається в _History Database_ групу таблиць сховища.
+
+Об'єм та рівень генерації подій налаштовується за допомогою _HistoryLevel_, який визначається за допомогою властивості _camunda.bpm.history-level_
+
+[NOTE]
+--
+Властивість _camunda.bpm.history-level_ може бути визначена тільки один раз при первинному запуску додатку Camunda.
+Для того, щоб змінити цю властивість, треба також змінити рівень історичних подій у базі даних Camunda
+[source, sql]
+UPDATE ACT_GE_PROPERTY SET VALUE_ = ?
+WHERE NAME_ = 'historyLevel';
+--
+
+.Можливі значення *camunda.bpm.history-level*:
+- *NONE* (VALUE_ = 0) -- запис історичних подій в БД не проводиться, таким чином мінімізується вплив на швидкодію
+- *ACTIVITY* (VALUE_ = 1) -- генеруються значущі історичні події над об'єктами: PROCESS, ACTIVITY, TASK
+- *AUDIT* (VALUE_ = 2) -- додатково генеруються події над змінними БП
+- *FULL* (VALUE_ = 3) -- додатково генерується історія змін змінних БП. Не рекомендовано для використання по причині найбільшого впливу на швидкодію
+
+[WARNING]
+Зберігання історичних даних у сховище _History Database_ є синхронним, а об'єм та рівень *генерації*  подій налаштовується за допомогою _HistoryLevel_.
+Важливим також є той факт, що ріст історичних даних не обмежено за замовчуванням.
+
+На даній діаграмі послідовності схематично зображено алгоритм дій фіксації історичних подій у процесі виконання БП:
+
+[plantuml]
+----
+@startuml
+skinparam shadowing false
+skinparam DatabaseBackgroundColor white
+skinparam DatabaseBorderColor #2688d4
+skinparam sequence {
+    ArrowColor #2688d4
+    ActorBorderColor #2688d4
+    LifeLineBorderColor #2688d4
+    ParticipantBorderColor #2688d4
+    ParticipantBackgroundColor white
+    BoxBorderColor #2688d4
+    BoxBackgroundColor white
+}
+
+box "Сервіс виконання БП"
+    participant "BPMN \nCore Engine" as engine
+    participant "History Level" as history_level
+    participant "History \nEvent Producer" as producer
+    participant "Composite History \nEvent Handler" as composite_handler
+    participant "DB History \nEvent Handler" as db_handler
+end box
+
+box "BPM Database"
+    database "History \nDatabase" as history_db
+end box
+
+engine -> history_level ++: isHistoryEventProduced()
+note right: Генерація події відбувається на базі відповідного "HistoryLevel"
+alt return false
+  engine <-- history_level: false
+else return true
+  return true
+  engine -> producer ++: createEvent()
+  return event
+  engine -> composite_handler ++: handleEvent()
+  composite_handler -> db_handler ++: handleEvent()
+  db_handler -> history_db++: saveRecord()
+  return
+  return
+  return
+end
+@enduml
+----
+
+== Антипаттерни використання історичності
+
+Існує декілька антипаттернів використання історичності, які напряму впливають на швидкодію _Сервісу виконання бізнес-процесів_:
+
+- Використання _History Database_ у якості сховища довгострокового збереження історичних даних з ціллю подальшого формування пошукових запитів
+- Використання надлишкового рівня логування подій _HistoryLevel_, який спричиняє суттєвий ріст кількості синхронних операцій на збереження та ріст об'єму історичних даних
+- Відсутність контролю за ростом об'єму історичних даних в _History Database_
+- Використання історичних даних з _History Database_ при обслуговуванні операційних сценаріїв взаємодії користувача через кабінет
+- Використання _History Database_ для обслуговування сценаріїв перегляду історичних даних через кабінет користувача
+
+== Принципи, закладені в дизайн рішення підтримки історичності
+
+- Розмежування реалізацій операційних сценаріїв та сценаріїв роботи з історичними даних на рівні окремих компонент та сховищ даних, які їх обслуговують
+- Налаштування мінімально достатнього для обслуговування системи адміністратором та службою підтримки рівня логування подій _HistoryLevel_
+- Обмеження зростання об'єму історичних даних виконання бізнес-процесів у сховищі сервісу виконання БП за допомогою автоматичного процесу їх видалення
+- Обмеження життєвого циклу історичних даних (_TTL_) часом виконання відповідних БП з метою використання даних у якості допоміжних для служби підтримки
+- Формування окремого потоку значущих історичних подій виконання БП та їх асинхронна публікація через брокера повідомлень _Kafka_ з ціллю подальшої обробки та збереження
+- Обробка повідомлень історичних подій БП, отриманих через брокера повідомлень _Kafka_ та їх збереження в окреме _Сховище історичних даних виконання БП_ у денормалізованій формі
+- Виключення використання історичних даних з _History Database_ у якості допоміжних при обслуговуванні операційних сценаріїв
+- Реалізація сценаріїв перегляду історичних даних з використанням _Сховище історичних даних виконання БП_
+
+== Технічний дизайн рішення
+
+На даній діаграмі зображено залучені для реалізації вимог сервіси платформи та взаємодію між ними.
+Додатково зображено важливі особливості, які необхідно брати до уваги в рамках реалізації.
+
+image::architecture/registry/operational/bpms/bpm-history.svg[]
+
+=== Компоненти обслуговування історичності
+
+==== Публікація історичних подій
+
+З метою мінімізації впливу на швидкодію виконання бізнес-процесів та формування окремого сховища історичних даних, необхідно реалізувати _Process Engine Plugin_ з компонентом _Process History Event Publisher_, який буде обробляти події з _HistoryLevel=AUDIT_ від _BPMN Core Engine_ та публікувати їх в окремий топік брокера повідомлень _Kafka_.
+
+Розглянути можливість реалізації _кастомного рівня логування історичних подій_ для публікації повідомлень у _Kafka_ згідно з наступними правилами:
+
+|===
+|Ресурс|Тип події|Ідентифікатор ресурсу|Операція збереження
+
+|*Process Instance*
+|START, UPDATE, END
+|-
+|_INSERT OR UPDATE BPM_HISTORY_PROCESS BY PROCESS_INSTANCE_ID_
+
+|*Task Instance*
+|CREATE, UPDATE, COMPLETE
+|-
+|_INSERT OR UPDATE BPM_HISTORY_TASK BY ACTIVITY_INSTANCE_ID_
+
+|*Variable Instance*
+|CREATE, UPDATE, DELETE
+|Системні змінні: *sys-var-process-completion-result*, *sys-var-process-excerpt-id*
+|_UPDATE BPM_HISTORY_PROCESS BY PROCESS_INSTANCE_ID_
+|===
+
+==== Збереження опублікованих історичних подій
+
+З метою збереження історичних даних виконання бізнес-процесів, необхідно реалізувати компонент _User Process History Event Subscriber_, який буде відповідальний за обробку повідомлень топіка історичних подій брокера повідомлень _Kafka_ та подальше збереження в окреме сховище у денормолізованому вигляді.
+
+==== API доступу до історичних даних
+
+З метою надання користувачам кабінетів доступу до їх персональних історичних даних про виконання бізнес-процесів та задач, необхідно реалізувати окремий компонент _User Process History Management_, який надає необхідний API для обслуговування історичних запитів автентифікованих користувачів.
+
+=== Взаємодія компонентів системи
+
+На даній діаграмі послідовності схематично зображено алгоритм дій фіксації історичної події у процесі виконання БП:
+[plantuml]
+----
+@startuml
+skinparam shadowing false
+skinparam DatabaseBackgroundColor white
+skinparam DatabaseBorderColor #2688d4
+skinparam QueueBackgroundColor white
+skinparam QueueBorderColor #2688d4
+skinparam sequence {
+    ArrowColor #2688d4
+    ActorBorderColor #2688d4
+    LifeLineBorderColor #2688d4
+    ParticipantBorderColor #2688d4
+    ParticipantBackgroundColor white
+    BoxBorderColor #2688d4
+    BoxBackgroundColor white
+}
+
+box "Сервіс виконання БП"
+    participant "BPMN \nCore Engine" as engine
+    participant "Composite History \nEvent Handler" as composite_handler
+    participant "DB History \nEvent Handler" as db_handler
+    participant "Process History \nEvent Publisher" as kafka_publisher
+end box
+
+box "BPM Database"
+    database "History \nDatabase" as history_db
+end box
+
+box "Data Factory"
+  queue "Kafka" as kafka
+  participant "User Process History \nEvent Subscriber" as kafka_subscriber
+end box
+
+box "Citus"
+  database "Process Execution \nHistory Database" as user_process_history_db
+end box
+
+engine -> composite_handler: handleEvent()
+composite_handler -> db_handler: handleEvent()
+  db_handler -> history_db: saveRecord()
+  history_db --> db_handler
+  db_handler --> composite_handler
+
+composite_handler -> kafka_publisher
+  kafka_publisher -> kafka: send()
+    kafka --> kafka_publisher
+  kafka_publisher --> composite_handler
+composite_handler --> engine
+
+kafka_subscriber -> kafka: consume()
+kafka_subscriber -> user_process_history_db: saveRecord()
+  user_process_history_db --> kafka_subscriber
+kafka_subscriber --> kafka
+
+@enduml
+----
+
+== API доступу до історичних даних виконання бізнес-процесів користувача
+
+=== Отримання поточних ініційованих бізнес-процесів
+
+[WARNING]
+Отримання доступу до даних можливе лише в рамках виконання запиту автентифікованого користувача в системі.
+
+Ідентифікатор користувача, отриманий з _X-Access-Token_ HTTP-заголовка запиту, безумовно використовується у якості обов'язкового критерія для формування вибірки даних за полем *"startUserId"*.
+
+[NOTE]
+При формуванні запитів на вибірку даних бізнес-процесів безумовно додається критерій на отримання БП верхнього рівня (_SUPER_PROCESS_INSTANCE_ID IS NULL_)
+
+*GET /api/process-instances*
+
+|===
+|Параметр|Тип|Частина запиту|Опційність|Значення за замовчуванням|Опис
+
+|*X-Access-Token*
+|JWT
+|HTTP заголовок
+|Ні
+|-
+|Токен доступу користувача
+
+|*offset*
+|Числовий
+|Параметр запиту
+|Так
+|_0_
+|Зміщення запису
+
+|*limit*
+|Числовий
+|Параметр запиту
+|Так
+|_10_
+|Обмеження кількості записів
+
+|*sort*
+|Текстовий
+|Параметр запиту
+|Так
+|_desc(endTime)_
+|Поле та порядок сортування записів. _Приклад: asc(<field>) / desc(<field>)_
+|===
+
+.Приклад відповіді
+[source, json]
+----
+[
+    {
+      "processInstanceId":  "",
+      "superProcessInstanceId": "",
+      "processDefinitionId": "",
+      "processDefinitionKey": "",
+      "processDefinitionName": "",
+      "businessKey": "",
+      "startTime": "",
+      "startUserId": "",
+      "status": {
+        "code": "",
+        "title": ""
+      }
+    }
+]
+----
+
+.Коди помилок
+|===
+|Код|Опис
+
+a|[green]#200#
+|OK з поверненням результату виконання запиту
+a|[red]#400#
+|Некоректно сформований запит (неправильний формат даних)
+a|[yellow]#401#
+| Помилка автентифікації (відсутній токен доступу)
+a|[red]#500#
+|Серверна помилка обробки запиту
+|===
+
+.Діаграма послідовності запиту поточних даних бізнес-процесів
+[plantuml]
+----
+@startuml
+skinparam shadowing false
+skinparam DatabaseBackgroundColor white
+skinparam DatabaseBorderColor #2688d4
+skinparam sequence {
+    ArrowColor #2688d4
+    ActorBorderColor #2688d4
+    LifeLineBorderColor #2688d4
+    ParticipantBorderColor #2688d4
+    ParticipantBackgroundColor white
+    BoxBorderColor #2688d4
+    BoxBackgroundColor white
+}
+
+participant "Process History \nservice" as historyService
+database "History \nDatabase" as history_db
+
+-> historyService ++: Request \nprocess-instance list
+historyService -> history_db ++: Select process-instance list with state in \n("ACTIVE", "SUSPENDED")
+return requested list
+historyService -> history_db ++: Select list of unfinished tasks by ACTIVE\nroot-process-instance-id list assigned to current user
+return requested tasks
+historyService -> historyService: Replace ACTIVE state with PENDING \nif there exists an unfinished task by process-instance id
+historyService -> historyService: remap database "state" to status.code and define localized status.title
+return Requested list
+@enduml
+----
+
+.Локалізація статусів
+|===
+|Технічний статус|Локалізований статус
+
+|ACTIVE|У виконанні
+|PENDING|Очікує виконання задачі
+|SUSPENDED|Призупинено адміністратором
+|===
+
+=== Отримання історії ініційованих бізнес-процесів
+
+[WARNING]
+Отримання доступу до історичних даних можливе лише в рамках виконання запиту автентифікованого користувача в системі.
+
+Ідентифікатор користувача, отриманий з _X-Access-Token_ HTTP-заголовка запиту, безумовно використовується у якості обов'язкового критерія для формування вибірки даних за полем *"startUserId"*.
+
+[NOTE]
+При формуванні запитів на вибірку історичних даних бізнес-процесів безумовно додається критерій на отримання БП верхнього рівня (_SUPER_PROCESS_INSTANCE_ID IS NULL_)
+
+*GET /api/history/process-instances*
+
+|===
+|Параметр|Тип|Частина запиту|Опційність|Значення за замовчуванням|Опис
+
+|*X-Access-Token*
+|JWT
+|HTTP заголовок
+|Ні
+|-
+|Токен доступу користувача
+
+|*offset*
+|Числовий
+|Параметр запиту
+|Так
+|_0_
+|Зміщення запису
+
+|*limit*
+|Числовий
+|Параметр запиту
+|Так
+|_10_
+|Обмеження кількості записів
+
+|*sort*
+|Текстовий
+|Параметр запиту
+|Так
+|_desc(endTime)_
+|Поле та порядок сортування записів. _Приклад: asc(<field>) / desc(<field>)_
+|===
+
+.Приклад відповіді
+[source, json]
+----
+[
+    {
+      "processInstanceId":  "",
+      "superProcessInstanceId": "",
+      "processDefinitionId": "",
+      "processDefinitionKey": "",
+      "processDefinitionName": "",
+      "businessKey": "",
+      "startTime": "",
+      "endTime": "",
+      "startUserId": "",
+      "excerptId": "",
+      "status": {
+        "code": "",
+        "title": ""
+      }
+    }
+]
+----
+
+.Коди помилок
+|===
+|Код|Опис
+
+a|[green]#200#
+|OK з поверненням результату виконання запиту
+a|[red]#400#
+|Некоректно сформований запит (неправильний формат даних)
+a|[yellow]#401#
+| Помилка автентифікації (відсутній токен доступу)
+a|[red]#500#
+|Серверна помилка обробки запиту
+|===
+
+.Діаграма послідовності запиту історичних даних бізнес-процесів
+[plantuml]
+----
+@startuml
+skinparam shadowing false
+skinparam DatabaseBackgroundColor white
+skinparam DatabaseBorderColor #2688d4
+skinparam sequence {
+    ArrowColor #2688d4
+    ActorBorderColor #2688d4
+    LifeLineBorderColor #2688d4
+    ParticipantBorderColor #2688d4
+    ParticipantBackgroundColor white
+    BoxBorderColor #2688d4
+    BoxBackgroundColor white
+}
+
+participant "Process History \nservice" as historyService
+database "History \nDatabase" as history_db
+
+-> historyService ++: Request \nprocess-instance list
+historyService -> history_db ++: Select process-instance list with state in \n("COMPLETED", "EXTERNALLY_TERMINATED")
+return requested list
+historyService -> historyService: remap database "state" to status.code and define localized status.title
+return Requested list
+@enduml
+----
+
+.Локалізація статусів
+|===
+|Технічний статус|Локалізований статус
+
+|completionResult != null| Значення completionResult
+|COMPLETED|Надання послуги завершено
+|EXTERNALLY_TERMINATED|Відмінено адміністратором
+|===
+
+=== Отримання історії виконаних задач бізнес-процесів
+
+[WARNING]
+Отримання доступу до історичних даних можливе лише в рамках виконання запиту автентифікованого користувача в системі.
+
+Ідентифікатор користувача, отриманий з _X-Access-Token_ HTTP-заголовка запиту, безумовно використовується у якості обов'язкового критерія для формування вибірки даних за полем *"assignee"*.
+
+*GET /api/history/tasks*
+
+|===
+|Параметр|Тип|Частина запиту|Опційність|Значення за замовчуванням|Опис
+
+|*X-Access-Token*
+|JWT
+|HTTP заголовок
+|Ні
+|-
+|Токен доступу користувача
+
+|*offset*
+|Числовий
+|Параметр запиту
+|Так
+|_0_
+|Зміщення запису
+
+|*limit*
+|Числовий
+|Параметр запиту
+|Так
+|_10_
+|Обмеження кількості записів
+
+|*sort*
+|Текстовий
+|Параметр запиту
+|Так
+|_desc(endTime)_
+|Поле та порядок сортування записів. _Приклад: asc(<field>) / desc(<field>)_
+|===
+
+.Приклад відповіді:
+[source, json]
+----
+[
+    {
+      "activityInstanceId":  "",
+      "taskDefinitionKey": "",
+      "taskDefinitionName": "",
+      "processInstanceId": "",
+      "processDefinitionId": "",
+      "processDefinitionKey": "",
+      "processDefinitionName": "",
+      "startTime": "",
+      "endTime": "",
+      "assignee": ""
+    }
+]
+----
+
+.Коди помилок
+|===
+|Код|Опис
+
+a|[green]#200#
+|OK з поверненням результату виконання запиту
+a|[red]#400#
+|Некоректно сформований запит (неправильний формат даних)
+a|[yellow]#401#
+| Помилка автентифікації (відсутній токен доступу)
+a|[red]#500#
+|Серверна помилка обробки запиту
+|===
+
+== Налаштування історичності даних в _Сервісі виконання бізнес-процесів_
+
+=== Фіксація історичних подій бізнес-процесів
+
+В процесі експлуатації системи може виникати необхідність залучення служби підтримки для дослідження помилок та причин зупинки виконання бізнес-процесів користувачів.
+Для забезпечення можливостей використання адміністративного інтерфейсу _Camunda Cockpit_ з метою перегляду стану бізнес-процесу та його змінних рекомендовано встановлення рівня логування історичних подій за необхідністю за допомогою властивості _camunda.bpm.database-history-level_.
+
+.Можливі значення *camunda.bpm.database-history-level*:
+- *NONE* (запис історичних подій в БД не проводиться, таким чином мінімізується вплив на швидкодію)
+- *ACTIVITY* (фіксуються значущі історичні події над об'єктами: PROCESS, ACTIVITY, TASK)
+- *AUDIT* (додатково фіксуються події над змінними БП)
+- *FULL* (додатково логується історія змін змінних БП. Не рекомендовано для використання по причині найбільшого впливу на швидкодію)
+
+[NOTE]
+--
+За замовченням, рекомендовано встановити наступні налаштування:
+
+- camunda.bpm.history-level: AUDIT
+- camunda.bpm.database-history-level: ACTIVITY
+
+Налаштування потребують корегування в залежності від стабільності системи та необхідності підвищення швидкодії / рівня деталізації подій в системі.
+--
+
+[TIP]
+З метою подальшої оптимізації швидкодії, існує можливість підключення кастомного рівня логування історичних подій у вигляді реалізації _TypeBasedHistoryLevel_ інтерфейсу та реєстрації в Process Engine конфігурації.
+
+[WARNING]
+Для визначення рівня фіксації історичних подій не слід використовувати _camunda.bpm.history-level_ оскільки ця проперті визначає рівень *створення* історичних подій, а не рівень фільтрування їх перед обробленням.
+Слід використовувати кастомну проперті _camunda.bpm.database-history-level_.
+
+=== Автоматичне видалення історичних подій
+
+[WARNING]
+Запропонований механізм видалення історичних даних бізнес-процесів орієнтований на екземпляри процесів та не має відношення до "метаданих", які належать застарілим встановленим версіям _Deployment_.У разі необхідності, видалення застарілих версій має бути реалізовано окремо.
+
+Для поліпшення швидкодії та зменшення росту об'єму історичних даних, необхідно впровадити наступні налаштування для _Сервісу виконання бізнес-процесів_ задля впровадження автоматичного процесу видалення застарілих даних за _Removal-Time-based_ стратегією:
+
+|===
+|Налаштування|Значення|Опис
+
+|*historyCleanupEnabled*
+|_true_
+|Активація механізму автоматичного періодичного видалення історичних даних
+
+|*historyCleanupStrategy*
+|_removalTimeBased_
+|Стратегія видалення історичних даних за принципом _removal time = base time + TTL_
+
+|*historyRemovalTimeStrategy*
+|_end_
+|Встановлення _base time_ для формування _removal time_ часу видалення історичних даних БП
+
+|*historyTimeToLive*
+|_P1D_
+|Встановлення _TTL_ для формування _removal time_ часу видалення історичних даних БП
+
+|*historyCleanupBatchWindowStartTime*
+|_20:00_
+|Ініціювання процесу автоматичного видалення кожного дня, починаючи з вказаного часу
+
+|*historyCleanupBatchWindowEndTime*
+|_22:00_
+|Закінчення автоматичного видалення кожного дня у вказаний час
+
+|*historyCleanupDegreeOfParallelism*
+|_1_
+|Ступінь паралелізації процесу видалення (кількість залучених потоків)
+
+|*historyCleanupBatchSize*
+|_500_
+|Кількість екземплярів БП для яких виконується видалення історичних даних в рамках однієї транзакції
+|===
+
+== Модель історичних даних виконання бізнес-процесів
+
+У контексті роботи з історичними даними, існує два основних сценарії взаємодії користувача через кабінет:
+
+- Отримання історії ініційованих користувачем та завершених бізнес-процесів
+- Отримання історії виконаних задач користувача
+
+Для оптимізації виконання запитів, історичні дані необхідно зберігати у денормалізованому вигляді в  окремому сховищі:
+
+- *BPM_HISTORY_PROCESS* - історичні дані бізнес-процесів
+- *BPM_HISTORY_TASK* - історичні дані задач
+
+[NOTE]
+Відношення/зв'язок між таблицями не встановлено навмисно, оскільки в результаті денормалізації містять весь необхідний набір атрибутів для обслуговування історичних запитів та наповнюються даними незалежно одна від одної.
+
+[plantuml]
+----
+@startuml
+
+skinparam shadowing false
+skinparam class {
+    BackgroundColor white
+    BorderColor #2688d4
+}
+!define table(x) entity x << (T, white) >>
+!define primary_key(x) <b><color:#b8861b><&key></color> x</b>
+!define column(x) <color:#efefef><&media-record></color> x
+hide methods
+hide stereotypes
+
+table( BPM_HISTORY_PROCESS ) {
+    primary_key( PROCESS_INSTANCE_ID ): VARCHAR
+    column( SUPER_PROCESS_INSTANCE_ID ): VARCHAR
+    column( PROCESS_DEFINITION_ID ): VARCHAR
+    column( PROCESS_DEFINITION_KEY ): VARCHAR
+    column( PROCESS_DEFINITION_NAME ): VARCHAR
+    column( BUSINESS_KEY ): VARCHAR
+    column( START_TIME ): DATETIME
+    column( END_TIME ): DATETIME
+    column( START_USER_ID ): VARCHAR
+    column( STATE ): VARCHAR
+    column( EXCERPT_ID ): VARCHAR
+    column( COMPLETION_RESULT ): VARCHAR
+}
+
+table( BPM_HISTORY_TASK ) {
+    primary_key( ACTIVITY_INSTANCE_ID ): VARCHAR
+    column( TASK_DEFINITION_KEY ): VARCHAR
+    column( TASK_DEFINITION_NAME ): VARCHAR
+    column( PROCESS_INSTANCE_ID ): VARCHAR
+    column( PROCESS_DEFINITION_ID ): VARCHAR
+    column( PROCESS_DEFINITION_KEY ): VARCHAR
+    column( PROCESS_DEFINITION_NAME ): VARCHAR
+    column( START_TIME ): DATETIME
+    column( END_TIME ): DATETIME
+    column( ASSIGNEE ): VARCHAR
+}
+@enduml
+----

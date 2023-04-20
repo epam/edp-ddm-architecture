@@ -1,0 +1,101 @@
+= createTable
+
+== Загальний опис
+
+Тег, необхідний для створення таблиць у БД, є стандартним для Liquibase, проте у *liquibase-ddm-ext* додається обробка параметрів, специфічних для _Платформи_
+
+== Liquibase-схема
+
+Зберігається у одній схемі з іншими стандартними тегами Liquibase, у офіційній https://www.liquibase.org/xml/ns/dbchangelog/[документації] (наразі використовується версія 4.15)
+
+Атрибути, специфічні для *liquibase-ddm-ext*:
+[source, xml]
+----
+<xsd:attribute name="historyFlag" type="xsd:boolean"/>
+<xsd:attribute name="readMode" type="readType" default="sync"/>
+<xsd:attribute name="distribution" type="distributionType" default="local"/>
+<xsd:attribute name="classify" type="classifyType"/>
+<xsd:attribute name="autoGenerate" type="xsd:string"/>
+<xsd:attribute name="bulkLoad" type="xsd:boolean"/>
+----
+
+== Приклад використання
+[source, xml]
+----
+<changeSet id="table pd_processing_consent" author="registry owner">
+    <comment>CREATE TABLE pd_processing_consent</comment>
+    <ext:createTable tableName="pd_processing_consent" ext:historyFlag="true" ext:bulkLoad="true">
+        <column name="consent_id" type="UUID">
+            <constraints nullable="false" primaryKey="true" primaryKeyName="pk_pd_processing_consent"/>
+        </column>
+        <column name="consent_date" type="TIMESTAMPTZ">
+            <constraints nullable="false"/>
+        </column>
+        <column name="person_gender" type="type_gender">
+            <constraints nullable="false"/>
+        </column>
+        <column name="person_full_name" type="TEXT">
+            <constraints nullable="false"/>
+        </column>
+        <column name="person_pass_number" type="TEXT">
+            <constraints nullable="false"/>
+        </column>
+        <column name="auto_generated_number" type="TEXT" ext:autoGenerate="АА-{DDMMYYYY}-{SEQ}">
+            <constraints nullable="false" unique="true"/>
+        </column>
+    </ext:createTable>
+</changeSet>
+----
+
+== Опис параметрів
+
+Параметри для основного тегу
+
+[cols="2,2,6"]
+|===
+| Назва параметру | Можливі значення | Опис
+| *historyFlag* | true | створює для вказаної таблиці відповідну історичну з суфіксом _hst, в яку записуються усі зміни у записах таблиці
+| *bulkLoad* | true/false | для модифікації API згенерованих сервісів, визначає, чи буде згенерований ендпоінт, що дозволяє транзакційно зберігати декілька сутностей в одному запиті
+| *readMode* | sync/async | для модифікації API згенерованих сервісів, визначає,як буде відбуватись операція читання даних, синхронно чи асинхронно (синхронно - на рівні _registry-rest_api_, асинхронно - шляхом rest-api-> _registry-kafka-api_ -> rest-api)
+| *isObject* | true/false | визначає таблицю як об'єкт (додається зв'язок з таблицею _subject_)
+|===
+
+Параметри для вкладених тегів *column*
+
+[cols="2,2,6"]
+|===
+| Назва атрибуту (name) | Можливі значення (value) | Опис
+| *classify* | private/confidential | класифікує дані в колонці як персональні
+| *autoGenerate* | Патерн для генерації значень у колонці (наприклад, _АА-{dd-MM-yyyy}-{SEQ}_) | для генерації унікальних значень у колонку за вказаним патерном
+|===
+
+== Згенеровані запити до БД
+
+Запити згенеровані для таблиці, наведеної у прикладі
+[source, sql]
+----
+CREATE TABLE registry.pd_processing_consent_hst (consent_id UUID NOT NULL, consent_date TIMESTAMP WITH TIME ZONE NOT NULL, person_gender TYPE_GENDER NOT NULL, person_full_name TEXT NOT NULL, person_pass_number TEXT NOT NULL, auto_generated_number TEXT NOT NULL, ddm_created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL, ddm_created_by TEXT NOT NULL, ddm_dml_op CHAR(1) NOT NULL, ddm_system_id UUID NOT NULL, ddm_application_id UUID NOT NULL, ddm_business_process_id UUID, ddm_business_process_definition_id TEXT, ddm_business_process_instance_id TEXT, ddm_business_activity TEXT, ddm_business_activity_instance_id TEXT, ddm_digital_sign TEXT, ddm_digital_sign_derived TEXT, ddm_digital_sign_checksum TEXT, ddm_digital_sign_derived_checksum TEXT, CONSTRAINT pk_pd_processing_consent PRIMARY KEY (consent_id), CONSTRAINT ui_pd_processing_consent_hst UNIQUE (consent_id, ddm_created_at));
+
+ALTER TABLE registry.pd_processing_consent_hst DROP CONSTRAINT pk_pd_processing_consent;
+
+REVOKE ALL PRIVILEGES ON TABLE pd_processing_consent_hst FROM PUBLIC;
+
+GRANT SELECT ON pd_processing_consent_hst TO application_role;
+
+CREATE TABLE registry.pd_processing_consent (consent_id UUID NOT NULL, consent_date TIMESTAMP WITH TIME ZONE NOT NULL, person_gender TYPE_GENDER NOT NULL, person_full_name TEXT NOT NULL, person_pass_number TEXT NOT NULL, auto_generated_number TEXT NOT NULL, ddm_created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL, ddm_created_by TEXT NOT NULL, ddm_updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL, ddm_updated_by TEXT NOT NULL, CONSTRAINT pk_pd_processing_consent PRIMARY KEY (consent_id), UNIQUE (auto_generated_number));
+
+REVOKE ALL PRIVILEGES ON TABLE pd_processing_consent FROM PUBLIC;
+
+GRANT SELECT ON pd_processing_consent TO application_role;
+
+CREATE SEQUENCE IF NOT EXISTS pd_processing_consent_auto_generated_number_seq INCREMENT BY 1 OWNED BY pd_processing_consent.auto_generated_number;
+
+GRANT USAGE ON SEQUENCE pd_processing_consent_auto_generated_number_seq TO application_role;
+
+insert into ddm_liquibase_metadata(change_type, change_name, attribute_name, attribute_value) values ('autoGenerate', 'pd_processing_consent', 'auto_generated_number', 'АА-{DDMMYYYY}-{SEQ}');
+
+insert into ddm_liquibase_metadata(change_type, change_name, attribute_name, attribute_value) values ('bulkLoad', 'pd_processing_consent', 'bulkLoad', 'true');
+
+INSERT INTO public.ddm_db_changelog (ID, AUTHOR, FILENAME, DATEEXECUTED, ORDEREXECUTED, MD5SUM, DESCRIPTION, COMMENTS, EXECTYPE, CONTEXTS, LABELS, LIQUIBASE, DEPLOYMENT_ID) VALUES ('table pd_processing_consent', 'registry owner', 'main-liquibase.xml', NOW(), 55, '8:1d833a79f2d827609a61ac1df5354bd4', 'createTable tableName=pd_processing_consent', 'CREATE TABLE pd_processing_consent', 'EXECUTED', NULL, NULL, '4.5.0', '7604867906');
+
+----

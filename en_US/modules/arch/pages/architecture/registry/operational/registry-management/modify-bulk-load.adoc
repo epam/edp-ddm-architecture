@@ -1,0 +1,105 @@
+= Зміна налаштувань поведінки API які вказуються на рівні структури створення таблиці
+
+== Загальний опис
+
+У моделювальника регламенти при створенні нових таблиць є можливість зазначити атрибут "bulkLoad" для можливості завантаження даних до таблиці з файлів або масивом.
+На данний момент відсутня можливість змінити це після створення таблиці.
+Оскільки цей атрибут не міняє структури даних, а лише впливає на генерацію коду - необхідно додати можливість зміни значення атрибуту і після створення таблиць.
+
+== Функціональні сценарії
+
+* Як моделювальник регламенту я хочу мати змогу змінювати налаштування які впливають на поведінку згенерованого коду API, але вказуються на рівні створення таблиць.
+** Включення/виключення можливості збереження масиву даних з CSV або через REST API.
+** Зміна режиму читання даних синхронного/асинхронного.
+
+== Ролі користувачів
+
+* Розробник/моделювальник регламенту
+
+== Загальні принципи та положення
+
+* Вже створені структури даних можуть лише розширюватись.
+* Теги в регламенті які вже було опрацьовано не можуть бути змінені.
+*
+
+== Моделювання регламенту реєстру
+
+=== Розширення для моделювання
+
+[source,xml]
+----
+
+<databaseChangeLog>
+    <changeSet author="..." id="initial creation">
+        <ext:createTable name="example_bulk" bulkLoad="false">
+             <column name="id" type="UUID" defaultValueComputed="uuid_generate_v4()">
+                            <constraints nullable="false" primaryKey="true" primaryKeyName="pk_example_bulk_id"/>
+                        </column>
+            <column name="first_name" type="text"/>
+            ...
+            ...
+        </ext:createTable>
+
+        <ext:createTable name="example_read_mode" readMode="sync">
+             <column name="id" type="UUID" defaultValueComputed="uuid_generate_v4()">
+                            <constraints nullable="false" primaryKey="true" primaryKeyName="pk_example_read_mode_id"/>
+                        </column>
+            <column name="first_name" type="text"/>
+            ...
+            ...
+        </ext:createTable>
+    </changeSet>
+
+    <changeSet author="..." id="change api behavior">
+        <ext:alterTableApi table="example_bulk">
+            <ext:attribute name="bulkLoad" value="true"/>
+            <ext:attribute name="readMode" value="sync"/>
+        </ext:alterTableApi>
+
+        <ext:alterTableApi table="example_bulk">
+            <ext:attribute name="bulkLoad" value="true"/>
+        </ext:alterTableApi>
+    </changeSet>
+</databaseChangeLog>
+----
+
+== Низькорівневий дизайн сервісів
+
+=== Ключові сценарії
+
+* При зазначенні атрибута в тегу його значення відображається в таблиці метаданих.
+* Відпрацювання тега в рамках декількох `changeSet`-ів є ідемпотентним.
+* За умови відсутності атрибутів в тегу значення в таблиці метаданих залишаєтеся незмінним.
+
+=== XSD-схема валідації
+
+Обовʼязковим є вказання назви таблиці та хоча б один атрибут.
+
+=== Структура даних
+
+.Структура таблиці ddm_liquibase_metadata
+|===
+|metadata_id | change_type | change_name | attribute_name |attribute_value
+
+|%id%
+|bulkLoad
+|%назва таблиці%
+|bulkLoad
+|*true/false*
+
+|%id%
+|readMode
+|createTable
+|%назва таблиці%
+|*sync/async*
+|===
+
+== Високорівневий план розробки
+
+=== Технічні експертизи
+* BE(Java) розробник
+
+=== План розробки
+
+* Додавання схеми нового тега до `liquibase-ext-schema`.
+* Розширення  `liquibase-ddm-ext` новим тегом.

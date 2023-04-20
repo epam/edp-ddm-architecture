@@ -1,0 +1,587 @@
+= Моделювання бізнес-процесу з формування витягів у форматі csv та docx
+:toc:
+:toc-title: ЗМІСТ
+:experimental:
+:example-caption: Приклад
+:important-caption: ВАЖЛИВО
+:note-caption: ПРИМІТКА
+:tip-caption: ПІДКАЗКА
+:warning-caption: ПОПЕРЕДЖЕННЯ
+:caution-caption: УВАГА
+:figure-caption: Figure
+:table-caption: Table
+:appendix-caption: Appendix
+:toclevels: 5
+:sectnums:
+:sectnumlevels: 5
+:sectanchors:
+:sectlinks:
+:partnums:
+
+Опис механізму моделювання бізнес-процесу наведений на прикладі Реєстру атестованих лабораторій, а саме формування витягу "Звіт по лабораторіям у форматі csv". Моделювання бізнес-процесу з витягом у форматі docx є аналогічним, за винятком кроку, де зазначається формат файлу.
+
+[TIP]
+Виконайте необхідні передумови для створення бізнес-процесу, інструкція за xref:bp-modeling/bp/bp-modeling-instruction.adoc#bp-modelling-preconditions[посиланням].
+
+== Початкові кроки створення бізнес-процесу
+
+. Створіть нову BPMN-діаграму.
++
+image:registry-develop:bp-modeling/bp/modeling-instruction/bp-1.png[]
+. Додайте елемент Create pool/Participant.
++
+У правому вікні з параметрами необхідно заповнити поля відповідними значеннями:
+
+* в полі `Participant Name` введіть назву пулу `Формування звіту по лабораторіям в форматі csv`;
+* в полі `Process id` введіть ідентифікатор бізнес-процесу `zvit-csv-bp`;
+* в полі `Process name` вкажіть бізнес-назву процесу `Формування звіту по лабораторіям в форматі csv`.
+
++
+image:registry-develop:bp-modeling/bp/excerpt-csv-docx/bp-modeling-excerpt-csv-docx-01.png[]
+[#create-start-event]
+. Створіть початкову подію для запуску бізнес-процесу користувачем.
++
+На панелі налаштувань справа заповніть наступні параметри відповідними значеннями:
+
+* на вкладці `General`:
+** в полі `Id` введіть значення `StartEvent_lab1`;
+** в полі `Name` введіть назву початкової події `Стартова форма`;
+** в полі `Initiator` введіть значення `initiator`.
++
+[TIP]
+====
+`initiator` — спеціальна змінна, що встановлюється для користувача, який розпочав процес.
+====
++
+image:registry-develop:bp-modeling/bp/excerpt-csv-docx/bp-modeling-excerpt-csv-docx-02.png[]
+
+* на вкладці `Form`:
+** в полі `FormKey` введіть ідентифікатор форми `add-startform-zvit`.
++
+[TIP]
+====
+В полі `FormKey` зазначається службова назва створеної UI-форми в Кабінеті адміністратора регламентів.
+
+image:registry-develop:bp-modeling/bp/excerpt-csv-docx/bp-modeling-excerpt-csv-docx-02.1.png[]
+На подальших кроках буде розглянуто xref:#create-ui-form-1[моделювання стартової форми].
+
+====
+
+
+== Підготування даних та їх підписання
+
+. Створіть сервісну задачу "Читання даних по laboratoryId".
++
+Оберіть налаштований шаблон (Template) `Read entity from data factory`.
++
+[TIP]
+====
+Детальніше ознайомитися з описом делегата Читання сутності із фабрики даних (`Read entity from data factory`) ви можете за xref:bp-modeling/bp/element-templates/bp-element-templates-installation-configuration.adoc#_читання_сутності_із_фабрики_даних_read_entity_from_data_factory[посиланням].
+====
++
+На панелі налаштувань вкажіть наступні значення:
+
+* в полі `Name` вкажіть назву задачі `Читання даних по laboratoryId`;
+* в полі `Resource` вкажіть ресурс `laboratory`;
+* в полі `Resource id` введіть ідентифікатор ресурсу `${submission('StartEvent_lab1').formData.prop('laboratory').prop('laboratoryId').value()}`;
++
+[TIP]
+====
+В нашому випадку ми передаємо ідентифікатор ресурсу `StartEvent_lab1` за допомогою функції `submission()` зі стартової форми бізнес-процесу.
+====
+* в полі `X-Access-Token` вкажіть токен доступу до системи користувача, під яким виконується операція `${initiator().accessToken}`;
+* в полі `Result Variable` вкажіть назву для вихідного параметра -- `labResponse`.
+
++
+image:registry-develop:bp-modeling/bp/excerpt-csv-docx/bp-modeling-excerpt-csv-docx-03.png[]
+
+. Створіть сервісну задачу "Пошук даних про співробітників".
++
+Оберіть налаштований шаблон (Template) `Search for entities in data factory`.
++
+[TIP]
+====
+Детальніше ознайомитися з описом делегата Пошук сутностей у фабриці даних (`Search for entities in data factory`) ви можете за xref:bp-modeling/bp/element-templates/bp-element-templates-installation-configuration.adoc#_пошук_сутностей_у_фабриці_даних_search_for_entities_in_data_factory[посиланням].
+====
++
+На панелі налаштувань вкажіть наступні значення:
+
+* У полі `Name` вкажіть назву задачі `Пошук даних про співробітників`;
+* У розділі `Input Parameters`:
+** Розгорніть блок `Resource`:
+*** `Local Variable Assigment` має значення `on`, це дозволить створити локальну змінну для тіла запита;
+*** `Variable Assignment Type`  оберіть з випадного списку тип призначення змінної `String of Expression`;
+*** `Variable Assignment Value` введіть `staff-equal-laboratory-id`.
++
+[TIP]
+====
+`staff-equal-laboratory-id` -- це назва ендпоінту для критерію пошуку куди здійснюється запит для пошуку сутностей.
+====
+** Розгорніть блок `Search variable`:
+*** `Local Variable Assigment` має значення `on`;
+*** `Variable Assignment Type` виберіть `Map`;
+*** `Add Entry` -> в `Key` зазначте `laboratoryId`, в `Value` зазначте `${submission('StartEvent_lab1').formData.prop('laboratory').prop('laboratoryId').value()}`.
+** Розгорніть блок `X-Access-Token`:
+*** `Local Variable Assigment` має значення `on`;
+*** `Variable Assignment Type` оберіть `String of Expression`;
+*** `Variable Assignment Value` введіть значення `${initiator().accessToken}`.
+* У розділі `Output Parameters`:
+** Розгорніть блок `Result variable`:
+*** `Local Variable Assigment` має значення `on`;
+*** `Assign to Process Variable` введіть значення змінної до якої буде записано результат запита -- `staffResponse`.
+
++
+image:registry-develop:bp-modeling/bp/excerpt-csv-docx/bp-modeling-excerpt-csv-docx-04.png[]
+
+. Створіть задачу скриптування "Підготовка даних для показу".
++
+На панелі налаштувань вкажіть наступні значення:
+
+* в полі `Name` вкажіть назву `Підготовка даних для показу`;
+* в полі `Script Format` вкажіть тип (мову) скриптування — `groovy`;
+* в полі `Script Type` вкажіть тип скрипту `Inline Script`;
+* в полі `Script` вставте безпосередньо groovy-скрипт:
++
+[source, groovy]
+----
+def labResponseBody = labResponse.responseBody
+def payload = [:]
+def personnelGrid = []
+
+def addPersonPropClosure = { person, staffIt, key ->
+if (staffIt.hasProp(key)) {
+if (!staffIt.prop(key).isNull()) {
+person[key] = staffIt.prop(key).value()
+}
+}
+}
+
+staffResponse.responseBody.elements().each {
+def person = [:]
+
+    addPersonPropClosure(person, it, 'fullName')
+    addPersonPropClosure(person, it, 'specializationDate')
+    addPersonPropClosure(person, it, 'salary')
+    addPersonPropClosure(person, it, 'hygienistFlag')
+    addPersonPropClosure(person, it, 'fullTimeFlag')
+
+    personnelGrid.add(person)
+}
+
+payload['name'] = labResponseBody .prop('name').value()
+payload['edrpou'] = labResponseBody .prop('edrpou').value()
+payload['address'] = labResponseBody .prop('address').value()
+payload['headName'] = labResponseBody .prop('headName').value()
+payload['personnelGrid'] = personnelGrid
+
+execution.removeVariable('payload')
+set_transient_variable('payload', S(payload, 'application/json'))
+----
+
++
+image:registry-develop:bp-modeling/bp/excerpt-csv-docx/bp-modeling-excerpt-csv-docx-05.png[]
+[#create_user-task-1]
+. Створіть користувацьку задачу "Відобразити дані про персонал".
++
+На панелі налаштувань вкажіть наступні значення:
+
+* в полі `Id` введіть значення `personnelDataZvitForm`;
+* в полі `Name` вкажіть назву `Відобразити дані про персонал`;
+* в полі `Form key` введіть значення `read-personnel-data-zvit`;
++
+[TIP]
+====
+В полі `FormKey` зазначається службова назва створеної UI-форми в Кабінеті адміністратора регламентів.
+
+На подальших кроках буде розглянуто xref:#create-ui-form-2[моделювання форми відображення даних про персонал].
+====
+* в полі `Assignee` введіть значення `${initiator}`;
++
+[TIP]
+====
+`${initiator}` вказує на те, що бізнес-процес буде призначено користувачеві, що ініціював бізнес-процес.
+====
+
+* в полі `Form data pre-population` введіть значення `${payload}`.
+
++
+image:registry-develop:bp-modeling/bp/excerpt-csv-docx/bp-modeling-excerpt-csv-docx-06.png[]
+
+. Створіть задачу скриптування "Підготовка даних для запису (transient var)".
++
+На панелі налаштувань вкажіть наступні значення:
+
+* в полі `Name` введіть значення `Підготовка даних для запису (transient var)`;
+* в полі `Script Format` вкажіть тип (мову) скриптування — `groovy`;
+* в полі `Script Type` вкажіть тип скрипту `Inline Script`;
+* в полі `Script` вставте безпосередньо groovy-скрипт:
++
+[source, groovy]
+----
+def personnelFormData = submission('personnelDataZvitForm').formData
+
+def excerptInputData = [:]
+def requests = []
+
+def prepopulatedDataMap = [:]
+prepopulatedDataMap['name'] = personnelFormData.prop('name').value()
+prepopulatedDataMap['address'] = personnelFormData.prop('address').value()
+prepopulatedDataMap['headName'] = personnelFormData.prop('headName').value()
+prepopulatedDataMap['edrpou'] = personnelFormData.prop('edrpou').value()
+
+personnelFormData.prop('personnelGrid').elements().each {
+    def request = [:]
+    request.putAll(prepopulatedDataMap)
+    it.fieldNames().each { fieldName ->
+        request[fieldName] = it.prop(fieldName).value()
+    }
+    request['hygienistFlag'] = it.prop('hygienistFlag').boolValue() ? '1' : '0'
+    request['fullTimeFlag'] = it.prop('fullTimeFlag').boolValue() ? '1' : '0'
+
+    requests.add(request)
+}
+
+excerptInputData['requests'] = requests
+
+def request = [:]
+request['recordId'] = null
+request['excerptType'] = 'lab-staff-excerpt-csv'
+request['excerptInputData'] = excerptInputData
+request['requiresSystemSignature'] = false
+
+def payload = S(request, 'application/json')
+execution.removeVariable('payload')
+set_transient_variable('payload', payload)
+
+execution.removeVariable('excerpt')
+set_transient_variable('excerpt', excerptInputData)
+----
+
++
+image:registry-develop:bp-modeling/bp/excerpt-csv-docx/bp-modeling-excerpt-csv-docx-07.png[]
+
+. Додайте задачу виклику зовнішнього бізнес-процесу (Call Activity) "Підпис даних системним ключем".
++
+[TIP]
+====
+Детальніше ознайомитися з описом делегата виклику підпроцесу для підпису даних системним ключем (`System digital signature`) ви можете за xref:bp-modeling/bp/element-templates/bp-element-templates-installation-configuration.adoc#element-temp-system-digital-signature[посиланням].
+====
++
+Оберіть налаштований шаблон (Template) `System digital signature`.
++
+На панелі налаштувань вкажіть наступні значення:
+
+* в полі `Name` вкажіть назву задачі `Підпис даних системним ключем`;
+* в полі `Input Data` вкажіть вхідні дані, які необхідно підписати та передати бізнес-процесу, що викликається `${payload}`;
+* в полі `Output variable name` вкажіть назву змінної `system_signature_ceph_key`, до якої необхідно зберегти системний ключ для підпису, отриманий в результаті виконання підпроцесу, що викликається.
+
++
+image:registry-develop:bp-modeling/bp/excerpt-csv-docx/bp-modeling-excerpt-csv-docx-08.png[]
+
+== Формування звіту
+[#create-service-task-1]
+. Створіть сервісну задачу "Запит на формування витягу-звіту".
++
+Оберіть налаштований шаблон (Template) `Generate Excerpt`.
+
+* в полі `Name` введіть назву `Запит на формування витягу-звіту`;
+* в полі `Excerpt Type` введіть назву файлу, яким визначено формат  `lab-staff-excerpt-csv`;
+* в полі `Excerpt Input Data` введіть значення `${excerpt}`;
+* в полі `Requires System Signature` введіть значення `false`;
++
+[IMPORTANT]
+====
+Можливість підписання даних витягів у форматі .csv і .docx системним ключем [.underline]#відсутня#, тому за замовчуванням параметр `Requires System Signature` має містити значення `false`. Якщо буде вказано значення `true`, бізнес-процес не буде працювати. _Підписання системним ключем доступно лише для формату .pdf_.
+====
+* в полі `X-Access-Token` зазначте токен доступу до системи користувача, під яким виконується операція `${initiator().accessToken}`;
+* в полі `X-Digital-Signature source` вкажіть джерело цифрового підпису `${sign_submission('StartEvent_lab1').signatureDocumentId}`;
+* в полі `X-Digital-Signature-Derived source` вкажіть джерело системного цифрового підпису `${system_signature_ceph_key}`;
+* в полі `Result variable` вкажіть назву для вихідного параметра `response`.
+
++
+image:registry-develop:bp-modeling/bp/excerpt-csv-docx/bp-modeling-excerpt-csv-docx-09.png[]
+
++
+[TIP]
+====
+Дані, що передаються для генерації витягу `excerptInputData` повинні мати відповідний формат:
+[source, groovy]
+----
+{
+   "requests":[
+      {
+         "field1":"value1"
+      },
+      {
+         "field2":"value2"
+      }
+
+..........
+   ]
+}
+----
+====
+
+. Створіть файл у корені кластера, розмістивши його у відповідному каталозі проєкту.
++
+Файл повинен мати назву ідентичну зазначеній у полі `Excerpt Type` (xref:#create-service-task-1[на попередньому кроці]), у нашому прикладі -- `lab-staff-excerpt-csv.csv`.
++
+[plantuml]
+----
+@startsalt
+{
+{T
++ <&folder> registry-regulations
+
+++ <&folder> bp-auth
++++ <&file> role.yml
++++ ...
+
+++ <&folder> bp-trembita
++++ <&file> config.yml
++++ ...
+
+++ <&folder> bpmn
++++ <&file> process.bpmn
++++ ...
+
+++ <&folder>data-model
++++ <&folder> data-load
+++++ <&file> dict.csv
+++++ ...
++++ <&file> model.xml
++++ ...
+
+++ <&folder> dmn
+
+++ <&folder> excerpts
+
+++ <&folder> excerpts-csv
++++ <&file> **lab-staff-excerpt-csv.csv**
++++ ...
+
+++ <&folder> forms
++++ <&file> form.json
+++++ ...
+
+++ <&folder> global-vars
++++ <&file> global-vars.yml
+
+++ <&folder> reports
++++ <&file> report.json
++++ ...
+
+++ <&folder> roles
++++ <&file> role.yml
++++ ...
+
++ <&file> settings.yaml
+
+}
+}
+@endsalt
+----
++
+[TIP]
+====
+На цьому етапі визначається формат файлу .csv та .docx.
+====
+
+. Створіть задачу скриптування "Зберегти Id запиту витягу-звіту".
++
+На панелі налаштувань вкажіть наступні значення:
+
+* в полі `Name` введіть назву задачі `Зберегти Id запиту витягу-звіту`;
+* в полі `Script Format` вкажіть тип (мову) скриптування — `groovy`;
+* в полі `Script Type` вкажіть тип скрипту `Inline Script`;
+* в полі `Script` вставте безпосередньо groovy-скрипт:
++
+[source, groovy]
+----
+response.responseBody.prop('excerptIdentifier').value()
+----
+* в полі `Result Variable` вкажіть назву змінної, до якої буде записано ідентифікатор витягу, -- `excerptIdentifier`.
+
++
+image:registry-develop:bp-modeling/bp/excerpt-csv-docx/bp-modeling-excerpt-csv-docx-11.png[]
+
+== Налаштування умов перевірок результату генерації витягу
+
+. Додайте задачу виклику зовнішнього бізнес-процесу (Call Activity) "Перевірка статусу генерації витягу-звіту".
++
+Оберіть налаштований шаблон (Template) `Check excerpt status`.
++
+[TIP]
+====
+Детальніше ознайомитися з описом делегата `Check excerpt status` ви можете за xref:bp-modeling/bp/element-templates/bp-element-templates-installation-configuration.adoc#element-temp-check-excerpt-status[посиланням].
+====
++
+На панелі налаштувань вкажіть наступні значення:
+
+* в полі `Name` вкажіть назву задачі `Перевірка статусу генерації витягу-звіту`;
+* в полі `Input excerpt identifier` вкажіть ID витягу, який необхідно передати бізнес-процесу, що викликається, -- `${excerptIdentifier}`;
+* в полі `Output variable name`  вкажіть назву змінної -- `excerptStatus`, до якої необхідно зберегти статус витягу, отриманий в результаті виконання підпроцесу, що викликається.
+
++
+image:registry-develop:bp-modeling/bp/excerpt-csv-docx/bp-modeling-excerpt-csv-docx-12.1.png[]
+
++
+
+
+.Бізнес процес "Перевірка статусу генерації витягу"
+====
+image:registry-develop:bp-modeling/bp/excerpt-csv-docx/bp-modeling-excerpt-csv-docx-13.png[]
+====
+
+
+. Додайте елемент Create Intermediate/Boundary Event, визначте її тип, натиснувши іконку ключа (Change type) та обравши з меню пункт Timer Boundary Event.
++
+[TIP]
+====
+Детальніше ознайомитися з описом елемента моделювання події "Timer" ви можете за xref:registry-develop:bp-modeling/bp/bpmn/events/timer-event.adoc[посиланням].
+====
++
+Перейдіть до панелі налаштувань та сконфігуруйте подію:
+
+* в полі `Name` введіть значення `Вичерпано час на очікування P2M`;
+* в полі `Timer Definition Type` вкажіть тип таймера `Duration` (тривалість);
+* в полі `Timer Definition` зазначте тривалість таймера `P2M`.
+
++
+image:registry-develop:bp-modeling/bp/excerpt-csv-docx/bp-modeling-excerpt-csv-docx-12.2.png[]
+
+. Додайте XOR-шлюзи для Call Activity "Перевірка статусу генерації витягу-звіту" і Timer Boundary Event "Вичерпано час на очікування P2M".
++
+image:registry-develop:bp-modeling/bp/excerpt-csv-docx/bp-modeling-excerpt-csv-docx-14.png[]
+
+. Створіть сервісну задачу "Зберегти ідентифікатор згенерованого витягу-звіту у системну БП".
++
+На панелі налаштувань вкажіть наступні значення:
+
+* на вкладці `General`:
+** в полі `Name` введіть значення `Зберегти ідентифікатор згенерованого витягу-звіту у системну БП`;
+** в полі `Implementation` виберіть значення `Delegate Expression`;
+** в полі `Delegate Expression` введіть значення `${defineProcessExcerptIdDelegate}`.
+* на вкладці `Intup/Output`:
+** в полі `Local Variable Name` введіть значення `excerptId`;
+** в полі `Variable Assignment Type` виберіть значення `String or Expression`;
+** в полі `Variable Assignment Value` введіть значення `${excerptIdentifier}`.
+
++
+image:registry-develop:bp-modeling/bp/excerpt-csv-docx/bp-modeling-excerpt-csv-docx-15.1.png[]
+[.text-center]
+↓
+image:registry-develop:bp-modeling/bp/excerpt-csv-docx/bp-modeling-excerpt-csv-docx-15.2.png[]
+
++
+[TIP]
+====
+Значення, що вказано в полі `Id` використовується як назва файлу, який користувач буде завантажувати з Кабінету.
+====
+
+. Налаштуйте процес потоку для XOR-шлюзу.
++
+Створіть Connect using sequence (гілки):
++
+.. до сервісної задачі "Зберегти ідентифікатор згенерованого витягу-звіту у системну БП":
+* у полі `Name` введіть значення `так`;
+* у полі `Condition Type` виберіть значення `Expression`;
+* у полі `Expression` введіть значення `${excerptStatus.equals('COMPLETED')}`.
++
+image:registry-develop:bp-modeling/bp/excerpt-csv-docx/bp-modeling-excerpt-csv-docx-16.png[]
+.. до іншого XOR-шлюзу:
+* у полі `Name` введіть значення `ні`;
+* у полі `Condition Type` виберіть значення `Expression`;
+* у полі `Expression` введіть значення `${excerptStatus.equals('FAILED')}`.
++
+image:registry-develop:bp-modeling/bp/excerpt-csv-docx/bp-modeling-excerpt-csv-docx-17.png[]
+
+== Результат виконання процесу
+
+=== Неусіпішний результат виконання бізнес-процесу
+
+. Створіть сервісну задачу "Результат виконання "Витяг-звіт не сформовано"".
++
+Оберіть налаштований шаблон (Template) `Define business process status`.
++
+На панелі налаштувань вкажіть наступні значення:
+
+* у полі `Name` введіть значення `Результат виконання "Витяг-звіт не сформовано"`;
+* у полі `Status` введіть значення `Витяг не сформовано` статус, що відображатиметься після завершення процесу.
+
++
+image:registry-develop:bp-modeling/bp/excerpt-csv-docx/bp-modeling-excerpt-csv-docx-18.png[]
+
+. Налаштуйте процес потоку від XOR-шлюзу до сервісної задачі "Результат виконання "Витяг-звіт не сформовано"", створивши Connect using sequence (гілку).
++
+І створіть подію завершення бізнес-процесу.
+
+* у полі `Name` введіть значення `Документ витяг-звіт не сформовано`.
+
++
+image:registry-develop:bp-modeling/bp/excerpt-csv-docx/bp-modeling-excerpt-csv-docx-19.png[]
+
+=== Успішний результат виконання бізнес-процесу
+
+. Створіть сервісну задачу "Результат виконання "Витяг-звіт сформовано"".
++
+Оберіть налаштований шаблон (Template) `Define business process status`.
++
+На панелі налаштувань вкажіть наступні значення:
+
+* у полі `Name` введіть значення `Результат виконання "Витяг-звіт сформовано"`;
+* у полі `Status` введіть значення `Витяг сформовано` статус, що відображатиметься після завершення процесу.
+
++
+image:registry-develop:bp-modeling/bp/excerpt-csv-docx/bp-modeling-excerpt-csv-docx-20.png[]
+
+. Cтворіть подію завершення бізнес-процесу.
+
+* у полі `Name` введіть значення `Документ витяг-звіт сформовано`.
+
++
+image:registry-develop:bp-modeling/bp/excerpt-csv-docx/bp-modeling-excerpt-csv-docx-21.png[]
+
+== Моделювання форм
+
+Змоделюйте форми згідно з інструкцією за xref:registry-develop:bp-modeling/forms/registry-admin-modelling-forms.adoc[посиланням].
+
+[#create-ui-form-1]
+=== Моделювання стартової форми
+
+Моделювання стартової форми передбачає створення форми для пошуку лабораторії за назвою.
+
+* У полі `Бізнес-назва форми` введіть значення `Стартова форма лаб звіт`.
+* У полі `Службова назва форми` введіть значення `add-startform-zvit` (що використовувалось на xref:#create-start-event[минулому кроці] як значення параметра `Form Key`).
+
+image:bp-modeling/bp/excerpt-csv-docx/bp-modeling-excerpt-csv-docx-22.png[]
+
+[TIP]
+====
+Завантажити налаштовану форму можливо за посиланням:
+_link:{attachmentsdir}/bp-modeling/add-startform-zvit.json[add-startform-zvit.json]_
+====
+
+[#create-ui-form-2]
+=== Моделювання форми відображення даних про персонал
+
+Моделювання форми відображення даних про персонал передбачає створення форми для формування даних запитуваної лабораторії.
+
+* У полі `Бізнес-назва форми` введіть значення `Відобразити дані про персонал звіт`.
+* У полі `Службова назва форми` введіть значення `read-personnel-data-zvit`,(що використовувалось на xref:#create_user-task-1[минулому кроці] як значення параметра `Form Key`).
+
+image:bp-modeling/bp/excerpt-csv-docx/bp-modeling-excerpt-csv-docx-23.png[]
+
+[TIP]
+====
+Завантажити налаштовану форму можливо за посиланням:
+_link:{attachmentsdir}/bp-modeling/read-personnel-data-zvit.json[read-personnel-data-zvit.json]_
+====
+
+== Приклад використання бізнес-процесу користувачем
+
+Детальніше ознайомитися з процесом формування витягів користувачем за результатом змодельованого бізнес-процесу ви можете за посиланнями:
+
+* xref:user:officer/reports/reports-csv.adoc[]
+* xref:user:officer/reports/reports-docx.adoc[]
+

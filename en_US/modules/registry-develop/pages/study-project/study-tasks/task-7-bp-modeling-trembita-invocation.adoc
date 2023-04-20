@@ -1,0 +1,612 @@
+:toc-title: ЗМІСТ
+:toc: auto
+:toclevels: 5
+:experimental:
+:important-caption:     ВАЖЛИВО
+:note-caption:          ПРИМІТКА
+:tip-caption:           ПІДКАЗКА
+:warning-caption:       ПОПЕРЕДЖЕННЯ
+:caution-caption:       УВАГА
+:example-caption:           Приклад
+:figure-caption:            Зображення
+:table-caption:             Таблиця
+:appendix-caption:          Додаток
+:sectnums:
+:sectnumlevels: 5
+:sectanchors:
+:sectlinks:
+:partnums:
+
+= Завдання 7. Моделювання бізнес-процесу із викликом ШБО "Трембіта"
+
+== Мета завдання
+
+Мета завдання -- навчитися моделювати бізнес-процес із викликом зовнішніх сервісів через ШБО "Трембіта".
+
+В рамках цього завдання моделювальники мають: ::
++
+[%interactive]
+* [ ] змоделювати 1 бізнес-процес;
+* [ ] змоделювати 3 форми внесення даних до бізнес-процесу;
+* [ ] надати доступи до бізнес-процесу для відповідних ролей;
+* [ ] зберегти створені артефакти до локального git-репозиторію;
+* [ ] перенести локальні зміни до віддаленого Gerrit-репозиторію;
+* [ ] перевірити працездатність бізнес-процесу.
+
+== Передумови
+
+Перед проходженням завдання необхідно виконати наступні передумови:
+
+. xref:bp-modeling/bp/element-templates/bp-element-templates-installation-configuration.adoc#business-process-modeler-extensions-installation[Встановіть додаток Camunda Modeler і типові розширення до нього].
+. xref:registry-develop:bp-modeling/forms/bp-modeling-forms-general-description.adoc[Ознайомтеся із компонентами FormIO для моделювання форм].
+
+. Ознайомтеся із загальним принципом xref:registry-admin/external-integration/api-call/trembita/external-services-connection-config.adoc[налаштування підключення для виклику зовнішніх SOAP-сервісів через ШБО "Трембіта"].
+
+== Процес виконання завдання
+
+[TIP]
+====
+На етапі моделювання бізнес-процесу необхідно створити та зберегти відповідну BPMN-діаграму.
+
+Використовуйте файл _link:{attachmentsdir}/study-project/task-7/bp-schema/trembita-integration.bpmn[trembita-integration.bpmn]_ із готовою схемою бізнес-процесу як приклад.
+====
+
+[checklist-bp-modeling]
+=== Чекліст моделювання бізнес-процесу
+
+Використовуйте наведений чекліст із переліком кроків для створення бізнес-процесу: ::
++
+[%interactive]
+* [ ] xref:#create-pool-participant[]
+* [ ] xref:#create-start-event[]
+* [ ] xref:#create-user-task-1[]
+* [ ] xref:#create-service-task1[]
+* [ ] xref:#create-task-script-data-signing[]
+* [ ] xref:#create-user-task-2[]
+* [ ] xref:#create-service-task2[]
+* [ ] xref:#create-task-script-data-signing2[]
+* [ ] xref:#create-user-task-3[]
+* [ ] xref:#create-end-event[]
+* [ ] xref:#save-bp-trembita[]
+
+=== Моделювання бізнес-процесу
+
+[#create-pool-participant]
+==== Створення пулу для бізнес-процесу
+
+Найперше, _змоделюйте пул для бізнес-процесу_. Для цього виконайте кроки, подані нижче:
+
+NOTE: Змоделюйте діаграму бізнес-процесу в рамках елемента *Create Pool/Participant*.
+
+. Відкрийте додаток *Camunda Modeler* та створіть [.underline]#нову діаграму BPMN#. Для цього у лівому верхньому куті натисніть меню `*File* > *New File* > *BPMN Diagram*`.
++
+image:registry-develop:bp-modeling/bp/modeling-instruction/bp-1.png[]
+
+. На панелі інструментів зліва знайдіть елемент *Create pool/Participant* та перетягніть його до панелі моделювання.
++
+image:registry-develop:bp-modeling/bp/modeling-instruction/bp-2.png[]
+
+. Заповніть наступні поля:
+
+* У полі `Participant Name` введіть значення `Trembita Integration Demo`.
+* У полі `Process id` вкажіть `trembita-integration-demo`.
+* У полі `Process Name` введіть `Trembita Integration Demo`.
+
++
+image:registry-develop:study-project/task-7/task-7-1-trembita.png[]
+
+
+[#create-start-event]
+==== Створення початкової події
+
+_Створіть початкову подію_. Для цього виконайте наступні кроки:
+
+. На панелі інструментів зліва знайдіть елемент (коло) *CreateStartEvent* та перетягніть його до панелі моделювання.
+
+. На панелі налаштувань справа заповніть наступні параметри:
+** у полі `Initiator` введіть `initiator`.
+** у полі `Name` вкажіть значення `Початок`.
++
+TIP: Параметр `Name` має лише інформаційне значення і не впливає на логіку виконання бізнес-процесу. Можна лишити його порожнім.
+
++
+image:registry-develop:study-project/task-7/task-7-2-trembita.png[]
+
+[#create-user-task-1]
+==== Створення користувацької задачі "Внесення даних для пошуку"
+
+Далі _створіть користувацьку задачу, призначену для додавання даних користувачем_. Для цього виконайте наступні кроки:
+
+. Оберіть коло з початковою подією, змодельованою на xref:#create-start-event[попередньому етапі], та приєднайте нову задачу, натиснувши іконку `*Append Task*`.
++
+image:study-project/task-3/task-3-3-bp-append-task.png[]
+
+. Вкажіть тип задачі, натиснувши іконку ключа та обравши з меню пункт *User Task* (Користувацька задача).
++
+image:study-project/task-3/task-3-3-bp-user-task.png[]
+
+. На панелі налаштувань справа натисніть `*Open Catalog*`, оберіть шаблон *User Form* (*Користувацька форма*) та натисніть `*Apply*` для підтвердження.
++
+image:study-project/task-3/task-3-3-bp-open-catalog.png[]
++
+image:study-project/task-3/task-3-3-bp-user-form.png[]
+
+. На панелі налаштувань справа заповніть наступні поля:
+
+* у полі `Id` зазначте `task1`;
+* у полі `Name` введіть `user task1`;
+* у полі `Form key` введіть `search-subject-form`;
+* у полі `Assignee` вкажіть `${initiator}`.
+
++
+image:study-project/task-7/task-7-3-trembita.png[]
+
+[#create-service-task1]
+==== Створення сервісної задачі пошуку інформації за суб'єктом в ЄДР
+
+Далі необхідно створити сервісну задачу пошуку інформації за суб'єктом в ЄДР (*search subject*). Для цього виконайте наступні кроки:
+
+. Оберіть прямокутник із користувацькою задачею `user task1`, змодельованою на xref:#create-user-task-1[попередньому етапі], та приєднайте нову сервісну задачу, натиснувши іконку `*Append Task*`.
++
+image:study-project/task-7/task-7-4-trembita.png[]
+
+. Вкажіть тип задачі, натиснувши _іконку ключа_ та обравши з меню пункт *Service Task* (Сервісна задача):
++
+image:study-project/task-7/task-7-5-trembita.png[]
+
+. На панелі налаштувань справа натисніть `*Open Catalog*`, оберіть шаблон *Search Subjects Edr Registry* та натисніть `*Apply*` для підтвердження.
++
+image:bp-modeling/ext-integration/connectors/edr/element-template-settings-01.png[]
+
+. На панелі налаштувань справа заповніть наступні поля:
+
+* у полі `Name` введіть `search subject`;
+* у полі `Authorization token` вкажіть прочерк (`-`);
+* у полі `Code` вкажіть `${submission('task1').formData.prop('code').value()}`;
+* у полі `Result variable` variable вкажіть значення змінної, до якої запишеться результат -- `ssResponse`.
+
++
+image:study-project/task-7/task-7-7-trembita.png[]
+
+.Відповідь від сервісу ЄДР з інформацією про суб'єкт
+====
+
+[source,json]
+----
+{
+    "name":"Сидоренко Василь Леонідович",
+    "code":"88888888",
+    "id":9,
+    "state":"CANCEL_STATE"
+}
+----
+
+[TIP]
+=====
+Детальну інформацію з описом сервісу ЄДР ви можете знайти на сторінці xref:registry-admin/external-integration/api-call/trembita/overview.adoc[].
+=====
+
+====
+
+[#create-task-script-data-signing]
+==== Створення задачі скриптування підготування даних для користувацької задачі 2
+
+На цьому етапі необхідно змоделювати задачу скриптування *(prepare form data for task2)* для підготовки даних до показу. Для цього виконайте наступні кроки:
+
+. Оберіть прямокутник із сервісною задачею *search subject*, змодельованою на xref:#create-service-task1[попередньому етапі], та приєднайте нову задачу скриптування, натиснувши іконку `*Append Task*`.
++
+image:study-project/task-7/task-7-8-trembita.png[]
+
+. Вкажіть тип задачі, натиснувши іконку ключа та обравши з меню пункт *Script Task* (Задача скриптування).
++
+image:study-project/task-7/task-7-9-trembita.png[]
+
+. Виділіть додану задачу скриптування та налаштуйте наступні параметри:
+
+* у полі `Name` вкажіть `prepare form data for task2`;
+* у полі `Script Format` вкажіть тип (мову) скриптування -- `groovy`;
+* у полі `Script Type` вкажіть тип скрипту `InlineScript`;
+* у полі `Script` вставте groovy-скрипт:
++
+[source,groovy]
+----
+def response = ssResponse.responseBody.elements().get(0)
+
+def formPrePopulation = [:]
+formPrePopulation['id'] = response.prop('id').value().toString()
+formPrePopulation['code'] = response.prop('code').value()
+formPrePopulation['name'] = response.prop('name').value()
+formPrePopulation['state'] = response.prop('state').value()
+
+execution.removeVariable('payload')
+set_transient_variable('payload', S(formPrePopulation, 'application/json'))
+----
+
++
+image:study-project/task-7/task-7-10-trembita.png[]
+
+[#create-user-task-2]
+==== Створення користувацької задачі "Відображення інформації за суб'єктом у ЄДР"
+
+На прикладі xref:create-user-task-1[] необхідно створити користувацьку задачу відображення інформації за суб'єктом в ЄДР *(user task2)*. Для цього виконайте наступні кроки:
+
+. Визначте тип задачі, натиснувши іконку ключа та обравши з меню пункт *User Task* (Користувацька задача).
+
+. Натисніть `*Open Catalog*`, оберіть шаблон *User Form* та натисніть `*Apply*` для підтвердження.
+
+. На панелі налаштувань справа заповніть наступні поля:
+* у полі `Id` вкажіть `task2`;
+* у полі `Name` введіть `user task2`;
+* у полі `Form key` введіть `display-search-subject-form`;
+* у полі `Assignee` вкажіть `${initiator}`;
+* у полі `Form data pre-population` введіть `${payload}`.
+
++
+image:study-project/task-7/task-7-11-trembita.png[]
+
+[#create-service-task2]
+==== Створення сервісної задачі пошуку деталізованої інформації за суб'єктом в ЄДР
+
+. На прикладі xref:create-service-task1[] створіть та приєднайте нову сервісну задачу пошуку деталізованої інформації за суб'єктом в ЄДР (*get subject detail*), натиснувши _іконку ключа_ та обравши з меню пункт `Service Task`.
+
+. Натисніть `*Open Catalog*`, оберіть шаблон *Get Subject Detail Edr Registry* та натисніть `*Apply*` для підтвердження.
+
+. На панелі налаштувань справа сконфігуруйте наступні параметри:
+* у полі `Name` введіть `get subject detail`;
+* у полі `Authorization token` вкажіть прочерк (`-`);
+* у полі `Id` введіть `${submission('task2').formData.prop('id').value()}`;
++
+TIP: Тут ми використовуємо id запису, отриманого на кроці xref:#create-service-task1[] для одержання деталізованої інформації за цим же суб'єктом в ЄДР.
+
+* у полі `Result variable` вкажіть значення змінної, до якої запишеться результат -- `sdResponse`.
+
++
+image:study-project/task-7/task-7-12-trembita.png[]
+
+.Відповідь від сервісу ЄДР з деталізованою інформацією про суб'єкт
+====
+[source,json]
+----
+{
+    "address":"м.Харків, Київський район ВУЛИЦЯ СУМСЬКА буд. 1221",
+    "email":"harry@com.ua"
+}
+----
+====
+
+[TIP]
+=====
+Детальну інформацію з описом сервісу ЄДР ви можете знайти на сторінці xref:registry-admin/external-integration/api-call/trembita/overview.adoc[].
+=====
+
+[#create-task-script-data-signing2]
+==== Створення задачі скриптування підготування даних для користувацької задачі 3
+
+. На прикладі xref:#create-task-script-data-signing[] створіть та приєднайте нову задачу скриптування *prepare from data for task3*, натиснувши іконку ключа та обравши з меню пункт `Script Task`.
+
+. Оберіть прямокутник із сервісною задачею (*get subject detail*), змодельованою на xref:#create-service-task2[попередньому етапі], та приєднайте нову задачу скриптування, натиснувши іконку `*Append Task*`
+
+. На панелі налаштувань справа сконфігуруйте наступні параметри:
+* у полі `Name` вкажіть `prepare form data for task3`;
+* у полі `Script Format` вкажіть тип (мову) скриптування -- `groovy`;
+* у полі `Script Type` вкажіть тип скрипту `InlineScript`;
+* у полі `Script` вставте безпосередньо groovy-скрипт:
++
+[source,groovy]
+----
+def formPrePopulation = [:]
+
+['email', 'address'].each {
+    formPrePopulation[it] = sdResponse.responseBody.prop(it).value()
+}
+
+execution.removeVariable('payload')
+set_transient_variable('payload', S(formPrePopulation, 'application/json'))
+----
+
++
+image:study-project/task-7/task-7-13-trembita.png[]
+
+[#create-user-task-3]
+==== Створення користувацької задачі відображення деталізованої інформації за суб'єктом в ЄДР
+
+На прикладі xref:create-user-task-1[] необхідно створити користувацьку задачу *(user task3)*. Для цього виконайте наступні кроки:
+
+. Визначте тип задачі, натиснувши іконку ключа та обравши з меню пункт `User Task` (Користувацька задача).
+
+. Натисніть `*Open Catalog*`, оберіть шаблон *User Form* та натисніть `*Apply*` для підтвердження.
+
+. На панелі налаштувань справа заповніть наступні поля:
+* у полі `Name` введіть `user task3`;
+* у полі `Form key` введіть `display-additional-info`;
+* у полі `Assignee` вкажіть `${initiator}`;
+* у полі `Form data pre-population` введіть `${payload}`.
+
++
+image:study-project/task-7/task-7-14-trembita.png[]
+
+[#create-end-event]
+==== Створення події завершення бізнес-процесу
+
+. Оберіть прямокутник із щойно створеною задачею xref:#create-user-task-3[], приєднайте та налаштуйте _подію, що завершує процес_, натиснувши іконку `Append EndEvent`:
++
+image:study-project/task-7/task-7-15-trembita.png[]
+
+
+. На панелі налаштувань справа у полі `Name` вкажіть `Кінець`.
++
+image:study-project/task-7/task-7-16-trembita.png[]
+
+[#save-bp-trembita]
+==== Збереження змодельованої схеми бізнес-процесу
+
+Після завершення процесу моделювання збережіть отриману схему бізнес-процесу із назвою *_trembita-integration.bpmn_* регламентної папки *_bpmn_* проєкту в Gerrit-репозиторії. Для цього у лівому верхньому куті відкрийте меню `*File* > *Save File As..*`, введіть відповідну назву та шлях.
+
+=== Моделювання форм
+
+[TIP]
+====
+На етапі моделювання форм необхідно створити та прив'язати JSON-форми до попередньо змодельованих задач в рамках бізнес-процесу.
+
+Форми прив'язуються до бізнес-процесів за службовою назвою.
+
+Використовуйте файли _link:{attachmentsdir}/study-project/task-7/bp-forms/display-additional-info.json[display-additional-info.json]_, _link:{attachmentsdir}/study-project/task-7/bp-forms/display-search-subject-form.json[display-search-subject-form.json]_  та _link:{attachmentsdir}/study-project/task-7/bp-forms/search-subject-form.json[search-subject-form.json]_ зі змодельованими формами для прикладу.
+====
+
+[checklist-form-modeling]
+==== Чекліст моделювання UI-форм
+
+Використовуйте наведений чекліст із переліком кроків для створення форм: ::
++
+[%interactive]
+* [ ] xref:#search-subject-form[]
+* [ ] xref:#display-search-subject-form[]
+* [ ] xref:#display-additional-info[]
+
+CAUTION: Після проходження всіх етапів, завантажте та збережіть файли зі схемами форм до відповідної папки з регламентом реєстру (_див. xref:#form-save[]_)
+
+[#search-subject-form]
+==== Створення форми внесення даних для пошуку
+
+TIP: Змоделюйте форму для внесення даних для пошуку -- `search-subject-form`.
+
+. Увійдіть до застосунку [.underline]#Кабінет адміністратора регламентів#.
++
+image::registry-develop:bp-modeling/forms/admin-portal-form-modeling-step-1.png[]
++
+За замовчуванням користувач опиняється на домашній сторінці [.underline]#Огляд версії# майстер-версії регламенту.
++
+image:registry-admin/admin-portal/new-admin-portal-1.png[]
++
+[TIP]
+====
+Детальніше про майстер-версію регламенту ви можете переглянути за посиланням:
+
+* xref:registry-develop:registry-admin/admin-portal/version-control/master-version-settings.adoc[]
+====
++
+[WARNING]
+====
+Майстер-версія змін до регламенту реєстру дозволяє працювати з UI-формами лише у режимі перегляду.
+
+Для того, щоб створювати, або редагувати будь-які сутності регламенту (форми, бізнес-процеси тощо), а також їх складові, необхідно створити нову версію-кандидат на внесення змін до регламенту реєстру і працювати в ній.
+====
+
+. Створіть новий запит на внесення змін до регламенту, тобто створіть нову версію-кандидат на внесення змін.
++
+image:registry-develop:study-project/task-5/task-5-forms-new-change-request.png[]
++
+АБО
++
+Оберіть наявну версію-кандидат на внесення змін.
++
+image:registry-develop:study-project/task-5/task-5-forms-new-change-request-1.png[]
++
+[TIP]
+====
+Детальніше про створення та перегляд запитів на внесення змін до регламенту ви можете переглянути за посиланнями:
+
+* xref:registry-develop:registry-admin/admin-portal/version-control/create-new-change-request.adoc[]
+* xref:registry-develop:registry-admin/admin-portal/version-control/overview-new-change-request.adoc[]
+====
+
+. В рамках своєї версії-кандидата перейдіть до розділу [.underline]#UI-форми#.
+
++
+image:registry-develop:study-project/task-5/task-5-forms-overview.png[]
+
+. Щоб створити нову форму для бізнес-процесу, натисніть кнопку `Створити нову форму`.
+
++
+image:registry-develop:study-project/task-5/task-5-forms-overview-1.png[]
+
+* У новому вікні, у полі `Бізнес-назва форми` вкажіть назву форми -- `search-subject-form`. Форма поєднана зі змодельованою користувацькою задачею -- xref:#create-user-task-1[`Внесення даних для пошуку` (`task1`)].
+* Заповніть поле `Службова назва форми` значенням `search-subject-form` (має відповідати значенню поля `Form key` тієї ж користувацької задачі -- xref:#create-user-task-1[`Внесення даних для пошуку` (`task1`)].
+
++
+image:study-project/task-7/task-7-17-trembita.png[]
+
+. Перейдіть на вкладку [.underline]#Конструктор# та виконайте моделювання форми за допомогою компонентів.
++
+image:study-project/task-7/task-7-17-1-trembita.png[]
+
+. З панелі компонентів зліва перетягніть компонент *Text Field* до панелі моделювання та виконайте подальші налаштування.
++
+image:study-project/task-3/task-3-27-forms-drag-text-field.png[]
+
+* У новому вікні перейдіть на вкладку *Display*, заповніть поле `Label` значенням `Erdpou or rnokpp`.
++
+image:study-project/task-7/task-7-18-trembita.png[]
+
+* Перейдіть на вкладку *Validation* та встановіть прапорець для параметра  `Required` -- `true`.
++
+image:study-project/task-7/task-7-19-trembita.png[]
+
+* Перейдіть на вкладку *API* та заповніть поле `Property Name` значенням `code`. Натисніть кнопку `*Save*` для збереження змін:
++
+image:study-project/task-7/task-7-20-trembita.png[]
+
+. Збережіть форму, натиснувши кнопку `Зберегти зміни` у правому верхньому куті.
++
+image:study-project/task-7/task-7-21-trembita.png[]
+
+NOTE: Під час введення даних на формі у Кабінеті посадової особи використовуйте `Erdpou or rnokpp: 88888888` для перевірки.
+
+[#display-search-subject-form]
+==== Створення форми для відображення даних
+
+TIP: Далі створіть форму для відображення даних -- `display-search-subject-form`. Для цього виконайте кроки за аналогією до xref:#search-subject-form[попереднього пункту].
+
+. У розділі [.underline]#UI-форми# натисніть кнопку `Створити нову форму`.
++
+image:registry-develop:study-project/task-5/task-5-forms-overview-1.png[]
+
+* У новому вікні, у полі `Бізнес-назва форми` вкажіть назву форми -- `display-search-subject-form`. Форма поєднана зі змодельованою користувацькою задачею -- xref:#create-user-task-2[`Відображення інформації за суб'єктом у ЄДР` (`task2`)].
+* Заповніть поле `Службова назва форми` значенням `display-search-subject-form` (має відповідати значенню поля `Form key` тієї ж користувацької задачі -- xref:#create-user-task-2[`Відображення інформації за суб'єктом у ЄДР` (`task2`)].
+
++
+image:study-project/task-7/task-7-06-1-trembita.png[]
+
+. Перейдіть на вкладку [.underline]#Конструктор# та виконайте моделювання форми за допомогою компонентів.
++
+image:study-project/task-7/task-7-06-trembita.png[]
+
+. З панелі компонентів зліва перетягніть компонент *Text Field* до панелі моделювання. Необхідно змоделювати 4 таких поля: `ID`, `Code`, `Name`, `State`, та виконати їх налаштування.
++
+IMPORTANT: Значення параметра `Property Name` має бути у нижньому регістрі. Groovy-скрипти бізнес-процесу використовують назви саме у нижньому регістрі.
+
+* Змоделюйте текстове поле `ID`:
+** У новому вікні перейдіть на вкладку *Display*, заповніть поле `Label` значенням `ID`.
+** Активуйте параметр `Disabled` - `True`.
+** Перейдіть на вкладку *API* та заповніть поле `Property Name` значенням `id`.
+** Натисніть кнопку `*Save*` для збереження змін.
+
+* Змоделюйте текстове поле `Code`:
+** У новому вікні перейдіть на вкладку *Display*, заповніть поле `Label` значенням `Сode`.
+** Активуйте параметр `Disabled` - `True`.
+** Перейдіть на вкладку *API* та заповніть поле `Property Name` значенням `code`.
+** Натисніть кнопку `*Save*` для збереження змін.
+
+* Змоделюйте текстове поле `Name`:
+** У новому вікні перейдіть на вкладку *Display*, заповніть поле `Label` значенням `Name`.
+** Активуйте параметр `Disabled` - `True`.
+** Перейдіть на вкладку *API* та заповніть поле `Property Name` значенням `name`.
+** Натисніть кнопку `*Save*` для збереження змін.
+
+* Змоделюйте текстове поле `State`:
+** У новому вікні перейдіть на вкладку *Display*, заповніть поле `Label` значенням `State`.
+** Активуйте параметр `Disabled` - `True`.
+** Перейдіть на вкладку *API* та заповніть поле `Property Name` значенням `state`.
+
+** Натисніть кнопку `*Save*` для збереження змін.
+
++
+image:study-project/task-7/task-7-22-1-trembita.png[]
+
+. Збережіть форму, натиснувши кнопку `Створити форму` у правому верхньому куті.
++
+image:study-project/task-7/task-7-22-trembita.png[]
+
+[#display-additional-info]
+==== Створення форми для відображення додаткової інформації
+
+[TIP]
+Далі створіть форму для відображення додаткової інформації -- `display-additional-info`. Для цього виконайте кроки за аналогією до xref:#display-search-subject-form[попереднього пункту]
+
+. У розділі [.underline]#UI-форми# натисніть кнопку `Створити нову форму`.
++
+image:registry-develop:study-project/task-5/task-5-forms-overview-1.png[]
+
+* У новому вікні, у полі `Бізнес-назва форми` вкажіть назву форми -- `display-additional-info`. Форма поєднана зі змодельованою користувацькою задачею -- xref:#create-user-task-3[`Відображення деталізованої інформації за суб'єктом в ЄДР` (`task3`)].
+* Заповніть поле `Службова назва форми` значенням `display-additional-info` (має відповідати значенню поля `Form key` тієї ж користувацької задачі -- xref:#create-user-task-3[`Відображення деталізованої інформації за суб'єктом в ЄДР` (`task3`)].
+
++
+image:registry-develop:study-project/task-7/task-7-07-trembita.png[]
+
+. Перейдіть на вкладку [.underline]#Конструктор# та виконайте моделювання форми за допомогою компонентів.
++
+image:registry-develop:study-project/task-7/task-7-23-trembita.png[]
+
+. З панелі компонентів зліва перетягніть компонент *Text Field* до панелі моделювання. Необхідно змоделювати 2 таких поля: `Address`, `Email`, та виконати їх налаштування.
++
+IMPORTANT: Значення параметра `Property Name` має бути у нижньому регістрі. Groovy-скрипти бізнес-процесу використовують назви саме у нижньому регістрі.
+
+* Змоделюйте текстове поле `Address`:
+** У новому вікні перейдіть на вкладку *Display*, заповніть поле `Label` значенням `Address`.
+** Активуйте параметр `Disabled` - `True`.
+** Перейдіть на вкладку *API* та заповніть поле `Property Name` значенням `address`.
+** Натисніть кнопку `*Save*` для збереження змін.
+
+* Змоделюйте текстове поле `Email`:
+** У новому вікні перейдіть на вкладку *Display*, заповніть поле `Label` значенням `Email`.
+** Активуйте параметр `Disabled` - `True`.
+** Перейдіть на вкладку *API* та заповніть поле `Property Name` значенням `email`.
+** Натисніть кнопку `*Save*` для збереження змін.
+
+. Збережіть форму, натиснувши кнопку `Створити форму` у правому верхньому куті.
++
+image:study-project/task-7/task-7-24-trembita.png[]
+
+[#form-save]
+==== Завантаження змодельованих форм бізнес-процесу до локальної директорії
+
+//TODO на майбутнє
+// Чи треба показувати, як застосувати зміни до майстер-гілки після завершення моделювання форм? Чи йдемо лише хардкорним шляхом, як і у всіх завданнях до цього?
+//TODO на майбутнє
+// Якщо моделювальник працює у власній гілці, а потім вирішує залити форми через Gerrit, то після того, як зміни потраплять у майстер, необхідно видалити усі непотрібні гілки.
+//TODO на майбутнє
+// Якщо ж гілка-кандидат потрібна для подальшої роботи, то її можна лишити. Відразу після оновлення майстер-версії усі версії-кандидати оновляться автоматично.
+
+Завантажте форми, натиснувши `&#10515;` (_іконку завантаження_), та помістіть їх до регламентної папки *_forms_* проєкту в локальному Gerrit-репозиторії.
+
+image:registry-develop:study-project/task-7/task-7-05-trembita.png[]
+
+=== Моделювання доступу до бізнес-процесу
+
+[TIP]
+====
+На цьому етапі необхідно надати доступ до бізнес-процесу із Кабінету посадової особи.
+
+Налаштуйте параметри доступу до бізнес-процесу у конфігураційному файлі _link:{attachmentsdir}/study-project/task-7/bp-access/officer.yml[bp-auth/officer.yml]_.
+====
+
+Створіть файл _bp-auth/officer.yml_ та сконфігуруйте в ньому наступні параметри:
+
+
+.Приклад. Налаштування доступу до бізнес-процесу із Кабінету посадової особи
+[source,yaml]
+----
+authorization:
+  realm: 'officer'
+  process_definitions:
+    - process_definition_id: 'trembita-integration-demo'
+      process_name: 'Trembita Integration Demo'
+      process_description: 'test'
+      roles:
+        - officer
+----
+
+Збережіть файл _officer.yml_ до регламентної папки *_bp-auth_* проєкту в локальному Gerrit-репозиторії.
+
+== Завантаження файлів регламенту до віддаленого репозиторію Gerrit
+
+Для успішного розгортання бізнес-процесу, форм, а також застосування правильних налаштувань доступу до бізнес-процесу у цільовому середовищі, адміністратор регламенту має завантажити збережені локально файли регламенту реєстру до віддаленого сховища коду Gerrit.
+
+Для цього виконайте кроки з інструкції xref:registry-develop:registry-admin/regulations-deploy/registry-admin-deploy-regulation.adoc[].
+
+== Додатки
+
+=== Схема бізнес-процесу
+
+* _link:{attachmentsdir}/study-project/task-7/bp-schema/trembita-integration.bpmn[trembita-integration.bpmn]_
+
+=== Форми для бізнес-процесу
+
+* _link:{attachmentsdir}/study-project/task-7/bp-forms/search-subject-form.json[search-subject-form.json]_
+* _link:{attachmentsdir}/study-project/task-7/bp-forms/display-search-subject-form.json[display-search-subject-form.json]_
+* _link:{attachmentsdir}/study-project/task-7/bp-forms/display-additional-info.json[display-additional-info.json]_
+
+=== Yaml-файл для доступу ролі officer до бізнес-процесу
+
+* _link:{attachmentsdir}/study-project/task-7/bp-access/officer.yml[officer.yml]_
+

@@ -1,0 +1,82 @@
+== Оновлення платформних та реєстрових ключів та конфігурації сервісу цифрового підпису
+
+Даний документ містить інформацію про загальні положення та технічний дизайн оновлення платформних та реєстрових ключів та конфігурації сервісу цифрового підпису
+
+=== Загальні положення
+
+* Адміністратор за допомогою Адміністративного інтерфейсу управління платформою може редагувати реєстрові або платформні ключі цифрового підпису.
+* Веб-інтерфейс управління платформою зберігає внесені адміністратором зміни в сервіс HashiCorp Vault підсистеми управління секретами та
+шифруванням або в сервіс Gerrit підсистеми розгортання та налаштування Платформи та реєстрів.
+* Веб-інтерфейс управління платформою відображає шлях до значень та файлів у відповідних values.yaml.
+* Пайплайн забирає необхідні дані з HashiCorp Vault або Gerrit та створює необхідні секрети в OpenShift.
+
+=== Верхньорівневий технічний дизайн
+На даній діаграмі зображені залучені для реалізації вимог компоненти платформи та взаємодія між ними.
+
+image::architecture/platform/administrative/config-management/keys-update-subsystem.svg[registry-platform-keys]
+
+image::architecture/platform/administrative/config-management/keys-update-config.svg[registry-platform-keys]
+
+В таблиці нижче зазначені компоненти які залучені або потребують змін/створення в рамках реалізації функціональних вимог згідно технічного дизайну рішення.
+
+Таблиця 1
+|===
+|Компонент|Службова назва|Призначення
+
+|Інтерфейс адміністрування платформи
+|control-plane-console
+|Внесення налаштувань доступних каналів зв’язку для цільового оточення реєстру
+|Збереження конфігурації платформи та реєстрів
+|control-plane-gerrit
+|Платформний компонент для зберігання конфігурацій реєстру та платформи.
+|Розгортання платформи та реєстрів
+|edp-library-stages-fork
+|Пайплайн для розгортання платформи та реєстрів
+|Розгортання платформи та реєстрів
+|edp-library-pipelines-fork
+|Стейджи для розгортання платформи та реєстрів
+
+|===
+
+Зміст values.yaml у випадку файлового ключа:
+----
+digital-signature:
+  data:
+    CACertificates: <path to gerrit>
+    CAs: <path to gerrit>
+    Key-6-dat: <path to vault>
+    allowed-keys-yml: <path to vault>
+    osplm.ini: ""
+  env:
+    sign.key.device-type: file
+    sign.key.file.issuer: <path to vault>
+    sign.key.file.password: <path to vault>
+    sign.key.hardware.device: ""
+    sign.key.hardware.password: ""
+    sign.key.hardware.type: ""
+----
+Зміст values.yaml у випадку апаратного ключа:
+----
+digital-signature:
+  data:
+    CACertificates: <path to gerrit>
+    CAs: <path to gerrit>
+    Key-6-dat: ""
+    allowed-keys-yml: <path to vault>
+    osplm.ini: <path to gerrit>
+  env:
+    sign.key.device-type: hardware
+    sign.key.file.issuer: ""
+    sign.key.file.password: ""
+    sign.key.hardware.device: <path to vault>
+    sign.key.hardware.password: <path to vault>
+    sign.key.hardware.type: <path to vault>
+----
+
+NOTE: Імʼя секрету в vault повинно конкатенуватись з поточною датою оновлення секретів в формати short ISO8601
+(без двокрапок та тире) і оновлюватись в values.yaml реєстру та платформи
+
+Шлях в Gerrit репозиторіях:
+
+* cluster-mgmt.git: config/dso/
+* registry-template.git: config/dso/

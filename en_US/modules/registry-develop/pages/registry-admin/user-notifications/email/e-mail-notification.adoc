@@ -1,0 +1,310 @@
+:toc-title: ЗМІСТ
+:toc: auto
+:toclevels: 5
+:experimental:
+:important-caption:     ВАЖЛИВО
+:note-caption:          ПРИМІТКА
+:tip-caption:           ПІДКАЗКА
+:warning-caption:       ПОПЕРЕДЖЕННЯ
+:caution-caption:       УВАГА
+:example-caption:           Приклад
+:figure-caption:            Зображення
+:table-caption:             Таблиця
+:appendix-caption:          Додаток
+:sectnums:
+:sectnumlevels: 5
+:sectanchors:
+:sectlinks:
+:partnums:
+
+= Відправлення повідомлень користувачам через електронну пошту
+
+== Передумови
+
+Платформа підтримує відправлення електронних повідомлень з використанням SMTP-протоколу для комунікації та однієї з наступних опцій налаштувань поштового сервера, залежно від вимог реєстру:
+
+* Поштовий сервер платформи;
+* Зовнішній поштовий сервер.
+
+Попередньо необхідно виконати налаштування каналів зв'язку для відправки повідомлень користувачам реєстру.
+
+[NOTE]
+====
+Детальну інформацію щодо налаштування відправки повідомлень можна отримати за посиланнями:
+
+* xref:registry-admin/user-notifications/email/config-smtp-server.adoc[]
+* xref:admin:installation/internal-smtp-server-setup.adoc[]
+====
+
+Відправка повідомлень системою можлива лише зареєстрованим користувачам.
+
+== Налаштування шаблону повідомлення
+
+Для реалізації функціональності відправки email-повідомлень користувачам кабінету через електронну пошту, необхідно створити шаблон повідомлення, що буде використовуватися при моделюванні бізнес-процесу.
+
+Шаблон повідомлення необхідно створити у розмітці HTML за допомогою технології шаблонізації Apache FreeMarker (розширення файлів _.ftlh_ та _.ftl_ для HTML та текстових документів відповідно).
+
+[NOTE]
+====
+Детальну інформацію щодо Apache FreeMarker можливо отримати за посиланням:
+
+* https://freemarker.apache.org/
+====
+
+Для забезпечення вимог щодо підтримки відправлення повідомлень користувачам, структуру регламенту розширено додатковою директорією _<registry-regulation>/notifications_. Типовий шаблон поштового повідомлення має наступну структуру:
+
+[plantuml, email-notification-structure, svg]
+----
+@startsalt
+{
+{T
++ <&folder> registry-regulations
+++ ...
+++ <&folder> notifications
++++ <&folder> email
+++++ <&folder> <b><template-directory></b>
++++++ <&folder> css
+++++++ <&file> style.css
++++++ <&folder> image
+++++++ <&file> image.jpg
+++++++ <&file> ...
++++++ <&file> notification.ftlh
++++++ <&file> notification.yml
+++++ ...
+}
+}
+@endsalt
+----
+
+- _<template-directory>_ -- директорія з ресурсами шаблону, яка має унікальне ім'я для заданого каналу зв'язку;
+
+- _<template-directory>/css/style.css_ -- єдиний CSS-файл стилів, які використовуються в HTML-документі (Приклад: _<link rel="stylesheet" href="css/style.css">_);
+
+- _<template-directory>/image/*.*_ -- перелік файлів зображень, які використовуються в HTML-документі (Приклад: _<img src="images/image.jpg">_);
+
+- _<template-directory>/notification.ftlh_ -- HTML-документ шаблону для подальшої генерації тіла повідомлення.
++
+[%collapsible]
+.HTML-документ шаблону для подальшої генерації тіла повідомлення
+====
+[source,html]
+----
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0"/>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="header">
+        <div class="logo-wrap">
+            <img src="image/trident.jpg" alt="Diia" class="logo">
+        </div>
+        <div class="platform-name">Платформа<br>реєстрів</div>
+    </div>
+    <div class="main">
+        Процес: ${processName} успішно виконаний
+    </div>
+    <div class="footer">
+        <br>
+        Адреса чи службова інформація
+    </div>
+</body>
+</html>
+----
+====
+
+- _<template-directory>/notification.yml_ -- Конфігураційний файл з метаданими для відправлення поштового повідомлення.
++
+.Конфігураційний файл з метаданими для відправлення поштового повідомлення
+====
+[source,yaml]
+----
+title: "Процес успішно виконаний"
+----
+====
+
+//Шаблон має відповідати загальній стилізації реалізованих кабінетів користувачів Платформи та стайл-гайдів додатку "Дія".
+
+== Моделювання бізнес-процесів
+
+Розглядаються два основних сценарії моделювання відправлення повідомлень у межах моделювання бізнес-процесів:
+
+* xref:#send-user-notification[відправлення повідомлень одному користувачу];
+* xref:#send-many-user-notifications[відправлення повідомлень багатьом користувачам].
+
+[#send-user-notification]
+=== Відправлення повідомлень одному користувачу
+
+Для моделювання бізнес-процесу використовується типове розширення для задач на відправлення повідомлення (Send Task) -- *Send User Notification*.
+
+Розширення *Send User Notification* -- делегат для відправлення повідомлень отримувачам послуг електронною поштою, з використанням заданого шаблону в HTML-вигляді.
+
+[NOTE]
+====
+Перед налаштуванням шаблону в Сamunda Modeler переконайтеся, що папка із застосунком _resources → element-templates_ містить _sendUserNotification.json_
+====
+
+Для налаштування шаблону виконайте наступні кроки:
+
+. Створіть *Send Task*.
++
+image:registry-develop:registry-admin/e-mail-notification/e-mail-notification-02.png[]
+
+. На панелі налаштувань справа натисніть кнопку `Open Catalog` та оберіть шаблон (template) делегата -- *Send User Notification*. Для підтвердження натисніть `Apply`.
++
+image:registry-develop:registry-admin/e-mail-notification/e-mail-notification-03.png[]
+
+. Виконайте подальші налаштування:
+
+* У полі `name` вкажіть назву задачі (наприклад, `Відправка email користувачу`).
+
+* У полі `Recipient` вкажіть унікальний ідентифікатор -- `<username>` отримувача повідомлення (наприклад, `${initiator().userName}`).
+
+* У полі `Subject` вкажіть текстову назву теми повідомлення (наприклад, `Email successfully generated`).
+
+* У полі `Notification message template` вкажіть унікальну назву шаблону для формування тіла повідомлення, яка відповідає назві директорії наявного шаблону у регламенті (наприклад, `business-process-notification-template`).
+
+* У полі `Notification template model` -- вкажіть набір даних для генерації тіла повідомлення на базі шаблону (наприклад, `${templateModel}`).
+
++
+image:registry-admin/e-mail-notification/e-mail-notification-01.png[]
+
+[#send-many-user-notifications]
+=== Відправка повідомлень багатьом користувачам
+
+Для відправлення повідомлень багатьом користувачам моделювання бізнес-процесу відбувається за аналогією з xref:#send-user-notification[моделюванням бізнес-процесу відправки повідомлення одному користувачу], за виключенням використання функції мультиекземпляра (Multi Instance). Ця функція дозволяє виконати одночасне відправлення повідомлень усім зазначеним користувачам із масиву.
+
+image:registry-develop:registry-admin/e-mail-notification/e-mail-notification-07.png[]
+
+* У полі `Collection` вкажіть xref:#related-delegates[масив користувачів, що отримані за атрибутами із сервісу Keycloak]. У цьому випадку масив записаний до змінної `${usersByAttributes}`, яку і вказуємо у полі.
++
+TIP: У нашому прикладі вказана змінна `${usersByAttributes}`, до якої попередньо збережений масив імен (username) користувачів у бізнес-процесі. Також імена отримувачів повідомлення можна задати простими константами через кому. Наприклад, `username1,username2,username3`.
+* У полі `Element Variable` зазначте локальну змінну екземпляра під заданим іменем.
+
+Процес відправки повідомлення не блокує основний потік виконання бізнес-процесу та виконується асинхронно.
+
+[NOTE]
+====
+Детальніше ознайомитися з функцією Multi Instance ви можете за посиланням:
+
+* https://docs.camunda.io/docs/0.26/reference/bpmn-workflows/multi-instance/[Multi-Instance]
+====
+
+[#related-delegates]
+=== Пов'язані делегати для отримання користувачів
+
+З метою отримання списку користувачів (отримувачів послуг) для відправки їм повідомлень, доступне типове розширення для сервісних задач:
+
+* Делегат `getCitizenUsersByAttributesFromKeycloak` -- використовується для пошуку користувачів Кабінету отримувачів послуг у Keycloak за їх атрибутами.
+
+[NOTE]
+====
+Детальну інформацію щодо налаштування делегата можна отримати за посиланням:
+
+* xref:bp-modeling/bp/element-templates/bp-element-templates-installation-configuration.adoc#get-citizen-users-by-attributes-from-keycloak[Пошук отримувачів послуг у Keycloak за їх атрибутами]
+====
+
+[#audit-log]
+== Логування відправлення повідомлень у журналі аудиту
+
+Події успішного, або неуспішного відправлення повідомлень користувачу у застосунок "Дія" логуються в журналі аудиту та зберігаються у базі даних `audit`.
+
+.Аудит подій відправлення поштових повідомлень
+====
+
+.Фіксація події успішного відправлення повідомлення у БД audit
+[%collapsible]
+=====
+[source,json]
+----
+{
+  "result": "SUCCESS",
+  "notification": {
+    "channel": "email",
+    "subject": "Повідомлення від УБКІ!",
+    "message": "<!DOCTYPE html>\n<html lang=\"uk\"> \n <head> \n  <meta charset=\"UTF-8\" /> \n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0\" />  \n  <style>body {\n    margin: 0;\n    padding: 0;\n    line-height: 1;\n    font-family: 'e-Ukraine', Verdana, sans-serif;\n}\n\n.header {\n    padding: 0 48px;\n    margin: 32px 0;\n    color: #000;\n    font-size: 16px;\n}\n\n.logo-wrap {\n    float: left;\n    margin-right: 16px;\n}\n\n.logo {\n    width: 48px;\n    height: 48px;\n}\n\n.platform-name {\n    font-size: 16px;\n    line-height: 24px;\n}\n\n.main {\n    padding: 0 48px;\n    margin: 48px 0;\n    color: #000;\n    font-size: 16px;\n    line-height: 24px;\n}\n\n.main-title {\n    margin-bottom: 24px;\n    font-size: 24px;\n    line-height: 28px;\n}\n\n.footer {\n    padding: 16px 48px 80px;\n    background: #000;\n    color: #fff;\n    font-size: 12px;\n    line-height: 16px;\n}\n</style>\n </head> \n <body>  \n  <div class=\"main\">\n    У кредитну історію надійшла інформація про новий кредитний договір: дата відкриття - Wed Jul 26 12:54:51 UTC 1978, кредитор - auto-user-notification-f278366. Отримати кредитну історію можна на сайті Українського бюро кредитних історій - ubki.ua. У разі виявлення шахрайських дій щодо вас або помилки кредитора - оскаржіть дані у кредитній історії. \n  </div> \n  <div class=\"footer\"> \n   <br /> Адреса чи службова інформація \n  </div>  \n </body>\n</html>",
+    "recipient": {
+      "id": "auto-user-notification-f",
+      "email": "auto-user-notification-f@inbucket.inbucket.svc.cluster.local"
+    }
+  },
+  "delivery": {
+    "channel": "email",
+    "status": "SUCCESS",
+    "failureReason": null
+  },
+  "action": "SEND_USER_NOTIFICATION",
+  "step": "AFTER"
+}
+----
+
+* Параметр `result` вказує на результат надсилання повідомлення.
+* Параметр `channel` вказує, який канал зв'язку із користувачем використано.
+* Параметр `subject` вказує тему повідомлення.
+* Атрибут `recipient` показує інформацію про отримувача повідомлення, а саме його ID та Email.
+* Атрибут `delivery` відображає статус доставлення за відповідним каналом зв'язку.
+=====
+
+.Фіксація події неуспішного відправлення повідомлення у БД audit
+[%collapsible]
+=====
+[source,json]
+----
+{
+  "result": "FAILURE",
+  "notification": {
+    "context": {
+      "system": "Low-code Platform",
+      "application": "ddm-bpm",
+      "businessProcess": "bpmn-send-inbox-with-form",
+      "businessProcessDefinitionId": "bpmn-send-inbox-with-form:2:1f54abab-65b2-11ed-8fda-0a580a822841",
+      "businessProcessInstanceId": "b84ceb8f-65b8-11ed-8fda-0a580a822841",
+      "businessActivity": "Activity_0l2g5sf",
+      "businessActivityInstanceId": "Activity_0l2g5sf:b84e9948-65b8-11ed-8fda-0a580a822841"
+    },
+    "notification": {
+      "title": null,
+      "templateName": "inbox-template-ubki111",
+      "ignoreChannelPreferences": false
+    },
+    "recipients": [
+      {
+        "id": "auto-user-citizen",
+        "channels": [
+          {
+            "channel": "diia",
+            "email": null,
+            "rnokpp": "1010101014"
+          },
+          {
+            "channel": "email",
+            "email": "auto1-user-citizen@inbucket.inbucket.svc.cluster.local",
+            "rnokpp": null
+          }
+        ],
+        "parameters": {
+          "dateCredOpen": "inbox-template-ubki",
+          "creditor": "inbox-template-ubki"
+        }
+      }
+    ]
+  },
+  "delivery": {
+    "channel": "email",
+    "status": "FAILURE",
+    "failureReason": "Notification template inbox-template-ubki111 not found"
+  },
+  "action": "SEND_USER_NOTIFICATION",
+  "step": "AFTER"
+}
+----
+* Параметр `result` вказує на результат надсилання повідомлення.
+* Параметр `context` надає деталі про бізнес-процес, в рамках якого змодельовано відправлення повідомлення, а також його складові.
+* Параметр `templateName` вказує, який шаблон було використано для надсилання повідомлення.
+* Масив `recipients` показує інформацію про отримувачів повідомлення, а також канали зв'язку.
+* Атрибут `delivery` відображає статус доставлення за відповідним каналом зв'язку та причину помилки.
+=====
+
+====
