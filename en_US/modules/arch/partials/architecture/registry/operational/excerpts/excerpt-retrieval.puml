@@ -1,0 +1,56 @@
+@startuml
+skinparam monochrome true
+
+actor "Користувач" as user
+participant "Клієнтський додаток\n кабінету користувача" as cabinet
+participant "Kong \nAPI Management" as kong
+participant "Сервіс управління \n бізнес-процесами користувача" as user_process_mngmnt
+
+box "Виконання бізнес-процесів"
+participant "Сервіс виконання бізнес-процесів" as bpms
+database "Операційне сховище БП" as bpms_db
+end box
+
+box "Підсистема звітності" #LightBlue
+participant "API отримання витягів" as report_storage_api
+participant "Об'єктне сховище Ceph" as ceph
+end box
+
+skinparam responseMessageBelowArrow false
+title Отримання згенерованого в рамках бізнес-процесу витягу ==
+
+user -> cabinet: Перегляд наданих послуг
+activate cabinet
+  cabinet -> kong: Запит на отримання наданих послуг
+  activate kong
+    kong -> user_process_mngmnt: Запит на отримання наданих послуг
+    activate user_process_mngmnt
+      user_process_mngmnt -> bpms: Отримання завершених бізнес-процесів користувача
+      activate bpms
+        bpms -> bpms_db: Отримання історичних бізнес-процесів
+        note over bpms, bpms_db: SYS_VAR_PROCESS_COMPLETION_RESULT та SYS_VAR_PROCESS_EXCERPT_ID
+        bpms -> bpms_db: Отримання значень історичних змінних процесів
+        bpms -> bpms: Формування агрегованого переліку процесів
+      return Перелік завершених бізнес-процесів \n та їх змінних
+    return Перелік наданих послуг
+  return Перелік наданих послуг
+  cabinet -> cabinet: Маркування послуг, для яких \nвизначена змінна SYS_VAR_PROCESS_EXCERPT_ID \nяк послуг, для яких доступне завантаження витягу
+return Перелік наданих послуг
+
+group Бізнес-процес, результатом якого є згенерований витяг [наявність змінної SYS_VAR_PROCESS_EXCERPT_ID]
+user -> cabinet: Завантаження витягу для обраного бізнес-процесу \nза значенням SYS_VAR_PROCESS_EXCERPT_ID
+activate cabinet
+  cabinet -> kong: Запит на отримання файлу витягу
+  activate kong
+    kong -> report_storage_api: Запит на отримання витягу за ідентифікатором та Access Token користувача, який ініціював бізнес-процес
+    activate report_storage_api
+      report_storage_api -> report_storage_api: Авторизація запиту на отримання витягу \n(keycloakId збережений у процесі генерації \nвитягу має відповідати keycloakId, \nотриманому з Access Token)
+      report_storage_api -> report_storage_api: Перевірка співпадання чек-сум документу, \nзбереженому в "Об'єктному сховищі Ceph" \nта оригінальній чек-сумі, отриманої \nвід згенерованого витягу
+      report_storage_api -> ceph: Отримання файлу витягу зі сховища
+      ceph -> report_storage_api: Файл витягу
+    return Дані витягу
+  return Файл витягу
+return Файл витягу
+end
+
+@enduml

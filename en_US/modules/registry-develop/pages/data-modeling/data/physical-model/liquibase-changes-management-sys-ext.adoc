@@ -1,0 +1,924 @@
+= Побудова фізичної моделі даних реєстру за допомогою функціональних розширень Liquibase
+:toc:
+:toc-title: ЗМІСТ
+:toclevels: 5
+:sectnums:
+:sectnumlevels: 5
+:sectanchors:
+
+== Вступ
+
+Цей документ є керівництвом розробників/адміністраторів даних, призначений для опису сценаріїв створення фізичної моделі даних за допомогою інструмента Liquibase та розширень системи керування змінами моделі даних Liquibase.
+
+Для опису правил побудови фізичної моделі даних реєстру в Liquibase використовуються спеціальні шаблони, що мають бути створені моделювальником у форматі XML.
+
+XML-шаблон є набором правил, що представлені XML-тегами (change types), для генерації відповідних SQL-сценаріїв в PostgreSQL.
+
+Liquibase підтримує як https://docs.liquibase.com/change-types/home.html[стандартні change types], так і xref:registry-develop:data-modeling/data/physical-model/liquibase-ddm-ext.adoc[додатково створені або розширені change types].
+
+:sectnums:
+
+[#create-table-hst]
+== Схема моделювання таблиць та функція підтримки історичності
+
+Схема описує правила дизайну XML-шаблону, в результаті застосування якого будуть згенеровані SQL-сценарії зі створення пари таблиць (історичної та поточної).
+
+=== Схема вихідного SQL-синтаксису
+
+[source, SQL]
+----
+-- таблиця з історичними даними
+CREATE TABLE table_name_hst (
+  -- list of business columns defined by XML pattern
+  column_name data_type [, ... ]
+  -- list of predefined for historical table auxiliary columns
+  column_name data_type [, ... ]
+  -- other definitions
+  ...
+);
+-- Таблиця із поточними даними
+CREATE TABLE table_name (
+  -- list of business columns defined by XML pattern
+  column_name data_type [, ... ]
+  -- list of predefined for recent data table auxiliary columns
+  column_name data_type [, ... ]
+  -- other definitions
+  ...
+)
+----
+
+=== Правила опису XML-шаблону
+
+Схема визначає додатковий атрибут `historyFlag` для стандартного елементу https://docs.liquibase.com/change-types/community/create-table.html[`createTable`].
+
+Атрибут `historyFlag` реалізує функцію DDM - **історичні таблиці**.
+`historyFlag` повинен мати значення `true` - таким чином Liquibase згенерує DDL для двох таблиць, які містять додаткові поля:
+
+- **Історичні дані**: `table_name=ENTITY_NAME_hst` (дозволено лише додавання нових даних до таблиці - https://en.wikipedia.org/wiki/Append-only[append-only] allowed).
+- **Поточні дані**: `table_name=ENTITY_NAME` (дозволено всі DML).
+
+WARNING: Додаткові поля для кожної з таблиць є різними та починаються з префікса `ddm_`. Див. приклад нижче.
+
+=== XML-шаблон опису створення таблиць та підтримки історичності даних
+
+[source, XML]
+----
+<?xml version="1.1" encoding="UTF-8" standalone="no"?>
+
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xmlns:ext="http://www.liquibase.org/xml/ns/dbchangelog-ext"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.2.xsd
+        http://www.liquibase.org/xml/ns/dbchangelog-ext dbchangelog-ext.xsd">
+
+    <changeSet id="table pd_subject_role" author="registry owner">
+        <comment>CREATE TABLE pd_subject_role</comment>
+        <createTable tableName="pd_subject_role" ext:historyFlag="true">
+            <column name="role_id" type="BIGINT">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="pk_pd_subject_role"/>
+            </column>
+            <column name="role_name" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+
+</databaseChangeLog>
+----
+
+=== Згенерований SQL-синтаксис
+
+В результаті опрацювання XML-шаблону, Liquibase генерує SQL-сценарій, логічно розподілений на декілька частин:
+
+1) Створює таблиці типу "append-only" з історичними даними:
+
+[source, SQL]
+----
+-- Creates historical table
+ CREATE TABLE pd_subject_role_hst
+  (
+     role_id                           BIGINT NOT NULL,
+     role_name                         TEXT NOT NULL,
+     ddm_created_at                    TIMESTAMP WITH time zone DEFAULT Now()
+     NOT NULL,
+     ddm_created_by                    TEXT NOT NULL,
+     ddm_dml_op                        CHAR(1) NOT NULL,
+     ddm_system_id                     UUID NOT NULL,
+     ddm_application_id                UUID NOT NULL,
+     ddm_business_process_id           UUID,
+     ddm_process_id                    TEXT,
+     ddm_digital_sign                  TEXT,
+     ddm_digital_sign_derived          TEXT,
+     ddm_digital_sign_checksum         TEXT,
+     ddm_digital_sign_derived_checksum TEXT,
+     CONSTRAINT pk_pd_subject_role PRIMARY KEY (role_id),
+     CONSTRAINT ui_pd_subject_role_hst UNIQUE (role_id, ddm_created_at)
+  );
+----
+
+2) Створює таблицю із поточними даними `pd_subject_role`:
+
+[source, SQL]
+----
+-- Creates table with current data
+CREATE TABLE pd_subject_role
+  (
+     role_id        BIGINT NOT NULL,
+     role_name      TEXT NOT NULL,
+     ddm_created_at TIMESTAMP WITH time zone DEFAULT Now() NOT NULL,
+     ddm_created_by TEXT NOT NULL,
+     ddm_updated_at TIMESTAMP WITH time zone DEFAULT Now() NOT NULL,
+     ddm_updated_by TEXT NOT NULL,
+     CONSTRAINT pk_pd_subject_role PRIMARY KEY (role_id)
+  );
+----
+
+[full-output-sql]
+==== Повний згенерований SQL-cценарій
+
+.**Натисніть, щоб розгорнути блок**
+[%collapsible]
+====
+[source, SQL]
+----
+ -- Creates historical table
+CREATE TABLE pd_subject_role_hst
+  (
+     role_id                           BIGINT NOT NULL,
+     role_name                         TEXT NOT NULL,
+     ddm_created_at                    TIMESTAMP WITH time zone DEFAULT Now()
+     NOT NULL,
+     ddm_created_by                    TEXT NOT NULL,
+     ddm_dml_op                        CHAR(1) NOT NULL,
+     ddm_system_id                     UUID NOT NULL,
+     ddm_application_id                UUID NOT NULL,
+     ddm_business_process_id           UUID,
+     ddm_process_id                    TEXT,
+     ddm_digital_sign                  TEXT,
+     ddm_digital_sign_derived          TEXT,
+     ddm_digital_sign_checksum         TEXT,
+     ddm_digital_sign_derived_checksum TEXT,
+     CONSTRAINT pk_pd_subject_role PRIMARY KEY (role_id),
+     CONSTRAINT ui_pd_subject_role_hst UNIQUE (role_id, ddm_created_at)
+  );
+
+-- Drops primary key
+ALTER TABLE PUBLIC.pd_subject_role_hst
+  DROP CONSTRAINT pk_pd_subject_role;
+
+REVOKE ALL privileges ON TABLE pd_subject_role_hst FROM PUBLIC;
+
+-- grants read privileges for the role
+GRANT SELECT ON pd_subject_role_hst TO application_role;
+
+-- Creates table with current data
+CREATE TABLE pd_subject_role
+  (
+     role_id        BIGINT NOT NULL,
+     role_name      TEXT NOT NULL,
+     ddm_created_at TIMESTAMP WITH time zone DEFAULT Now() NOT NULL,
+     ddm_created_by TEXT NOT NULL,
+     ddm_updated_at TIMESTAMP WITH time zone DEFAULT Now() NOT NULL,
+     ddm_updated_by TEXT NOT NULL,
+     CONSTRAINT pk_pd_subject_role PRIMARY KEY (role_id)
+  );
+
+REVOKE ALL privileges ON TABLE pd_subject_role FROM PUBLIC;
+
+GRANT SELECT ON pd_subject_role TO application_role;
+----
+====
+
+[#create-sc]
+== Схема моделювання критеріїв пошуку в базі даних
+
+TIP: Критерії пошуку в базі даних називаються *Search Conditions*.
+
+Схема моделювання критеріїв пошуку в БД описує правила XML-шаблону `*searchConditions*` для генерації відповідних SQL-сценаріїв створення розрізів даних (Views) та індексів підтримки пошуку.
+
+На основі кожного `*searchCondition*` генерується відповідний REST-ендпоінт на рівні API платформи даних, через який запити надалі потрапляють до бази даних.
+
+=== Передумови
+
+==== Умови пошуку
+
+1) Знайти за значенням `person_full_name` та повернути перелік всіх полів таблиці `pd_processing_consent`.
+
+2) Знайти за значеннями `legal_entity_name` та `edrpou` (edrpou_val) таблиці `pd_processing_consent_subject` та повернути перелік `person_full_name`, `person_pass_number`, `consent_date` з таблиці `pd_processing_consent` разом із критеріями пошуку (`legal_entity_name` та `edrpou` (edrpou_val) таблиці `pd_processing_consent_subject`).
+
+3) Знайти за значеннями `person_full_name` та `person_pass_number` з таблиці `pd_processing_consent` та повернути перелік `legal_entity_name` та `edrpou` (edrpou_val) таблиці `pd_processing_consent_subject` разом із критеріями пошуку (`person_full_name`, `person_pass_number`, `consent_date` з таблиці `pd_processing_consent`).
+
+==== Схема вихідного SQL-запита
+
+Нижче представлено схему SQL-синтаксису, який необхідно згенерувати за допомогою відповідного ХML-шаблону:
+
+[source, SQL]
+----
+CREATE OR replace VIEW <view_name> AS SELECT <column_list>
+FROM   <table_1> t1
+JOIN   <table_2> t2
+ON     t1.<join_column> = t2.<join_column>
+WHERE  <conditions>;
+----
+
+=== Правила опису XML-шаблонів
+
+[xml-diagram-sc]
+==== Діаграма XML-шаблону
+
+image:registry-develop:data-modeling/data/physical-model/lb-create-sc-xsd-diagram.png[]
+
+WARNING: Перший тег `<ext:condition>` в умові `<ext:where>` не повинен містити атрибуту `logicOperator`, всі інші теги `<ext:condition>` - повинні;
+
+WARNING: Перший тег `<ext:condition>`, як і всі інші, в умові `<ext:join>` повинен містити атрибут `logicOperator`;
+
+WARNING: Атрибут `logicOperator` приймає значення _and_ і _or_.
+
+WARNING: Якщо тег `<ext:condition>` вкладений в інший, то вони обгортаються дужками.
+
+**Оператор приймає наступні значення:**
+
+[options="header"]
+|=======================================================================
+|Значення| Пояснення                       |Символ (Unicode)| Коментар
+|`eq`      |**eq**uals                       |=               |
+|`ne`      |**n**ot **e**qual                |<>              |
+|`gt`      |**g**reater **t**han             |>               |
+|`ge`      |**g**reater than or **e**quals to|>=              |
+|`lt`      |**l**ess **t**han                |<               |
+|`le`      |**l**ess than or **e**quals to   |<=              |
+|`in`      |                                 |                |
+|`notIn`   |                                 |                |
+|`isNull`  |is null                          |                |Якщо значення (value) = `true`, то перевірка колонки _is null_; якщо значення (value) = `false`, то перевірка колонки _is not null_.
+|`similar` |similar                          |~               |
+|=======================================================================
+
+- Value - якщо потрібно передати текстове значення, то потрібно це значення обгорнути в одинарні лапки;
+- `<ext:function>` - дозволяє використовувати агрегатні функції (`min()`, `max()`, `avg()`, `count()`, `sum()`), при цьому поля таблиці, які використовуються в цих функціях, вилучаються з виводу (SELECT). Всі інші поля включаються в групування (GROUP BY).
+
+[#create-sc-simple]
+=== XML-шаблон дизайну простого критерію пошуку (Сценарій 1)
+
+Поданий приклад дозволяє створити розріз даних (view) із назвою `pd_processing_consent_simple` та відповідний індекс.
+
+[source,XML]
+----
+<changeSet author="registry owner" id="searchCondition pd_processing_consent_simple">
+    <comment>CREATE search condition pd_processing_consent_simple</comment>
+    <ext:createSimpleSearchCondition name="pd_processing_consent_simple" indexing="true" limit="all">
+        <ext:table name="pd_processing_consent" alias="c" searchType="equal" searchColumn="person_full_name"/>
+    </ext:createSimpleSearchCondition>
+</changeSet>
+----
+
+[sc-scenario-1-sql-output]
+==== Згенерований SQL-синтаксис
+
+[source, SQL]
+----
+CREATE OR REPLACE view pd_processing_consent_simple_v
+AS
+  SELECT c.*
+  FROM   pd_processing_consent c;
+
+CREATE INDEX ix_pd_processing_consent_simple_pd_processing_consent_person_full_name ON pd_processing_consent(
+  lower(
+    cast(person_full_name as varchar)
+  )
+);
+
+----
+
+[#create-sc-uc2]
+=== XML-шаблон дизайну критерію пошуку (Сценарій 2)
+
+Поданий приклад дозволяє створити розріз даних (view) із назвою `pd_processing_consent_1` та відповідний індекс.
+
+[source, xml]
+----
+<changeSet author="registry owner" id="searchCondition pd_processing_consent_1">
+    <comment>CREATE search condition pd_processing_consent_1</comment>
+    <ext:createSearchCondition name="pd_processing_consent_1" indexing="true">
+        <ext:table name="pd_processing_consent" alias="c">
+            <ext:column name="person_full_name" searchType="equal" returning="true" type="text"/>
+            <ext:column name="person_pass_number" returning="true" type="varchar"/>
+            <ext:column name="consent_date" returning="true"/>
+        </ext:table>
+        <ext:table name="pd_processing_consent_subject" alias="cs">
+            <ext:column name="legal_entity_name" alias="srch_legal_entity_name" returning="true"/>
+            <ext:column name="edrpou" alias="srch_edrpou" returning="true"/>
+        </ext:table>
+        <ext:join type="inner">
+            <ext:left alias="c">
+                <ext:column name="consent_id"/>
+            </ext:left>
+            <ext:right alias="cs">
+                <ext:column name="consent_id"/>
+            </ext:right>
+        </ext:join>
+    </ext:createSearchCondition>
+</changeSet>
+----
+
+[sc-scenario-2-sql-output]
+==== Згенерований SQL-синтаксис
+
+[source, SQL]
+----
+CREATE
+OR REPLACE VIEW pd_processing_consent_1_v AS
+SELECT
+  c.person_full_name,
+  c.person_pass_number,
+  c.consent_date,
+  cs.legal_entity_name AS srch_legal_entity_name,
+  cs.edrpou AS srch_edrpou
+FROM
+  pd_processing_consent AS c
+  INNER JOIN pd_processing_consent_subject AS cs ON (c.consent_id = cs.consent_id);
+CREATE INDEX IF NOT EXISTS ix_pd_processing_consent__person_full_name ON pd_processing_consent(
+  lower(
+    cast(person_full_name as varchar)
+  )
+);
+
+----
+
+[#create-sc-uc3]
+=== XML-шаблон дизайну критерію пошуку (Сценарій 3)
+
+Поданий приклад дозволяє створити розріз даних (view) із назвою `pd_processing_consent_2` та сортуванням записів за зменшенням (`DESC`).
+
+[source, xml]
+----
+<changeSet author="registry owner" id="searchCondition pd_processing_consent_2">
+    <comment>CREATE search condition pd_processing_consent_2</comment>
+    <ext:createSearchCondition name="pd_processing_consent_2" limit="1">
+        <ext:table name="pd_processing_consent" alias="c">
+            <ext:column name="person_full_name" searchType="equal" returning="true"/>
+            <ext:column name="person_pass_number" returning="true"/>
+            <ext:column name="consent_date" returning="true" sorting="desc"/>
+        </ext:table>
+        <ext:table name="pd_processing_consent_subject" alias="cs">
+            <ext:column name="legal_entity_name" returning="true"/>
+            <ext:column name="edrpou" returning="true"/>
+        </ext:table>
+        <ext:join type="inner">
+            <ext:left alias="c">
+                <ext:column name="consent_id"/>
+            </ext:left>
+            <ext:right alias="cs">
+                <ext:column name="consent_id"/>
+            </ext:right>
+        </ext:join>
+    </ext:createSearchCondition>
+</changeSet>
+----
+
+[sc-scenario-3-sql-output]
+==== Згенерований SQL-синтаксис
+
+[source, SQL]
+----
+CREATE
+OR REPLACE VIEW pd_processing_consent_2_v AS
+SELECT
+  c.person_full_name,
+  c.person_pass_number,
+  c.consent_date,
+  cs.legal_entity_name,
+  cs.edrpou
+FROM
+  pd_processing_consent AS c
+  INNER JOIN pd_processing_consent_subject AS cs ON (c.consent_id = cs.consent_id)
+ORDER BY
+  c.consent_date DESC;
+----
+
+[#create-sc-uc4]
+=== XML-шаблон дизайну критерію пошуку (Сценарій 4)
+
+Поданий приклад дозволяє створити розріз даних (view) із назвою `SearchCondition`.
+
+[source, xml]
+----
+<changeSet author="registry owner" id="SearchCondition">
+    <ext:createSearchCondition name="SearchCondition" limit="1">
+        <ext:table name="table_one" alias="to">
+            <ext:column name="name" alias="to_name"/>
+            <ext:column name="type" searchType="equal"/>
+            <ext:function name="count" alias="cnt" columnName="uuid"/>
+        </ext:table>
+        <ext:table name="table_two" alias="tt">
+            <ext:column name="name" alias="tt_name"/>
+            <ext:column name="code" searchType="contains"/>
+            <ext:function name="sum" alias="sm" columnName="code"/>
+        </ext:table>
+        <ext:join type="left">
+            <ext:left alias="np">
+                <ext:column name="level2"/>
+            </ext:left>
+            <ext:right alias="rn">
+                <ext:column name="code"/>
+            </ext:right>
+        </ext:join>
+        <ext:where>
+            <ext:condition tableAlias="to" columnName="type" operator="eq" value="'char'">
+                <ext:condition logicOperator="or" tableAlias="to" columnName="type" operator="eq" value="'text'"/>
+            </ext:condition>
+            <ext:condition logicOperator="and" tableAlias="tt" columnName="code" operator="similar" value="'{80}'"/>
+        </ext:where>
+    </ext:createSearchCondition>
+</changeSet>
+----
+
+[sc-scenario-4-sql-output]
+==== Згенерований SQL-синтаксис
+
+[source, SQL]
+----
+ CREATE OR REPLACE view searchcondition_v
+AS
+  SELECT to.name        AS to_name,
+         to.type,
+         tt.name        AS tt_name,
+         Count(to.uuid) AS cnt,
+         Sum(tt.code)   AS sm
+  FROM   table_one AS to
+         LEFT JOIN table_two AS tt
+                ON ( to.code = tt.code )
+  WHERE  ( ( to.type = 'char' )
+            OR ( to.type = 'text' ) )
+         AND ( tt.code ~ '{80}' )
+  GROUP  BY to.name,
+            to.type,
+            tt.name
+  LIMIT  1;
+----
+
+[#delete-sc]
+=== XML-шаблон видалення критерію пошуку
+
+Поданий приклад дозволяє видалити створений раніше розріз даних (view).
+
+[source, xml]
+----
+<changeSet author="registry owner" id="drop report_research view">
+        <ext:dropSearchCondition name="report_research"/>
+    </changeSet>
+----
+
+[sc-delete-sql-output]
+==== Згенерований SQL-синтаксис
+
+[source, SQL]
+----
+ DROP VIEW IF EXISTS report_research_v;DELETE
+FROM   ddm_liquibase_metadata
+WHERE  (
+              change_type = 'searchCondition')
+AND    (
+              change_name = 'report_research');DO $$DECLARE txt TEXT;BEGIN
+  SELECT String_agg('drop index if exists '
+                || indexname, '; ')
+                || ';'
+  INTO   txt
+  FROM   pg_indexes
+  WHERE  indexname LIKE 'ix_$report_research$_%';
+
+  IF txt IS NOT NULL then
+  EXECUTE txt;
+ENDIF;END;$$;
+----
+
+=== Повний XML-шаблон дизайну критеріїв пошуку
+
+._Натисніть, щоб розгорнути або згорнути блок_
+[%collapsible]
+====
+[source, xml]
+----
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xmlns:ext="http://www.liquibase.org/xml/ns/dbchangelog-ext"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.2.xsd
+        http://www.liquibase.org/xml/ns/dbchangelog-ext xsd/dbchangelog-ext.xsd">
+
+    <changeSet author="registry owner" id="searchCondition pd_processing_consent_simple">
+        <comment>CREATE search condition pd_processing_consent_simple</comment>
+        <ext:createSimpleSearchCondition name="pd_processing_consent_simple" indexing="true" limit="all">
+            <ext:table name="pd_processing_consent" alias="c" searchType="equal" searchColumn="person_full_name"/>
+        </ext:createSimpleSearchCondition>
+    </changeSet>
+
+    <changeSet author="registry owner" id="searchCondition pd_processing_consent_1">
+        <comment>CREATE search condition pd_processing_consent_1</comment>
+        <ext:createSearchCondition name="pd_processing_consent_1" indexing="true">
+            <ext:table name="pd_processing_consent" alias="c">
+                <ext:column name="person_full_name" searchType="equal" returning="true" type="text"/>
+                <ext:column name="person_pass_number" returning="true" type="varchar"/>
+                <ext:column name="consent_date" returning="true"/>
+            </ext:table>
+            <ext:table name="pd_processing_consent_subject" alias="cs">
+                <ext:column name="legal_entity_name" alias="srch_legal_entity_name" returning="true"/>
+                <ext:column name="edrpou" alias="srch_edrpou" returning="true"/>
+            </ext:table>
+            <ext:join type="inner">
+                <ext:left alias="c">
+                    <ext:column name="consent_id"/>
+                </ext:left>
+                <ext:right alias="cs">
+                    <ext:column name="consent_id"/>
+                </ext:right>
+            </ext:join>
+        </ext:createSearchCondition>
+    </changeSet>
+
+    <changeSet author="registry owner" id="searchCondition pd_processing_consent_2">
+        <comment>CREATE search condition pd_processing_consent_2</comment>
+        <ext:createSearchCondition name="pd_processing_consent_2" limit="1">
+            <ext:table name="pd_processing_consent" alias="c">
+                <ext:column name="person_full_name" searchType="equal" returning="true"/>
+                <ext:column name="person_pass_number" returning="true"/>
+                <ext:column name="consent_date" returning="true" sorting="desc"/>
+            </ext:table>
+            <ext:table name="pd_processing_consent_subject" alias="cs">
+                <ext:column name="legal_entity_name" returning="true"/>
+                <ext:column name="edrpou" returning="true"/>
+            </ext:table>
+            <ext:join type="inner">
+                <ext:left alias="c">
+                    <ext:column name="consent_id"/>
+                </ext:left>
+                <ext:right alias="cs">
+                    <ext:column name="consent_id"/>
+                </ext:right>
+            </ext:join>
+        </ext:createSearchCondition>
+    </changeSet>
+
+    <changeSet author="registry owner" id="SearchCondition">
+        <ext:createSearchCondition name="SearchCondition" limit="1">
+            <ext:table name="table_one" alias="to">
+                <ext:column name="name" alias="to_name"/>
+                <ext:column name="type" searchType="equal"/>
+                <ext:function name="count" alias="cnt" columnName="uuid"/>
+            </ext:table>
+            <ext:table name="table_two" alias="tt">
+                <ext:column name="name" alias="tt_name"/>
+                <ext:column name="code" searchType="contains"/>
+                <ext:function name="sum" alias="sm" columnName="code"/>
+            </ext:table>
+            <ext:join type="left">
+                <ext:left alias="np">
+                    <ext:column name="level2"/>
+                </ext:left>
+                <ext:right alias="rn">
+                    <ext:column name="code"/>
+                </ext:right>
+            </ext:join>
+            <ext:where>
+                <ext:condition tableAlias="to" columnName="type" operator="eq" value="'char'">
+                    <ext:condition logicOperator="or" tableAlias="to" columnName="type" operator="eq" value="'text'"/>
+                </ext:condition>
+                <ext:condition logicOperator="and" tableAlias="tt" columnName="code" operator="similar" value="'{80}'"/>
+            </ext:where>
+        </ext:createSearchCondition>
+    </changeSet>
+
+    <changeSet author="registry owner" id="drop report_research view">
+        <ext:dropSearchCondition name="report_research"/>
+    </changeSet>
+
+</databaseChangeLog>
+----
+====
+
+[#create-many2many]
+== Схема моделювання зв'язків між сутностями в БД
+
+Моделювання відносин між сутностями представлене на прикладі зв'язку "many-to-many".
+
+Метою цієї схеми є опис правил XML-шаблону для генерації SQL-сценаріїв зі створення зв'язку між таблицями типу "багато до багатьох".
+
+=== Передумови
+
+==== Обмеження
+
+Вимога універсальності Платформи накладає наступні обмеження:
+
+- Автоматично згенеровані API для кожної з таблиць реєстру мають справу з даними лише однієї таблиці та не можуть читати, редагувати або видаляти дані з інших таблиць.
+- Кожний запис в реєстрі має містити цифровий підпис (ЕЦП/КЕП) відповідальної особи. Таким чином, кожен пакет даних має розлядатися як цілісний елемент, тобто має зберігатися в одному рядку таблиці, разом з підписом, а не в окремій таблиці.
+
+З урахуванням цих обмежень, класична реалізація зв'язку "багато до багатьох" не може бути застосована для таблиць реєстру.
+
+**Натомість застосовується наступна схема**:
+
+1) Таблиці, між якими існує зв'язок багато до багатьох, логічно розподідені на **головну** та **підпорядковану**.
+
+2) Головною вважатиметься та таблиця, яка приймає підписаний КЕП єдиним набором взаємозв'язаних даних (dataset).
+
+3) Головна таблиця містить зв'язок кожного її елемента з елементами підпорядкованої таблиці в окремому полі у вигляді масиву.
+
+Зв'язок між головною та підпорядкованою таблицею встановлюється через окремо створений розріз даних (View), розгортає масив із головної таблиці в построковому вигляді.
+
+==== Схема вихідного SQL-запита
+
+[source, SQL]
+----
+ CREATE view statement_factor_rel_v
+AS
+  (SELECT id,
+          Unnest(factors) AS factor_id
+   FROM   statement);
+
+CREATE INDEX ix_statement_factor USING gin(factors);
+----
+
+==== Структура таблиць для прикладу створення зв'язку між ними
+
+Для прикладу створено дві таблиці: `statement` і `factor`.
+
+[source, SQL]
+----
+ CREATE TABLE STATEMENT
+  (
+     id            UUID PRIMARY KEY,
+     laboratory_id UUID,
+     factors       UUID[]
+  );
+
+CREATE TABLE factor
+  (
+     id   UUID PRIMARY KEY,
+     name VARCHAR(128)
+  );
+----
+
+=== Правила опису XML-шаблонів
+
+==== Діаграма XML-схеми
+
+image:registry-develop:data-modeling/data/physical-model/lb-many-to-many-xsd-diagram.png[]
+
+Cхема визначає взаємозв'язок "багато-до-багатьох" для двох таблиць на основі ключа та масиву ідентифікаторів, до яких подані посилання в масиві:
+
+[source, SQL]
+----
+ CREATE view statement_factor_rel_v
+AS
+  (SELECT id,
+          Unnest(factors) AS factor_id
+   FROM   statement);
+
+CREATE INDEX ix_statement_factor USING gin(factors);
+----
+
+CAUTION: Поле головної таблиці, що містить ключі посилання на підпорядковану таблицю (`referenceKeysArray`) має **обов'язково** бути масивом.
+
+=== XML-шаблон дизайну зв'язку "багато до багатьох"
+
+Поданий шаблон створює зв'язок "багато до багатьох" між таблицями `statement` і `factor`.
+
+[source, xml]
+----
+<?xml version="1.1" encoding="UTF-8" standalone="no"?>
+
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xmlns:ext="http://www.liquibase.org/xml/ns/dbchangelog-ext"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.2.xsd
+        http://www.liquibase.org/xml/ns/dbchangelog-ext dbchangelog-ext.xsd">
+
+    <changeSet author="registry owner" id="m2m relationship">
+        <comment>Creates many-to-many relationship between tables `statement` and `factor`</comment>
+        <ext:createMany2Many mainTableName="statement" mainTableKeyField="id" referenceTableName="factor" referenceKeysArray="factors"/>
+    </changeSet>
+
+</databaseChangeLog>
+----
+
+=== Згенерований SQL-синтаксис
+
+[source, SQL]
+----
+ CREATE view statement_factor_rel
+AS
+  SELECT statement.id    AS statement_id,
+         Unnest(factors) AS factor_id
+  FROM   statement;
+
+CREATE INDEX statement_factor_m2m_index ON statement USING gin(factors);
+----
+
+== Схема створення користувацьких типів даних
+
+Цей розділ описує правила XML-шаблонів для генерації SQL-сценаріїв зі створення додаткових типів даних: **ENUM**, **композитного (Composite)** та **Domain**.
+
+[#create-type-enum-composite]
+=== Cхема створення типів даних ENUM та Composite
+
+Представлена схема описує правила XML-шаблону для генерації SQL-сценаріїв зі створення додаткових типів даних: **ENUM** і **композитного (Composite)**.
+
+==== Схема вихідного SQL-запита
+
+[source, SQL]
+----
+ CREATE TYPE name AS ( [ attribute_name data_type [ collate collation ] [, ... ]
+] );
+
+CREATE TYPE name AS enum ( [ 'label' [, ... ] ] );
+----
+
+==== Діаграма XML-схеми
+
+image:registry-develop:data-modeling/data/physical-model/lb-create-type-enum-composite.png[]
+
+==== Повний XML-шаблон створення типів даних ENUM та Composite
+
+.**Натисніть, щоб розгорнути блок**
+[%collapsible]
+====
+[source, xml]
+----
+<?xml version="1.1" encoding="UTF-8" standalone="no"?>
+
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xmlns:ext="http://www.liquibase.org/xml/ns/dbchangelog-ext"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.2.xsd
+        http://www.liquibase.org/xml/ns/dbchangelog-ext dbchangelog-ext.xsd">
+
+    <changeSet author="registry owner" id="enum typ_dml">
+        <comment>CREATE TYPE typ_dml</comment>
+        <ext:createType name="typ_dml">
+            <ext:enum>
+                <ext:label>I</ext:label>
+                <ext:label>U</ext:label>
+                <ext:label>D</ext:label>
+            </ext:enum>
+        </ext:createType>
+    </changeSet>
+
+    <changeSet author="registry owner" id="composite field_access_type">
+        <comment>CREATE TYPE field_access_type</comment>
+        <ext:createType name="field_access_type">
+            <ext:composite>
+                <ext:column name="masked_value" type="TEXT" collation="uk_UA.utf8"/>
+                <ext:column name="opened" type="BOOLEAN"/>
+                <ext:column name="private" type="BOOLEAN"/>
+                <ext:column name="private_denied_by_owner" type="BOOLEAN"/>
+                <ext:column name="confidential" type="BOOLEAN"/>
+                <ext:column name="secret" type="BOOLEAN"/>
+                <ext:column name="service" type="BOOLEAN"/>
+            </ext:composite>
+        </ext:createType>
+    </changeSet>
+</databaseChangeLog>
+----
+====
+
+==== XML-шаблон дизайну типу даних ENUM
+
+[source, xml]
+----
+<changeSet author="registry owner" id="enum typ_dml">
+        <comment>CREATE TYPE typ_dml</comment>
+        <ext:createType name="typ_dml">
+            <ext:enum>
+                <ext:label>I</ext:label>
+                <ext:label>U</ext:label>
+                <ext:label>D</ext:label>
+            </ext:enum>
+        </ext:createType>
+    </changeSet>
+----
+
+[enum-sql-output]
+===== Згенерований SQL-синтаксис
+
+[source, SQL]
+----
+ CREATE TYPE dml_type AS enum ('I', 'U', 'D');
+----
+
+==== XML-шаблон дизайну типу даних Composite
+
+[source, xml]
+----
+<changeSet author="registry owner" id="composite field_access_type">
+        <comment>CREATE TYPE field_access_type</comment>
+        <ext:createType name="field_access_type">
+            <ext:composite>
+                <ext:column name="masked_value" type="TEXT" collation="uk_UA.utf8"/>
+                <ext:column name="opened" type="BOOLEAN"/>
+                <ext:column name="private" type="BOOLEAN"/>
+                <ext:column name="private_denied_by_owner" type="BOOLEAN"/>
+                <ext:column name="confidential" type="BOOLEAN"/>
+                <ext:column name="secret" type="BOOLEAN"/>
+                <ext:column name="service" type="BOOLEAN"/>
+            </ext:composite>
+        </ext:createType>
+    </changeSet>
+----
+
+[composite-sql-output]
+===== Згенерований SQL-синтаксис
+
+[source, SQL]
+----
+CREATE TYPE field_access_type AS (
+    masked_value TEXT COLLATE "uk_UA.utf8",
+    opened BOOLEAN,
+    private BOOLEAN,
+    private_denied_by_owner BOOLEAN,
+    confidential BOOLEAN,
+    secret BOOLEAN,
+    service BOOLEAN
+);
+----
+
+[#create-type-domain]
+=== Схема створення типу даних Domain
+
+Метою цієї схеми є опис правил XML-шаблону для генерації SQL-сценарію зі створення додаткового користувацького типу даних `DOMAIN`.
+
+Цей тип даних надає можливість виконати перевірку на певні умови.
+
+==== Схема вихідного SQL-запита
+
+[source, SQL]
+----
+CREATE DOMAIN name [ AS ] data_type
+    [ COLLATE collation ]
+    [ DEFAULT expression ]
+    [ constraint [ ... ] ]
+
+where constraint is:
+
+[ CONSTRAINT constraint_name ]
+{ NOT NULL | NULL | CHECK (expression) }
+----
+
+==== Правила опису XML-шаблонів
+
+[domain-xml-schema]
+===== Діаграма XML-схеми
+
+image:registry-develop:data-modeling/data/physical-model/lb-create-type-domain.png[]
+
+==== XML-шаблон для створення типу даних Domain
+
+[source, xml]
+----
+<?xml version="1.1" encoding="UTF-8" standalone="no"?>
+
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xmlns:ext="http://www.liquibase.org/xml/ns/dbchangelog-ext"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.2.xsd
+        http://www.liquibase.org/xml/ns/dbchangelog-ext dbchangelog-ext.xsd">
+
+    <changeSet author="registry owner" id="domain test_passport_num">
+        <comment>CREATE DOMAIN dn_passport_num</comment>
+        <ext:createDomain name="test_passport_num" dataType="CHAR(8)">
+            <ext:constraint implementation="NOT NULL"/>
+            <ext:constraint name="passport_number_chk" implementation="CHECK (VALUE ~ '^[АВЕІКМНОРСТХ]{2}[0-9]{6}$)"/>
+        </ext:createDomain>
+    </changeSet>
+</databaseChangeLog>
+----
+
+[TIP]
+====
+Приклад наведенний в XML-шаблоні в результаті виконання створить тип даних `test_passport_num` з _DataType_ "TEXT" та буде накладено обмеження (CONSTRAINT) з регулярним виразом `'^[АВЕІКМНОРСТХ]{2}\d{6}$'`, де:
+
+* `^` - початок строки;
+* `[АВЕІКМНОРСТХ]` - можливе використання лише зазначених буквених символів;
+* `{2}` - кількість символів, що можуть бути використані з зазначеного переліку;
+* `\d{6}` - послідовні довільних 6 цифр;
+* `$` - кінець строки.
+====
+
+==== Згенерований SQL-синтаксис
+
+[source, SQL]
+----
+CREATE DOMAIN test_passport_num CHAR(8)
+CONSTRAINT ck_test_passport_num CHECK (VALUE ~ '^[АВЕІКМНОРСТХ]{2}[0-9]{6}$');
+----
+
+==== Попередньо створені користувацькі типи даних
+
+На Платформі вже наявні наступні типи даних:
+
+* Тип `dn_passport_num` створює поле типу "TEXT" та накладає обмеження (CONSTRAINT) з регулярним виразом `'^[АВЕІКМНОРСТХ]{2}\d{6}$'`.
+
+* Тип `dn_edrpou` створює поле типу "TEXT" та накладає на нього обмеження (CONSTRAINT) через які можливо вводити лише цифри загальною довжиною 8-10 символів.

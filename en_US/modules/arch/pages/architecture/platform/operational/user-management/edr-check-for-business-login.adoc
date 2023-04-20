@@ -1,0 +1,116 @@
+= Управління перевіркою в ЕДР для автентифікації бізнес-користувачів
+
+== Загальний опис
+Розробка можливості відключення, технічним адміністратором реєстру, перевірки наявності в ЕДР користувача при вході _Для бізнесу_.
+
+== Загальні принципи та положення
+* Перевірка отримувача послуг в ЕДР здійснюється шляхом інтеграції реєстру з ЕДР через ШБО _Трембіта_. +
+* Без перевірки в ЕДР КЕП громадянина буде класифікуватись як ФОП.
+
+== Актори
+* Фізична Особа Підприємець (ФОП)
+* Представник Фізичної Особи Підприємця (ФОП)
+* Представник Юридичної Особи
+* Технічний адміністратор реєстру.
+
+== Функціональні сценарії
+
+Технічний адміністратор реєстру через інтерфейс адмін-консолі може змінити поведінку, а саме перевірку наявності та стану активності користувача в ЕДР, для користувачів, що обрали вхід _Для бізнесу_ на сторінці автентифікації.
+
+.Екран конфігурації входу бізнес-користувачів в адмін-консолі
+image::architecture/platform/operational/user-management/edr-switch-control-plane-config.png[]
+
+Поточний підхід до xref:architecture/platform/operational/user-management/citizen-authentication.adoc[автентифікації].
+
+.Діаграма діяльності (`Activity diagram`). Зміни в класифікації користувача без доступу до ЕДР
+[plantuml, flow, svg]
+----
+:Вхід для бізнесу;
+if (Активована перевірка в ЕДР?) then (так)
+:Пошук користувача в ЕДР;
+:...;
+kill
+else (ні)
+    if (Містить ЄДРПОУ?) then (ні)
+        :Упішна автентифікація як ФОП;
+        kill
+    elseif  (ЄДРПОУ і РНОКПП однакові?) then (так)
+         :Упішна автентифікація як ФОП;
+        kill
+    elseif (Перевірка довжини ЄДРПОУ) then (довжина 8 символів)
+        :Упішна автентифікація як представник\nюредичної особи;
+        kill
+    else (довжина 10 символів)
+        :Упішна автентифікація як\nпредставник ФОП;
+        kill
+    endif
+endif
+
+----
+== Технічний дизайн рішення
+.Загальна структура компоненти
+image::architecture/platform/operational/user-management/user-managment-components.svg[]
+
+Впровадження додаткового параметра, що відповідальний за включення/виключення даної перевірки на рівні конфігурації компоненти `registry-configuration` з подальшим винесенням його до шаблонів реєстрів. Додавання додаткової гілки в автентифікатора `keycloak-ds-citizen-authenticator` визначення типу користувача без звернення до ЕДР.
+
+[NOTE]
+Привести назви до одного формату Subject як тип суб'єкта чи роль користувача;
+
+.Приклад низькорівневих змін до `keycloak-ds-citizen-authenticator`.
+[source, java]
+----
+package com.epam.digital.data.platform.keycloak.ds.citizen.authenticator.registration;
+
+public class BusinessRegistrationService implements RegistrationService {
+    ...
+    public UserModel registerUser(AbstractAuthenticationFlowContext ctx, UserAttributes attributes) {
+        boolean isEdrCheckActive = obtainConfiguration();
+        Subject currentUserRole = calculateEntityRole(ctx, attributes, isEdrCheckActive);
+        ...
+    }
+
+    private Subject calculateEntityRole(AbstractAuthenticationFlowContext ctx, UserAttributes attributes, boolean isEdrCheckActive) {
+        if (isEdrCheckActive) {
+            EdrEntity edrEntity = ....
+            return getSubject(attributes, edrEntity);
+        }
+        return  getSubject(attributes);
+    }
+    ...
+}
+
+----
+
+[NOTE]
+Конфігурація параметрів інтеграції з ЕДР поза межами даного дизайну.
+
+.Структура конфігурації values.yaml для конфігурації реєстру та компоненти `registry-configuration`.
+[source, yaml]
+----
+keycloak:
+  authFlows:
+    citizenAuthFlow:
+      authenticators:
+        dsCitizenAuthenticator:
+          authenticatorConfig:
+            edrCheck: true
+----
+
+
+== Міграція існуючих реєстрів
+Міграція існуючих реєстрів відбувається шляхом оновлення поточної конфігурації реєстру оновленими параметрами з шаблону реєстру.
+Тобто, під час міграції реєстру на нову версію відбувається перенесення значень і структур шляхом злиття гілок шаблону до поточної конфігурації реєстру.
+
+== Високорівневий план розробки
+
+=== Технічні експертизи
+
+* _BE_
+* _DevOps_
+
+=== План розробки
+
+* Додавання конфігурації на рівні компоненти.
+* Внесення змін в автентифікатор `keycloak-ds-citizen-authenticator`.
+* Додавання екрана конфігурації в адмін-консоль.
+* Винесення конфігурації на рівень шаблонів реєстрів `Helmfile`-у

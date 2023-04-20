@@ -1,0 +1,86 @@
+= Програмний емулятор криптомодуля Гряда-301 в AWS
+:toc:
+:toclevels: 5
+:toc-title: ЗМІСТ
+:sectnumlevels: 5
+:sectanchors:
+
+== Розгортання програмного емулятора криптомодуля Гряда-301 в AWS
+
+Для розгортання програмного емулятора криптомодуля Гряда-301 необхідно виконати наступні кроки:
+
+. Створити EC2 інстанси з наступною конфігурацією:
++
+|===
+|Назва|Тип|Правила доступу|Примітки
+
+|bastion
+|t2.micro
+|All from 10.0.0.0/16 (Platform subnet) + SSH from 85.223.209.0/24
+|OS: Ubuntu 22.04 LTS, public subnet of Platform VPC, Allocate elastic ip
+|griada-301
+|t3.micro
+|All from 10.0.0.0/16 (Platform subnet)
+|OS: Ubuntu 22.04 LTS, private subnet of Platform VPC
+|griada-control-center
+|t2.micro
+|RDP from 85.223.209.0/24
+|Windows_Server-2019, public subnet of Platform VPC, Allocate elastic ip,
+
+|===
+
+. Налаштувати SSH доступ в інстанс griada-301 через bastion інстанс. Приклад SSH конфіга:
++
+[source,shell]
+----
+Host bastion-live <bastion_host>
+    HostName <bastion_host>
+    User ubuntu
+    IdentitiesOnly yes
+    IdentityFile <bastion_ssh_key_path>
+Host griada-live
+    ProxyCommand ssh bastion-live -W %h:%p
+    HostName <griada_private_ip>
+    User ubuntu
+    IdentityFile <griada_ssh_key_path>
+----
+. Завантажити https://drive.google.com/file/d/12VVbkCv7yrRUkRgVacfrniJnMHuVHXKn/view?usp=sharing[архів] з модулями МКМ Гряда-301 в інстанс griada-301
+. Виконати наступні команди від root користувача в інстансі griada-301 для інсталяції:
++
+[source,shell]
+----
+mkdir -p /usr/local/iit /usr/local/iit/ncms /usr/local/iit/ncms/g301
+chmod -R 777 /usr/local/iit/ncms/g301
+----
++
+Скопіювати розпаковані файли у `/usr/local/iit/ncms/g301` та виконати команди:
++
+[source,shell]
+----
+chmod +x /usr/local/iit/ncms/g301/*.sh
+
+bash /usr/local/iit/ncms/g301/ncmg301.prepare.sh
+----
++
+Відкрити у текстовому редакторі `/usr/local/iit/ncms/g301/configs/default/ncm.ini` файл та у секції `[NCM]` вказати назву основного інтерфейсу (отримати назву системною командою ifconfig) та значення Accessors (вказати за кількістю ядер ЦП (центрального процесора) із множником 2 або 3), наприклад:
++
+----
+NCMExternalNetworkInterface=ens5
+NCMInternalNetworkInterface=ens5
+NCMAccessors=6
+----
++
+Виконати команди встановленння служб управління та вбудованого агента моніторингу криптомодуля:
++
+[source,shell]
+----
+bash /usr/local/iit/ncms/g301/ncmg301.installservices.sh
+----
+
+. Перевірити що сервіс запустився коректно і без помилок командами `systemctl status ncmg301m.service` та `journalctl -u ncmg301m.service`
+. Використовуючи RDP клієнт підʼєднатись до раніше розгорнутого `griada-control-center` windows інстансу.
+. Налаштувати в Панелі Управління локаль та регіон `Ukraine`.
+. Завантажити https://drive.google.com/file/d/1AqnkLCbZe8FFJD4AbNW6Mqr_JGZ8G5LX/view?usp=sharing[архів з інсталяцією] ВУ (віддаленого управління) МКМ Гряда-301.
+. Запустити .exe файл та встановити інтерфейс віддаленого керування МКМ Гряда-301.
+
+== Налаштування програмного емулятора криптомодуля Гряда-301 в AWS

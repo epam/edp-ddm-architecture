@@ -1,0 +1,587 @@
+:toc-title: ЗМІСТ
+:toc: auto
+:toclevels: 5
+:experimental:
+:important-caption:     ВАЖЛИВО
+:note-caption:          ПРИМІТКА
+:tip-caption:           ПІДКАЗКА
+:warning-caption:       ПОПЕРЕДЖЕННЯ
+:caution-caption:       УВАГА
+:example-caption:           Приклад
+:figure-caption:            Зображення
+:table-caption:             Таблиця
+:appendix-caption:          Додаток
+:sectnums:
+:sectnumlevels: 5
+:sectanchors:
+:sectlinks:
+:partnums:
+//Try to make text bold (for cyrillic symbols): +++<b>some text</b>+++
+
+= Завдання 6. Розробка аналітичних звітів
+
+== Мета завдання
+
+Мета завдання -- навчити розробляти звіти у середовищі Redash.
+
+В рамках цього завдання моделювальники мають: ::
++
+[%interactive]
+* [ ] змоделювати аналітичне представлення;
+* [ ] надати доступ до аналітичного представлення;
+* [ ] створити 3 запити (Query) в Redash;
+* [ ] створити дашборд в Redash;
+* [ ] вивантажити архів із дашбордом;
+* [ ] розпакувати архів у регламенті;
+* [ ] перенести зміни до віддаленого Gerrit-репозиторію;
+* [ ] перевірити сформований звіт.
+
+== Процес виконання завдання
+
+[#create-analytical-views]
+=== Створення аналітичного прошарку на рівні бази даних
+
+Система формування аналітичної звітності *Redash* має доступ лише до [.underline]#репліки бази даних#, і лише до [.underline]#аналітичних представлень#. Для створення таких представлень використовуйте тег `*<ext:createAnalyticsView>*`, подібний до тегу для створення критеріїв пошуку (Search Conditions).
+
+[TIP]
+====
+Детальну інформацію щодо [.underline]#створення аналітичних представлень# та [.underline]#критеріїв пошуку# на рівні моделі даних можна переглянути на сторінці за посиланнями:
+
+* xref:data-modeling/data/physical-model/liquibase-ddm-ext.adoc#create-search-conditions[Керування критеріями пошуку]
+* xref:data-modeling/data/physical-model/liquibase-ddm-ext.adoc#create-analytical-views[Керування аналітичними представленнями]
+====
+
+
+NOTE: Для аналітичних представлень створіть окремий файл *_createAnalyticsViews.xml_* із шаблону _link:{attachmentsdir}/study-project/task-6/xml-temp/createAnalyticsViews.xml[createAnalyticsViews.xml]_
+
+IMPORTANT: Назва аналітичного представлення має починатися префіксом *`report_`*.
+
+==== Створення аналітичного представлення "Розгорнута інформація по лабораторіях"
+
+* Назва аналітичного представлення: `*report_laboratory*`.
+* Інформація з таблиць: `*laboratory*`, `*koatuu*` (область, населений пункт), `*ownership*`.
+
+.Приклад. ХМL-шаблон створення аналітичного представлення
+
+[source,xml]
+----
+    <changeSet author="registry owner" id="create report_laboratory view">
+        <ext:createAnalyticsView name="report_laboratory">
+            <ext:table name="laboratory" alias="l">
+                <ext:column name="laboratory_id"/>
+                <ext:column name="name"/>
+                <ext:column name="address"/>
+                <ext:column name="edrpou"/>
+                <ext:column name="koatuu_id"/>
+                <ext:column name="ownership_id"/>
+            </ext:table>
+            <ext:table name="koatuu" alias="k">
+                <ext:column name="name" alias="town"/>
+                <ext:column name="level1" alias="obl_code"/>
+            </ext:table>
+            <ext:table name="koatuu" alias="ko">
+                <ext:column name="koatuu_id" alias="region_id"/>
+                <ext:column name="name" alias="region"/>
+            </ext:table>
+            <ext:table name="ownership" alias="o">
+                <ext:column name="name" alias="ownership"/>
+            </ext:table>
+            <ext:join type="inner">
+                <ext:left alias="l">
+                    <ext:column name="koatuu_id"/>
+                </ext:left>
+                <ext:right alias="k">
+                    <ext:column name="koatuu_id"/>
+                </ext:right>
+            </ext:join>
+            <ext:join type="left">
+                <ext:left alias="ko">
+                    <ext:column name="code"/>
+                </ext:left>
+                <ext:right alias="k">
+                    <ext:column name="level1"/>
+                </ext:right>
+            </ext:join>
+            <ext:join type="inner">
+                <ext:left alias="l">
+                    <ext:column name="ownership_id"/>
+                </ext:left>
+                <ext:right alias="o">
+                    <ext:column name="ownership_id"/>
+                </ext:right>
+            </ext:join>
+            <ext:where>
+                <ext:condition tableAlias="ko" columnName="type" operator="eq" value="'О'"/>
+            </ext:where>
+        </ext:createAnalyticsView>
+    </changeSet>
+----
+
+.Вихідний SQL-запит на базі XML-шаблону
+[source,sql]
+----
+SELECT l.laboratory_id,
+       l.name,
+       l.address,
+       l.edrpou,
+       l.koatuu_id,
+       l.ownership_id,
+       k.name   AS town,
+       k.level1 AS obl_code,
+       ko.koatuu_id AS region_id,
+       ko.name  AS region,
+       o.name   AS ownership
+  FROM laboratory l
+         JOIN koatuu k ON l.koatuu_id = k.koatuu_id
+         LEFT JOIN koatuu ko ON ko.code = k.level1
+         JOIN ownership o ON l.ownership_id = o.ownership_id
+ WHERE ko.type = 'О';
+----
+
+==== Створення аналітичного представлення "Довідник КОАТУУ"
+
+* Назва аналітичного представлення: `*report_koatuu*`.
+* Інформація з таблиці: `*koatuu*`.
+
+.Приклад. ХМL-шаблон створення аналітичного представлення
+
+[source,xml]
+----
+    <changeSet author="registry owner" id="create report_koatuu view">
+        <ext:createAnalyticsView name="report_koatuu">
+            <ext:table name="koatuu">
+                <ext:column name="koatuu_id"/>
+                <ext:column name="code"/>
+                <ext:column name="name"/>
+                <ext:column name="type"/>
+            </ext:table>
+        </ext:createAnalyticsView>
+    </changeSet>
+----
+
+.Вихідний SQL-запит на базі XML-шаблону
+[source,sql]
+----
+SELECT koatuu.koatuu_id,
+       koatuu.code,
+       koatuu.name,
+       koatuu.type
+  FROM koatuu;
+----
+
+==== Створення аналітичного представлення "Довідник типів власності"
+
+* Назва аналітичного представлення: `*report_ownership*`.
+* Інформація з таблиці: `*ownership*`.
+
+.Приклад. ХМL-шаблон створення аналітичного представлення
+
+[source,xml]
+----
+    <changeSet author="registry owner" id="create report_ownership view">
+        <ext:createAnalyticsView name="report_ownership">
+            <ext:table name="ownership">
+                <ext:column name="ownership_id"/>
+                <ext:column name="name"/>
+            </ext:table>
+        </ext:createAnalyticsView>
+    </changeSet>
+----
+
+.Вихідний SQL-запит на базі XML-шаблону
+[source,sql]
+----
+SELECT ownership.ownership_id,
+       ownership.name
+FROM ownership;
+----
+
+=== Видача прав доступу до аналітичних представлень
+
+Кожна роль, що вказана у файлі _roles/officer.yml_ Gerrit-репозиторію реєстру, має користувача бази даних на репліці з префіксом `*analytics_*` (наприклад, `analytics_officer`).
+
+Для правильного функціонування звітів потрібно надати права до створених представлень відповідній ролі. Перевірте файл _officer.yml_, та додайте роль `officer` (якщо такої ще немає).
+
+.Приклад вмісту файлу _officer.yml_ із регламентною роллю officer
+====
+[source,yaml]
+----
+roles:
+  - name: officer
+    description: Officer role
+----
+====
+
+[grant-access-analytical-views-1-5-plus]
+==== Механізм видачі прав на платформі реєстрів версії 1.5. та вище
+
+У файлі _createAnalyticsViews.xml_, додайте тег `*<ext:grantAll>*`, додавши в середину тег `*<ext:role>*` з атрибутом `name="analytics_officer"`.
+
+.Приклад. ХМL-шаблон для видачі прав
+
+[source,xml]
+----
+ <changeSet author="registry owner" id="grants to all analytics users">
+    <ext:grantAll>
+        <ext:role name="analytics_officer"/>
+    </ext:grantAll>
+</changeSet>
+----
+Покладіть створений файл *_createAnalyticsViews.xml_* до папки *_data-model_* Gerrit-репозиторію.
+
+=== Застосування змін до моделі бази даних
+
+Виконайте наступні кроки для застосування змін: ::
+. У файлі _main-liquibase.xml_ додайте тег `*<include>*` з обов'язковим вказанням атрибуту `file="data-model/createAnalyticsViews.xml"` у кінці тегу `<databaseChangeLog>`:
++
+[source,xml]
+----
+<databaseChangeLog...>
+    <include file="data-model/createAnalyticsViews.xml"/>
+</databaseChangeLog>
+----
+
+. Оновіть версію регламенту у файлі _settings.yaml_, що знаходиться у кореневій папці Gerrit-репозиторію.
++
+image:registry-develop:study-project/task-6/task-6-13-redash.png[]
+
+. Застосуйте зміни до Gerrit (`git commit`, `git push`).
+. Проведіть процедуру рецензування коду вашого commit. За відсутності прав, попросіть про це відповідальну особу.
+. Дочекайтеся виконання *Jenkins*-пайплайну *MASTER-Build-registry-regulations*.
+
+=== Процес створення звіту в Redash
+
+Розробка аналітичної звітності ведеться на базі admin-екземпляра *Redash*. Необхідно мати роль `redash-admin` у реалмі `-admin` реєстру. Роль призначає адміністратор безпеки в інтерфейсі сервісу *Keycloak*. Зверніться до сторінки xref:admin:user-management-auth/keycloak-create-users.adoc[] за детальною інформацією щодо керування ролями.
+
+[TIP]
+====
+
+* Використовуйте екземпляр `*redash-viewer*` для [.underline]#перегляду# аналітичної звітності, а також дослідження подій у журналах аудиту.
++
+Користувачі Кабінету посадової особи мають роль `officer` за замовчуванням. Роль надає доступ до особистого кабінету, а також стандартних звітів відповідного реєстру.
++
+Система передбачає додаткову розширену роль `auditor`. Вона призначена для перегляду журналів аудиту у сервісі Redash.
+
+* Використовуйте екземпляр `*redash-admin*` для [.underline]#створення# та перегляду аналітичної звітності адміністраторами реєстру.
++
+Адміністратор звітності отримує роль `redash-admin` у реалмі `-admin` реєстру. Після цього він матиме повний доступ до звітності у сервісі Redash.
+
+* Знайти посилання до екземплярів Redash можна в інтерфейсі OpenShift-консолі за https://console-openshift-console.apps.envone.dev.registry.eua.gov.ua/[посиланням].
+
+image:registry-develop:study-project/task-6/task-6-12-redash.png[]
+====
+
+==== Створення запита для параметра "Тип Власності"
+
+На цьому кроці треба створити запит для параметра, який дозволить бачити лабораторії лише певного типу власності.
+
+Найперше створіть *Snippet* (запит за замовчуванням): ::
+. Відкрийте [.underline]#Налаштування# (*Settings*).
++
+image:registry-develop:study-project/task-6/task-6-1-redash.png[]
+
+. Оберіть вкладку [.underline]#Фрагменти запита#, натисніть `Новий запит Snippet` та заповніть обов'язкові поля:
+
+ * `Активатор` -- значенням `select_query_based_dropdown_list`
+ * `Фрагмент` -- *sql* кодом:
++
+.SQL-запит -- шаблон
+[source,sql]
+----
+WITH cte AS (
+    SELECT
+        -1 AS rn,
+        uuid_nil() AS value,
+        '( Всі значення )' AS name
+    UNION ALL
+    SELECT 
+        2 AS rn,
+        <OBJ_PK_UUID> AS value,
+        name AS name
+    FROM <OBJ_NAME>
+)
+SELECT value, name
+FROM cte
+ORDER BY rn, name;
+---- 
++
+image:registry-develop:study-project/task-6/task-6-2-redash.png[]
+
+Далі створіть новий запит: ::
+. В інтерфейсі адміністратора *Redash* (`redash-admin`) відкрийте секцію [.underline]#Запити# та натисніть `Новий Запит`.
++
+image:registry-develop:study-project/task-6/task-6-2-1-redash.png[]
+
+. У полі для запита введіть `select_`, після чого виберіть з випадного списку готовий шаблон запита для створення параметрів у звітах -- *`select_query_based_dropdown_list`*.
++
+image:registry-develop:study-project/task-6/task-6-3-redash.png[]
+
+. Змініть `<OBJ_PK_UUID>` та `<OBJ_NAME>` на -> `ownership_id` та `report_ownership_v` (назви мають відповідати тим, що були визначені на кроці xref:#create-analytical-views[] поточного завдання).
++
+[TIP]
+====
+* `report_ownership` -- назва аналітичного представлення, створеного на кроці xref:#create-analytical-views[] у файлі _createAnalyticsViews.xml_.
+Система автоматично додає постфікс `_v` при розгортанні. Тому завжди звертайтеся до будь-якого аналітичного представлення у Redash за такою схемою:
+
+----
+назва_аналітичного_представлення + _v.
+----
+
+.Назва, вказана при створенні аналітичного представлення
+=====
+[source,xml]
+----
+<ext:createAnalyticsView name="report_ownership">
+----
+=====
+
+.Назва представлення, фактично згенерована при розгортанні
+=====
+image:registry-develop:study-project/task-6/task-6-2-2-redash.png[]
+=====
+
+====
+
+. Натисніть на кнопку `Виконати`, щоб надіслати запит до БД.
++
+У нижній частині ви побачите таблицю з даними.
++
+image:registry-develop:study-project/task-6/task-6-4-redash.png[]
+
+. Натисніть на назву запита вгорі -- `Новий Запит` та вкажіть для нього нову назву, наприклад _Вибір типу власності_. Далі натисніть `Enter`.
++
+image:registry-develop:study-project/task-6/task-6-4-1-redash.png[]
+
+. Натисніть кнопку `Зберегти`, щоб зберегти запит.
+
+. Натисніть кнопку `Опублікувати`, щоб опублікувати запит.
+
+==== Створення запита для параметра "Область"
+
+На цьому кроці необхідно створити запит для параметра, який надасть можливість бачити лабораторії, розташовані у певній області.
+
+Створіть новий запит: ::
+. В інтерфейсі адміністратора Redash (`redash-admin`) відкрийте секцію [.underline]#Запити# та натисніть `Новий Запит`.
++
+image:registry-develop:study-project/task-6/task-6-2-1-redash.png[]
+
+. У полі для запита введіть `select_`, та оберіть з випадного списку готовий шаблон запита для створення параметрів у звітах -- *`select_query_based_dropdown_list`*.
++
+image:registry-develop:study-project/task-6/task-6-3-redash.png[]
+
+. Змініть `<OBJ_PK_UUID>` та `<OBJ_NAME>` на -> `koatuu_id` та `report_koatuu_v`, додавши умову `WHERE type = 'О'`. Вираз *where* має обмежити значення лише областями.
++
+CAUTION: Будьте уважні. Буква 'О' тут -- українська, не латиниця.
+
+. Натисніть кнопку `Виконати`, щоб надіслати запит до БД.
++
+У нижній частині ви побачите таблицю з даними.
+
+. Натисніть назву запита вгорі -- `Новий Запит` та вкажіть нове значення, наприклад _Вибір області_. Далі натисніть `Enter`.
++
+image:registry-develop:study-project/task-6/task-6-5-1-redash.png[]
+
+. Натисніть кнопку `Зберегти`, щоб зберегти запит.
+
+. Натисніть кнопку `Опублікувати` щоб опублікувати запит.
+
+==== Створення основного запита для звіту
+
+[NOTE]
+Основний запит посилається на попередні запити для їх використання як параметри фільтрації.
+
+Створіть новий запит: ::
+
+. В інтерфейсі адміністратора Redash (`redash-admin`) відкрийте секцію [.underline]#Запити# та натисніть `Новий Запит`.
+. У полі для запита введіть *SQL*-скрипт:
++
+.SQL-запит - шаблон
+[source,sql]
+----
+SELECT name AS "Назва лабораторії",
+       edrpou AS "ЄДРПОУ",
+       address AS "Адреса",
+       ownership AS "Тип власності",
+       town AS "Місто",
+       region AS "Область"
+  FROM report_laboratory_v
+ WHERE region_id = ''
+----
+
+Налаштування параметра фільтрації за Областю ::
+. Перемістіть курсор між одинарних лапок та натисніть кнопку створення параметра (`*Add New Parameter*`):
++
+image:registry-develop:study-project/task-6/task-6-6-redash.png[]
+
+. Задайте наступні значення у формі:
+
+* `Keyword` (Ключове слово) -- `region`;
+* `Title` (Заголовок) -- `Область`;
+* `Type` (Тип) -- `Query Based Dropdown List`;
+* `Query` (Запит) -- `Вибір області`.
+
+. Натисніть на кнопку *`Add Parameter`* (`Додати Параметр`).
++
+Ви отримаєте вираз вигляду: `… WHERE region_id = '{{ region }}'`.
++
+.Фінальний вигляд випадного списку для вибору області
+image::registry-develop:study-project/task-6/task-6-7-redash.png[]
+
+. Додайте до отриманого виразу, що фільтрує, логічний предикат *`OR`* та наступний вираз -- `'{{ region }}'= uuid_nil()`. Він необхідний для врахування та опрацювання умови `“( Всі значення )”`.
+
+. Загорніть вирази зліва та справа від `OR` у дужки.
+
+Налаштування параметра фільтрації за Власником ::
+
+. З нового рядка додайте до отриманого виразу умову опрацювання фільтрації за власником лабораторії: `AND ownership_id = ''`.
+. Перемістіть курсор між одинарних лапок та натисніть кнопку створення параметра (`*Add New Parameter*`).
+. Задайте наступні значення у формі:
+
+* `Keyword` (Ключове слово) -- `ownership`;
+* `Title` (Заголовок) -- `Власник`;
+* `Type` (Тип) -- `Query Based Dropdown List`;
+* `Query` (Запит) -- `Вибір типу власності`.
+
+. Натисніть на кнопку `*Add Parameter*` (`Додати Параметр`). Ви отримаєте вираз вигляду: `… AND ownership_id = '{{ ownership }}'`;
++
+.Фінальний вигляд випадного списку для вибору власника
+image::registry-develop:study-project/task-6/task-6-8-redash.png[]
+
+. Додайте до отриманого виразу, що фільтрує, логічний предикат `OR` та наступний вираз -- `'{{ ownership }}'= uuid_nil()` -- необхідний для врахування та опрацювання умови `“( Всі значення )”`.
+
+. Загорніть вирази зліва та справа від предиката `OR` у дужки.
++
+.Вираз `WHERE`, який ви маєте отримати в результаті
+[source,sql]
+----
+WHERE (region_id = '{{ region }}' OR '{{ region }}' = uuid_nil() )
+  AND (ownership_id = '{{ ownership }}' OR '{{ ownership }}' = uuid_nil())
+----
+
+. Натисніть на кнопку `Виконати`.
++
+У таблиці результатів мають з'явитися створені раніше лабораторії.
++
+image:registry-develop:study-project/task-6/task-6-9-redash.png[]
+
+. Натисніть назву запита вгорі -- `Новий Запит` та вкажіть для нього нове значення, наприклад _Перелік лабораторій_. Далі натисніть `Enter`.
++
+image:registry-develop:study-project/task-6/task-6-10-redash.png[]
+
+. Натисніть кнопку `Зберегти`, щоб зберегти запит.
+
+. Натисніть кнопку `Опублікувати` щоб опублікувати запит.
+
+==== Створення Інформаційної Панелі (Дашборду)
+
+Створіть нову інформаційну панель (*Dashboard*):
+
+. В інтерфейсі адміністратора Redash (`redash-admin`) відкрийте секцію [.underline]#Дашборди# та натисніть `Нова інформаційна панель`.
++
+image:registry-develop:study-project/task-6/task-6-11-redash.png[]
+
+. Вкажіть назву -- `Лабораторії`.
+. Натисніть кнопку `*Add Widget*` (`Додати віджет`), оберіть запит `Перелік лабораторій` зі списку та натисніть кнопку `*Add to Dashboard*` (`Додати до Панелі`).
+. Розтягніть додану панель за шириною та довжиною екрана.
+. Натисніть кнопку `*Done Editing*` (`Закінчити Редагування`).
+. Опублікуйте створену панель кнопкою `*Publish*` (`Опублікувати`).
+
+[WARNING]
+====
+Особливості роботи із назвами дашбордів ::
++
+* Рекомендуємо використовувати латиницю для назв дашбордів у Redash.
++
+image:registry-develop:study-project/task-6/dashboard-naming/dashnoard-naming-1.png[]
+* Починаючи із версії Redash 10, нові дашборди створюються за шаблоном `<порядковий_номер>-<slug_ім'я>`. Раніше призначалося лише ім'я дашборда.
++
+[TIP]
+=====
+Параметр `*slug*` -- псевдонім, який додається до ідентифікатора дашборда в URL через дефіс. У нашому прикладі *`"slug": "laboratories"`* (_див. зображення нижче_).
+=====
++
+image:registry-develop:study-project/task-6/dashboard-naming/dashnoard-naming-2.png[]
+
+* Отримати JSON-представлення дашборда за його ID можна, передавши до Redash API _кореневий шлях оточення_, на якому розгорнуто *`redash-admin`* + `*/api/dashboards/<resource-id>*`.
++
+.Приклад. Запит на отримання дашборда №8
+[source,http]
+----
+https://redash-admin-<назва-реєстру>.apps.envone.dev.registry.eua.gov.ua/api/dashboards/8
+----
++
+image:registry-develop:study-project/task-6/dashboard-naming/dashnoard-naming-3.png[]
+* Якщо перейменувати назву дашборда кирилицею, то в URL ви отримаєте ідентифікатор дашборда та прочерк.
++
+image:registry-develop:study-project/task-6/dashboard-naming/dashnoard-naming-4.png[]
++
+image:registry-develop:study-project/task-6/dashboard-naming/dashnoard-naming-5.png[]
++
+TIP: Детальніше про Redash API ви можете переглянути за посиланням: https://redash.io/help/user-guide/integrations-and-api/api[].
+====
+
+==== Публікація створених об'єктів користувачам
+
+Опублікуйте створені об'єкти в регламенті:
+
+. Увійдіть до [.underline]#Кабінету адміністратора регламентів#.
+. Перейдіть на сторінку [.underline]#Шаблони звітів#.
++
+image:registry-develop:study-project/task-6/task-6-1-reports.png[]
+
+. Натисніть `&#10515;` (_іконку завантаження_) на записі _Лабораторії_.
+. Розпакуйте отриманий архів та покладіть отримані файли до папки _reports/officer_ Gerrit-репозиторію.
++
+image:registry-develop:study-project/task-6/task-6-2-reports.png[]
++
+image:registry-develop:study-project/task-6/task-6-3-reports.png[]
+
++
+[NOTE]
+====
+Файли із дашбордами повинні мати унікальні назви (_dashboard_1.json_, _dashboard_2.json_, _dashboard_3.json_ тощо).
+
+У папці _reports/<назва-ролі>/queries/_ завжди повинен бути лише один файл із назвою *_queries.json_*. Він повинен містити запити, що присутні у файлах _queries.json_ із різних архівів. Тобто ви НЕ підміняєте один файл на інший, а розширюєте наявний файл новими запитами. Це може виглядати, наприклад, ось так:
+
+[source,json]
+----
+{
+   "count":172,
+   "page_size":25,
+   "page":1,
+   "results":[
+      {
+         "інформація про запит": 1
+      },
+      {
+         "інформація про запит": 2
+      },
+      {
+         "інформація про запит": 3
+      }
+   ]
+}
+----
+
+.Файл queries.json, що містить запити (queries) із різних архівів
+image::registry-develop:study-project/task-6/task-6-14-redash.png[]
+====
+
++
+NOTE: Видаліть _.zip_-файл із папки _reports/officer_.
+
+. Застосуйте зміни до *Gerrit* (`git commit`, `git push`).
+. Проведіть процедуру рецензування коду вашого commit. За відсутності прав, попросіть про це відповідальну особу.
+. Дочекайтеся виконання *Jenkins*-пайплайну *MASTER-Build-registry-regulations*.
+. Перевірте наявність створеної інформаційної панелі на *viewer*-екземплярі Redash.
++
+image:registry-develop:study-project/task-6/task-6-4-reports.png[]
+
+[TIP]
+====
+Додаткову інформацію щодо доступу до даних та розмежування прав ви можете переглянути на сторінках:
+
+* xref:registry-develop:data-modeling/data/physical-model/liquibase-ddm-ext.adoc#create-analytical-views[Керування аналітичними представленнями]
+* xref:registry-develop:data-modeling/reports/data-analytical-reports-creation.adoc[]
+* xref:registry-develop:data-modeling/reports/data-analytical-data-access-rights.adoc[]
+====

@@ -1,0 +1,196 @@
+= Внесення змін до файлу описів структур таблиць моделі даних реєстру через веб-редактор коду
+
+== Загальний опис
+Розробка регламенту реєстру включає в себе розробку моделі даних реєстру. Адміністративний портал надає функціонал по перегляду моделі даних реєстру. Необхідно забезпечити можливість редагування моделі даних регламенту реєстру.
+
+== Опис проблеми
+Адмін портал має функціональність по перегляду стану моделі даних регламенту реєстру. Існуючий підхід передбачає внесення змін у Gerrit до відповідного MR версії-кандидату під час розробки моделі даних регламенту реєстру.
+
+== Актори
+- Розробник регламенту реєстру
+
+== Глосарій
+- LS - language server
+
+== Функціональні сценарії
+- Зміна структури даних в моделі даних регламенту реєстру
+- Збереження внесених змін в версію-кандидат регламенту реєстру
+- Перегляд сповіщень про помилки у вікні редагування структури таблиць моделі даних регламенту реєстру
+- Автопідказки та автодоповнення при редагуванні liquibase changelog xml
+- Перевірка liquibase конфігурації згідно з liquibase та DDM xsd
+
+== Дизайн існуючого рішення
+
+=== Перегляд та редагування моделі даних
+image::architecture/registry/administrative/regulation-management/admin-portal/data-model/edit-data-model-version-candidate/data-model-edit-current-design.svg[]
+
+=== Взаємодія з Language Server
+image::architecture/registry/administrative/regulation-management/admin-portal/data-model/edit-data-model-version-candidate/ls-current-design.svg[]
+
+
+=== Загальні принципи
+- Внесення змін в модель даних регламенту реєстру відбувається шляхом внесення змін безпосередньо в Gerrit
+- Початковий файл для розгортання моделі даних є `data-model/main-liquibase.xml`
+- Структура файлів на файловій системі чітко не регламентована. `Liquibase changeset's` з інструкціями для створення таблиць моделі даних технічно може знаходитись в будь-якому файлі на файловій системі
+- ddm-language-server підтримує лише Groovy мову
+
+== Технічний дизайн рішення
+
+image::architecture/registry/administrative/regulation-management/admin-portal/data-model/edit-data-model-version-candidate/edit-data-model-target-design.svg[]
+
+=== Загальні принципи
+
+- Редагування структури даних дата моделі відбувається тільки в createTables.xml файлі.
+- registry-regulation-management отримує та змінює createTables.xml через RestAPI відповідні методи.
+- Language Server підтримує Groovy та XML.
+- В переліку стану складових версії-кандидату зміна структури БД відображається єдиним пунктом без переліку детальних змін по кожній із таблиць моделі даних.
+
+=== Зміна контракту опису дата моделі регламентур реєстру
+
+Для забезпечення редагування структури таблиць моделі даних регламенту реєстру необхідно змінити підхід по організації структури liquibase файлів конфігурації наступним чином:
+
+- Всі операції по створенню або зміні структури таблиць БД необхідно тримати в файлі `data-model/createTables.xml`
+- `data-model/createTables.xml` повинен бути явно включений до переліку файлів для розгортання в `data-model/main-liquibase.xml` конфігурацію
+
+==== Міграція існуючих реєстрів
+
+Для забезпечення сумісності структури фалів регламенту реєстру необхідно переконатися в вищенаведених правилах та провести зміну структури файлів (*без зміни liquibase changeset контенту*) в разі необхідності.
+
+[CAUTION]
+При відсутності createTables.xml адмін-портал не надасть можливість редагування liquibase конфігурації використовуючи Web-ui. Працездатність існуючої конфігурації регламенту реєстру при цьому не ніяк зміниться.
+
+=== Розподіл перспектив редагування і перегляду моделі даних
+Для редагування моделі даних регламенту реєстру необхідно створити нову перспективу редагування.
+Всі операції, пов'язані з переглядом стану моделі даних (наявні та майбутні) виокремлюються в перспективу перегляду
+
+[NOTE]
+TODO: add screenshots when will be ready
+
+=== Діаграма послідовності
+
+[plantuml, edit-data-model edit-data-model-tables-sequence, svg]
+----
+include::partial$architecture/registry/administrative/regulation-management/admin-portal/data-model-version-candidates/edit-data-model-tables-sequence.puml[]
+----
+
+=== Розгортання XML LS
+
+- Для розгортання XML Language Server необхідно використати https://github.com/eclipse/lemminx[lemminx language server].
+Даний LS публікується в `https://mvnrepository.com/artifact/org.eclipse.lemminx/org.eclipse.lemminx/0.23.2[maven central repository]` (немає необхідності розміщовати код даного компоненту у себе в gerrit).
+
+- Необхідно підключити наведений артефакт та використати `org.eclipse.lemminx.XMLLanguageServer` імплементацію LS в ddm-language-server модулі.
+
+- Згідно зі https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocumentItem[специфікацією LS] URL для створення websocket повинен бути `/xml`.
+
+=== Робота з DDM XSD
+
+Для забезбечення підказок під час редагування XML документів в повному об'ємі (показ опису полів з xsd схем у вигляді hoover повідомлень, автодоповнення та інше) необхідно забезпечити доступ `ddm-language-server` до завантаження відповідних xsd схем за вказаним URL в XSD документі.
+
+Всі необхідні XSD для редагування XML Liquibase документів повинні бути розміщені в platform nexus
+
+XSD, необхідні для редагування liquibase скриптів:
+
+- liquibase xsd: http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.5.xsd
+- ddm liquibase extension: https://nexus-public-mdtu-ddm-edp-cicd.apps.cicd2.mdtu-ddm.projects.epam.com/repository/extensions/com/epam/digital/data/platform/liquibase-ext-schema/latest/liquibase-ext-schema-latest.xsd
+
+[CAUTION]
+Для забезпечення сумісності liquibase конфігурацій з `ddm-language-server` необхідно провести міграцію URI для `http://www.liquibase.org/xml/ns/dbchangelog` namespace. URI повинен вказувати на відповідну xsd, опубліковану в platform nexus
+
+=== RestAPI по роботі з liquibase конфігураціями
+
+Необхідно розширити registry-regulation-management існуючий RestAPI шляхом додавання методів для:
+
+- Отримання liquibase конфігурації структури таблиць моделі даних для версії-кандидату
+- Отримання liquibase конфігурації структури таблиць моделі даних для мастер версії
+- Зміна liquibase конфігурації структури таблиць моделі даних для версії-кандидату
+
+==== Отримання liquibase конфігурації таблиць дата моделі
+
+Запит:
+
+[source,http,options="nowrap"]
+----
+GET /versions/candidates/{versionCandidateId}/data-model/tables
+GET /versions/master/data-model/tables
+----
+
+Структура відповіді:
+
+[CAUTION]
+Content-type=text/xml
+
+[source,xml,options="nowrap"]
+----
+<?xml version="1.1" encoding="UTF-8" standalone="no"?>
+
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xmlns:ext="http://www.liquibase.org/xml/ns/dbchangelog-ext"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.5.xsd
+        http://www.liquibase.org/xml/ns/dbchangelog-ext https://nexus-public-mdtu-ddm-edp-cicd.apps.cicd2.mdtu-ddm.projects.epam.com/repository/extensions/com/epam/digital/data/platform/liquibase-ext-schema/latest/liquibase-ext-schema-latest.xsd">
+
+    ...
+</databaseChangeLog>
+----
+
+==== Зміна liquibase конфігурації таблиць дата моделі
+
+Запит:
+
+[source,http,options="nowrap"]
+----
+PUT /versions/candidates/{versionCandidateId}/data-model/tables
+----
+
+[CAUTION]
+Content-type=text/xml
+
+Body:
+[source,xml,options="nowrap"]
+----
+<?xml version="1.1" encoding="UTF-8" standalone="no"?>
+
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xmlns:ext="http://www.liquibase.org/xml/ns/dbchangelog-ext"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.5.xsd
+        http://www.liquibase.org/xml/ns/dbchangelog-ext https://nexus-public-mdtu-ddm-edp-cicd.apps.cicd2.mdtu-ddm.projects.epam.com/repository/extensions/com/epam/digital/data/platform/liquibase-ext-schema/latest/liquibase-ext-schema-latest.xsd">
+    ...
+</databaseChangeLog>
+----
+
+
+=== Отримання та відображення змін в перегляді стану складових регламенту реєстру
+
+Робота зі структурою БД реєстру ведеться в цілому редагуванням лише одного ресурсу в термінах RestAPI '/versions/candidates/{versionCandidateId}/data-model/tables'.
+Тому в переліку стану складових регламенту реєстру необхідно оперувати одним єдиним пунктом під назвою `Структура таблиць БД`.
+
+Даний пункт може мати єдиний стан `Змінено` в тому разі, якщо будь-які зміни були внесені в файл `data-model/createTables.xml` через адмін-портал або напряму через додавання патчсету в Gerrit у відповідний MR до версії-кандидату.
+
+== Високорівневий план розробки
+=== Необхідні експертизи
+- DevOps
+- BE
+- FE
+- QA/AQA
+- One TeamLead or One QALead
+
+=== DevOps
+- Налаштувати kong для роботи з XML LS.
+
+=== Backend
+- Розширити RestAPI для отримання та збереження liquibase конфігурацій (для версій-кандидатів та мастер версії). Додати RestAPI Optimistic locking headers до ендпоінтів `/versions/candidates/{versionCandidateId}/data-model/tables`.
+- Підключити XML lemminx LS. Розширити ddm-language-server для роботи з /xml websocket endpoint.
+- Додати інформацію про зміни структури БД моделі даних в `/versions/candidates/{versionCandidateId}/changes` RestAPI ендпоінт.
+- Опублікувати http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.5.xsd[dbchangelog-4.5.xsd] в платформенний nexus.
+
+=== Frontend
+- Створити перспективу перегляду стану моделі даних та перспективу редагування таблиць моделі даних.
+- Інтегрувати monaco editor в перспективу редагування таблиць моделі даних. Налаштувати взаємодію з XML LS.
+- Забезпечити відображення та збереження liquibase конфігурації структури таблиць моделі даних (інтеграція з `/versions/candidates/{versionCandidateId}/data-model/tables` ендпоінтами). Забезпечити роботи з RestAPI Optimistic Locking механізмом.
+- Додати відображення інформації про зміни с структурі таблиць моделі даних в огляд версії-кандидату.
+
+=== One TeamLead or One QALead
+- Створити інструкцію міграції інснуючих реєстрів. Опублікувати інструкцію, провести KT з DevOps командою.
