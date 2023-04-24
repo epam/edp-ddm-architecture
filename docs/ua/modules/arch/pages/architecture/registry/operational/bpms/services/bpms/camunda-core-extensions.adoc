@@ -1,0 +1,498 @@
+= Розширення ядра Camunda
+
+== Розширення можливостей парсингу bpmn
+
+Для розширення можливостей парсингу bpmn було імплементовано наступну ієрархію класів
+
+[plantuml,config,svg]
+----
+@startuml
+class TransientBpmnParse #back:lightblue;line:green;text:black extends BpmnParse
+
+class BpmnParseFactory {
+  createBpmnParse()
+}
+
+class TransientBpmnParseFactory #back:lightblue;line:green;text:black extends BpmnParseFactory {
+  createBpmnParse()
+}
+
+class SpringProcessEngineConfiguration {
+  BpmnParseFactory bpmnParseFactory
+}
+
+class LowcodeSpringProcessEngineConfiguration #back:lightblue;line:green;text:black extends SpringProcessEngineConfiguration
+class CamundaConfiguration #back:lightblue;line:green;text:black {
+ processEngineConfigurationImpl()
+}
+
+BpmnParse <- BpmnParseFactory : creates
+TransientBpmnParse <- TransientBpmnParseFactory : creates
+BpmnParseFactory -o SpringProcessEngineConfiguration
+LowcodeSpringProcessEngineConfiguration <-- CamundaConfiguration : creates
+@enduml
+----
+
+- `TransientBpmnParse` - є наслідком `BpmnParse` і перевантажує методи парсингу bpmn
+- `TransientBpmnParseFactory` - є наслідком `BpmnParseFactory` та потрібен для створення `TransientBpmnParse` у `SpringProcessEngineConfiguration`
+- `LowcodeSpringProcessEngineConfiguration` - є наслідком `SpringProcessEngineConfiguration` та потрібен для визначення параметрів кастомними значеннями (такими як `bpmnParseFactory`)
+- `CamundaConfiguration` - базовий конфігураційний клас який створює та конфігурує екземпляр класу `LowcodeSpringProcessEngineConfiguration`
+- `DefaultSerializationFormatConfiguration` - конфігураційний клас який визначає `application/json` як формат серіалізації об'єктів за замовчуванням для `LowcodeSpringProcessEngineConfiguration`
+
+=== Заміщення парсингу input/output параметрів
+
+У Camunda визначення input/output параметрів імплементовано з використанням `AbstractVariableScope::setVariableLocal` (який не є transient, тобто створює запис для цього параметру в базі даних) для зберігання параметру у контексті виконання бізнес-процесу.
+Тому було вирішено замістити `InputParameter` за замовчуванням кастомними `TransientInputParameter`
+
+[plantuml,transient-input-params,svg]
+----
+@startuml
+class BpmnParse {
+  parseActivityInputOutput()
+}
+
+class TransientBpmnParse #back:lightblue;line:green;text:black extends BpmnParse {
+  parseActivityInputOutput()
+}
+
+class InputParameter {
+  execute()
+}
+
+class TransientInputParameter #back:lightblue;line:green;text:black extends InputParameter {
+  execute()
+}
+
+BpmnParse .> InputParameter
+TransientBpmnParse .> TransientInputParameter
+@enduml
+----
+
+- Перевантажений метод `parseActivityOutput` виконує input/output маппинг за замовчуванням, отримує згенеровані input параметри та заміщує їх екземплярами класу `TransientInputParameter`
+- `TransientInputParameter::execute` використовує `AbstractVariableScope::setVariableLocal` з ознакою `isTransient = true` для зберігання параметру як `transient`
+
+=== Заміщення логіки expression language resolver
+
+У Camunda expression language resolver імплементовано так щоб повертати значення визначеної змінної.
+Тобто якщо змінна `variable` має значення `value`, то вираз `${variable}` поверне тільки значення `value` типу `String` (навіть якщо змінна є transient).
+Через що використання таких виразів не є захищеним (expression language resolver передає значення у camunda input parameter та "губить" інформацію про те чи transient ця змінна, а camunda input parameter своєю чергою не отримав інформації про те чи ця змінна transient та кладе цей параметр у контекст виконання бізнес-процесу без ознаки transient, через що ця змінна потрапляє до бази даних Camunda).
+Тому було вирішено додати кастомний `ElResolver` до контексту Camunda.
+
+[plantuml,el-resolving,svg]
+----
+@startuml
+class SpringProcessEngineConfiguration {
+  SpringExpressionManager expressionManager
+}
+
+class LowcodeSpringProcessEngineConfiguration #back:lightblue;line:green;text:black extends SpringProcessEngineConfiguration
+
+class SpringExpressionManager {
+  ElResolver createElResolver()
+}
+
+class CamundaSpringExpressionManager #back:lightblue;line:green;text:black extends SpringExpressionManager{
+  CompositeElResolver createElResolver()
+}
+
+abstract class ElResolver {
+  getValue()
+}
+
+class CompositeElResolver extends ElResolver {
+  getValue()
+}
+
+class TransientVariableScopeElResolver #back:lightblue;line:green;text:black extends ElResolver {
+  getValue()
+}
+
+class CamundaConfiguration #back:lightblue;line:green;text:black {
+  processEngineConfigurationImpl()
+}
+
+SpringProcessEngineConfiguration o- SpringExpressionManager
+SpringExpressionManager -> ElResolver : creates
+LowcodeSpringProcessEngineConfiguration <-- CamundaConfiguration : creates
+CamundaSpringExpressionManager <-- CamundaConfiguration : creates and injects into SpringProcessEngineConfiguration
+CamundaSpringExpressionManager -> CompositeElResolver : creates
+CamundaSpringExpressionManager --> TransientVariableScopeElResolver : creates and injects into CompositeElResolver
+@enduml
+----
+
+- `CamundaConfiguration` створює екземпляр `CamundaSpringExpressionManager` та кладе його у `LowcodeSpringProcessEngineConfiguration`
+- `CamundaSpringExpressionManager` створює екземпляр `ElResolver` за замовчуванням та екземпляр `TransientVariableScopeElResolver`, комбінує їх в `CompositeElResolver` та повертає його
+- `TransientVariableScopeElResolver::getValue` у випадку якщо змінна не transient повертає значення змінної типу цієї самої змінної, але у випадку якщо змінна transient, то повертає екземпляр класу `TypedValue` який зберігає ознаку transient.
+
+[CAUTION]
+Ці зміни спричинили зміни у самій expression language.
+Відтепер якщо змінна є transient та потрібно повернути саме значення змінної у виразі то це можна зробити через `.value`.
+Наприклад `${variable.toString()}` стане `${variable.value.toString()}`
+
+== Можливість додати системні змінні до контексту виконання бізнес-процесу
+
+Щоб можна було змінні з bpms-camunda-global-system-vars config-map додати до контексту виконання бізнес-процесу було імплементовано наступну ієрархію класів.
+
+[plantuml,sys-vars,svg]
+----
+@startuml
+class AbstractProcessEnginePlugin {
+  preInit()
+}
+
+class CamundaEngineSystemVariablesSupportListenerPlugin #back:lightblue;line:green;text:black extends AbstractProcessEnginePlugin {
+  preInit()
+}
+
+class AbstractBpmnParseListener {
+  parseStartEvent()
+}
+
+class CamundaEngineSystemVariablesSupportListener #back:lightblue;line:green;text:black extends AbstractBpmnParseListener {
+  parseStartEvent()
+}
+
+class CamundaProperties #back:lightblue;line:green;text:black {
+  Map<String, String> systemVariables
+}
+
+CamundaEngineSystemVariablesSupportListenerPlugin -> CamundaEngineSystemVariablesSupportListener
+CamundaEngineSystemVariablesSupportListener -> CamundaProperties
+@enduml
+----
+
+- `CamundaProperties` містить список системних змінних
+- `CamundaEngineSystemVariablesSupportListener` містить екземпляр класу `CamundaProperties` та у методі parseStartEvent додає системні змінні до контексту виконання бізнес-процесу
+- `CamundaEngineSystemVariablesSupportListenerPlugin` додає екземпляр `CamundaEngineSystemVariablesSupportListener` до загального списку `preParseListeners` у Camunda
+
+== Збереження токену ініціатора бізнес-процесу у transient змінній бізнес-процесу
+
+Для збереження токену ініціатора бізнес-процесу було імплементовано наступну ієрархію класів.
+
+[plantuml,initiator-token,svg]
+----
+@startuml
+class AbstractBpmnParseListener {
+  parseStartEvent()
+}
+
+class BpmSecuritySupportListener #back:lightblue;line:green;text:black extends AbstractBpmnParseListener {
+  parseStartEvent()
+}
+
+interface ExecutionListener {
+  notify(DelegateExecution)
+}
+
+class InitiatorTokenStartEventListener #back:lightblue;line:green;text:black implements ExecutionListener {
+  void notify(DelegateExecution)
+}
+
+BpmSecuritySupportListener o- InitiatorTokenStartEventListener
+@enduml
+----
+
+- `InitiatorTokenStartEventListener` бере об'єкт автентифікації з `SecurityContextHolder` та зберігає токен у контексті Camunda в якості transient змінної з ім'ям `initiator_access_token`
+- `BpmSecuritySupportListener` містить екземпляр класу `InitiatorTokenStartEventListener` та у методі parseStartEvent додає цей об'єкт до загального списку `executionListeners` стартового івенту
+
+[IMPORTANT]
+--
+Оскільки змінна `initiator_access_token` є transient змінною, то вона буде доступна тільки до наступного wait state (задачі користувача)
+--
+
+== Збереження даних про фактичного виконавця задачі в змінних процесу
+
+Для збереження токену та ім'я користувача фактичного виконавця задачі було імплементовано наступну ієрархію класів.
+
+[plantuml,completer-token,svg]
+----
+@startuml
+class AbstractBpmnParseListener {
+  parseUserTask()
+}
+
+class BpmSecuritySupportListener #back:lightblue;line:green;text:black extends AbstractBpmnParseListener {
+  parseUserTask()
+}
+
+interface TaskListener {
+  notify(DelegateTask)
+}
+
+class CompleterTaskEventListener #back:lightblue;line:green;text:black implements TaskListener {
+  void notify(DelegateTask)
+}
+
+BpmSecuritySupportListener o- CompleterTaskEventListener
+@enduml
+----
+
+- `CompleterTaskEventListener` бере об'єкт автентифікації з `SecurityContextHolder` та зберігає данні у контексті Camunda, а саме: ім'я користувача - в якості змінної з ім'ям `<task_id>_completer`, токен користувача - в якості transient змінної з ім'ям `<task_id>_completer_access_token`.
+- `BpmSecuritySupportListener` містить екземпляр класу `CompleterTaskEventListener` та у методі parseUserTask додає цей об'єкт до загального списку `taskListeners` користувацьких задач.
+
+[IMPORTANT]
+--
+Оскільки змінна `<task_id>_completer_access_token` є transient змінною, то вона буде доступна тільки до наступного wait state (задачі користувача).
+--
+
+== Збереження попередніх даних форми користувацьких задач у Ceph
+
+Для Збереження попередніх даних форми користувацьких задач у Ceph було імплементовано наступну ієрархію класів
+
+[plantuml,ceph-saving-listener,svg]
+----
+@startuml
+class AbstractBpmnParseListener {
+  parseUserTask()
+}
+
+class CamundaSystemVariablesSupportListener #back:lightblue;line:green;text:black extends AbstractBpmnParseListener {
+  parseUserTask()
+}
+
+interface TaskListener {
+  notify(DelegateTask)
+}
+
+class PutFormDataToCephTaskListener #back:lightblue;line:green;text:black implements TaskListener {
+  void notify(DelegateTask)
+}
+
+CamundaSystemVariablesSupportListener o- PutFormDataToCephTaskListener
+@enduml
+----
+
+- `PutFormDataToStorageTaskListener` бере інпут параметр задачі з ім'ям `userTaskInputFormDataPrepopulate` та зберігає його у Ceph під ключем що має відношення до користувацької задачі
+- `StorageBpmnParseListener` містить екземпляр класу `PutFormDataToStorageTaskListener` та у методі `parseUserTask` додає цей об'єкт до загального списку `taskListeners` кожної користувацької задачі
+
+[NOTE]
+--
+Якщо інпут параметр `userTaskInputFormDataPrepopulate` буде `null` або іншого від `SpinJsonNode` типу, то `PutFormDataToStorageTaskListener` не збереже його у Ceph
+--
+
+== Видалення файлів з Ceph перед завершенням бізнес-процесу
+
+Для видалення файлів з Ceph було імплементовано наступну ієрархію класів
+
+[plantuml,ceph-cleaner-listener,svg]
+----
+@startuml
+class AbstractBpmnParseListener {
+  parseEndEvent()
+}
+
+class CamundaSystemVariablesSupportListener #back:lightblue;line:green;text:black extends AbstractBpmnParseListener {
+  parseEndEvent()
+}
+
+interface ExecutionListener {
+  notify(DelegateExecution)
+}
+
+class FileCleanerEndEventListener #back:lightblue;line:green;text:black implements ExecutionListener {
+  void notify(DelegateExecution)
+}
+
+CamundaSystemVariablesSupportListener o- FileCleanerEndEventListener
+@enduml
+----
+
+- `FileCleanerEndEventListener` отримує ідентифікатор екземпляра бізнес-процесу та формує префікс формату `process/{processInstanceId}/` за яким отримує перелік ключів файлів збережених у Ceph, після чого видаляє файли за цим переліком.
+- `StorageBpmnParseListener` містить екземпляр класу `FileCleanerEndEventListener` та у методі `parseEndEvent` додає цей об'єкт до загального списку `executionListeners` кінцевого івенту.
+
+== Видалення користувацьких даних з Ceph перед завершенням бізнес-процесу
+
+Для видалення користувацьких даних з Ceph було імплементовано наступну ієрархію класів
+
+[plantuml,form_data_ceph-cleaner-listener,svg]
+----
+@startuml
+class AbstractBpmnParseListener {
+  parseEndEvent()
+}
+
+class CamundaSystemVariablesSupportListener #back:lightblue;line:green;text:black extends AbstractBpmnParseListener {
+  parseEndEvent()
+}
+
+interface ExecutionListener {
+  notify(DelegateExecution)
+}
+
+class FormDataCleanerEndEventListener #back:lightblue;line:green;text:black implements ExecutionListener {
+  void notify(DelegateExecution)
+}
+
+CamundaSystemVariablesSupportListener o- FormDataCleanerEndEventListener
+@enduml
+----
+
+- `FormDataCleanerEndEventListener` отримує ідентифікатор екземпляра бізнес-процесу та формує префікс формату `process/{processInstanceId}/` за яким отримує перелік ключів користувацьких даних збережених у Ceph, та додає до цього переліку ключ користувацьких даних стартової форми якщо він присутній, після чого видаляє дані за цим переліком.
+- `StorageBpmnParseListener` містить екземпляр класу `FormDataCleanerEndEventListener` та у методі `parseEndEvent` додає цей об'єкт до загального списку `executionListeners` кінцевого івенту.
+
+== Маппинг виключень на HTTP відповідь
+
+У разі виникнення виключної ситуації Camunda маппить це виключення використовуючи `ExceptionMapper`
+
+[plantuml,exception-mapping,svg]
+----
+@startuml
+interface ExceptionMapper<Throwable> {
+  toResponse()
+}
+
+class CamundaSystemExceptionMapper<SystemException> #back:lightblue;line:green;text:black implements ExceptionMapper {
+  toResponse()
+}
+
+class CamundaRestExceptionMapper<RestException> #back:lightblue;line:green;text:black implements ExceptionMapper {
+  toResponse()
+}
+
+class UserDataValidationExceptionMapper<ValidationException> #back:lightblue;line:green;text:black implements ExceptionMapper {
+  toResponse()
+}
+
+
+class TaskAlreadyInCompletionExceptionMapper<TaskAlreadyInCompletionException> #back:lightblue;line:green;text:black implements ExceptionMapper {
+  toResponse()
+}
+
+class RestException extends Throwable
+class SystemException #back:lightgreen;line:green;text:black extends Throwable
+class ValidationException #back:lightgreen;line:green;text:black extends Throwable
+class TaskAlreadyInCompletionException #back:lightblue;line:green;text:black extends Throwable
+
+ExceptionMapper .> Throwable
+CamundaRestExceptionMapper .> RestException
+CamundaSystemExceptionMapper .> SystemException
+UserDataValidationExceptionMapper .> ValidationException
+TaskAlreadyInCompletionExceptionMapper .> TaskAlreadyInCompletionException
+
+CamundaRestExceptionMapper --[hidden]> CamundaSystemExceptionMapper
+CamundaSystemExceptionMapper --[hidden]> UserDataValidationExceptionMapper
+UserDataValidationExceptionMapper --[hidden]> TaskAlreadyInCompletionExceptionMapper
+RestException --[hidden]> SystemException
+SystemException --[hidden]> ValidationException
+ValidationException --[hidden]> TaskAlreadyInCompletionException
+@enduml
+----
+
+- `ExceptionMapper<Throwable>` інтерфейс який містить метод `toResponse`
+- `CamundaRestExceptionMapper<RestException>` клас який маппить `RestException` на HTTP відповідь з HTTP статусом який міститься у `RestException` з тілом яке має наступну структуру
+
+[source,json]
+----
+{
+  "traceId" : "traceId",
+  "code" : "code",
+  "message" : "message",
+  "localizedMessage" : "localizedMessage"
+}
+----
+
+- `CamundaSystemExceptionMapper<SystemException>` - маппить `SystemException` на HTTP відповідь зі статусом 500 з тілом яке має наступну структуру
+
+[source,json]
+----
+{
+  "traceId" : "traceId",
+  "code" : "code",
+  "message" : "message",
+  "localizedMessage" : "localizedMessage"
+}
+----
+
+- `UserDataValidationExceptionMapper<ValidationException>` - маппить `ValidationException` на HTTP відповідь зі статусом 422 з тілом яке має наступну структуру
+
+[source,json]
+----
+{
+  "traceId" : "traceId",
+  "code" : "code",
+  "message" : "message",
+  "details" : {
+    "errors": [
+      {
+        "field": "fieldName",
+        "value": "fieldValue",
+        "message": "localizedMessage"
+      }
+    ]
+  }
+}
+----
+
+- `TaskAlreadyInCompletionExceptionMapper<TaskAlreadyInCompletionException>` - мапить `TaskAlreadyInCompletionException` на HTTP відповідь зі статусом 409 з тілом яке має наступну структуру
+
+[source,json]
+----
+{
+  "traceId" : "traceId",
+  "code" : "code",
+  "message" : "message",
+  "localizedMessage" : "localizedMessage"
+}
+----
+
+== Синхронізоване виконання задачі
+
+Для того, щоб не можна було виконати одну й ту ж задачу кілька разів, була реалізована можливість синхронізації по бізнес-ключу.
+Таким чином, наприклад, буде можливість виконувати декілька задач одразу, хоча не буде можливості виконувати одну й ту ж задачу в декілька потоків.
+
+[plantuml,sychronization-by-id,svg]
+----
+@startuml
+class SpringProcessEngineConfiguration {
+  TaskService taskService
+}
+
+class LowcodeSpringProcessEngineConfiguration #back:lightblue;line:green;text:black extends SpringProcessEngineConfiguration
+
+interface TaskService {
+  void complete()
+  void completeWithVariablesInReturn()
+}
+
+class TaskServiceImpl implements TaskService
+
+class SynchronizedTaskServiceImpl #back:lightblue;line:green;text:black extends TaskServiceImpl {
+  SynchronizationService synchronizationService
+  void complete()
+  void completeWithVariablesInReturn()
+}
+
+class SynchronizationService #back:lightblue;line:green; {
+  Cache<Object, ReentrantLock> lockCache
+
+  ReentrantLock getLock(Object key)
+  void execute(Object key, Runnable runnable)
+  R evaluate(Object key, Supplier<R> supplier)
+  void executeOrThrow(Object key, Runnable runnable, Supplier<T extends Throwable> exceptionSupplier)
+  R evaluateOrThrow(Object key, Supplier<R> supplier, Supplier<T extends Throwable> exceptionSupplier)
+}
+
+class CamundaConfiguration #back:lightblue;line:green;text:black {
+  processEngineConfigurationImpl()
+}
+
+SpringProcessEngineConfiguration o- TaskService
+LowcodeSpringProcessEngineConfiguration <-- CamundaConfiguration : creates
+CamundaConfiguration o- SynchronizedTaskServiceImpl : injects into SpringProcessEngineConfiguration
+SynchronizedTaskServiceImpl o- SynchronizationService
+@enduml
+----
+
+Було реалізовано SynchronizationService який у собі має кеш локів з weak-reference ключами, де ключем є будь-який бізнес-ключ (наприклад `taskId`) а значенням є `ReentrantLock` пов'язаний з цим бізнес ключем. Таким чином, якщо 2 потоки будуть використовувати лок отриманий з кешу по одному й тому ж ключу водночас вони будуть синхронізовані, хоча будь-які інші потоки з іншими ключами будуть використовувати вже інші локи тому й не будуть заблоковані між собою.
+
+.`SynchronizationService` надає наступні можливості:
+- `ReentrantLock getLock(Object key)` -- повертає лок пов'язаний з бізнес-ключем `key` для самостійного використання
+- `void execute(Object key, Runnable runnable)` -- бере лок пов'язаний з бізнес-ключем `key`, по ньому синхронізується, виконує `runnable.run()` та відпускає лок
+- `R evaluate(Object key, Supplier<R> supplier)` -- бере лок пов'язаний з бізнес-ключем `key`, по ньому синхронізується, повертає результат `supplier.get()` та відпускає лок
+- `void executeOrThrow(Object key, Runnable runnable, Supplier<T extends Throwable> exceptionSupplier)` -- бере лок пов'язаний з бізнес-ключем `key`, та намагається його заблокувати, якщо виходить заблокувати лок, то виконує `runnable.run()` та відпускає лок, інакше -- кидає виключення яке береться з `exceptionSupplier`
+- `R evaluateOrThrow(Object key, Supplier<R> supplier, Supplier<T extends Throwable> exceptionSupplier)` -- бере лок пов'язаний з бізнес-ключем `key`, та намагається його заблокувати, якщо виходить заблокувати лок, то повертає результат отриманій з `supplier.get()` та відпускає лок, інакше -- кидає виключення яке береться з `exceptionSupplier`
+
+[NOTE]
+Таким чином пара методів `execute` та `evaluate` по одному й тому ж ключу буде виконувати `runnable.run()`/`supplier.get()` по черзі, а `executeOrThrow` та `evaluateOrThrow` "відказуються" їх виконувати якщо щось вже заблокувало потрібній лок.
+
+Також було реалізовано `SynchronizedTaskServiceImpl` який розширює стандартний `TaskServiceImpl` та перевантажує методи `complete` та `completeWithVariablesInReturn` додаючи синхронізацію за `taskId` за допомогою `SynchronizationService` з використанням `executeOrThrow` та `evaluateOrThrow` відповідно.
