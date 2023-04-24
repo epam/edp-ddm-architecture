@@ -1,0 +1,631 @@
+= Кастомні JUEL функції
+
+== Розробка JUEL функцій
+
+Для доступу статичних Java функцій в Expression Language та Groovy скриптах бізнес-процесу було імплементовано наступну ієрархію класів
+
+[plantuml,juel,svg]
+----
+@startuml
+interface ApplicationContext
+note left : Spring application context
+
+interface ApplicationContextAware {
+  +void setApplicationContext(ApplicationContext)
+}
+ApplicationContext  <. ApplicationContextAware : uses
+
+abstract class CoreExecution
+note left : Camunda execution context
+ApplicationContext -[hidden]- CoreExecution
+
+abstract class FunctionMapper {
+  + Method resolveFunction(String, String)
+}
+
+package el.juel{
+  abstract class AbstractApplicationContextAwareJuelFunction #back:lightblue;line:green;text:black implements ApplicationContextAware {
+    - {static} ApplicationContext applicationContext
+    --
+    + final void setApplicationContext(ApplicationContext)
+    + Method getJuelFunctionMethod()
+    ..
+    # {static} CoreExecution getExecution()
+    # {static} <T> T getBean(Class<T>)
+  }
+  package mapper {
+    class CompositeApplicationContextAwareJuelFunctionMapper #back:lightblue;line:green;text:black extends FunctionMapper {
+      + Method resolveFunction(String, String)
+    }
+  }
+}
+
+CoreExecution <. AbstractApplicationContextAwareJuelFunction : provides access \nfor child classes
+
+AbstractApplicationContextAwareJuelFunction o- CompositeApplicationContextAwareJuelFunctionMapper
+
+interface ScriptEnvResolver {
+  + String[] resolve(String)
+}
+
+abstract class AbstractProcessEnginePlugin {
+  +void postInit(ProcessEngineConfigurationImpl)
+}
+
+package scripting {
+  package groovy {
+    class StaticJavaFunctionsGroovyScriptEnvResolver #back:lightblue;line:green;text:black implements ScriptEnvResolver {
+      + String[] resolve(String)
+    }
+  }
+  class StaticJavaFunctionsProcessEnginePlugin #back:lightblue;line:green;text:black extends AbstractProcessEnginePlugin {
+    +void postInit(ProcessEngineConfigurationImpl)
+  }
+}
+
+CoreExecution -[hidden]- ScriptEnvResolver
+
+StaticJavaFunctionsGroovyScriptEnvResolver o- StaticJavaFunctionsProcessEnginePlugin : adds to process \nengine configuration
+
+() customGroovyScript #back:lightblue;line:green;text:black
+note left #back:lightblue;line:green;text:black : /groovy/importStaticJavaFunctions.groovy
+customGroovyScript <.. StaticJavaFunctionsGroovyScriptEnvResolver : resolve
+AbstractApplicationContextAwareJuelFunction <.. customGroovyScript  : imports static methods from child classes
+@enduml
+----
+
+* `AbstractApplicationContextAwareJuelFunction` -- Базовий клас для всіх JUEL функцій.
+Імплементує `ApplicationContextAware` для зберігання ініціалізованого Spring контексту у приватній статичній змінній.
+Надає 2 методи для нащадків:
+** `getExecution` -- Повертає поточній camunda execution context для доступу до змінних бізнес-процесу
+** `getBean` -- Повертає бін отриманий зі Spring контексту для виклику методів на ньому
+* `CompositeApplicationContextAwareJuelFunctionMapper` -- нащадок FunctionMapper що маппить статичний Java метод/функцію на JUEL функцію (повертає об'єкт типу `Method` в залежності від імені функції)
+* `/groovy/importStaticJavaFunctions.groovy` -- скрипт що імпортує статичні Java методи (ініціалізує змінні посиланням на статичні Java методи)
+* `StaticJavaFunctionsGroovyScriptEnvResolver` -- клас що повертає скрипт описаний вище для виконання бізнес-процесом перед скриптом самого процесу
+* `StaticJavaFunctionsProcessEnginePlugin` -- плагін що додає `StaticJavaFunctionsGroovyScriptEnvResolver` до Camunda Process Engine
+
+'''
+
+.Щоб додати нову JUEL функцію треба:
+* Створити нащадка `AbstractApplicationContextAwareJuelFunction`
+* У щойно створеному нащадку імплементувати статичний Java метод що відповідає бізнес вимогам задачі
+** для доступу до Camunda Execution Context використовувати `AbstractApplicationContextAwareJuelFunction::getExecution`
+** для доступу до Spring бінів використовувати `AbstractApplicationContextAwareJuelFunction::getBean` замість автовайрингу
+* Додати посилання на функцію до скрипту `/groovy/importStaticJavaFunctions.groovy`, наприклад `foo = foo.bar.FooJuelFunction.&foo`
+* Додати документацію на функцію до цього розділу
+
+[IMPORTANT]
+Доступ до функції у скриптах відбувається через ініціалізацію змінних, тому наявні змінні бізнес-процесу, що мають ті ж імена що й функції будуть доступні тільки через об'єкт `execution`, наприклад `execution.getVariable('foo')`.
+Та навпаки, якщо перевизначити змінну з функцією доступ до неї в цьому самому скрипті буде втрачено (*це стосується тільки скриптів, expression language має доступ і до змінних і до функцій, навіть якщо вони мають однакове ім'я*)
+
+== Доступні JUEL функції
+
+=== initiator()
+
+Діаграма класів:
+
+[plantuml,initiator-class,svg]
+----
+@startuml
+package el {
+  package juel {
+    abstract class AbstractApplicationContextAwareJuelFunction
+    class InitiatorJuelFunction #back:lightblue;line:green;text:black extends AbstractApplicationContextAwareJuelFunction {
+      + {static} UserDto initiator()
+    }
+  }
+  package dto {
+    class UserDto #back:lightblue;line:green;text:black {
+      - String userName
+      - String accessToken
+      - JwtClaimsDto claims
+      --
+      + String getUserName()
+      + String getAccessToken()
+      + String getFullName()
+      + String getDrfo()
+      + String getEdrpou()
+    }
+  }
+  AbstractApplicationContextAwareJuelFunction ..[hidden]> UserDto
+  InitiatorJuelFunction .> UserDto : returns
+}
+UserDto .o JwtClaimsDto
+@enduml
+----
+
+* `InitiatorJuelFunction` -- наслідує `AbstractApplicationContextAwareJuelFunction` та надає функцію `initiator()` що:
+
+[plantuml,initiator-sequence,svg]
+----
+@startuml
+  skinparam responseMessageBelowArrow true
+
+  participant "initiator()" as initiator order 10
+  participant "Camunda Execution Context" as camunda order 20
+  participant "Spring Application Context" as spring order 30
+  participant TokenParser as parser order 40
+
+  -> initiator
+  activate initiator
+
+  initiator -> camunda : Отримати існуючий UserDto об'єкт ініціатора
+  activate camunda
+
+  alt об'єкт ініціатора знайдено
+    initiator <-- camunda : знайдений UserDto об'єкт ініціатора
+    <-- initiator : UserDto
+  else об'єкт ініціатора не знайдено
+    initiator <-- camunda : null
+    deactivate camunda
+
+    initiator -> camunda : Отримати ім'я ініціатора з відповідної змінної
+    activate camunda
+
+    initiator <-- camunda : Ім'я ініціатора
+    deactivate camunda
+
+    initiator -> camunda : Отримати токен ініціатора з відповідної змінної
+    activate camunda
+    alt токен ініціатора не наявний у Camunda контексті
+      initiator <-- camunda : null
+      initiator -> initiator : збудувати UserDto використовуючи \nтільки ім'я ініціатора
+    else токен ініціатора наявний у Camunda контексті
+      initiator <-- camunda : токен ініціатора
+      deactivate camunda
+
+      initiator -> spring : Отримати бін типу TokenParser
+      activate spring
+
+      initiator <-- spring : бін типу TokenParser
+      deactivate spring
+
+      initiator -> parser : Розпарсити токен ініціатора у об'єкт JwtClaimsDto
+      activate parser
+
+      initiator <-- parser : згенерований JwtClaimsDto
+      deactivate parser
+
+      initiator -> initiator : збудувати UserDto використовуючи \n ім'я та токен ініціатора та згенерований JwtClaimsDto
+    end
+
+    initiator -> camunda : зберегти збудований UserDto у контексті \nу якості transient змінної
+    activate camunda
+
+    initiator <-- camunda : збережено
+    deactivate camunda
+
+    <-- initiator : UserDto
+    deactivate initiator
+  end
+@enduml
+----
+
+* `UserDto` -- клас що являє собою обгортку даних користувача (в цьому випадку ініціатора).
+Завжди містить у собі userName та токен і JwtClaimsDto до першої задачі користувача.
+Надає методи:
+** getUserName() -- повертає ім'я користувача, що можна використовувати в Assignee та Candidate Users полях задач користувача
+** getAccessToken() -- повертає токен користувача, що можна використовувати в інтеграційних конекторах для інтеграції від імені користувача
+** getDrfo() -- делегує виклик на JwtClaimsDto та повертає Keycloak атрибут 'drfo' користувача
+** getEdrpou() -- делегує виклик на JwtClaimsDto та повертає Keycloak атрибут 'edrpou' користувача
+** getFullName() -- делегує виклик на JwtClaimsDto та повертає Keycloak атрибут 'fullName' користувача
+
+[IMPORTANT]
+Токен ініціатора, а разом з ним і всі Keycloak атрибути, будуть доступні тільки до першої "User task" у бізнес-процесі
+
+=== completer(<task_id>)
+
+Діаграма класів:
+
+[plantuml,completer-class,svg]
+----
+@startuml
+package el {
+  package juel {
+    abstract class AbstractApplicationContextAwareJuelFunction
+    class CompleterJuelFunction #back:lightblue;line:green;text:black extends AbstractApplicationContextAwareJuelFunction {
+      + {static} UserDto completer(String taskDefinitionKey)
+    }
+  }
+  package dto {
+    class UserDto #back:lightblue;line:green;text:black {
+      - String userName
+      - String accessToken
+      - JwtClaimsDto claims
+      --
+      + String getUserName()
+      + String getAccessToken()
+      + String getFullName()
+      + String getDrfo()
+      + String getEdrpou()
+    }
+  }
+  AbstractApplicationContextAwareJuelFunction ..[hidden]> UserDto
+  CompleterJuelFunction .> UserDto : returns
+}
+UserDto .o JwtClaimsDto
+@enduml
+----
+
+* `CompleterJuelFunction` -- наслідує `AbstractApplicationContextAwareJuelFunction` та надає функцію `completer(<task_id>)` що:
+
+[plantuml,completer-sequence,svg]
+----
+@startuml
+  skinparam responseMessageBelowArrow true
+
+  participant "completer(<task_id>)" as completer order 10
+  participant "Camunda Execution Context" as camunda order 20
+  participant "Spring Application Context" as spring order 30
+  participant "CephKeyProvider" as ceph_key_provider order 40
+  participant "Ceph" as ceph order 50
+  participant "TokenParser" as parser order 60
+
+  -> completer
+  activate completer
+
+  completer -> camunda : Отримати існуючий UserDto об'єкт комплітера
+  activate camunda
+
+  alt Об'єкт комплітера знайдено
+    completer <-- camunda : Знайдений UserDto об'єкт комплітера
+    <-- completer : UserDto
+
+  else Об'єкт комплітера не знайдено
+    completer <-- camunda : null
+    deactivate camunda
+
+  completer -> camunda : Отримати ім'я комплітера з відповідної змінної
+    activate camunda
+
+    completer <-- camunda : Ім'я комплітера
+    deactivate camunda
+
+  completer -> camunda : Отримати токен комплітера з відповідної змінної
+    activate camunda
+    alt Токен комплітера не наявний у Camunda контексті
+      completer <-- camunda : null
+      completer -> spring : Отримати бін типу CephKeyProvider
+        activate spring
+
+      completer <-- spring : Бін типу CephKeyProvider
+        deactivate spring
+
+      completer -> ceph_key_provider : Згенерувати цеф ключ
+        activate ceph_key_provider
+
+      completer <-- ceph_key_provider : Згенерований цеф ключ
+        deactivate ceph_key_provider
+
+      completer -> spring : Отримати бін типу FormDataCephService
+        activate spring
+
+      completer <-- spring : Бін типу FormDataCephService
+      deactivate spring
+
+      completer -> ceph : Отримати цеф документ, який містить токен комплітера з цефу за згенерованим ключем
+      activate ceph
+
+      completer <-- ceph : Цеф документ, який містить токен комплітера
+      deactivate ceph
+
+      completer -> completer : Отримати токен з цеф документа
+
+    else Токен комплітера наявний у Camunda контексті
+      completer <-- camunda : Токен комплітера
+      deactivate camunda
+    end
+
+  completer -> spring : Отримати бін типу TokenParser
+      activate spring
+
+      completer <-- spring : Бін типу TokenParser
+      deactivate spring
+
+      completer -> parser : Розпарсити токен комплітера у об'єкт JwtClaimsDto
+      activate parser
+
+      completer <-- parser : Згенерований JwtClaimsDto
+      deactivate parser
+
+  completer -> completer : Збудувати UserDto використовуючи \n ім'я та токен комплітера, згенерований JwtClaimsDto
+
+  completer -> camunda : Зберегти збудований UserDto у контексті \nу якості transient змінної
+    activate camunda
+
+    completer <-- camunda : Збережено
+    deactivate camunda
+
+    <-- completer : UserDto
+    deactivate completer
+  end
+@enduml
+----
+
+* `UserDto` -- клас що являє собою обгортку даних користувача (в цьому випадку комплітера).
+Використовується такий самий об'єкт як і для функції ініціатора.
+
+[IMPORTANT]
+Функція комплітера доступна для використання після успішного завершення користувацької задачі.
+
+=== submission(<activity_id|event_id>)
+
+Діаграма класів:
+
+[plantuml,submission-class,svg]
+----
+@startuml
+package el {
+  package juel {
+    abstract class AbstractApplicationContextAwareJuelFunction
+    class SubmissionJuelFunction #back:lightblue;line:green;text:black extends AbstractApplicationContextAwareJuelFunction {
+      + {static} UserFormDataDto submission(String <activity_id|event_id>)
+    }
+  }
+  package dto {
+    class UserFormDataDto #back:lightblue;line:green;text:black {
+      - SpinJsonNode formData
+    }
+  }
+  AbstractApplicationContextAwareJuelFunction ..[hidden]> UserFormDataDto
+  SubmissionJuelFunction .> UserFormDataDto : returns
+}
+@enduml
+----
+
+* `SubmissionJuelFunction` -- наслідує `AbstractApplicationContextAwareJuelFunction` та надає функцію `submission(<activity_id|event_id>)` що:
+
+[plantuml,submission-sequence,svg]
+----
+@startuml
+  skinparam responseMessageBelowArrow true
+
+  participant "submission(<activity_id|event_id>)" as submission order 10
+  participant "Camunda Execution Context" as camunda order 20
+  participant "Spring Application Context" as spring order 30
+  participant "CephKeyProvider" as ceph_key_provider order 40
+  participant "Ceph" as ceph order 50
+
+  -> submission
+  activate submission
+
+  submission -> camunda : Отримати існуючий UserFormDataDto об'єкт
+  activate camunda
+
+  alt Об'єкт UserFormDataDto знайдено
+    submission <-- camunda : Знайдений об'єкт UserFormDataDto
+    <-- submission : UserFormDataDto
+
+  else Об'єкт UserFormDataDto не знайдено
+    submission <-- camunda : null
+    deactivate camunda
+
+    submission -> camunda : Отримати ідентифікатор стартової форми
+      activate camunda
+      submission <-- camunda : Ідентифікатор
+      deactivate camunda
+
+    submission -> submission : Визначити тип елемента бізнес-процесу
+    alt Елемент - стартова форма
+      submission -> camunda : Отримати цеф ключ з відповідної змінної
+      activate camunda
+      submission <-- camunda : Цеф ключ
+      deactivate camunda
+    else Елемент - користувацька задача
+      submission -> spring : Отримати бін типу CephKeyProvider
+      activate spring
+      submission <-- spring : Бін типу CephKeyProvider
+      deactivate spring
+
+      submission -> ceph_key_provider : Згенерувати цеф ключ
+      activate ceph_key_provider
+      submission <-- ceph_key_provider : Згенерований цеф ключ
+      deactivate ceph_key_provider
+    end
+
+    submission -> spring : Отримати бін типу FormDataCephService
+      activate spring
+      submission <-- spring : Бін типу FormDataCephService
+      deactivate spring
+
+    submission -> ceph : Отримати цеф документ, який містить дані форми з цефу за отриманим ключем
+      activate ceph
+      submission <-- ceph : Цеф документ, який містить дані форми
+      deactivate ceph
+
+    submission -> submission : Отримати дані форми з цеф документа
+
+    submission -> camunda : Зберегти UserFormDataDto об'єкт у контексті \nу якості transient змінної
+      activate camunda
+      submission <-- camunda : Збережено
+      deactivate camunda
+
+      <-- submission : UserFormDataDto
+      deactivate submission
+  end
+@enduml
+----
+
+* `UserFormDataDto` -- клас що являє собою обгортку даних форми користувача.
+
+[IMPORTANT]
+Функія `submission(<activity_id|event_id>)` доступна для використання після успішного завершення користувацької задачі або стартової форми.
+
+=== sign_submission(<activity_id|event_id>)
+
+Діаграма класів:
+
+[plantuml,sign_submission-class,svg]
+----
+@startuml
+package el {
+  package juel {
+    abstract class AbstractApplicationContextAwareJuelFunction
+    class SignSubmissionJuelFunction #back:lightblue;line:green;text:black extends AbstractApplicationContextAwareJuelFunction {
+      + {static} SignUserFormDataDto sign_submission(String <activity_id|event_id>)
+    }
+  }
+  package dto {
+    class SignUserFormDataDto #back:lightblue;line:green;text:black {
+      - SpinJsonNode formData
+      - String signature
+      - String signatureDocumentId
+    }
+  }
+  AbstractApplicationContextAwareJuelFunction ..[hidden]> SignUserFormDataDto
+  SignSubmissionJuelFunction .> SignUserFormDataDto : returns
+}
+@enduml
+----
+
+* `SignSubmissionJuelFunction` -- наслідує `AbstractApplicationContextAwareJuelFunction` та надає функцію `sign_submission(<activity_id|event_id>)` що:
+
+[plantuml,sign_submission-sequence,svg]
+----
+@startuml
+  skinparam responseMessageBelowArrow true
+
+  participant "sign_submission(<activity_id|event_id>)" as sign_submission order 10
+  participant "Camunda Execution Context" as camunda order 20
+  participant "Spring Application Context" as spring order 30
+  participant "CephKeyProvider" as ceph_key_provider order 40
+  participant "Ceph" as ceph order 50
+
+  -> sign_submission
+  activate sign_submission
+
+  sign_submission -> camunda : Отримати існуючий SignUserFormDataDto об'єкт
+  activate camunda
+
+  alt Об'єкт SignUserFormDataDto знайдено
+    sign_submission <-- camunda : Знайдений об'єкт SignUserFormDataDto
+    <-- sign_submission : SignUserFormDataDto
+
+  else Об'єкт SignUserFormDataDto не знайдено
+    sign_submission <-- camunda : null
+    deactivate camunda
+
+    sign_submission -> camunda : Отримати ідентифікатор стартової форми
+      activate camunda
+      sign_submission <-- camunda : Ідентифікатор
+      deactivate camunda
+
+    sign_submission -> sign_submission : Визначити тип елемента бізнес-процесу
+    alt Елемент - стартова форма
+      sign_submission -> camunda : Отримати цеф ключ з відповідної змінної
+      activate camunda
+      sign_submission <-- camunda : Цеф ключ
+      deactivate camunda
+    else Елемент - користувацька задача
+      sign_submission -> spring : Отримати бін типу CephKeyProvider
+      activate spring
+      sign_submission <-- spring : Бін типу CephKeyProvider
+      deactivate spring
+
+      sign_submission -> ceph_key_provider : Згенерувати цеф ключ
+      activate ceph_key_provider
+      sign_submission <-- ceph_key_provider : Згенерований цеф ключ
+      deactivate ceph_key_provider
+    end
+
+    sign_submission -> spring : Отримати бін типу FormDataCephService
+      activate spring
+      sign_submission <-- spring : Бін типу FormDataCephService
+      deactivate spring
+
+    sign_submission -> ceph : Отримати цеф документ, який містить дані форми з цефу за отриманим ключем
+      activate ceph
+      sign_submission <-- ceph : Цеф документ, який містить дані форми
+      deactivate ceph
+
+    sign_submission -> sign_submission : Отримати дані форми з цеф документа
+    sign_submission -> sign_submission : Отримати підпис з цеф документа
+    sign_submission -> sign_submission : Збудувати об'єкт SignUserFormDataDto
+
+    sign_submission -> camunda : Зберегти SignUserFormDataDto об'єкт у контексті \nу якості transient змінної
+      activate camunda
+      sign_submission <-- camunda : Збережено
+      deactivate camunda
+
+      <-- sign_submission : SignUserFormDataDto
+      deactivate sign_submission
+  end
+@enduml
+----
+
+* `SignUserFormDataDto` -- клас що являє собою обгортку для даних форми користувача, підпису та ключа цеф документа де зберігається підпис.
+
+[IMPORTANT]
+Функія `sign_submission(<activity_id|event_id>)` доступна для використання після успішного завершення підписуючої користувацької задачі або стартової форми.
+
+=== system_user()
+
+Діаграма класів:
+
+[plantuml,sign_submission-class,svg]
+----
+@startuml
+package el {
+  package juel {
+    abstract class AbstractApplicationContextAwareJuelFunction
+    class SystemUserJuelFunction #back:lightblue;line:green;text:black extends AbstractApplicationContextAwareJuelFunction {
+      + {static} UserDto system_user()
+    }
+  }
+  package dto {
+    class UserDto #back:lightblue;line:green;text:black {
+      - String userName
+      - String accessToken
+      - JwtClaimsDto claims
+    }
+  AbstractApplicationContextAwareJuelFunction ..[hidden]> UserDto
+  SystemUserJuelFunction .> UserDto : returns
+}
+@enduml
+----
+
+* `SystemUserJuelFunction` -- наслідує `AbstractApplicationContextAwareJuelFunction` та надає функцію `system_user()` що:
+
+[plantuml,system_user-sequence,svg]
+----
+@startuml
+  skinparam responseMessageBelowArrow true
+
+  participant "system_user()" as system_user order 10
+  participant "Camunda Execution Context" as camunda order 20
+  participant "Keycloak" as keycloak order 30
+
+  -> system_user
+  activate system_user
+
+  system_user -> camunda : Отримати існуючий UserDto об'єкт
+  activate camunda
+
+  alt Об'єкт UserDto знайдено
+    system_user <-- camunda : Знайдений об'єкт UserDto
+    <-- system_user : UserDto
+
+  else Об'єкт UserDto не знайдено
+    system_user <-- camunda : null
+    deactivate camunda
+
+    system_user -> keycloak : Отримати токен системного користувача
+      activate keycloak
+      system_user <-- keycloak : токен системного користувача
+      deactivate keycloak
+
+    system_user -> system_user : Парсинг токена системного користувача
+    system_user -> system_user : Збудувати об'єкт UserDto
+
+    system_user -> camunda : Зберегти UserDto об'єкт у контексті \nу якості transient змінної
+      activate camunda
+      system_user <-- camunda : Збережено
+      deactivate camunda
+
+      <-- system_user : UserDto
+      deactivate system_user
+  end
+@enduml
+----
+
+* `UserDto` -- клас що являє собою обгортку для даних системного користувача, таких як токен, та username.

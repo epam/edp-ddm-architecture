@@ -1,0 +1,41 @@
+@startuml
+participant "Web Клієнт" as client  order 10
+participant "Сервіс управління задачами" as service  order 20
+participant "Cервіс виконання бізнес-процесів" as bpms order 30
+participant "Ceph сховище" as ceph order 40
+skinparam responseMessageBelowArrow true
+
+title Отримання задачі за унікальним ідентифікатором
+  client -> service: Отримати задачу за ідентифікатором
+  activate service
+  service -> bpms: Отримати задачу за ідентифікатором
+  activate bpms
+  bpms -> service: Задача користувача, 200 OK
+  deactivate bpms
+  service -> service: Отримати username користувача з токену
+  service -> service: Порівняти assignee задачі та username з токену
+  alt Користувач не призначений\n на виконання задачі
+    service -> client: Помилка авторизації 403 Forbidden
+  end
+  service -> service: Зформувати ceph ключ на базі id задачі та id бізнес процесу
+  service -> ceph: Отримати дані корустивача за сeph ключем
+  activate ceph
+  ceph -> service: Дані форми користувача, 200 OK
+  deactivate ceph
+  service -> bpms: Отримати ім'я послуги за ідентифікатором послуги
+  activate bpms
+  bpms -> service: Ім'я послуги. 200 OK
+  deactivate bpms
+  service -> bpms: Отримати властивості задачі(такі як: esign - ознака задачі для підпису,\n formVariables - перелік імен змінних задачі)
+  activate bpms
+  bpms -> service: Перелік властивостей, 200 OK
+  deactivate bpms
+  service -> service: Отримати значення з esign властивості
+  service -> bpms: Отримати всі змінні, видимі в задачі
+  activate bpms
+  bpms -> service: Перелік змінних, 200 OK
+  deactivate bpms
+  service -> service: Отримання значень з переліку змінних,\n відфільтрованих за ім'ям
+  service -> client: Задача користувача
+  deactivate service
+@enduml

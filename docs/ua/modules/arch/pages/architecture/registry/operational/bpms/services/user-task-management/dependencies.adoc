@@ -1,0 +1,304 @@
+Залежності / Пов'язані компоненти
+---------------------------------
+
+.Основні залежності сервіса управління задачами користувача:
+* Ceph сховище
+* Cервіс виконання бізнес-процесів (bpms)
+* КЕП сервіс
+
+== Основні сценарії
+
+=== Отримати задачу користувача за вказаним ідентифікатором задачі
+
+Діаграма послідовності отримання задачі користувача:
+
+[plantuml]
+----
+include::partial$architecture/registry/operational/bpms/services/user-task-management/get-task.puml[]
+----
+
+Запит:
+
+[source]
+----
+GET /api/task/<task-id> --header 'X-Access-Token: token'
+----
+
+Відповідь:
+
+* 200 OK
+
+Тіло відповіді:
+
+[source,json]
+----
+{
+    "id": "string",
+    "name": "string",
+    "assignee": "string",
+    ...
+    "data": {
+        "formField1": "string",
+        "formField2": {
+           "dictionaryId": "string"
+           "dictionaryField": "string"
+           ...
+        }
+        ...
+    }
+    "eSign": "boolean",
+    "formVariables": {
+        "fullName": "FirstName LastName"
+    }
+}
+----
+
+=== Отримати перелік задач користувача
+
+Діаграма послідовності отримання переліку задач користувача:
+
+[plantuml]
+----
+include::partial$architecture/registry/operational/bpms/services/user-task-management/get-task-list.puml[]
+----
+
+Запит:
+
+[source]
+----
+GET /api/task --header 'X-Access-Token: token'
+----
+
+Відповідь:
+
+* 200 OK
+
+Тіло відповіді:
+
+[source,json]
+----
+[
+    {
+        "id": "string",
+        "name": "string",
+        "assignee": "string",
+        "created": "datetime",
+        "description": "string",
+        "processDefinitionName": "string",
+        "processDefinitionId": "string",
+        "processInstanceId": "string",
+        "formKey": "string",
+        "suspended": "boolean",
+        "assigned": "boolean"
+    }
+]
+----
+
+=== Взяти задачу у виконання
+
+Діаграма послідовності взяття задачі у виконання:
+
+[plantuml]
+----
+include::partial$architecture/registry/operational/bpms/services/user-task-management/claim-task.puml[]
+----
+
+Запит:
+
+[source]
+----
+POST /api/task/<task-id>/claim --header 'X-Access-Token: token'
+----
+
+Тіло запиту:
+
+[source]
+----
+empty body
+----
+
+Відповідь:
+
+* 204 OK - Задачу взято у виконання
+
+
+=== Зняти задачу з виконання
+
+Діаграма послідовності зняття задачі з виконання:
+
+[plantuml]
+----
+include::partial$architecture/registry/operational/bpms/services/user-task-management/unclaim-task.puml[]
+----
+
+Запит:
+
+[source]
+----
+POST /api/task/<task-id>/unclaim --header 'X-Access-Token: token'
+----
+
+Тіло запиту:
+
+[source]
+----
+empty body
+----
+
+Відповідь:
+
+* 204 OK - Задачу знято з виконання
+
+=== Виконати задачу користувача
+
+Діаграма послідовності виконання задачі користувача:
+
+[plantuml]
+----
+include::partial$architecture/registry/operational/bpms/services/user-task-management/complete-task.puml[]
+----
+
+Отримує данні форми та JWT токен користувача і делегує виконяння задачі сервісу виконання бізнес-процесів.
+
+Запит:
+
+[source]
+----
+POST /api/task/<task-id>/complete --header 'X-Access-Token: token'
+----
+
+Тіло запиту:
+
+[source,json]
+----
+{
+  "data": {
+    "formField1": "string",
+    "formFiled2": {
+      "title": "string",
+      ...
+    },
+    ...
+  }
+}
+----
+
+Відповідь:
+
+* 204 OK - Задачу виконано
+
+=== Підписати та виконати задачу чиновника
+
+Діаграма послідовності виконання підписуючої задачі чиновника:
+
+[plantuml]
+----
+include::partial$architecture/registry/operational/bpms/services/user-task-management/sign-officer-task.puml[]
+----
+
+Запит:
+[source]
+----
+POST /api/officer/task/<task-id>/sign-form --header 'X-Access-Token: token'
+----
+
+Тіло запиту:
+[source,json]
+----
+{
+  "signature": "string",
+  "data": {
+    "formField1": "string",
+    "formFiled2": {
+      "title": "string",
+      ...
+    },
+    ...
+  }
+}
+----
+
+Відповіді:
+
+* 204 OK - Задачу підписано та виконано
+
+* 422 Unprocessable Entity - Помилка валідації
+
+Тіло відповіді:
+
+[source,json]
+----
+{
+    "traceId": "string",
+    "code": "string",
+    "message": "string",
+    "localizedMessage": "string",
+    "details": {
+      "errors": [
+        {
+          "message": "string",
+          "field": "string",
+          "value": "string"
+        }
+      ]
+    }
+}
+----
+
+=== Підписати та виконати задачу людини
+
+Діаграма послідовності виконання підписуючої задачі людини:
+
+[plantuml]
+----
+include::partial$architecture/registry/operational/bpms/services/user-task-management/sign-citizen-task.puml[]
+----
+
+Запит:
+[source]
+----
+POST /api/citizen/task/<task-id>/sign-form --header 'X-Access-Token: token'
+----
+
+Тіло запиту:
+[source,json]
+----
+{
+  "signature": "string",
+  "data": {
+    "formField1": "string",
+    "formFiled2": {
+      "title": "string",
+      ...
+    },
+    ...
+  }
+}
+----
+
+Відповіді:
+
+* 204 OK - Задачу підписано та виконано
+
+* 422 Unprocessable Entity - Помилка валідації
+
+Тіло відповіді:
+
+[source,json]
+----
+{
+    "traceId": "string",
+    "code": "string",
+    "message": "string",
+    "localizedMessage": "string",
+    "details": {
+      "errors": [
+        {
+          "message": "string",
+          "field": "string",
+          "value": "string"
+        }
+      ]
+    }
+}
+----
