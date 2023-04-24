@@ -44,24 +44,39 @@ WARNING: Для опису моделі даних реєстру викорис
 TIP: Для прикладу, повний перелік розширених тегів з їх параметрами зберігається в
 xsd-схемі за https://nexus.apps.envone.dev.registry.eua.gov.ua/nexus/repository/extensions/com/epam/digital/data/platform/liquibase-ext-schema/1.5.0-SNAPSHOT.74/liquibase-ext-schema-1.5.0-SNAPSHOT.74.xsd[посиланням].
 
+[#table-management]
+== Керування таблицями
 
+.Файли створення таблиць структурі регламенту реєстру
+[plantuml, create-tables-regulation-structure, svg]
+----
+@startsalt
+{
+{T
++ <&folder> registry-regulation
+++ <&folder> bpmn
+++ <&folder> dmn
+++ <&folder> <b>data-model</b>
++++ <&file> <b>createTables.xml</b>
+++ ...
+}
+}
+@endsalt
+----
 
 [#createTable]
-== Теги створення таблиць
+=== Створення таблиць
 
-Назва change type: `<createTable>` `<ext:historyFlag>` ::
+Тег *`createTable`* використовується для створення нової таблиці в базі даних.
 
-Цей тег надає можливість створити таблицю або дві таблиці:
-
-- з історичними даними;
-- із поточними даними.
+Також для тегу *`createTable`* необхідно використовувати атрибут *`ext:historyFlag`* зі значенням *`true`*. Це розширений атрибут, який використовується для відстеження історії змін.
 
 ._Приклад XML-схеми_
 [%collapsible]
 ====
 [source, XML]
 ----
-<createTable tableName="pd_subject_role" ext:historyFlag="true">
+<createTable tableName="test" ext:historyFlag="true">
     <column name="role_id" type="BIGINT">
         <constraints nullable="false" primaryKey="true" primaryKeyName="pk_pd_subject_role"/>
     </column>
@@ -72,18 +87,88 @@ xsd-схемі за https://nexus.apps.envone.dev.registry.eua.gov.ua/nexus/repo
 ----
 ====
 
-CAUTION: В рамках процесу верифікації регламенту, атрибут `historyFlag` зі значенням `true` вимагатиметься для всіх тегів `createTable`. Тому при створенні таблиці необхідно вказувати відповідне значення `historyFlag="true"`. Таким чином буде додатково згенерована історична таблиця, і для кожної з таблиць буде згенеровано свій специфічний набір службових полів.
+[WARNING]
+====
+В рамках процесу верифікації регламенту, атрибут `*historyFlag*` зі значенням `*true*` _вимагатиметься для всіх тегів_ `*createTable*`.
 
-TIP: За детальною інформацією щодо створення таблиць зверніться до секції xref:data-modeling/data/physical-model/liquibase-changes-management-sys-ext.adoc#create-table-hst[Схема моделювання таблиць та функція підтримки історичності] відповідного документа.
+Тому при створенні таблиці необхідно вказувати відповідне значення `historyFlag="true"`. Таким чином буде додатково згенерована історична таблиця, і для кожної з таблиць буде згенеровано свій специфічний набір службових полів.
+====
 
-[ext-auto-generate]
-=== Генерація унікального номера для створених у реєстрі сутностей
+TIP: За детальною інформацією щодо створення таблиць зверніться до статті xref:data-modeling/data/physical-model/liquibase-changes-management-sys-ext.adoc#create-table-hst[Схема моделювання таблиць та функція підтримки історичності].
 
-Назва: атрибут `ext:autoGenerate`. Використовується у тегу `<column>` ::
+[#create-table-attributes]
+==== Атрибути створення таблиць та доступні значення
 
-Дозволяє згенерувати унікальний та зрозумілий для користувача номер для сутності (документа/акту). Номер формується під час збереження сутності та є унікальним у рамках окремого реєстру.
+[#bulk-load]
+===== Атрибут bulkLoad та доступні значення
 
-.XML-схема
+Атрибут *`bulkLoad`* дозволяє швидко завантажувати дані до таблиць із файлів або масивом.
+
+Атрибут приймає наступні значення: ::
+
+* *`true`* -- якщо значення *`bulkLoad`* встановлено як *`true`*, це дозволяє виконувати масове завантаження даних до таблиці з файлів (наприклад, `CSV`) або масивів (`LIST`). Це забезпечує оптимальну продуктивність та ефективність при роботі з великими наборами даних.
+* *`false`* -- якщо значення *`bulkLoad`* встановлено як *`false`*, масове завантаження даних до таблиці з файлів або масивів буде відключено. У цьому випадку, дані будуть імпортовані до таблиці за допомогою окремих операцій вставки (`INSERT`), що може бути менш ефективним при роботі з великими об'ємами даних.
+
++
+._Приклад створення таблиці із bulkLoad="true"_
+[%collapsible]
+====
+[source,xml]
+----
+<changeSet author="..." id="initial creation">
+	<ext:createTable name="example_bulk" bulkLoad="true">
+		<column name="id" type="UUID" defaultValueComputed="uuid_generate_v4()">
+			<constraints nullable="false" primaryKey="true" primaryKeyName="pk_example_bulk_id"/>
+		</column>
+		<column name="first_name" type="text"/>
+            ...
+            ...
+
+	</ext:createTable>
+</changeSet>
+----
+====
+
+[#read-mode]
+===== Атрибут readMode та доступні значення
+
+Атрибут *`readMode`* дозволяє контролювати поведінку читання даних із таблиць бази даних реєстру. Він визначає, як система читає дані з таблиці: _синхронно_ або _асинхронно_. Залежно від вимог до продуктивності, ви можете встановити відповідне значення для цього атрибута.
+
+Атрибут приймає наступні значення: ::
+
+* *`sync`* -- синхронний режим. У синхронному режимі читання даних, процес читання відбувається послідовно (читання даних виконується на рівні `registry-rest-api`). Запит на читання блокується до тих пір, поки дані не будуть повернуті від сервера бази даних. Це означає, що виконання додатка зупиняється на час отримання результатів запита. Синхронний режим може бути корисним у випадках, коли важливо забезпечити послідовність операцій.
+
+* *`async`* -- асинхронний режим. В асинхронному режимі читання даних, запит на читання відправляється серверу бази даних, але не блокує виконання додатка (читання даних виконується шляхом `rest-api > registry-kafka-api > rest-api`). Замість цього, додаток продовжує виконувати наступні дії, а результати читання обробляються коли вони стануть доступними. Асинхронний режим дозволяє збільшити продуктивність додатка, оскільки він не чекає завершення операцій читання. Це може бути корисним у випадках, коли необхідно одночасно обробляти велику кількість запитів або коли час відгуку сервера бази даних є непередбачуваним.
+
++
+._Приклад створення таблиці із readMode="sync"_
+[%collapsible]
+====
+[source,xml]
+----
+<changeSet>
+	<ext:createTable name="example_read_mode" readMode="sync">
+		<column name="id" type="UUID" defaultValueComputed="uuid_generate_v4()">
+			<constraints nullable="false" primaryKey="true" primaryKeyName="pk_example_read_mode_id"/>
+		</column>
+		<column name="first_name" type="text"/>
+            ...
+            ...
+
+	</ext:createTable>
+</changeSet>
+----
+====
+
+[#ext-auto-generate]
+===== Атрибут ext:autoGenerate та доступні значення
+
+Атрибут *`ext:autoGenerate`* є нестандартним атрибутом розширення Liquibase, який використовується для автоматичної генерації значень для стовпця під час вставки записів у таблицю. Використовується у тегу *`<column>`*.
+
+Дозволяє згенерувати унікальний та зрозумілий для користувача номер для сутності, створеної у реєстрі (документа/акту). Номер формується під час збереження сутності та є унікальним у рамках окремого реєстру.
+
+._XML-схема_
+[%collapsible]
 ====
 [source,xml]
 ----
@@ -94,6 +179,12 @@ TIP: За детальною інформацією щодо створення 
 ...
 </createTable>
 ----
+
+У цьому конкретному випадку, атрибут `*ext:autoGenerate*` встановлює шаблон значення для стовпця *`column_name`* у форматі *`AA-{dd-MM-yyyy}-{SEQ}`*.
+
+Значення, що будуть автоматично генеруватися, матимуть вигляд `AA-день-місяць-рік-послідовність`.
+
+Тут "АА" -- код документа, "день", "місяць" та "рік" -- це дата у форматі *`dd-MM-yyyy`*, а "послідовність" -- це унікальний порядковий номер запису, що додається.
 ====
 
 [TIP]
@@ -101,6 +192,101 @@ TIP: За детальною інформацією щодо створення 
 Детальний опис функціональності ви можете переглянути за посиланням:
 
 * xref:data-modeling/data/physical-model/auto-generate-number.adoc[]
+====
+
+=== Зміна налаштувань поведінки API на рівні структури створення таблиць
+
+Розробники регламенту мають змогу змінювати налаштування поведінки API на рівні структури створення таблиць.
+
+Для цього імплементовано тег *`ext:alterTableApi`*, який є нестандартним тегом розширення Liquibase. За допомогою цього тегу можна змінювати деякі атрибути таблиці, які не впливають на структуру даних, але впливають на генерацію коду API.
+
+Наприклад, у відповідному контексті, *`ext:alterTableApi`* може дозволити змінювати атрибути, такі як *`bulkLoad`* або *`readMode`*, що регулюють можливість завантаження даних до таблиці з файлів або масивом та режим читання даних (синхронний або асинхронний), відповідно.
+
+[TIP]
+====
+Див. детальніше про *`bulkLoad`* та *readMode* у відповідних розділах:
+
+* xref:#bulk-load[]
+* xref:#read-mode[]
+====
+
+Цей тег допомагає розробникам і моделювальникам регламентів керувати налаштуваннями поведінки API _для таблиць після їх створення, без зміни структури даних_.
+
+Тег використовує розширення *`ext:attribute`*, яке приймає ключ (*`name`*) та значення (*`value`*) атрибута, для якого необхідно змінити поведінку.
+
+[NOTE]
+====
+* Обов'язковим є вказання назви таблиці (`name`) та хоча б одного з 2-х атрибутів (`bulkLoad` або `readMode`). Атрибути та їх значення зберігаються у таблиці *`ddm_liquibase_metadata`*.
+
+* За відсутності атрибутів `bulkLoad` або `readMode` у тегу `ext:alterTableApi`, значення у таблиці метаданих `ddm_liquibase_metadata` залишається незмінним та не впливає на поведінку системи.
+====
+
+._XML-схема використання тегу ext:alterTableApi_
+[%collapsible]
+====
+[source,xml]
+----
+<changeSet author="..." id="change api behavior">
+	<ext:alterTableApi table="example_bulk_1">
+		<ext:attribute name="bulkLoad" value="true"/>
+		<ext:attribute name="readMode" value="sync"/>
+	</ext:alterTableApi>
+	<ext:alterTableApi table="example_bulk_2">
+		<ext:attribute name="bulkLoad" value="false"/>
+	</ext:alterTableApi>
+</changeSet>
+----
+====
+
+[WARNING]
+====
+[%collapsible]
+.Використовуйте тег *`ext:alterTableApi`* у новому changeSet, після відпрацьованого changeSet для створення відповідної таблиці.
+=====
+* Вже створені структури даних можуть лише розширюватись.
+* Теги в регламенті, які вже було опрацьовано, не можуть бути змінені.
+* Усі зміни є ідемпотентними, означає, що якщо ви виконаєте один і той же changeSet кілька разів, стан бази даних залишиться незмінним після першого виконання.
+=====
+====
+
+._Розширена XML-схема. Розгортання таблиць з одними значеннями атрибутів та подальша зміна цих значень із використанням тегу ext:alterTableApi_
+[%collapsible]
+====
+[source,xml]
+----
+<databaseChangeLog>
+	<changeSet author="..." id="initial creation">
+		<ext:createTable name="example_bulk" bulkLoad="false">
+			<column name="id" type="UUID" defaultValueComputed="uuid_generate_v4()">
+				<constraints nullable="false" primaryKey="true" primaryKeyName="pk_example_bulk_id"/>
+			</column>
+			<column name="first_name" type="text"/>
+            ...
+            ...
+
+		</ext:createTable>
+		<ext:createTable name="example_read_mode" readMode="sync">
+			<column name="id" type="UUID" defaultValueComputed="uuid_generate_v4()">
+				<constraints nullable="false" primaryKey="true" primaryKeyName="pk_example_read_mode_id"/>
+			</column>
+			<column name="first_name" type="text"/>
+            ...
+            ...
+
+		</ext:createTable>
+	</changeSet>
+	<changeSet author="..." id="change api behavior">
+		<ext:alterTableApi table="example_bulk">
+			<ext:attribute name="bulkLoad" value="true"/>
+			<ext:attribute name="readMode" value="sync"/>
+		</ext:alterTableApi>
+		<ext:alterTableApi table="example_bulk">
+			<ext:attribute name="bulkLoad" value="true"/>
+		</ext:alterTableApi>
+	</changeSet>
+</databaseChangeLog>
+
+----
 ====
 
 [#create-search-conditions]
@@ -129,7 +315,7 @@ TIP: За детальною інформацією щодо створення 
 
 Liquibase обробляє XML-модель та створює таблиці-представлення (`*VIEW*`) у базі даних, які є зведеними таблицями та містять інформацію, отриману з інших таблиць. До назви такої таблиці в БД додається префікс `*_v*`. Наприклад, *`search_condition_test_v`*.
 
-При розгортанні моделі даних реєстру, для кожного критерію пошуку створюється REST API-ендпоінт з аналогічною назвою, але в іншій конвенції (кейсі), наприклад *`search-condition-test`*.
+При розгортанні моделі даних реєстру, для кожного критерію пошуку створюється REST API-ендпоінт з аналогічною назвою, але в іншій конвенції (dash-case), наприклад *`search-condition-test`*.
 
 При виконанні запита до API-ресурсу `*/search-condition-test*`, дані зі зведеної таблиці `*search_condition_test_v*` повертаються у відповідь.
 
