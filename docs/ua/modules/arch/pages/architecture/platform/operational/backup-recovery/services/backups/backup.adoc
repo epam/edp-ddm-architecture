@@ -1,0 +1,120 @@
+== Високорівнева схема системи виконання, збереження та відновлення резервних копій реєстрів
+
+Дана схема поверхнево показує систему резервного копіювання реєстру та їх відновлення. Кожен реєстр складається з трьох важливих елементів:
+
+- Kubernetes manifests
+- Persistent Volumes
+- Object Buckets
+
+image::arch:architecture/platform/operational/backup-recovery/services/backups/backup-design.svg[]
+
+Для повноцінного відновлення реєстру після можливого збою системи необхідно створити резервну копію усіх елементів в єдиний зріз часу для забезпечення консолідації даних.
+
+== Режими резервного копіювання даних
+
+Резервне копіювання буде відбуватись в двух режимах:
+
+* ручний - режим ініційований адміністратором платформи або ж адміністратором реєстру.
+* за розкладом - автоматичне виконання резервного копіювання.
+
+== Інструменти, що виконують резервування та відновлення даних
+
+За створення резервних копій різних елементів системи відповідають різні інструменти платформи. За допомогою системи Velero буде відбуватись резервування Kubernetes Manifests та PersistentVolumes. За резервування ObjectBuckets же буде відповідати система Object Bucket Backup (OBB)
+
+== Створення резервної копії реєстру
+
+Для кожного реєстру відповідно буде створений Jenkins Pipeline для запуску резервного копіювання реєстру. Права на запуск даного pipeline буде в адміністратора платформи та адміністратора реєстру. При запуску pipeline для створення резервної копії реєстру система запустить виконання Velero, що повинен створити резервні копії Kubernetes Manifests і PersistentVolumes та зберегти їх в відповідну директорію (назва реєстру) зовнішнього сховища резервних копій. Паралельно буде запущена система OBB, що повинна зберегти усі ObjectBuckets, які належать даному реєстру, в відповідну директорію (назва реєстру) зовнішнього сховища. Також Jenkins Pipeline повинен сформувати CustomResource, що зберігає metadata про створений бекап реєстру. CustomResource повинен містити наступну інформацію:
+
+[source, yaml]
+----
+Kind: DdmRegistryBackup
+metadata:
+ name: {registry-name}-{YYYY-MM-DD-HH-MM-SS}
+spec:
+ type: {manual|regular}
+ registry-alias: {registry-name}
+ velero-backup-name:
+ objectbucket-backup-link:
+----
+
+[source, yaml]
+----
+Jenkins code
+#!/usr/bin/env bash
+if [[ $# -eq 0 ]] ; then
+    echo 'run script with registry name and backup type'
+    exit 1
+fi
+
+registry_name="$1"
+backup_type="$2"
+
+noobaa_s3_host=$(oc get route/s3 -n openshift-storage -o jsonpath='{.spec.host}')
+noobaa_s3_endpoint="https://${noobaa_s3_host}"
+
+execution_time=$(date '+%Y-%m-%d-%H-%M-%S')
+backup_date=$(date '+%Y-%m-%d-%H-%M-%S')
+destination_bucket="backup-s3-noobaa-bucket"
+
+echo "Getting AWS_KEY for secret"
+access_key_aws=$(oc get secret/backup-credential -n control-plane -o jsonpath='{.data.AWS_ACCESS_KEY_ID}' | base64 -d)
+echo "Getting AWS_SECRET_KEY for secret"
+access_secret_key_aws=$(oc get secret/backup-credential -n control-plane -o jsonpath='{.data.AWS_SECRET_ACCESS_KEY}' | base64 -d)
+
+for bucket_claim in $(oc get objectbucketclaim -n ${registry_name} -o=NAME) ; do
+bucket=$(oc get "${bucket_claim}" -n "${registry_name}" -o=jsonpath="{.spec.bucketName}")
+echo "Start backup for ${bucket}"
+bucket_secret=$(awk 'BEGIN{split(ARGV[1],var,"/");print var[2]}' "${bucket_claim}")
+
+acess_key_noobaa=$(oc get secret/"${bucket_secret}" -n "${registry_name}" -o jsonpath='{.data.AWS_ACCESS_KEY_ID}' | base64 -d)
+access_secret_key_noobaa=$(oc get secret/"${bucket_secret}" -n "${registry_name}" -o jsonpath='{.data.AWS_SECRET_ACCESS_KEY}' | base64 -d)
+mkdir -p ~/.config/rclone
+
+echo "
+[s3_bucket]
+type = s3
+provider = AWS
+env_auth = false
+access_key_id = ${access_key_aws}
+secret_access_key = ${access_secret_key_aws}
+region = eu-central-1
+location_constraint = EU
+acl = bucket-owner-full-control
+
+[noobaa]
+type = s3
+provider = Ceph
+env_auth = false
+access_key_id = ${acess_key_noobaa}
+secret_access_key = ${access_secret_key_noobaa}
+endpoint = ${noobaa_s3_endpoint}
+acl = bucket-owner-full-control
+bucket_acl = authenticated-read" > ~/.config/rclone/rclone.conf
+
+rclone sync noobaa:${bucket} s3_bucket:backup-s3-noobaa-bucket/${registry_name}/${execution_time}/${bucket_secret}/
+
+
+if [ $? -eq 0 ]; then
+cat <<EOF | oc apply -f -
+apiVersion: ddm.registy.jenkins/v1
+kind: RegistryBackup
+metadata:
+  namespace: ${registry_name}
+  name: ${registry_name}-${execution_time}
+spec:
+  type: ${backup_type}
+  date: ${execution_time}
+  registry-alias: ${registry_name}
+  velero-backup-name:
+  objectbucket-backup-link: s3://${destination_bucket}/${registry_name}/${execution_time}/${bucket_secret}/
+EOF
+
+echo "s3://${destination_bucket}/${registry_name}/${execution_time}/${bucket_secret}/"
+else
+  echo "Backup complete with ERROR"
+fi ; done
+----
+
+== Відновлення з резервної копії реєстру
+
+В відповідності з Pipeline для запуску резервного копіювання реєстру в Jenkins буде знаходитись Pipeline для відновлення реєстру з резервної копії. Даний pipeline дозволить адміністратору реєстру або адміністратору платформи на основі метаданих, збережених у CustomeResource, що описаний вище, відновити реєстр до стану зрізу часу, коли було виконане створення резервної копії реєстру.
