@@ -1,0 +1,115 @@
+:toc-title: ЗМІСТ
+:toc: auto
+:toclevels: 5
+:experimental:
+:important-caption:     ВАЖЛИВО
+:note-caption:          ПРИМІТКА
+:tip-caption:           ПІДКАЗКА
+:warning-caption:       ПОПЕРЕДЖЕННЯ
+:caution-caption:       УВАГА
+:example-caption:           Приклад
+:figure-caption:            Зображення
+:table-caption:             Таблиця
+:appendix-caption:          Додаток
+:sectnums:
+:sectnumlevels: 5
+:sectanchors:
+:sectlinks:
+:partnums:
+
+= Cleanup-процес видалення регламенту
+
+== Загальний опис
+
+*Cleanup*-процес (*`cleanup-job`*) у Jenkins -- це автоматизований процес, розроблений для підтримки оптимального стану регламенту реєстру шляхом видалення застарілих або непотрібних даних, ресурсів та компонентів. Процес включає очищення тимчасових реплік БД, які розгортаються для версій-кандидатів, видалення ресурсів та сервісів, очищення репозиторію Nexus, а також можливість вибору додаткових опцій відповідно до потреб адміністратора.
+
+[#stages]
+== Етапи та кроки Cleanup-процесу
+
+_Процес включає наступні етапи:_
+
+cleanup-of-version-candidate-dbs ::
+
+Цей етап забезпечує ефективне очищення тимчасових БД для версій-кандидатів, допомагаючи звільнити місце і підтримувати систематичний порядок.
++
+TIP: Детальніше про особливості розгортання БД для версій-кандидатів див. на сторінці xref:registry-admin/admin-portal/registry-modeling/tables/tables-data-structures.adoc#data-model-version-candidate[Особливості роботи з таблицями в рамках версій-кандидатів].
+
+delete-data-services ::
+На цьому етапі відбувається видалення ресурсів *`buildConfig`* та *Helm*-чартів для сервісів даних: `registry-kafka-api`, `registry-soap-api`, `registry-rest-api` та `registry-model`, а також видалення *Kafka topics* для API реєстру -- сервісу `registry-rest-api`.
++
+TIP: Сервіси даних (data services) -- це набір служб та інструментів, які забезпечують збір, обробку, зберігання та надання даних для різних застосунків, користувачів та систем.
+
+[#cleanup-trigger]
+cleanup-trigger ::
+Цей етап містить декілька кроків:
+
+* Видалення сервісів даних: `registry-kafka-api`, `registry-soap-api`, `registry-rest-api` та `registry-model`.
+
+* Видалення `history-excerptor`.
++
+TIP: *`History excerptor`* -- це інструмент, який генерує зрозумілий витяг змін з історичної таблиці, що містить дані про зміни в усіх інших таблицях бази даних реєстру, і дозволяє завантажити цей витяг у форматі PDF прямо з консолі Jenkins.
+
+* Очищення Nexus -- репозиторію для зберігання артефактів.
+
+* Вибір між двома опціями:
+
+** Видалення регламенту реєстру -- *`registry-regulations`*, очищення бази даних та ресурсів Redash (за умови, що чекбокс *`DELETE_REGISTRY_REGULATIONS_GERRIT_REPOSITORY`* активовано).
+
+** Залишення *`registry-regulations`* без змін, але з очищенням бази даних та ресурсів Redash (за умови, що чекбокс *`DELETE_REGISTRY_REGULATIONS_GERRIT_REPOSITORY`* деактивовано).
+
+* Створення нових порожніх репозиторіїв для *`history-excerptor`* та *`registry-regulations`*.
++
+NOTE: Створення `registry-regulations` пропускається, якщо cleanup-процес не видаляв цей компонент.
+
+* Запуск пайплайну публікації регламенту -- *`MASTER-Build-registry-regulations`* -- з активованою опцією *`FULL_DEPLOY`* (за умови, якщо cleanup-процес не видаляв компонент `*registry-regulations*`), що дозволяє правильно розгорнути регламент після процесу очищення.
+
+[#build-with-params]
+== Конфігурація та запуск cleanup-процесу
+
+Ви можете налаштувати та запустити процес очищення регламенту у сервісі Jenkins реєстру за посиланням: https://admin-tools-<назва-реєстру>.apps.<назва-кластера>.dev.registry.eua.gov.ua/cicd.
+
+. Увійдіть до адміністративної панелі *Control Plane*.
+. Відкрийте розділ [.underline]#Реєстри# > [.underline]#Компоненти реєстру# та перейдіть за посиланням до сервісу *Jenkins*.
++
+image:registry-admin/regulations-deploy/cleanup-job/cleanup-job-1.png[]
+
+.  Відкрийте процес *`cleanup-job`* та перейдіть до меню *`Build with Parameters`* (запуск процесу з певними параметрами конфігурації).
++
+image:registry-admin/regulations-deploy/cleanup-job/cleanup-job-2.png[]
++
+Для налаштування та запуску cleanup-job, необхідно вказати параметри, що забезпечують правильну роботу процесу.
+
+Ось перелік параметрів та їх опис: ::
++
+* *`DELETE_REGISTRY_REGULATIONS_GERRIT_REPOSITORY`* -- параметр визначає, чи потрібно видаляти та створювати заново репозиторій *_registry-regulations_* із порожнього шаблону.
++
+NOTE: Якщо опція встановлена (`true`), репозиторій буде видалено та створено заново. За замовчуванням опція *`DELETE_REGISTRY_REGULATIONS_GERRIT_REPOSITORY`* завжди у значенні `false`, тобто неактивна.
+
+* *`STAGES`* -- розділ, що містить параметри для налаштування різних етапів процесу (_див.детальніше розділ xref:#stages[]_).
+
+* *`CODEBASE_NAME`* -- вкажіть назву для *CodeBase*, з якою працюєте. У цьому випадку вкажіть *`registry-regulations`*.
+
+* *`CODEBASE_HISTORY_NAME`* -- вкажіть назву історії CodeBase, яка відображає версію та стан коду на певний момент часу. У цьому випадку вкажіть *`history-excerptor`*.
+
+* *`REPOSITORY_PATH`* -- вкажіть шлях до репозиторію, з яким ви працюєте. Це допоможе системі знайти та виконати операції з відповідним репозиторієм. Наприклад, `ssh://jenkins@gerrit:<порт>/registry-regulations`.
+
+* *`LOG_LEVEL`* -- виберіть рівень журналювання для процесу. Доступні варіанти: `ERROR`, `WARN`, `INFO` або `DEBUG`. Цей параметр допомагає контролювати рівень деталізації інформації, яка буде зберігатися в логах під час виконання процесу.
++
+[TIP]
+====
+Щоб переглянути лог виконання процесу, перейдіть усередину необхідного пайплайну та оберіть меню *Console Output* (вивід консолі).
+
+image:registry-admin/regulations-deploy/cleanup-job/cleanup-job-5.png[]
+====
+
+* *`DEPLOYMENT_MODE`* -- вкажіть режим розгортання для системи. Доступні опції: *`development`* (розробка) та `*production*` (промислове середовище).
++
+image:registry-admin/regulations-deploy/cleanup-job/cleanup-job-3.png[]
+
+. Після встановлення всіх параметрів, запустіть cleanup-процес, натиснувши кнопку kbd:[*Build*]. Система виконає вказані операції відповідно до налаштувань та забезпечить відповідний стан кодової бази та репозиторіїв.
+
+. В результаті розпочнеться процес видалення регламенту, який або видалить регламент *`registry-regulations`*, або ні, залежно від активації або деактивації чекбоксу *`DELETE_REGISTRY_REGULATIONS_GERRIT_REPOSITORY`* на етапі xref:#cleanup-trigger[cleanup-trigger].
+
+. Після завершення cleanup-процесу, автоматично запуститься пайплайн публікації регламенту -- *`MASTER-Build-registry-regulations`* -- з активованою опцією *`FULL_DEPLOY`* (за умови, якщо cleanup-процес не видаляв компонент `*registry-regulations*`), що дозволяє правильно розгорнути регламент після процесу очищення.
++
+image:registry-admin/regulations-deploy/cleanup-job/cleanup-job-4.png[]
