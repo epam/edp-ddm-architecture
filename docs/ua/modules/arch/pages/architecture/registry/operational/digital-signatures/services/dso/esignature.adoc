@@ -1,0 +1,189 @@
+Робота з цифовим підписом 
+------------------------
+== Основні сценарії
+
+=== Перевірка цифрового підпису накладеного чиновником
+
+Діаграма послідовності перевірки підпису:
+[plantuml]
+----
+include::arch:partial$architecture/registry/operational/digital-signatures/services/verify-sign-officer.puml[]
+----
+
+Ланцюг валідаційних перевірок реалізовано в наступних классах:
+[plantuml]
+----
+include::arch:partial$architecture/registry/operational/digital-signatures/services/signature-validator-class-diagram-officer.puml[]
+----
+
+Сервісом здійснюються наступні перевірки підпису чиновника:
+
+* ЕЦП дійсний
+* ЕЦП містить мітку часу
+* різниця в часі між моментом накладання підпису та поточним часом не перевищує значення заданого в timeout-ms параметрі, за замовчуванням 2 хвилини (120 000 ms)
+* цілісність даних непорушена (Значення хеша з підпису відповідає хешу порахованому сервісом на основі отриманих даних)
+* документ був підписаний ключем, який належить автентифікованому користувачу що його використовує. Дані користувача з ЕЦП відповідають даним в JWT токені доступу та містять ПІБ, РНОКПП, ЄДРПОУ.
+
+Запит:
+[source]
+----
+POST /api/esignature/officer/verify --header 'X-Access-Token: token'
+----
+
+Тіло запиту:
+[source, json]
+----
+{
+    "signature": "string",
+    "data": "string"
+}
+----
+
+Відповіді:
+
+* 200 OK Підпис валідний
+
+Тіло відповіді:
+[source, json]
+----
+{
+    "isValid": true,
+    "error": null
+}
+----
+
+* 200 OK Помилка перевірки підпису
+
+Тіло відповіді:
+[source, json]
+----
+{
+    "isValid": false,
+    "error": {
+        "code": "ERROR_EMPTY_EDRPOU",
+        "message": "Signature does not contain EDRPOU",
+        "localizedMessage": "Підпис не містить ЄДРПОУ код"
+    }
+}
+----
+* 400 Bad request Невалідний запит
+
+Тіло відповіді:
+[source, json]
+----
+{
+    "code": "string",
+    "message": "string",
+    "localizedMessage": "string"
+}
+----
+
+=== Перевірка цифрового підпису накладеного громадянином
+Діаграма послідовності перевірки підпису:
+[plantuml]
+----
+include::arch:partial$architecture/registry/operational/digital-signatures/services/verify-sign-citizen.puml[]
+----
+
+Ланцюг валідаційних перевірок реалізовано в наступних классах:
+[plantuml]
+----
+include::arch:partial$architecture/registry/operational/digital-signatures/services/signature-validator-class-diagram-citizen.puml[]
+----
+
+Сервісом здійснюються наступні перевірки підпису громадянина:
+
+* ЕЦП дійсний
+* ЕЦП містить мітку часу
+* ЕЦП належить фізичній особі - містить ПІБ і РНОКПП та не містить ЄДРПОУ
+* JWT токен належить фізичній особі, містить ПІБ і РНОКПП та не містить ЄДРПОУ
+* різниця в часі між моментом накладання підпису та поточним часом не перевищує значення заданого в timeout-ms параметрі, за замовчуванням 2 хвилини (120 000 ms)
+* цілісність даних непорушена (Значення хеша з підпису відповідає хешу порахованому сервісом на основі отриманих даних)
+* документ був підписаний ключем, який належить автентифікованому користувачу що його використовує  (дані користувача з ЕЦП відповідають даним в JWT токені доступу)
+
+Запит:
+[source]
+----
+POST /api/esignature/citizen/verify --header 'X-Access-Token: token'
+----
+
+Тіло запиту:
+[source, json]
+----
+{
+  "allowedSubjects": ["CITIZEN"],
+  "signature": "string",
+  "data": "string"
+}
+----
+allowedSubjects - пакет валідаційних правил для перевірки підпису, може містити [ CITIZEN, ENTREPRENEUR, LEGAL ]. У разі використання декількох правил підпис є валідним, якщо пройшла хоч одна з перевірок. В разі непрохдження перевірок по жодному з пакетів, повертається перша знайдена помилка. Перевірка для ENTREPRENEUR та LEGAL відбувається за допомогою валідатора того ж що й для чиновника.
+
+Відповіді:
+
+* 200 OK Підпис валідний
+
+Тіло відповіді:
+[source, json]
+----
+{
+    "isValid": true,
+    "error": null
+}
+----
+
+* 200 OK Помилка перевірки підпису
+
+Тіло відповіді:
+[source, json]
+----
+{
+    "isValid": false,
+    "error": {
+        "code": "ERROR_SIGNATURE_NAME_MISMATCH",
+        "message": "Signature and current user full name mismatch",
+        "localizedMessage": "ПІБ підпису та користувача відрізняються"
+    }
+}
+----
+* 400 Bad request Невалідний запит
+
+Тіло відповіді:
+[source, json]
+----
+{
+    "code": "string",
+    "message": "string",
+    "localizedMessage": "string"
+}
+----
+
+=== Отримання данних про власника підпису
+Отримання інформації, ким було накладено підпис відбувається шляхом перевірки чинності підпису з урахуванням дозволеного проміжку часу заданого в sign.auth.timeout-ms параметрі, за замовчуванням 1 хвилина (60 000 ms)
+Запит:
+[source]
+----
+POST /api/esignature/owner --header 'X-Access-Token: token'
+----
+
+Тіло запиту:
+[source, json]
+----
+{
+  "signature": "string",
+  "data": "string"
+}
+----
+
+Відповіді:
+
+* 200 OK Підпис перевірено та отримано дані про підписуючого
+
+Тіло відповіді:
+[source, json]
+----
+{
+  "fullName": "string",
+  "drfo": "string",
+  "edrpou": "string"
+}
+----

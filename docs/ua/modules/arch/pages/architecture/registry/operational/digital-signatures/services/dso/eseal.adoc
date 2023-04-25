@@ -1,0 +1,127 @@
+Робота з цифовою печаткою 
+------------------------
+
+== Основні сценарії
+=== Підписання даних системним цифровим підписом (цифровою печаткою)
+
+Діаграма послідовності накладання системного підпису:
+[plantuml]
+----
+include::arch:partial$architecture/registry/operational/digital-signatures/services/sign-document.puml[]
+----
+
+Обраховує значення хеша для даних що передані в сервіс з допомогою відповідної хеш функції та накладає цифрову печатку організації з міткою часу на отриманий хеш. Також добавляє до підпису цифровий сертифікат підпису.
+
+Запит:
+[source]
+----
+POST /api/eseal/sign --header 'X-Access-Token: token'
+----
+
+Тіло запиту:
+[source, json]
+----
+{
+  "data": "string"
+}
+----
+
+Відповіді:
+
+* 200 OK Документ підписано
+
+Тіло відповіді:
+[source, json]
+----
+{
+  "signature": "string"
+}
+----
+
+* 400 Bad request Невалідний запит
+
+Тіло відповіді:
+[source, json]
+----
+{
+    "code": "string",
+    "message": "string",
+    "localizedMessage": "string"
+}
+----
+
+=== Перевірка системної цифрової печатки та даних
+
+Діаграма послідовності перевірки системного підпису:
+[plantuml]
+----
+include::arch:partial$architecture/registry/operational/digital-signatures/services/verify-seal.puml[]
+----
+
+Ланцюг валідаційних перевірок реалізовано в наступних классах:
+[plantuml]
+----
+include::arch:partial$architecture/registry/operational/digital-signatures/services/seal-validator-class-diagram.puml[]
+----
+
+Сервісом здійснюються наступні перевірки:
+
+* ЕЦП дійсний
+* ЕЦП містить мітку часу.
+* цілісність даних непорушена (Значення хеша з підпису відповідає хешу порахованому сервісом на основі отриманих даних)
+* документ був підписаний системним ключем (issuer та serial атрибути з ЕЦП містяться в списку дозволених системних цифрових печаток)
+
+Запит:
+[source]
+----
+POST /api/eseal/verify --header 'X-Access-Token: token'
+----
+
+Тіло запиту:
+[source, json]
+----
+    {
+        "signature": "string",
+        "data": "string"
+    }
+----
+
+Відповіді:
+
+* 200 OK Печатка валідна
+
+Тіло відповіді:
+[source, json]
+----
+{
+    "isValid": true,
+    "error": null
+}
+----
+
+* 200 OK Помилка перевірки печатки
+
+Тіло відповіді:
+[source, json]
+----
+{
+    "isValid": false,
+    "error": {
+        "code": "ERROR_UNKNOWN_ESEAL",
+        "message": "Signature key is not allowed",
+        "localizedMessage": "Печатка не авторизована для накладання підпису"
+    }
+}
+----
+* 400 Bad request Невалідний запит
+
+Тіло відповіді:
+[source, json]
+----
+{
+    "code": "string",
+    "message": "string",
+    "localizedMessage": "string"
+}
+----
+
