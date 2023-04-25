@@ -1,0 +1,60 @@
+@startuml
+participant "Web клієнт" as client order 1
+participant "Модуль роботи з\nбізнес-процесами" as businessProcessModule order 2
+participant "Модуль роботи з файлами" as fileModule order 3
+participant "Файловий\nсервіс" as fileService order 4
+
+skinparam responseMessageBelowArrow true
+
+title Створення бізнес-процесу регламенту у вказаній версії
+
+client -> businessProcessModule: створити бізнес-процес
+activate businessProcessModule
+
+  businessProcessModule -> fileModule: отримати файловий\nсервіс для вказаної версії
+  activate fileModule
+    create fileService
+    fileModule -> fileService: ініціалізувати
+    alt вказана версія не існує
+      fileModule <-- fileService: помилка ініціалізації
+      businessProcessModule <-- fileModule: помилка ініціалізації\nфайлового сервісу
+      client <-- businessProcessModule: помилка зі статусом\n404 Not Found
+    end
+    fileModule <-- fileService
+    return файловий сервіс
+  deactivate fileModule
+
+  businessProcessModule -> businessProcessModule: провалідувати інпут бізнес-процесу
+  alt бізнес-процес не валідний
+  client <-- businessProcessModule: помилка зі статусом\n422 Unprocessable entity
+  end
+
+
+  businessProcessModule -> fileService: перевірити чи вже існує бізнес-процес з вказаним ім'ям
+  activate fileService
+    return ознака існування
+  deactivate fileService
+  alt бізнес-процес з таким ім'ям вже існує
+  client <-- businessProcessModule: помилка зі статусом\n409 Conflict
+  end
+
+  businessProcessModule -> businessProcessModule: визначити дати створення\nта останнього оновлення\nяк поточну дату та час
+
+  businessProcessModule -> businessProcessModule: додати дати створення та\nостаннього оновлення до контенту
+  note left
+    Дата створення:
+    **///bpmn:definitions/@dates:created//**
+
+    Дата останнього оновлення:
+    **///bpmn:definitions/@dates:modified//**
+  end note
+
+  businessProcessModule -> fileService: створити файл бізнес-процесу
+  activate fileService
+  return
+  deactivate fileService
+
+  client <-- businessProcessModule: контент бізнес-процесу з датами\nстворення та останнього\nоновлення
+
+deactivate businessProcessModule
+@enduml

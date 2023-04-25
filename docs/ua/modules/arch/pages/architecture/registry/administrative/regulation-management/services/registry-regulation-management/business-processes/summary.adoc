@@ -1,0 +1,135 @@
+== Бізнес-процеси
+
+=== Загальний опис
+
+Модуль для організації роботи з бізнес-процесами що знаходяться у репозиторії регламенту `registry-regulations` за шляхом `/bpmn`.
+
+.Надає наступний функціонал:
+- Отримання списку всіх бізнес-процесів регламенту
+- CRUD операції над бізнес-процесами регламенту
+
+==== Отримання списку всіх бізнес-процесів регламенту
+
+Повертає список всіх бізнес-процесів вказаної версії регламенту, їх назви, системні назви та дати створення та останнього оновлення бізнес-процесів.
+
+.Діаграма послідовності отримання списку доступних бізнес-процесів
+[plantuml]
+----
+include::arch:partial$architecture/registry/administrative/regulation-management/services/registry-regulation-management/business-processes/get-business-process-list.puml[]
+----
+
+==== Створення бізнес-процесу регламенту
+
+Додає бізнес-процес з переданим контентом у версії-кандидаті.
+
+.Діаграма послідовності створення бізнес-процесу у вказаній версії-кандидаті
+[plantuml]
+----
+include::arch:partial$architecture/registry/administrative/regulation-management/services/registry-regulation-management/business-processes/create-business-process.puml[]
+----
+
+==== Читання бізнес-процесу регламенту
+
+Повертає контент бізнес-процесу версії (майстер, чи кандидату).
+
+.Діаграма послідовності читання бізнес-процесу з вказаної версії
+[plantuml]
+----
+include::arch:partial$architecture/registry/administrative/regulation-management/services/registry-regulation-management/business-processes/read-business-process.puml[]
+----
+
+==== Оновлення бізнес-процесу регламенту
+
+Оновлює бізнес-процес, або створює новий бізнес-процес якщо той не існує, з переданим контентом у версії-кандидаті.
+
+.Діаграма послідовності оновлення бізнес-процесу у вказаній версії-кандидаті
+[plantuml]
+----
+include::arch:partial$architecture/registry/administrative/regulation-management/services/registry-regulation-management/business-processes/update-business-process.puml[]
+----
+
+==== Видалення бізнес-процесу регламенту
+
+Видаляє файл бізнес-процесу з версії-кандидата.
+
+.Діаграма послідовності видалення бізнес-процесу з вказаної версії-кандидата
+[plantuml]
+----
+include::arch:partial$architecture/registry/administrative/regulation-management/services/registry-regulation-management/business-processes/delete-business-process.puml[]
+----
+
+=== Робота з датами створення та останнього оновлення бізнес-процесів
+
+.Загальні положення:
+- Дати створення та останнього оновлення повинні показувати реальну картину роботи з бізнес-процесом.
+- Для бізнес-процесів що вже існують в майстер-версії дати повинні показуватися без міграції файлів бізнес-процесів.
+
+.Зчитування дат бізнес-процесів
+* Дати створення та останнього оновлення бізнес-процесу можуть знаходитися у XML контенті бізнес-процесу:
+** XPath дати створення бізнес-процесу - `**__/bpmn:definitions/@dates:created__**`
+** XPath дати останнього оновлення бізнес-процесу - `**__/bpmn:definitions/@dates:modified__**`
+* Якщо в контенті бізнес-процесу не представлена дата створення або останнього оновлення то вона зчитується з `**__git log__**`
+** Дата створення бізнес-процесу - це дата першого комміту з `**__git log__**` по файлу цього бізнес-процесу
+** Дата останнього оновлення бізнес-процесу - це дата останнього комміту з `**__git log__**` по файлу цього бізнес-процесу
+
+[NOTE]
+====
+Формат дат створення та останнього оновлення - `**ISO 8601**`.
+Всі дати в зоні `**UTC+0**`, тобто формат - `**yyyy-MM-dd\'T\'HH:mm:ss.SSS\'Z'**`.
+Наприклад `**2022-09-20T15:26:13.136Z**`.
+====
+
+.Запис дат бізнес-процесів
+* При створенні бізнес-процесу через REST-API:
+** Обидві дати у контенті бізнес-процесу виставляються автоматично
+** Обидві дати будуть дорівнювати поточній даті на момент створення бізнес-процесу
+** Будь-які явно зазначені дати у контенті бізнес-процесу при створенні будуть ігноруватись.
+* При оновленні бізнес-процесу через REST-API:
+** Дата оновлення у контенті бізнес-процесу виставляються автоматично
+** Дата оновлення буде дорівнювати поточній даті на момент оновлення бізнес-процесу
+** Дата створення при оновленні бізнес-процесу #_також_# проставляється автоматично та зчитується з _неоновленого_ контенту бізнес-процесу або з `**__git log__**` файлу бізнес-процесу, якщо дата створення не представлена у контенті
+** Будь-які явно зазначені дати у контенті бізнес-процесу при оновленні будуть ігноруватись.
+
+.Приклад контенту бізнес-процесу з датами:
+[source,xml]
+----
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions
+    xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+    xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+    xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+    xmlns:camunda="http://camunda.org/schema/1.0/bpmn"
+    xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+    id="Definitions_1ifek2y"
+    targetNamespace="http://bpmn.io/schema/bpmn" exporter="Camunda Modeler"
+    exporterVersion="4.6.0"
+    xlmns:rrm="http://registry-regulation-management"
+    rrm:created="2022-09-20T15:26:13.136Z"
+    rrm:modified="2022-10-15T07:11:54.588Z">
+  <bpmn:process id="auto_process_1TBE" name="BPMN-1-task-before-error" isExecutable="true">
+    <bpmn:startEvent id="StartEvent_1" name="Початок БП" camunda:initiator="initiator">
+      <bpmn:outgoing>Flow_0m372ld</bpmn:outgoing>
+    </bpmn:startEvent>
+      <!--...-->
+    <bpmn:endEvent id="Event_1lmfrox" name="Кінець БП">
+      <bpmn:incoming>Flow_077gjd3</bpmn:incoming>
+    </bpmn:endEvent>
+  </bpmn:process>
+</bpmn:definitions>
+----
+
+.XSD бізнес-процесів:
+[source,xml]
+----
+<?xml version="1.0" encoding="UTF-8"?>
+<xsd:schema
+  xmlns="http://registry-regulation-management"
+  xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+  targetNamespace="http://registry-regulation-management">
+
+  <xsd:import namespace="http://www.omg.org/spec/BPMN/20100524/MODEL" schemaLocation="BPMN20.xsd"/>
+
+  <xsd:attribute name="created" type="xsd:dateTime"/>
+  <xsd:attribute name="modified" type="xsd:dateTime"/>
+</xsd:schema>
+----

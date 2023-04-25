@@ -1,0 +1,42 @@
+@startuml
+participant "Web клієнт" as client order 1
+participant "Модуль роботи з формами" as formModule order 2
+participant "Модуль роботи з файлами" as fileModule order 3
+participant "Файловий\nсервіс" as fileService order 4
+
+skinparam responseMessageBelowArrow true
+
+title Читання форми регламенту з вказаної версії
+
+client -> formModule: запит на видалення\nформи за ім'ям
+activate formModule
+
+  formModule -> fileModule: отримати файловий\nсервіс для вказаної версії
+  activate fileModule
+    create fileService
+    fileModule -> fileService: ініціалізувати
+    alt вказана версія не існує
+      fileModule <-- fileService: помилка ініціалізації
+      formModule <-- fileModule: помилка ініціалізації\nфайлового сервісу
+      client <-- formModule: помилка зі статусом\n404 Not Found
+    end
+    fileModule <-- fileService
+    return файловий сервіс
+  deactivate fileModule
+
+  formModule -> fileService: перевірити чи існує форма з вказаним ім'ям
+  activate fileService
+    return ознака існування
+  deactivate fileService
+  alt форма з таким ім'ям не існує
+  client <-- formModule: помилка зі статусом\n404 Not Found
+  end
+
+  formModule -> fileService: видалити файл форми з вказаним ім'ям
+  activate fileService
+    return
+  deactivate fileService
+
+  client <-- formModule: відповідь зі статусом\n204 No Content
+deactivate formModule
+@enduml

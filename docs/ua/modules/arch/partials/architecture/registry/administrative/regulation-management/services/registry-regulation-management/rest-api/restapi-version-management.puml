@@ -1,0 +1,66 @@
+@startuml
+
+
+autonumber
+skinparam responseMessageBelowArrow true
+
+actor "Inspector" as Inspector
+
+actor "Client" as Client
+
+participant "Admin portal RestAPI" as Service
+
+participant "Gerrit WebUI" as Gerrit
+
+activate Client
+
+Client -> Service: GET /versions HTTP/1.1
+activate Service
+Client <- Service: HTTP/1.1 200 OK; List of versions
+
+Client -> Service: GET /versions/1 HTTP/1.1
+Client <- Service: HTTP/1.1 200 OK; Specific details of version-candidate 1
+
+Client -> Service: POST /versions HTTP/1.1
+Client <- Service: HTTP/1.1 200 OK; New version-candidate details (id:2)
+
+group registry regulations entity management
+
+Client -> Service: CRUD forms
+Client -> Service: CRUD business-processes
+Client -> Service: Read data model
+
+end
+
+Client -> Service: GET /versions/2/rebase
+Client <- Service: HTTP/1.1 Rebase response code
+
+deactivate Client
+deactivate Service
+
+alt rebase status code == 200
+
+Inspector -> Gerrit: Review MR
+activate Inspector
+activate Gerrit
+Inspector -> Gerrit: Approve MR
+deactivate Gerrit
+deactivate Inspector
+
+Client -> Service: GET /versions/2/submit
+Client <- Service: HTTP/1.1 200 OK;
+
+else have conflicts
+
+Client -> Gerrit: Fix conflicts
+activate Client
+activate Gerrit
+
+Client -> Gerrit: Submit MR
+
+deactivate Gerrit
+deactivate Client
+
+end
+
+@enduml
