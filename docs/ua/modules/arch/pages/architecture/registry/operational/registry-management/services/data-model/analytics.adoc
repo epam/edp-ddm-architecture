@@ -1,0 +1,541 @@
+= Побудова аналітичних звітів
+
+== Загальний опис
+
+Аналітичний функціонал забезпечується двома кластерами Redash, що вибудовують систему звітності на базі репліки операційної БД. Один кластер (admin) буде розгорнуто в мінімальному об'ємі для адміністрування, розробки та публікування звітності. З безпекових міркувань він має бути відокремлений від іншого кластеру (viewer), що міститимуть опублікований контент для потреб користувачів. Доступ до контенту серверів Redash розмежовується приналежність користувача до Групи, що своєю чергою, асоційована з Джерелом Даних. Розмежування доступу до даних реалізується за допомогою користувачів бази даних, що використовуються відповідним Джерелом Даних для виконання запитів до репліки БД.
+
+image::arch:architecture/registry/operational/registry-management/services/data-model/analytics_architecture.svg["Архітектура аналітичного прошарку"]
+
+== Інстантуювання первинних екземплярів Redash
+На етапі ініціалізації екземплярів Redash необхідно створити наступні службові *Джерела Даних*, *безпекові Групи* та *асоціювати їх між собою*:
+
+.Статичні об'єкти, що створюються під час первинного розгортання Redash
+|===
+^| Redash Instance ^| Group ^| Permissions ^| Data Source ^| Access Level
+
+|admin
+|-
+|"create_dashboard",
+"create_query",
+"edit_dashboard",
+"edit_query",
+"view_query",
+"view_source",
+"execute_query",
+"list_users",
+"schedule_query",
+"list_dashboards",
+"list_alerts",
+"list_data_sources"
+|registry
+|Full Access
+
+|viewer
+|auditor
+|"view_query",
+"execute_query",
+"list_dashboards",
+"list_alerts",
+"list_data_sources"
+|registry_auditor
+|View Only
+|===
+
+Користувачі реєстру мають використовувати ролі Keycloak для доступу до звітів Redash. Для кожної такої ролі слід створювати відповідну вертикаль об'єктів на рівні Redash та БД. Регламентні ролі описані в файлі roles/officer.yaml відповідного Gerrit репозитарію. Тому для кожної регламентної ролі Jenkins має створювати наступні об'єкти:
+
+.Динамічні об'єкти, що створюються після внесення змін у файл roles/officer.yaml
+|===
+^| Redash Instance ^| Group ^| Permissions ^| Data Source ^| Access Level
+
+|viewer
+|<назва ролі>
+|"view_query", "execute_query", "list_dashboards", "list_alerts", "list_data_sources"
+|registry_<назва ролі>
+|View Only
+|===
+
+.Приклад створення групи _auditor_ для екземпляру _viewer_
+[source,bash]
+----
+curl --location --request POST 'http://{{Redash URL}}/api/groups' \
+--header 'Content-Type: application/json' \
+--header 'Authorization: {{API Key}}' \
+--data-raw '    {
+        "permissions": [
+            "view_query",
+            "execute_query",
+            "list_dashboards",
+            "list_alerts",
+            "list_data_sources"
+        ],
+        "name": "auditor"
+    }'
+----
+WARNING: На момент написання цієї статті відсутня можливість задавати дозволи (permissions) при створенні Групи через API "*/api/groups". API приймає зазначену структуру, та все одно використовує повний набір дозволів. Тому обмеження прав створеним по регламентним ролям групам можливе лише через CLI.
+
+TIP: Після створення Групи отримуємо group_id для подальшого використання.
+
+.Приклад створення джерела даних registry для екземпляру admin
+[source,bash]
+----
+curl --location --request POST 'http://{{Redash URL}}/api/data_sources' \
+--header 'Content-Type: application/json' \
+--header 'Authorization: {{APY KEY}}' \
+--data-raw '{
+    "name": "Admin Registry",
+    "queue_name": "queries",
+    "syntax": "sql",
+    "options": {
+        "host": "citus-master-rep",
+        "password": "--------",
+        "dbname": "registry",
+        "user": "registry"
+    },
+    "type": "pg"
+}'
+----
+TIP: Після створення Джерела Даних отримуємо data_source_id для подальшого використання.
+
+.Приклад асоціювання джерела даних registry_db з групою Registry Admins для екземпляра admin
+[source,bash]
+----
+curl --location --request POST 'http://{{Redash URL}}/api/groups/{{Group ID}}/data_sources' \
+--header 'Content-Type: application/json' \
+--header 'Authorization: {{API Key}}' \
+--data-raw '{"data_source_id": {{Data Source ID}}'
+----
+Останнім кроком є задання рівня доступу до Джерела Даних з боку користувачів Групи. По замовчюванню рівень - Full Access, тому для інстансу admin цей крок не потрібен.
+
+.Приклад задання рівня доступу View Only для Групи registry_citizen, Джерела Даних registry_db на інстансі officer
+[source,bash]
+----
+curl --location --request POST 'http://{{Redash URL}}/api/groups/{{Group ID}}/data_sources/{{DS ID}}' \
+--header 'Content-Type: application/json' \
+--header 'Authorization: {{API Key}}' \
+--data-raw '{
+    "view_only": true
+}'
+----
+
+== Надання прав доступу до звітності
+//:2h: ##
+Область видимості доступних об'єктів Redash визначається Джерелом Даних - користувач бачить ті Запити та Дашборди, що використовують доступне користувачу Джерело Даних. Рівень прав на об'єкти системи звітності регулюється Групами. На етапі первинного розгортання систем Групи асоціюються з відповідними Джерелами Даних. А асоціація користувачів з відповідною групою відбувається через створення параметру на стороні Keycloak - RedashGroups. Перелічені в цьому параметрі назви груп будуть автоматично асоціюватися з користувачем при кожному вході в систему. Наприклад, щоб додати користувача в групу admin слід на закладці Attributes конкретного користувача додати RedashGroups в поле Key, та admin в поле value. В разі необхідності додавання користувача у декілька груп одночасно, слід зазначити назви груп через розділювач `##`
+//*{2h}*.
+
+По замовчуванню Keycloak не надсилає користувацькі поля по SAML протоколу. Для передачі цього параметру слід в Redash клієнті Keycloak створити Mapper. Обов'язково необхідно зазначити наступні поля та значення:
+
+- Protocol: *saml*
+- User Attribute: *RedashGroups*
+- SAML Attribute Name: *RedashGroups*
+
+TIP: Також існує можливість вказати параметр RedashGroups на рівні групи Keycloak. Всі користувачі Keycloak, що будуть входити до цієї групи, будуть додані у відповідні групи Redash, що зазначені в параметрі RedashGroups, автоматично в момент автентифікації.
+
+Для створення різних ролей з різним доступом до Дашбордів та відповідно даних, необхідно створити окрему вертикаль Група-Джерело Даних-Користувач БД з відповідними правами доступу. Потім, додати або замінити назву нової Групи в RedashGroups параметрі на стороні Keycloak.
+
+З метою використання ролей Keycloak слід створити Mapper типу Role list, зазначивши RedashGroups в Role attribute name або Friendly Name. В такому разі перелік ролей буде додано в SAML Response в якості атрибуту з назвою RedashGroups і Redash виконає автоматичне призначення користувачу груп, що будуть відповідати назві ролі Keycloak.
+
+WARNING: Для SAML клієнтів Keycloak додається Client Scope по замовчуванню role_list, що фактично виконую необхідну функцію - передає перелік ролей користувача у SAML відповіді у атрибуті Roles. Для автоматичного призначення групи Redash назва атрибуту має бути змінена на RedashGroups (або додано Friendly Name - RedashGroups) або role_list має бути вимкнуто і додано маппер.
+
+Для моделювальника також має бути роль у Keycloak - redash-admin. Вона створюється з Helm chart Redash за допомогою Keycloak оператора  під час розгортання Redash. А з боку Redash створюється група з такою ж самою назвою redash-admin. Це дозволяє отримати доступ користувачам з цією роллю до даних з боку admin екземпляру Redash для розробки звітів.
+
+== Доступ до даних та розмежування прав
+Для кожного Джерела Даних, створеного на Redash екземплярах, має бути створений відповідний користувач бази даних. Наступна таблиця задає назву користувача бази даних для кожного Джерела Даних Redash.
+
+[cols="2*^"]
+|===
+|Data source |Database User
+
+|registry
+|analytics_admin
+
+|registry_auditor
+|analytics_auditor
+
+|registry_<назва ролі>
+|analytics_<назва ролі>
+
+|===
+WARNING: Користувачі бази даних створюються лише на репліці операційної бази даних, не на операційній базі!
+Створення користувачів має відбутися на етапі постдеплойменту в момент первинного розгортання бази даних реєстру. Одразу після створення необхідно явним чином заборонити доступ до будь-яких таблиць репліки операційної бази даних реєстру.
+
+Доступ до даних реєстру має бути наданий через окремий прошарок представлень (views). Для цього в моделі даних, через Liquibase шаблон, має бути створений відповідний Search Condition з обов'язковим указанням контексту - *sub*. Контекст sub скерує Liquibase на створення представлення лише на репліці операційної бази даних, що також дозволить уникнути створення API для об'єктів аналітики.
+
+.Приклад створення представлення для подальшого використання для побудови звітності:
+[source,xml]
+----
+<changeSet author="registry owner" id="searchCondition labs_by_towns" context="sub">
+        <comment>CREATE analytical view labs_by_towns</comment>
+        <ext:createSearchCondition name="pd_processing_consent_1" indexing="like">
+            <ext:table name="laboratory" alias="l">
+                <ext:column name="name" alias="laboratory_name" returning="true"/>
+                <ext:column name="phone_number" returning="true"/>
+                <ext:column name="edropou" returning="true" />
+            </ext:table>
+            <ext:table name="koatuu" alias="k">
+                <ext:column name="type" returning="true"/>
+                <ext:column name="name" alias="koatuu_name" returning="true"/>
+            </ext:table>
+            <ext:join type="inner">
+                <ext:left alias="l">
+                    <ext:column name="koatuu_id"/>
+                </ext:left>
+                <ext:right alias="k">
+                    <ext:column name="koatuu_id"/>
+                </ext:right>
+            </ext:join>
+        </ext:createSearchCondition>
+    </changeSet>
+----
+Після створення представлення слід надати доступ до створеного об'єкта користувачу analytics_admin, що буде використовуватись моделювальником для створення звітів на admin екземплярі Redash.
+
+Надати доступ кінцевому користувачеві до представлення можливо через окремий тег Liquibase, що детально описано у статі xref:data-model:analytic_access_control.adoc[]
+
+== Дизайн та розробка звітності
+Передумовою для розробки звітів в системі Redash є виконання всіх описаних вище кроків, а саме:
+
+. В репліці операційної БД створено користувача analytics_admin
+. Створено Search Condition з контекстом pub, та надано права доступу на запит даних з відповідного представлення користувачу analytics_admin
+. На інстансі Redash admin створено Джерело Даних Admin Registry
+. На інстансі Redash admin створено Групу Registry Admins
+. Користувача, що буде розробляти звіт додано до Групи Registry Admins
+
+Кінечним продуктом, що можна будет опублікувати для використання користувачами, є Дашборд. Наступний список задає порядок короків, що треба виконати для створення Дашборду:
+
+. Створити Запит (_Query_)
+.. Натиснути кнопку _Create→Query_
+.. Ввести запит до бази даних
+.. Зберегти Запит, натиснувши кнопку _Save_
+.. Змінити назву _New Query_ на потрібну
+. Створити Візуалізацію (_Visualization_)
+.. Зайти в потрібний Запит
+.. Натиснути кнопку _+New Visualization_
+.. Вибрати тип візуалізації, та задати необхідні параметри
+.. Зберегти, натиснувши кнопку Save
+. Створити Дашборд
+.. Натиснути кнопку _Create→Dashboard_
+.. Ввести потрібну назву
+.. Натиснути кнопку _Add Widget_
+.. Ввести назву Запиту
+.. Вибрати необхідну візуалізацію
+.. Додати вибрану візуалізацію на Дашборд, натиснувши кнопку _Add to Dashboard_
+.. Розмістити доданий елемент в потрібному місці та задати необхідний розмір
+.. За необхідності, виконати пункти c-g для всіх візуалізацій, що мають бути присутні на Дашборді
+.. По завершенні натиснути кнопку _Done Editing_
+.. Натиснути кнопку _Publish_
+
+== Об'єкти звітності для публікації
+В цьому розділі перелічені об'єкти, що необхідно буде переносити між системами для публікації користувачам кінцевого дашборду. Також описоні методи їх вивантаження та завантаження.
+
+=== Джерело Даних
+
+Для переносу Запиту на одну з систем публікування звітів потрібно буде вказати ID Джерела Даних, що буде використовуватись для виконання Запиту.
+
+.Приклад API запиту дозволить отримати ID:
+[source,bash]
+----
+curl --location --request GET 'https://{{Redash URL}}/api/data_sources' \
+--header 'Authorization: {{API Key}}'
+----
+
+=== Запит
+.Приклад API команди для отримання всіх Запитів:
+[source,bash]
+----
+curl --location --request GET 'http://{{Redash URL}}/api/queries' \
+--header 'Content-Type: application/json' \
+--header 'Authorization: q1F1wJt8hGg9U6rj8r0eFNjuVdnSFmVtxZ8MGRay'
+----
+TIP: Додатково можна використати _*/api/queries/{{query_id}}*_ та _*/api/queries/?q={{query name}}*_ для отримання деталей по конкретному ID запиту або імені.
+
+Для створення Запиту на таргет системі слід використати отримані дані з минулих двох запитів. Мінімально необхідні параметри: query, data_source_id, name.
+
+.Приклад API команди для створення Запиту по отриманому JSON.
+[source,bash]
+----
+curl --location --request POST 'http://{{Redash URL}}/api/queries' \
+--header 'Authorization: {{API Key}}' \
+--header 'Content-Type: application/json' \
+--data-raw '{
+    "is_archived": false,
+    "query": "select koatuu_id, code, type as \"type::filter\", name,category from koatuu",
+    "description": null,
+    "tags": [],
+    "data_source_id": {{Data Source ID}},
+    "schedule": null,
+    "is_draft": false,
+    "name": "КОАТУУ",
+    "options": {
+        "parameters": []
+    }
+}'
+----
+
+=== Візуалізація
+Для отримання Візуалізації слід виконати API команду для отримання Запиту по ID (описано вище) та скопіювати значення ключа visualisation з отриманих даних. Наразі API для візуалізацій Redash не підртимує отримання Візуалізації по ID або всього переліку, працює тільки на створення зазначених об'єктів.
+
+Для створення Візуалізації, в отриманному JSON слід замінити ключ id на query_id для ассоціації з потрібним Запитом.
+
+.Приклад команди створення Візуалізації на таргет системі:
+[source,bash]
+----
+curl --location --request POST 'https://{{Redash URL}}/api/visualizations' \
+--header 'Content-Type: application/json' \
+--header 'Authorization: {{API Key}}' \
+--data-raw '{
+    "query_id": {{Query ID}},
+    "description": "",
+    "type": "CHOROPLETH",
+    "options": {
+                "valueFormat": "0,0.00",
+                "popup": {
+                    "enabled": true,
+                    "template": "Country: <b>{{ @@name_long }} ({{ @@iso_a2 }})</b>\n<br>\nValue: <b>{{ @@value }}</b>"
+                },
+                "valueColumn": "name",
+                "tooltip": {
+                    "enabled": true,
+                    "template": "<b>{{ @@name }}</b>: {{ @@value }}"
+                },
+                "colors": {
+                    "max": "#002FB4",
+                    "borders": "#ffffff",
+                    "noValue": "#dddddd",
+                    "background": "#ffffff",
+                    "min": "#799CFF"
+                },
+                "steps": 5,
+                "mapType": "subdiv_japan",
+                "countryCodeColumn": "koatuu_id",
+                "clusteringMode": "e",
+                "noValuePlaceholder": "N/A",
+                "countryCodeType": "iso_a3",
+                "legend": {
+                    "visible": true,
+                    "alignText": "right",
+                    "position": "bottom-left"
+                }
+            },
+            "name": "Map (Choropleth)"
+}'
+----
+
+=== Дашборд
+Звернення до _/api/dashboards_ дозволяє отримати масив всіх дашбордів в Redash але без необхідних деталей (Запитів та Візуалізацій). З отриманого переліку слід виокремети необхідний, та зберегти значення ключа *slug*. Він знадобиться для отримня всіх деталей необхідного дашборду через _/api/dashboards/{{slug_value}}_. Також підтримується можливість пошуку необхідного дашборду по імені через запит до _/api/dashborads?q={{dashboard_name}}_.
+
+.Приклад коду для отримання детального JSON Дашборда:
+[source,bash]
+----
+curl --location --request GET 'https://{{Redash URL}}/api/dashboards/learn' \
+--header 'Authorization: {{API Key}}'
+----
+
+.Приклад JSON Дашборда
+[%collapsible]
+====
+[source,json]
+----
+{
+    "tags": [],
+    "is_archived": false,
+    "public_url": "http://redash-mdtu-ddm-edp-cicd-mdtuddm-179-citus-replica-test-dev.apps.cicd.mdtu-ddm.projects.epam.com/public/dashboards/Eijuv5oATLSLA755THTsQDhGuVcoItXTscJNdjA3?org_slug=default",
+    "updated_at": "2021-02-10T18:33:15.480Z",
+    "is_favorite": false,
+    "user": {
+        "auth_type": "password",
+        "is_disabled": false,
+        "updated_at": "2021-02-10T18:26:43.137Z",
+        "profile_image_url": "https://www.gravatar.com/avatar/1600b9334170d7d73614e467941ca78d?s=40&d=identicon",
+        "is_invitation_pending": false,
+        "groups": [
+            2,
+            1
+        ],
+        "id": 3,
+        "name": "Oleksandr Vasylenko",
+        "created_at": "2021-02-05T13:34:11.973Z",
+        "disabled_at": null,
+        "is_email_verified": true,
+        "active_at": null,
+        "email": "oleksandr_vasylenko4@epam.com"
+    },
+    "layout": [],
+    "is_draft": false,
+    "id": 4,
+    "can_edit": true,
+    "api_key": "Eijuv5oATLSLA755THTsQDhGuVcoItXTscJNdjA3",
+    "user_id": 3,
+    "name": "Learn",
+    "created_at": "2021-02-10T18:26:43.137Z",
+    "slug": "learn",
+    "version": 11,
+    "widgets": [
+        {
+            "visualization": {
+                "description": "",
+                "created_at": "2021-02-02T16:14:39.401Z",
+                "updated_at": "2021-02-10T18:30:00.794Z",
+                "id": 5,
+                "query": {
+                    "user": {
+                        "auth_type": "password",
+                        "is_disabled": false,
+                        "updated_at": "2021-02-10T19:08:26.324Z",
+                        "profile_image_url": "https://www.gravatar.com/avatar/7b2795becb803fc8133b8a54fd1adc92?s=40&d=identicon",
+                        "is_invitation_pending": false,
+                        "groups": [
+                            1,
+                            2
+                        ],
+                        "id": 1,
+                        "name": "devops-user",
+                        "created_at": "2021-01-18T11:55:16.370Z",
+                        "disabled_at": null,
+                        "is_email_verified": true,
+                        "active_at": null,
+                        "email": "oleh_boreiko1@epam.com"
+                    },
+                    "created_at": "2021-02-02T16:14:39.401Z",
+                    "latest_query_data_id": 46,
+                    "schedule": null,
+                    "description": "",
+                    "tags": [],
+                    "updated_at": "2021-02-10T18:12:04.219Z",
+                    "last_modified_by": {
+                        "auth_type": "password",
+                        "is_disabled": false,
+                        "updated_at": "2021-02-10T18:26:43.137Z",
+                        "profile_image_url": "https://www.gravatar.com/avatar/1600b9334170d7d73614e467941ca78d?s=40&d=identicon",
+                        "is_invitation_pending": false,
+                        "groups": [
+                            2,
+                            1
+                        ],
+                        "id": 3,
+                        "name": "Oleksandr Vasylenko",
+                        "created_at": "2021-02-05T13:34:11.973Z",
+                        "disabled_at": null,
+                        "is_email_verified": true,
+                        "active_at": null,
+                        "email": "oleksandr_vasylenko4@epam.com"
+                    },
+                    "options": {
+                        "parameters": []
+                    },
+                    "is_safe": true,
+                    "version": 1,
+                    "query_hash": "73219e6f772ae7e473d36ec41e0e50ec",
+                    "is_archived": false,
+                    "query": "select koatuu_id, \n       code, \n       type as \"type::filter\", \n       name  , \n       category from koatuu\n",
+                    "api_key": "psX3DLuTXcXa2KI3JGJ2kCjjg6TyEGTZ3mNimDkh",
+                    "is_draft": false,
+                    "id": 4,
+                    "data_source_id": 1,
+                    "name": "КОАТУУ"
+                },
+                "type": "TABLE",
+                "options": {},
+                "name": "Table"
+            },
+            "text": "",
+            "created_at": "2021-02-10T18:30:00.794Z",
+            "updated_at": "2021-02-10T18:30:25.004Z",
+            "options": {
+                "parameterMappings": {},
+                "isHidden": false,
+                "position": {
+                    "autoHeight": false,
+                    "sizeX": 6,
+                    "sizeY": 8,
+                    "maxSizeY": 1000,
+                    "maxSizeX": 6,
+                    "minSizeY": 1,
+                    "minSizeX": 2,
+                    "col": 0,
+                    "row": 0
+                }
+            },
+            "dashboard_id": 4,
+            "width": 1,
+            "id": 8
+        }
+    ],
+    "dashboard_filters_enabled": true
+}
+----
+====
+
+Процесс створення Дашборду побудовано наступним чином:
+
+. Спочатку треба створити всі Запити, на які спирається Дашборд.
+. Далі для кожного Запиту відтворити всі Візуалізації, що відображаються на дашборді. За замовчуванням для кожного Запиту створюється одна Візуалізація типу Таблиця. Тому, якщо в Запиті, що переноситься тільки одна візуалізація, то нема необхідності її створювати, вона створиться автоматично. Але параметри Візуалізації слід оновити до ти, що відповідають Візуалізації що переноситься (_/api/visualization/{{vis_id}}_).
+. Наступним кромок створюємо пустий об'єкт Дашборду, передавши тільки ім'я.
+. І заключним етапом відтворюємо всі Віджети, що відображав дашборд. Цей крок пов'язує Дашборд з Візуалізаціями та Запитами всередині Віджета. Виконуюється POST зипитом до _/api/widgets_
+
+.Приклад створення Дашборду:
+[source,bash]
+----
+curl --location --request POST 'https://{{Redash URL}}/api/dashboards' \
+--header 'Content-Type: application/json' \
+--header 'Authorization: {{API Key}}' \
+--data-raw '{
+    "name": "Learn"
+}'
+----
+
+.Публікуємо Дашборд для доступу іншими користувачами:
+[source,bash]
+----
+curl --location --request POST 'https://{{Redash URL}}/api/dashboards/{{Dashboar ID}}' \
+--header 'Content-Type: application/json' \
+--header 'Authorization: {{API Key}}' \
+--data-raw '{
+    "is_draft": false
+}'
+----
+
+Наступним кроком має іти створення Запиту, та створення або редагування Візуалізації для запиту.
+
+Останнім кроком іде додавання Візуалізації на Дашборд через Віджет.
+
+.Приклад команди створення Віджету:
+[source,bash]
+----
+curl --location --request POST 'https://{{Redash URL}}/api/widgets' \
+--header 'Content-Type: application/json' \
+--header 'Authorization: {{API Key}}' \
+--data-raw '{
+            "visualization_id": 3,
+            "text": "",
+            "options": {
+                "parameterMappings": {},
+                "isHidden": false,
+                "position": {
+                    "autoHeight": false,
+                    "sizeX": 3,
+                    "sizeY": 22,
+                    "maxSizeY": 1000,
+                    "maxSizeX": 6,
+                    "minSizeY": 1,
+                    "minSizeX": 2,
+                    "col": 3,
+                    "row": 0
+                }
+            },
+            "dashboard_id": 1,
+            "width": 1
+        }'
+----
+
+== Процесс публікації звітності
+
+Адміністратор звітів через відповідний API запит вигружає JSON створенного, готового до публікації Дашборду. В перспективі можшливо створити кнопку на інтерфейсі правки та перегляду Дашбордів кнопку, що має вигружати Дашборд в JSON форматі, або навіть напряму коммітити у відповідний Gerrit репозитарій.
+
+Отриманий JSON файл, іменований так само як і дашборд, загружається до Gerrit репозитарію, після чого створюється merge запит для рецензування змін Адміністратором Публікацій.
+
+Об'єднання збуджує pipeline, що виконує наступні дій:
+
+. Аналізує отриманий JSON та виокремлює об'єкти Запитів, Візуалізацій, Віджетів та Дашбордів
+. Видаляємо всі Запити, пов'язані з ними Візуалізації та відповідний Дашборд на officer або citizen інстансі Redash. Пошук Запитів ведеться по імені та тексту запиту. Пошук Дашборда - по slug
+. Створює Запити із JSON файлу, та пов'язані з ними Візуалізації
+. Стоврює Дашборд відповідно до JSON файлу. Значення slug має залишатись незмінним.
+. Додає до Дашборду Віджети з відповідними Візуалізаціями.

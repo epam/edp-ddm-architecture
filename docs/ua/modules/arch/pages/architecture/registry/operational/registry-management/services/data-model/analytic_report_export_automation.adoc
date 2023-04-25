@@ -1,0 +1,92 @@
+= Автоматизація експорту звітів Redash
+
+== Загальний опис
+
+Панель адміністратора містить окрему сторінку для управління звітами Redash - перелік дашбордів, для кожного:
+
+* посилання на дашборд в Admin екземплярі Redash
+* посилання на <<Сервіс експорту звітності, експорт дашборду>>
+* [.line-through]#індикатор ідентичності/наявності дашборду на Viewer екземплярі# *Full Scope*
+
+<<Сервіс експорту звітності>> повертає архів з json файлом дашборду та всіма залежними запитами в окремій теці queries.
+
+[.line-through]#Адмін панель комітить експортований дашборд в Gerrit репозиторій реєстру і створює запит на злиття# *Full Scope*
+
+Отримані файли Адміністратор даних комітить в Gerrit репозиторій реєстру, чим збуджує пайплан для внесення змін в реєстр.
+
+.Публікування звітів Redash через панель адміністратора
+image::data-model:analytics_reports_export_automation.svg[dsfg, 100%]
+
+== Сервіс експорту звітності
+
+=== Авторизація
+Для звернення до Redash API необхідний API ключ, що знаходиться в сікретах OpenShift.
+
+* назва: _redash-api-keys_
+* ключ: _admin-api-key_
+
+
+=== REST API
+Звернення до ендпоінта створеного сервісу повертає перелік дашбордів наявних на адмін екземплярі Redash.
+[source]
+----
+GET /
+[
+    {
+        "id": ...
+        "name": ...
+        "slug": ...
+        "created_at": ...
+        "updated_at": ...
+    },
+    ...
+]
+----
+
+У випадку зазначення _slug_ дашброрду, ендпоінт повертає архів з дашбордами у json форматі.
+[source]
+----
+GET /slug_id
+
+----
+
+* приймає на вхід slug_id (ідентифікатор дашборда)
+* отримує json дашборда з Redash Admin REST API (`dashboard_<slug>.json`)
+* для кожного із залежних запитів отримує json запиту з Redash Admin REST API (зберігає масивом у `queries/parameters_<slug>.json`), <<parameter_queries, формат файлу>> зазначено нижче
+* формує <<archive, zip пакет>> для повернення
+
+[NOTE]
+Формат запитів до Redash API детально описано у статті xref:data-model:analytics.adoc[] (xref:data-model:analytics.adoc#_дашборд[Дашборд] та xref:data-model:analytics.adoc#_запит[Запит])
+
+[#archive]
+.Структура файлів що містить архів
+[plantuml, format=png]
+----
+@startuml
+    skinparam monochrome true
+    note as N1
+      dashboard_<slug>.zip
+      |_ queries
+        |_ parameters_<slug>.json
+      |_ dashboard_<slug>.json
+    end note
+@enduml
+----
+
+[#parameter_queries]
+.Формат файлу із залежними запитами
+[source, json]
+----
+{
+  "count": 3,
+  "page": 1,
+  "page_size": 25,
+  "results": [
+    {"id": ...},
+    {"id": ...},
+    {"id": ...}
+  ]
+}
+----
+
+
