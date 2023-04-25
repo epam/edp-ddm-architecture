@@ -1,0 +1,91 @@
+= Шифрування окремих атрибутів
+
+== Загальний опис
+
+Для вибіркового шифрування атрибутів сутностей в БД має використовуватись сервіс шифрування на стороні Vault. Для визначення колонок таблиці реєстру що мають зберігати дані в зашифрованому вигляді необхідно позначити ці колонки відповідним атрибутом шаблону Liquibase під час створення моделі даних. На рівні Rest API всі дані з цих колонок будуть передаватись на Vault для шифрування або дешифрування, в залежності від напрямку потоку. Інформація про те які саме колонки містять шифровані дані буде передаватись через таблицю метаданих. Відповідно, згенеровані ендпоінти завжди будуть пропускати дані з відповідних полів через Vault. Наступна діаграма ілюструє процес вибіркового шифрування даних на рівні дата фабрики.
+
+.Загальна діаграма шифрування окремих атрибутів
+image::arch:architecture/registry/operational/registry-management/services/data-model/attributes_encryption_general.svg[]
+
+
+== XML Шаблон
+Для визначення полів таблиці, що завжди мають містити інформацію в зашифрованому вигляді використовуємо атрибут `encrypt="true"` на рівні визначення колонки таблиці.
+
+[source, xml]
+----
+<createTable name="very_secret_data" ext:historyFlag="true">
+    <column name="id"  type="UUID">
+        <constraints nullable="false" primaryKey="true" primaryKeyName="pk_vsd_id"/>
+    </column>
+    <column name="data_type" type="TEXT"/>
+    <column name="secret_data" type="TEXT" encrypt="true"/>
+</createTable>
+----
+
+Результатом такого визначення буде занесення в таблицю метаданих *ddm_liquibase_metadata* інформації про те яка саме колонка таблиці містить дані у зашифрованому вигляді.
+
+[NOTE]
+Дані, що класифіковані як *персональні* або *конфіденційні* завжди мають зберігатись у зашифрованому вигляді. Принцип визначення цих колонок як таких, що містять зашифровані дані той самий - інформація в метаданих. Але процесом створення цих метаданих керує інший тег.
+
+== Ендпоінти
+
+В момент генерації ендпоінтів сервіс має аналізувати метадані на предмет наявності там інформації щодо полів, які мають містити інформацію в зашифрованому вигляді. Якщо в таблиці присутні такі колонки, дані що вони містять мають відправлятись на Vault для шифрування та дешифрування
+
+=== Get
+Загалом, без обробки можливих виключень, процес отримання даних можна визначити наступним чином.
+
+.Процес запиту шифрованих даних
+[plantuml]
+----
+@startuml
+skinparam monochrome true
+
+
+?-> "Rest API": data request
+alt query has filter by\nencrypted columns
+    "Rest API"->Vault: plain filter value
+    Vault->"Rest API": encrypted value
+end
+
+"Rest API"->"Rest API": replace filter value\nby encrypted value
+
+queue Kafka
+"Rest API" -> Kafka: query request
+Kafka -> "Rest API": query response
+
+alt table has encrypted columns
+    "Rest API" -> Vault: encrypted data
+    Vault -> "Rest API": plain data
+end
+"Rest API" -> "Rest API": replace encrypted\ndata by plain version
+?<- "Rest API": data response
+'lowcode ?-> "Rest API" as ra: data request
+@enduml
+----
+
+=== Put/Post
+Загалом, без обробки можливих виключень, процес вставки та зміни шифрованих даних можна визначити наступним чином.
+
+.Процес вставки та зміни шифрованих даних
+[plantuml]
+----
+@startuml
+skinparam monochrome true
+
+
+?-> "Rest API": request to insert/update
+alt table has encrypted columns
+    "Rest API" -> Vault: plain data
+    Vault -> "Rest API": encrypted data
+end
+queue Kafka
+
+"Rest API" -> "Rest API": replace data by\nencrypted version
+
+"Rest API" -> Kafka: modification request
+
+@enduml
+----
+
+== Ротація ключів шифрування
+Vault надає можливість автоматичної ротації ключів для шифрування даних. Але ця функціональність не планується використовуватись на фазі MVP. Надалі, перед виконанням дешифрування, слід буде окремо перевірити відповідність ключа за допомогою дати та часу зміни даних що дешифруються.
