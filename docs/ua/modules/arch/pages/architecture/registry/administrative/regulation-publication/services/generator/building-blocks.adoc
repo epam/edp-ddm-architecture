@@ -1,0 +1,65 @@
+= Структура компонента
+
+== Контекст
+// Взаємодія з іншими компонентами платформи та опис інтерфейсів
+image::arch:architecture/registry/administrative/regulation-publication/services/generator/context.svg[]
+
+== Рівень 1
+// Високорівневе представлення компоненти. Опис основних бібліотек які використовуються і для чого.
+=== Додаток
+
+https://www.schemacrawler.com/[SchemaCrawler] - бібліотека яка дозволяє зручно читати мета-данні про об'єкти БД +
+https://freemarker.apache.org/[FreeMarker] - template-engine для генерації Java коду.
+
+=== Таблиця метаданих
+
+Єдини джерелом конфігурації бажаного стану регламенту є файл liquibase та settings.yaml.
+
+Оскільки в рамках одного і того ж liquibase файлу об'єкти можуть змінюватись декілька разів - генерація код відбувається на підставі фінального стану БД.
+Фінальна схема БД може не містити окремі атрибути які містились в файлі liquibase. Для забеспечення передачі таких атрибутів використовується службова таблиця *ddm_liquibase_metadata*.
+
+[plantuml, ddm_liquibase_metadata, svg]
+----
+
+@startuml
+skinparam monochrome true
+
+map ddm_liquibase_metadata {
+ metadata_id => ідентифікатор запису
+ change_type => назва типу змін (приклад: "searchCondition")
+ change_name => конкретна назві зміни (приклад: "public_lab")
+ attribute_name => назва ключа атрибуту
+ attribute_value => значення атрибуту
+}
+@enduml
+----
+== Рівень 2
+// Деталізоване представлення
+
+
+[source, java]
+----
+for (String templateName : templates) {
+  Scope scope = ScopeFactory.create(templateName);
+    if (scope != null) {
+      for (Object scopeItem : scope.create(context)) {
+        Object model = processScope(scopeItem);
+        renderTemplate(templateName, model);
+      }
+    } else {
+      renderTemplate(templateName, null);
+  }
+}
+----
+
+**Контекст** - всі метадані які можливо зібрати про схему даних та її об'єкти. +
+*Scope* - інтерфейс який дозволяє виділити окремі елементи загального контексту пов'язані з конкретним шаблоном та створити список окремих бінів. (*scope items*) +
+*Scope Item* - проміжний об'єкт який містить вичерпну інформацію для створення *template model*. +
+*Template model* - POJO об'єкт який використовується для заповнення FreeMarker шаблону +
+*Таблиця метаданих* - службова таблиця яка створюється liquibase-ext та містить додаткові метадані з xml файлу які не можна отримати безпосередньо із схеми БД. Може використовуватись у при формуванні *scope items*. +
+
+*Статичний шаблон* - шаблон класу в якому контент є сталим і не залежить від вхідної моделі даних +
+*Динамічний шаблон* - шаблон класу логіка методів якого залежить від вхідної моделі даних +
+
+== Рівень 3
+// Деталізоване представлення до рівня класів/методів

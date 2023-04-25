@@ -1,0 +1,26 @@
+@startuml
+skinparam responseMessageBelowArrow true
+
+participant "Web клієнт" as client order 1
+participant "Модуль роботи\nз версіями" as versionModule order 2
+participant "Модуль роботи\nз Gerrit" as gerritModule order 3
+
+title Оновлення версії-кандидату змінами з майстер-версією
+
+client-> versionModule: оновити версію-кандидат\nзмінами з майстер-версії
+activate versionModule
+  versionModule -> gerritModule: надіслати запит на rebase\nchange request за ідентифікатором
+  activate gerritModule
+    alt версії-кандидата не існує
+      versionModule <-- gerritModule: помилка операції rebase\nчерез те що не існує такого\nchange request
+      client <-- versionModule: помилка зі статусом\n404 Not Found
+    else наявні конфліктуючі зміни з майстер-версією
+      versionModule <-- gerritModule: помилка операції rebase\nчерез те що наявні конфлікти\nз майстер-версією
+      client <-- versionModule: помилка зі статусом\n409 Conflict
+    end
+    versionModule <-- gerritModule
+  deactivate gerritModule
+
+  client <-- versionModule: відповідь зі статусом\n204 No Content
+deactivate versionModule
+@enduml

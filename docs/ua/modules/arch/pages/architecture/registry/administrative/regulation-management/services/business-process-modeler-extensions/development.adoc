@@ -1,0 +1,133 @@
+= Розробка типових розширень
+
+== Вступ
+- Під час розробки бізнес-процесів виникають ситуації коли потрібно використовувати однотипні типові задачі, і для того щоб прискорити цей процес можна використовувати елементи типових розширень, які досить один раз створити і просто застосовувати в подальшому.
+- Шаблони елементів типових розширень визначають користувацькі вхідні параметри, користувацьку перевірку та технічне відображення введених даних.
+- Після вибору на панелі властивостей вони пропонуються користувачеві як `Custom Fields`.
+- Ці поля можуть бути випадаючими списками, прапорцями, областями введення та текстовими.
+- Розглянемо на прикладі бізнес-процесу у якому потрібно досить часто використовувати однотипні задачі, а саме - відправляти повідомлення на електронну пошту за допомогою реалізаціі https://docs.camunda.org/manual/7.15/user-guide/process-engine/delegation-code/[Java Delegate] яку ми будемо використовувати при створенні сервісної задачі.
+- Нижче наведені два приклади створення сервісної задачі з використання шаблону і без:
+
+== Створення задачі без використання типових розширень
+
+- При створенні задачі без використання шаблону розробнику кожного разу потрібно буде виконувати одні і ті самі дії для створення однотипних задач, а саме розглянемо на прикладі:
+
+image::arch:architecture/registry/administrative/regulation-management/services/business-process-modeler-extensions/general-without-temp.svg[]
+
+image::arch:architecture/registry/administrative/regulation-management/services/business-process-modeler-extensions/input-without-temp.svg[]
+
+- Такий сценарій сповільнює розробку бізнес-процеса, а також може призвести до виникнення помилок, наприклад - друкарська помилка в якомусь із символів або неправильно налаштований елемент.
+- У свою чергу шаблон досить один раз налаштувати і просто застосовувати в подальшому.
+- Нижче приведено приклад створення такого шаблону.
+
+== Створення елемента розширення
+
+.Основна вимога до елементів типових розширень:
+* Файли повинні бути у `JSON`-форматі
+
+[source,json]
+----
+{
+   "name":"Template",
+   "id":"sometemplate",
+   "description":"some description",
+   "version":1,
+   "appliesTo":[
+      "bpmn:ServiceTask"
+   ],
+   "properties":[
+      {
+         "label":"Implementation Type",
+         "type":"String",
+         "value":"com.example.MailTaskImpl",
+         "editable":false,
+         "binding":{
+            "type":"property",
+            "name":"camunda:class"
+         }
+      },
+      {
+         "label":"Sender",
+         "type":"String",
+         "binding":{
+            "type":"camunda:inputParameter",
+            "name":"sender"
+         },
+         "constraints":{
+            "notEmpty":true
+         }
+      },
+      {
+         "label":"Receivers",
+         "type":"String",
+         "binding":{
+            "type":"camunda:inputParameter",
+            "name":"receivers"
+         },
+         "constraints":{
+            "notEmpty":true
+         }
+      }
+   ]
+}
+----
+
+- `name : String:` - Назва шаблону, який з'явиться в каталозі.
+- `id : String` - Ідентифікатор шаблону.
+- `description : String` - Необов'язковий опис шаблону. Відображатиметься в модальному вікні вибору шаблону елемента і на панелі властивостей (після застосування шаблону елемента).
+- `version : Integer` - Необов'язкова версія шаблону. Якщо ви додасте версію в шаблон, вона буде вважатися унікальною в залежності від її ідентифікатора і версії. Два шаблону можуть мати однаковий ідентифікатор, якщо їх версії різняться.
+- `appliesTo : Array<String>` - Список типів BPMN, до яких можна застосувати шаблон (може будь-яким з bpmn:Task, bpmn:SendTask, bpmn:ReceiveTask, bpmn:UserTask, bpmn:ManualTask, bpmn:BusinessRuleTask, bpmn:ServiceTask, bpmn:ScriptTask, bpmn:CallActivity, bpmn:SubProcess, bpmn:Activity, bpmn:Event, bpmn:Gateway, bpmn:SequenceFlow, bpmn:Process, etc.).
+- `properties : Array<Object>` - Список властивостей шаблону.
+- Опис властивостей шаблону:
+* `label` - Описовий текст, який відображається разом з властивістю
+* `type` - Необов'язкове значення, визначення зовнішнього вигляду на панелі властивостей (може бути будь-яким з String, Text, Boolean, Dropdown або Hidden). Якщо не вказано, то в звдачі з'являється можливість вибору типу з переліку: String or Expression, Script, List, Map.
+* `value` - Необов'язкове значення за замовчуванням, яке буде використовуватися, якщо пов'язується властивість яка ще не встановлена.
+* `editable` - Необов'язкове значення, яке відповідає за можливість редагування властивості.
+* `binding` - Вказівка способу зіставлення властивості з елементами і атрибутами розширення BPMN або Camunda (може бути будь-яким з property, camunda: property, camunda:inputParameter, camunda:outputParameter, camunda:in, camunda:out, camunda:executionListener, camunda:field, camunda:errorEventDefinition )
+* `constraints` - Список обмежень редагування, застосовуваних до шаблону.
+** Перелік обмежнь, які можна застосувати:
+*** `notEmpty` - Вхідні параметри не повинні бути порожніми
+*** `minLength` - Мінімальна довжина для вхідних параметрів
+*** `maxLength` - Максимальна довжина для вхідних параметрів
+*** `pattern` - Регулярний вираз для зіставлення вхідних даних
+- Після чого потрібно застосувати новий шаблон
+- Як результат - у переліку шаблонів отримаємо нове розширення:
+
+image::arch:architecture/registry/administrative/regulation-management/services/business-process-modeler-extensions/new-template-catalog.svg[]
+
+- Після його застосування, сервісна задача матиме наступний вигляд:
+
+image::arch:architecture/registry/administrative/regulation-management/services/business-process-modeler-extensions/new-template-result.svg[]
+
+[NOTE]
+Більш докладно про створення типових розширень можна ознайомитися https://github.com/camunda/camunda-modeler/tree/master/docs/element-templates#defining-templates[тут]
+
+== Застосування елемента розширення
+
+=== Підготовка до роботи
+.Для застосування типових розширень потрібно:
+* Встановити https://camunda.com/bpmn/tool[Camunda Modeler]
+* Скопіювати каталог `business-process-modeler-extensions`.
+
+=== Сценарій застосування
+
+- Визначити тип задачі (сервісна чи користувацька)
+
+image::arch:architecture/registry/administrative/regulation-management/services/business-process-modeler-extensions/task-type.svg[]
+
+- Після чого, натиснути кнопку `Open Catalog`
+
+image::arch:architecture/registry/administrative/regulation-management/services/business-process-modeler-extensions/open-catalog.svg[]
+
+- В спливаючому вікні потрібно вибрати необхідний шаблон та натиснути кнопку `Apply`
+
+image::arch:architecture/registry/administrative/regulation-management/services/business-process-modeler-extensions/apply-template.svg[]
+
+- Останній крок - це заповнити шаблон відповідно до бізнес-логіки процесу
+
+image::arch:architecture/registry/administrative/regulation-management/services/business-process-modeler-extensions/template-result.svg[]
+
+- Щоб видалити застосований шаблон з елемента, можна використовувати функцію *Unlink* або *Remove*:
+
+image::arch:architecture/registry/administrative/regulation-management/services/business-process-modeler-extensions/unlink-template.svg[]
+
