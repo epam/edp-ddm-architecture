@@ -1,5 +1,5 @@
 :toc-title: ЗМІСТ
-:toc: auto
+//:toc: auto
 :toclevels: 5
 :experimental:
 :important-caption:     ВАЖЛИВО
@@ -19,37 +19,41 @@
 
 = Зміна deploymentMode з production на development
 
-Щоб змінити `deploymentMode` з `production` на `development`, виконайте кроки, подані нижче в інструкції.
+Щоб змінити `*deploymentMode*` із `production` на `development`, виконайте наступні кроки:
 
-== Redash admin
+. Знайдіть змінну `deploymentMode: production` у файлі _deploy-templates/values.yaml_ та змініть її значення на `deploymentMode: development`.
 
-Компонент *`redash-admin`* доступний виключно в режимі *`development`* і не буде розгортатися при первинній інсталяції в режимі *`production`*. При повторному оновленні реєстру зі зміною режиму на `development`, компонент `redash-admin` стає доступним, але не виконається post-install скрипт link:{attachmentsdir}/registry-admin/change-dev-prod-mode/admin-hook-install-job.yaml[admin-hook-install-job.yaml], який створює початкові налаштування бази даних *Redash admin*, зокрема таблиці. Така поведінка є очікуваною, оскільки насправді відбувається оновлення (update) реєстру, а не його установка (install).
+. Виконайте `git commit` зі змінами, підтвердьте його у мастер-гілці та запустіть розгортання реєстру.
 
-=== Запуск скрипту вручну з екземпляра redash-admin
+[NOTE]
+Налаштування *Redash admin* та *Pgadmin* є опційними й потрібні лише як додаткові кроки при виникненні проблем зі зміною режиму. Ми рекомендуємо ознайомитися з ними, але врахуйте, що вони не є обов'язковими для зміни `deploymentMode`.
 
-Запустіть наступний скрипт вручну з поди *`redash-admin`*:
+[tabs]
+====
+Redash admin::
++
+--
+Компонент *`redash-admin`* доступний виключно в режимі *`development`* і не буде розгортатися при первинній інсталяції в режимі *`production`*. При повторному оновленні реєстру зі зміною режиму на `development`, компонент `redash-admin` стає доступним, але не виконається post-install скрипт _admin-hook-install-job.yaml_, який створює початкові налаштування бази даних *Redash admin*, зокрема таблиці. Така поведінка є очікуваною, оскільки насправді відбувається оновлення (update) реєстру, а не його установка (install).
 
+. Запустіть наступний скрипт вручну з поди *`redash-admin`*:
++
 [source,bash]
 ----
 bash /config/install-upgrade.sh install
 ----
 
-=== Перезапуск пайплайну розгортання реєстру
+. Після успішного завершення конфігурування `redash-admin` бази даних, перезапустіть пайплайн розгортання реєстру, якщо попередня спроба закінчилася неуспішно через `redash-chart deploy`.
+--
 
-Після успішного завершення конфігурування `redash-admin` бази даних, перезапустіть пайплайн розгортання реєстру, якщо попередня спроба закінчилася неуспішно через `redash-chart deploy`.
-
-== Pgadmin
-
-=== Перевірка останньої доступної версії PgAdmin
-
-Перевірте останню доступну версію PgAdmin у *`control-plane-gerrit`*.
-
+Pgadmin::
++
+--
+. Перевірте останню доступну версію PgAdmin у *`control-plane-gerrit`*.
++
 image:registry-admin/change-dev-prod-mode/change-mode-1.png[image,width=468,height=208]
 
-=== Додавання чарту в deploy-templates/helmfile.yaml
-
-Додайте наступний чарт до _deploy-templates/helmfile.yaml_, у розділі `releases` із версією компонента з попереднього кроку:
-
+. Додайте наступний чарт до _deploy-templates/helmfile.yaml_, у розділі `releases` із версією компонента з попереднього кроку:
++
 [source,yaml]
 ----
 - name: pgadmin-chart
@@ -71,11 +75,6 @@ image:registry-admin/change-dev-prod-mode/change-mode-1.png[image,width=468,heig
     - '{{ env "NAMESPACE"}}/network-management'
     - '{{ env "NAMESPACE"}}/citus'
 ----
+--
 
-=== Зміна значення deploymentMode у файлі deploy-templates/values.yaml
-
-Знайдіть змінну `deploymentMode: production` у файлі _deploy-templates/values.yaml_ та змініть її значення на `deploymentMode: development`.
-
-=== Commit змін та їх підтвердження у master
-
-Виконайте `git commit` зі змінами, підтвердьте його у мастер-гілці та запустіть розгортання реєстру.
+====
