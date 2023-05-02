@@ -17,16 +17,132 @@
 :sectlinks:
 :partnums:
 
-= Зміна deploymentMode з production на development
+= Зміна режиму розгортання реєстру (deployment mode)
 
-Щоб змінити `*deploymentMode*` із `production` на `development`, виконайте наступні кроки:
+== Загальний опис
 
-. Знайдіть змінну `deploymentMode: production` у файлі _deploy-templates/values.yaml_ та змініть її значення на `deploymentMode: development`.
+Режим розгортання (*deployment mode*) -- це параметр, який вказує на те, в якому середовищі відбувається розгортання регламенту реєстру. Він дозволяє відрізнити виробниче середовище від середовища розробки, а також налаштувати конфігурацію відповідно до потреб кожного з них. Платформа реєстрів підтримує 2 режими розгортання: `*development*` та *`production`*.
 
-. Виконайте `git commit` зі змінами, підтвердьте його у мастер-гілці та запустіть розгортання реєстру.
+Режим `*development*` передбачає розгортання із налаштуваннями для зручності розробки та відлагодження.
+
+Режим *`production`* передбачає розгортання, оптимізоване для максимальної продуктивності, стабільності та безпеки. Він виключає додаткові інструменти відлагодження, забезпечує оптимальну конфігурацію та налаштування для роботи в реальних умовах на цільових кластерах.
+
+[IMPORTANT]
+====
+У виробничому режимі разом із продуктивними версіями Платформи _не_ розгортаються:
+
+* компоненти, залучені у процесах розробки регламенту реєстрів;
+
+* публічні ендпоінти компонентів, залучені у процесах розробки регламенту реєстрів.
+====
+
+.Компоненти та ендпоінти, які використовують розробники регламенту
+|===
+|+++<b style="font-weight: 700">Компонент для розробки регламенту<b>+++| +++<b style="font-weight: 700">Використання у Production <b>+++| +++<b style="font-weight: 700">Публічний ендпоінт <b>+++
+
+|`admin-portal`
+|+++<b style="color: red;">Не потрібен<b>+++
+|+++<b style="color: red;">Відсутній<b>+++
+
+|`registry-regulation-management`
+|+++<b style="color: red;">Не потрібен<b>+++
+|+++<b style="color: red;">Відсутній<b>+++
+
+|`kafka-ui`
+|+++<b style="color: red;">Не потрібен<b>+++
+|+++<b style="color: red;">Відсутній<b>+++
+
+|`redash-admin`
+|+++<b style="color: red;">Не потрібен<b>+++
+|+++<b style="color: red;">Відсутній<b>+++
+
+|`redash-admin-adhocworker`
+|+++<b style="color: red;">Не потрібен<b>+++
+|+++<b style="color: red;">Відсутній<b>+++
+
+|`redash-admin-scheduledworker`
+|+++<b style="color: red;">Не потрібен<b>+++
+|+++<b style="color: red;">Відсутній<b>+++
+
+|`redash-admin-exporter`
+|+++<b style="color: red;">Не потрібен<b>+++
+|+++<b style="color: red;">Відсутній<b>+++
+
+|`form-management-modeler` (legacy)
+|+++<b style="color: red;">Не потрібен<b>+++
+|+++<b style="color: red;">Відсутній<b>+++
+
+|`pgAdmin`
+|+++<b style="color: red;">Не потрібен<b>+++
+|+++<b style="color: red;">Відсутній<b>+++
+
+|`registry-vault`
+|+++<b style="color: green;">Потрібен<b>+++
+|+++<b style="color: red;">Відсутній<b>+++
+
+|`external-integration-mocks`
+|+++<b style="color: red;">Не потрібен<b>+++
+|+++<b style="color: red;">Відсутній<b>+++
+
+|`registry-rest-api`
+|+++<b style="color: green;">Потрібен<b>+++
+|+++<b style="color: red;">Відсутній<b>+++
+|===
+
+== Налаштування
+
+Щоб змінити режим розгортання реєстру -- `*deploymentMode*` -- з *`production`* на *`development`*, виконайте наступні кроки:
+
+. Відкрийте *OpenShift*-консоль, знайдіть проєкт *Control Plane* та перейдіть за посиланням до компонента *`gerrit`*.
++
+.Посилання до центрального Gerrit:
+TIP: `https://gerrit-control-plane.<dns-wildcard>[]`
+
+. Знайдіть репозиторій із вашим реєстром та відкрийте файл _**deploy-templates/values.yaml**_.
+
+. Знайдіть змінну *`deploymentMode: production`* та змініть її значення на *`deploymentMode: development`*.
++
+Налаштування режимів розгортання виглядає наступним чином:
++
+.deploy-templates/values.yaml
+[source,yaml]
+----
+global:
+  deploymentMode: development
+----
+
+. (_Опціонально_) Якщо необхідно розгорнути реєстр без певного порталу, наприклад, _Кабінету отримувача послуг_, виключіть його з налаштувань наступним чином:
++
+.deploy-templates/values.yaml
+[source,yaml]
+----
+global:
+  excludePortals: ['citizen']
+----
++
+[IMPORTANT]
+====
+За замовчуванням змінна `excludePortals` відсутня, що означає розгортання усіх порталів:
+
+.deploy-templates/values.yaml
+[source,yaml]
+----
+global:
+  excludePortals: ['']
+----
+
+При виключенні Кабінету отримувача послуг із процесу розгортання, наступні сервіси також не розгортаються:
+
+* `citizen-portal`
+* `ddm-notification-service`
+* `user-service-api`
+* `user-service-persistence`
+====
+
+. Виконайте `git commit` зі змінами, застосуйте зміни до `master`-гілки та запустіть розгортання реєстру.
 
 [NOTE]
-Налаштування *Redash admin* та *Pgadmin* є опційними й потрібні лише як додаткові кроки при виникненні проблем зі зміною режиму. Ми рекомендуємо ознайомитися з ними, але врахуйте, що вони не є обов'язковими для зміни `deploymentMode`.
+Налаштування *Redash admin* та *Pgadmin* є опційними й потрібні лише як додаткові кроки при виникненні проблем зі зміною режиму розгортання. Ми рекомендуємо ознайомитися з ними, але врахуйте, що вони не є обов'язковими для зміни `deploymentMode`.
 
 [tabs]
 ====
@@ -45,7 +161,7 @@ bash /config/install-upgrade.sh install
 . Після успішного завершення конфігурування `redash-admin` бази даних, перезапустіть пайплайн розгортання реєстру, якщо попередня спроба закінчилася неуспішно через `redash-chart deploy`.
 --
 
-Pgadmin::
+pgAdmin::
 +
 --
 . Перевірте останню доступну версію PgAdmin у *`control-plane-gerrit`*.
