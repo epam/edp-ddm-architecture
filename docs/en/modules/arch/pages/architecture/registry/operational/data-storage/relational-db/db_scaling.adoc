@@ -1,0 +1,262 @@
+//= Масштабування екземплярів PostgreSQL
+= Scaling PostgreSQL instances
+
+//Горизонтальне масштабування традиційних баз даних розпадається на дві дуже різні підходи: масштабування читання і масштабування запису. Єдиний спосіб масштабувати запис по горизонталі - це використовувати шардінг бази даних. Горизонтальне масштабування читання можливе шляхом розділення читання/запису.
+
+There are two vastly different approaches to horizontal scaling of traditional databases: read scalability and write scalability. The only way to achieve horizontal write scalability is by using database sharding. Horizontal read scalability is achievable by separating reads and writes.
+
+//По результатам наших дослідженнь і тестів рішення Citus, використання шардування виявилось недоцільним. Були виявлені дві основні проблеми. Перша - структура бази данних BPMS (camunda) не дозволяє шардувати таблиці таким чином щоб в результаті збільшення кількості робочих подів збільшувалась продуктивність. В усіх випробуваних конфігураціях продуктивність навпаки падає. Друга - при навантаженні запитами на шардовані таблиці часом виникають розподіленні блокування.
+
+Based on our research and Citus solution tests, sharding turned out to be impractical. We found two key issues. First, BPMS (Camunda) database structure does not allow sharding the tables in such a way that increasing the number of working pods would increase performance. On the contrary, performance decreased in all the configurations that were tested. Second, loading the sharded tables with requests sometimes leads to distributed locks.
+
+//Що стосується автоматичного горизонтального масштабування, то це можливий варіант, але масштабування пов’язане з тимчасовим великим падінням продуктивності. Тому зазвичай це має сенс як масштабування за графіком, пов’язане із запланованою зміною навантаження.
+
+Automatic horizontal scaling is a viable option, but it involves a substantial drop in performance, albeit temporarily. This scaling approach usually makes sense to use on a schedule tied to planned load changes.
+
+//== Структура кластера PostgreSQL
+== PostgreSQL cluster structure
+
+image::architecture/registry/operational/data-storage/relational-db/postgres_cluster.svg[PostgreSQL cluster]
+
+Applications::
+BPMS, data fabric, User/Excerpt/Audit/etc. services
+
+Pgpool-II::
+//балансувальник навантаження. Pgpool-II використовує переваги функції реплікації, щоб зменшити навантаження на кожен сервер PostgreSQL, розподіляючи запити SELECT між кількома серверами, покращуючи загальну пропускну здатність системи. Запити на запис надсилаються на основний сервер (Master)
+A load balancer. Pgpool-II takes advantage of the replication feature to reduce the load on each PostgreSQL server by distributing SELECT queries among multiple servers, improving system's overall throughput. Write requests are sent to the master server.
+
+PGO::
+//Postgres оператор від Crunchy Data, який автоматично керує кластерами PostgreSQL на основі простого декларативного опису. Наступні элементи керуються postgres оператором:
+Postgres Operator from Crunchy Data automatically manages PostgreSQL clusters based on a simple declarative description. Postgres Operator controls the following elements:
+
+Master DB;; 
+//экземпляр PostgreSQL який виконуе роль мастера реплікації
+A PostgreSQL instance that acts as a replication master.
+Replica DB;;
+//экземпляри PostgreSQL які виконують роль репліки та отримують данні з мастера в синхронному режимі
+PostgreSQL instances that act as replicas and receive data from the master synchronously.
+Master Service;;
+//Kubernetes сервіс який надає ім’я DNS для пода який виконує роль мастера.
+A Kubernetes service that provides a DNS name to the pod that acts as a master.
+Replica Service;;
+//Kubernetes сервіс який надає єдине ім’я DNS для набору подів, які виконують роль репліки, і може розподіляти навантаження між ними.
+A Kubernetes service that provides a single DNS name to a number of pods that act as a replica. It can balance the load between them.
+Cluster Service;;
+//Kubernetes сервіс який надає єдине ім’я DNS для всіх подів кластеру, і може розподіляти навантаження між ними.
+A Kubernetes service that provides a single DNS name to all pods in a cluster. It can balance the load between them.
+
+S3::
+//AWS S3 (або S3-compatible)  сховище на якому зберігаються резервні копії та архівні wal логи. Можливо використовувати інші типи сховищ, такі як azure, gcs або kubernetes persistent volume
+AWS S3 (or S3-compatible) storage that keeps backups and archived WAL logs. It is possible to use other storage types such as Azure, GCS, or Kubernetes persistent volume.
+
+Operational Cluster::
+//кластер який обслуговує додатки та сервіси реєстру
+A cluster that serves the registry's applications and services.
+
+Analytical Cluster::
+//кластер який обслуговує аналітичні інструменти, зокрема Redash. Отримує данні через логічну реплікацію з операційного кластеру. Доступний ззовні лише на читання.
+A cluster that serves analytical tools such as Redash. It receives data through logical replication from the operational cluster. External access is read-only.
+
+//=== Приклади маніфестів
+=== Manifest examples
+
+.Operational cluster sample definition
+====
+[source,yaml]
+----
+apiVersion: postgres-operator.crunchydata.com/v1beta1
+kind: PostgresCluster
+metadata:
+  name: operational
+spec:
+  image: registry.developers.crunchydata.com/crunchydata/crunchy-postgres:centos8-14.2-0
+  postgresVersion: 14
+  instances:
+    - name: instance1
+      replicas: 3
+  backups:
+     pgbackrest:
+       image: registry.developers.crunchydata.com/crunchydata/crunchy-pgbackrest:centos8-2.36-1
+  patroni:
+    dynamicConfiguration:
+      synchronous_mode: true 
+      synchronous_node_count: 2
+      pause: false
+      postgresql:
+        parameters:
+          synchronous_standby_names: "*"
+        use_slots: true
+        pg_hba:
+        - host all all all md5
+  users:
+    - name: postgres
+----
+====
+
+.Pgpool-II sample definition
+====
+[source,yaml]
+----
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pgpool
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pgpool
+  template:
+    metadata:
+      labels:
+        app: pgpool
+    spec:
+      containers:
+      - name: pgpool
+        image: pgpool/pgpool
+        env:
+        - name: POSTGRES_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: operational-pguser-postgres
+              key: user
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: operational-pguser-postgres
+              key: password
+        volumeMounts:
+        - name: pgpool-config
+          mountPath: /config
+      volumes:
+      - name: pgpool-config
+        configMap:
+          name: pgpool-config
+----
+====
+
+.Pgpool-II sample config
+====
+[source,yaml]
+----
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pgpool-config
+  labels:
+    name: pgpool-config
+data:
+  pgpool.conf: |-
+    listen_addresses = '*'
+    port = 5432
+    pool_passwd = /config/pool_passwd
+    socket_dir = '/var/run/pgpool'
+    pcp_listen_addresses = '*'
+    pcp_port = 9898
+    pcp_socket_dir = '/var/run/pgpool'
+    backend_hostname0 = 'operational-primary'
+    backend_port0 = 5432
+    backend_weight0 = 0
+    backend_flag0 = 'ALWAYS_PRIMARY|DISALLOW_TO_FAILOVER'
+    backend_hostname1 = 'operational-replicas'
+    backend_port1 = 5432
+    backend_weight1 = 1
+    backend_flag1 = 'DISALLOW_TO_FAILOVER'
+    sr_check_period = 0
+    enable_pool_hba = off
+    backend_clustering_mode = 'streaming_replication'
+    num_init_children = 200
+    max_pool = 1
+    reserved_connections = 0
+    child_life_time = 300
+    child_max_connections = 0
+    connection_life_time = 0
+    client_idle_limit = 0
+    connection_cache = on
+    load_balance_mode = on
+    statement_level_load_balance = off
+    ssl = off
+    failover_on_backend_error = off
+    logging_collector = off
+  pool_hba.conf: |-
+    local   all         all                               trust
+    host    all         all         127.0.0.1/32          trust
+    host    all         all         ::1/128               trust
+    host    all         all         0.0.0.0/0             md5
+----
+====
+
+//== Масштабування кластеру
+== Cluster scaling
+
+//Операційний та аналітичний кластери можуть масштабуватися незалежно один від одного. Кластер може працювати як у режимі _тільки мастер_, тобто без масштабування, так і у режимі _мастер + репліки_, з розділенням читання/запису.
+
+Operational and analytical clusters can be scaled independently. A cluster can work both in the _master-only_ mode, without scaling, and in _master + replicas_ mode, with separate reads and writes.
+
+//Налаштування відбувається за допомогою змін у CRD PostgresCluster та ConfigMap з конфігурацією PgPool II якщо розділення читання/запису вмикається або вимикається.
+
+Cluster scaling is configured by changing PostgresCluster CRD and Pgpool-II configuration in ConfigMap if separate reads and writes are enabled or disabled.
+
+////
+IMPORTANT: Перехід з конфігурації _тільки мастер_ на _мастер + репліки_ і навпаки веде до розриву всіх з’єднаннь з кластером баз данних +
+   +
+При зменшенні кількості подів розривається та частина з’єднаннь яка була створена на видалених подах +
+ +
+В обох випадках з’єднання відновлюються через
+декілька секунд, але у момент такого масштабування можуть спостерігатися помилки у сервісах
+////
+
+[IMPORTANT]
+====
+Switching the configuration from _master-only_ to _master + replicas_ and vice versa causes all connections to the database cluster to be broken.
+
+Reducing the number of pods breaks connections created for the deleted pods.
+
+In both cases connections are renewed after several seconds, but during this scaling operation services may return errors.
+====
+
+//.Аналітичний кластер
+.Analytical cluster
+====
+////
+* Змінити *spec.instances.replicas* на бажану кількість подів. Параметр включає мастер та репліки. Тобто при значенні 1 буде розгорнуто тільки мастер без реплік.
+* Змінити *spec.patroni.dynamicConfiguration.synchronous_node_count* на кількість реплік. Параметр завжди менший на 1 ніж загальна кількість подів (spec.instances.replicas)
+* Застосовувати зміни маніфесту
+////
+* Set *spec.instances.replicas* to the total number of pods. This parameter includes the master and replicas. When set to 1, only the master without replicas is deployed.
+* Set *spec.patroni.dynamicConfiguration.synchronous_node_count* to the number of replicas. This parameter is always 1 less than the total number of pods (spec.instances.replicas).
+* Apply manifest changes.
+====
+
+//.Операційний кластер
+.Operational cluster
+====
+////
+* Виконати всі дії як на аналітичному кластері
+* При переході з конфігурації з однією подою (spec.instances.replicas=1) на конфігурацію з двома і більше, додати/розкоментувати налаштування енпоінту реплік в pgpool.conf
+////
+* Perform the steps described for the analytical cluster.
+* When switching from a single-pod configuration (spec.instances.replicas=1) to a configuration with two or more pods, add or uncomment the replicas endpoint settings in pgpool.conf:
+
+[source,bash]
+----
+    backend_hostname1 = 'operational-replicas'
+    backend_port1 = 5432
+    backend_weight1 = 1
+    backend_flag1 = 'DISALLOW_TO_FAILOVER'
+----
+
+//* При переході з конфігурації з з двома і більше подами на конфігурацію з однією подою, вилучити/закоментувати налаштування енпоінту реплік в pgpool.conf
+* When switching from a configuration with two or more pods to a single-pod configuration, delete or comment out the replicas endpoint settings in pgpool.conf:
+
+[source,bash]
+----
+    #backend_hostname1 = 'operational-replicas'
+    #backend_port1 = 5432
+    #backend_weight1 = 1
+    #backend_flag1 = 'DISALLOW_TO_FAILOVER'
+----
+
+//* При переході з конфігурації з двома і більше подами на іншу з двома і більше подами, ніяких додаткових дій непотрібно. Тобто при переході наприклад з 2 под на 5, або з 5 на 3, конфігурацію pgpool змінювати не треба
+* When switching from a configuration with two or more pods to a different configuration with two or more pods, no additional steps are necessary. For example, when switching from 2 to 5 pods, or from 5 to 3 pods, there is no need to change the pgpool config.
+====
