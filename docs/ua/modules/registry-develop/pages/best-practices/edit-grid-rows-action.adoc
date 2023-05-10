@@ -1,0 +1,537 @@
+:toc-title: ЗМІСТ
+:toc: auto
+:toclevels: 5
+:experimental:
+:important-caption:     ВАЖЛИВО
+:note-caption:          ПРИМІТКА
+:tip-caption:           ПІДКАЗКА
+:warning-caption:       ПОПЕРЕДЖЕННЯ
+:caution-caption:       УВАГА
+:example-caption:           Приклад
+:figure-caption:            Зображення
+:table-caption:             Таблиця
+:appendix-caption:          Додаток
+:sectnums:
+:sectnumlevels: 5
+:sectanchors:
+:sectlinks:
+:partnums:
+
+= Вибір одного або декількох рядків у таблиці та виконання дій щодо даних у записах
+
+== Моделювання структур даних
+
+Створіть модель даних реєстру за прикладом нижче.
+
+[TIP]
+====
+Приклад _.xml_-схем та пов'язаних CSV-файлів для створення моделі даних ви можете знайти у регламенті демо-реєстру *_consent-data_* за посиланням:
+https://admin-tools-consent-data.apps.envone.dev.registry.eua.gov.ua/gerrit.
+
+Схема для створення таблиць та критеріїв пошуку буде доступна за назвою *_licenseTable.xml_*.
+
+Файл-довідник CSV із даними для імпорту в БД буде доступний за назвою *_licences.csv_*.
+
+Файл для заповнення таблиці licences даними буде доступний за назвою *_populateLicenses.xml_*.
+====
+
+. Створіть новий тип даних, таблицю та критерій пошуку.
++
+Ця модель даних створює новий користувацький тип даних та таблицю, а також визначає критерій пошуку.
++
+._Базова модель даних для нашого прикладу_
+[%collapsible]
+====
+[source,xml]
+----
+  <changeSet author="registry owner" id="enum license_status">
+    <comment>CREATE TYPE license_status</comment>
+    <ext:createType name="license_status">
+      <ext:asEnum>
+        <ext:label translation="діюча">active</ext:label>
+        <ext:label translation="анульована">canceled</ext:label>
+      </ext:asEnum>
+    </ext:createType>
+  </changeSet>
+
+  <changeSet author="registry owner" id="table licenses">
+    <comment>CREATE TABLE licenses</comment>
+    <ext:createTable tableName="licenses" ext:historyFlag="true">
+      <column name="license_id" type="UUID">
+        <constraints nullable="false" primaryKey="true" primaryKeyName="pk_licenses"/>
+      </column>
+      <column name="number" type="TEXT">
+        <constraints nullable="false"/>
+      </column>
+      <column name="date_received" type="DATE">
+        <constraints nullable="false"/>
+      </column>
+      <column name="date_terminated" type="DATE">
+        <constraints nullable="false"/>
+      </column>
+      <column name="full_name" type="TEXT">
+        <constraints nullable="false"/>
+      </column>
+      <column name="licensing_status" type="license_status">
+        <constraints nullable="false"/>
+      </column>
+    </ext:createTable>
+  </changeSet>
+
+  <changeSet author="registry owner" id="searchCondition search_licenses_by_status">
+    <comment>CREATE search condition search_licenses_by_status</comment>
+    <ext:createSearchCondition name="search_licenses_by_status">
+      <ext:table name="licenses" alias="l">
+        <ext:column name="license_id"/>
+        <ext:column name="number"/>
+        <ext:column name="date_received"/>
+        <ext:column name="date_terminated"/>
+        <ext:column name="full_name"/>
+        <ext:column name="licensing_status" searchType="equal"/>
+      </ext:table>
+    </ext:createSearchCondition>
+  </changeSet>
+----
+====
++
+Створюється користувацький тип даних *`license_status`* з двома можливими значеннями: "діюча" (`active`) та "анульована" (`canceled`).
++
+Створюється нова таблиця *`licenses`* з наступними стовпцями:
+
+* *`license_id`*: унікальний ідентифікатор ліцензії (`UUID`).
+* *`number`*: номер ліцензії (текстовий формат).
+* *`date_received`*: дата отримання ліцензії (формат дати).
+* *`date_terminated`*: дата припинення ліцензії (формат дати).
+* *`full_name`*: повне ім'я власника ліцензії (текстовий формат).
+* *`licensing_status`*: статус ліцензії (тип даних `license_status`).
++
+Створюється критерій пошуку (Search condition) із назвою *`search_licenses_by_status`*, який дозволяє здійснювати пошук ліцензій у таблиці *`licenses`* за їх статусом. У цій умові пошуку передбачено, що значення стовпця *`licensing_status`* повинно бути рівним значенню, заданому при пошуку (*`searchType="equal"`*).
+
+. Підготуйте файл-довідник CSV із даними для імпорту в БД.
++
+Цей файл-довідник CSV містить дані про ліцензії, які можуть бути завантажені до бази даних (таблиці "licenses"). У файлі представлені наступні стовпці:
+
+* *`number`*: номер ліцензії.
+* *`licensing_status`*: статус ліцензії (діюча або анульована).
+* *`date_received`*: дата отримання ліцензії.
+* *`date_terminated`*: дата припинення дії ліцензії.
+* *`full_name`*: повне ім'я власника ліцензії (організація або фізична особа).
++
+Ці дані можуть бути імпортовані в таблицю *`licenses`* бази даних.
+
+. Імпортуйте дані з файлу-довідника CSV за допомогою виклику функції завантаження даних до БД -- *`CALL p_load_table_from_csv()`*. Для цього створіть окремий файл *_populateLicences.xml_*, в якому вкажіть наступну структуру:
++
+[source,xml]
+----
+  <property  name="dataLoadPath"  value="/tmp/data-load/"/>
+
+  <changeSet author="registry owner" id="load licenses">
+    <sql dbms="postgresql" endDelimiter=";" splitStatements="true" stripComments="true">
+      CALL p_load_table_from_csv('licenses','${dataLoadPath}licenses.csv', array['number', 'licensing_status', 'date_received', 'date_terminated', 'full_name']);
+    </sql>
+  </changeSet>
+----
++
+Ця функція використовує вбудований механізм Liquibase для імпорту даних з CSV-файлу в таблицю бази даних. Використовуються наступні компоненти:
+
+* *`<property>`*: встановлює значення змінної dataLoadPath, яка вказує шлях до каталогу з файлами CSV для завантаження даних.
+* *`<changeSet>`*: описує зміни, які слід застосувати до бази даних. В цьому випадку -- виклик функції *`p_load_table_from_csv()`* для імпорту даних з CSV-файлу в таблицю *`licenses`*.
+* *`<sql>`*: описує SQL-запит, який викликає функцію `p_load_table_from_csv`. Запит включає ім'я таблиці `licenses`, шлях до CSV-файлу (використовуючи змінну `${dataLoadPath}`), та масив зі стовпцями, які слід імпортувати з файлу.
+
+TIP: Детальніше про створення моделі та завантаження даних до реєстру ви можете переглянути у розділах xref:data-modeling/data/physical-model/overview.adoc[] та xref:data-modeling/initial-load/data-initial-data-load-pl-pgsql.adoc[].
+
+== Референтний бізнес-процес
+
+=== Створення пулів для процесів
+
+Це комплексний бізнес-процес, який складається з основного процесу та підпроцесів, які він викликає.
+
+BPMN-діаграма містить основний процес та два підпроцеси, які ініціюються основним через *Call Activity*. Ці підпроцеси є подібними та відрізняються лише назвами задач та порядком їх виконання.
+
+У нашому прикладі розглянемо основний процес, а також коротко один із підпроцесів -- анулювання ліцензії.
+
+[TIP]
+====
+Приклад _.bpmn_-моделі процесу, а також користувацькі _.json_-форми до нього ви можете знайти у регламенті демо-реєстру *_consent-data_* за посиланням:
+https://admin-tools-consent-data.apps.envone.dev.registry.eua.gov.ua/gerrit.
+
+Процес буде доступний за назвою *_edit-grid-rows-action.bpmn_*. Назви форм ви можете знайти всередині відповідних користувацьких задач бізнес-процесу у полі *`Form key`*.
+====
+
+=== Вибір усіх органів ліцензування з БД через критерій пошуку
+
+Змоделюйте сервісну задача (Service Task) та використайте делегат *Search entities in data factory*.
+
+На основі створеної моделі даних, ця задача відповідає за пошук та вибірку ліцензій з таблиці *`licenses`*. Таблиця *`licenses`* містить наступні стовпці:
+
+* `license_id` -- унікальний ідентифікатор ліцензії (`UUID`).
+* `number` -- номер ліцензії (`TEXT`).
+* `date_received` -- дата отримання ліцензії (`DATE`).
+* `date_terminated` -- дата припинення ліцензії (`DATE`).
+* `full_name` -- повне ім'я органу ліцензування (`TEXT`).
+* `licensing_status` -- статус ліцензії (тип даних `license_status`).
+
+Тип даних *`license_status`* є переліком з двома можливими значеннями:
+
+* *`active`* (чинна) -- ліцензія є дійсною.
+* *`canceled`* (анульована) -- ліцензія скасована.
+
+Поточна задача використовує умову пошуку (Search condition) *`search_licenses_by_status`*, яка дозволяє фільтрувати ліцензії в таблиці *`licenses`* за статусом ліцензування. У цьому випадку, задача шукає ліцензії зі статусом *`active`* (чинні).
+
+Таким чином, сервісне завдання виконує пошук активних ліцензій у таблиці *`licenses`* на основі визначених умов пошуку, передаючи системний токен доступу для авторизації запиту до бази даних.
+
+Параметри які використовуються для налаштування та отримання результатів пошуку: ::
+. У секції *Inputs* встановіть вхідний параметр *`resource`* як *`search-licenses-by-status`* для визначення ресурсу/API-ендпоінту, який слід використати для пошуку.
++
+TIP: Тут ендпоінт `search-licenses-by-status` генерується на базі критерію пошуку `search_licenses_by_status`, визначеного у моделі даних.
+
+. У секції *Inputs > Search variables* передайте параметри пошуку, які необхідно застосувати, як ключі-значення (*`Map`*):
+
+* `Key: *licensingStatus*`
+* `Value: *active*`
++
+У цьому випадку, ми шукаємо ліцензії зі статусом *`active`*.
+
+. У секції *Inputs > X-Access-Token* передайте системний токен доступу для авторизації запита до бази даних:
++
+----
+${system_user().accessToken}
+----
+
+. У секції *Outputs > Result variable* встановіть вихідний параметр як змінну *`licensesResponse`*, до якої зберігатиметься відповідь від бази даних для подальшого використання.
+
+image:best-practices/edit-grid-rows-action/edit-grid-rows-action-1.png[]
+
+=== Скрипт підготовки даних для відображення на формі у табличному вигляді
+
+Змоделюйте сервісну задачу та використайте наступний groovy-скрипт.
+
+[source,groovy]
+----
+def licenses = licensesResponse.responseBody.elements()
+
+        def payload = S([:], 'application/json')
+        payload.prop('licenses', licenses)
+        set_transient_variable('payload', payload)
+----
+
+Цей скрипт виконує наступні дії:
+
+. Витягує список ліцензій з відповіді *`licensesResponse.responseBody.elements()`*. Змінна *`licenses`* містить список активних ліцензій, отриманих від попереднього сервісного завдання.
+
+. Створює новий об'єкт JSON *`payload`* з порожнім словником.
+
+. Додає до об'єкта JSON *`payload`* список ліцензій, отриманий на першому кроці, під ключем *`licenses`*.
+
+. Зберігає JSON об'єкт *`payload`* у транзієнтну змінну (тимчасову змінну, яка існує лише під час виконання процесу) з назвою *`payload`*.
+
+image:best-practices/edit-grid-rows-action/edit-grid-rows-action-2.png[]
+
+=== Обрання дії над даними в одному рядку таблиці
+
+Змоделюйте користувацьку задачу (User Task) та поєднайте її з відповідною UI-формою за ключем *`Form key`*.
+
+Основна мета цієї форми -- дозволити користувачу обрати дію, яку він хоче виконати над даними у певному рядку таблиці за допомогою компонента *Edit Grid* (змінити дату або анулювати ліцензію).
+
+Виконайте наступні налаштування: ::
+
+. У полі *`Name`* введіть назву користувацької задачі.
+. Застосуйте шаблон делегата -- *`User Form`*.
+. У полі *`ID`* введіть ідентифікатор задачі -- *`defineActionActivity`*.
+. У полі *`Form key`* визначте ключ для поєднання із відповідною змодельованою формою бізнес-процесу -- *`feature-edit-grid-rows-action-define`*.
+. . У полі `Assignee` вкажіть змінну для особи, якій призначається поточна задача, -- *`${initiator}`*.
+. У полі *`Form data pre-population`* передайте дані на UI-форму як змінну ${payload}.
+
+image:best-practices/edit-grid-rows-action/edit-grid-rows-action-3.png[]
+
+=== Моделювання XOR-шлюзу та додавання логіки через вирази умови
+
+Змоделюйте XOR-шлюз, який визначає, який з підпроцесів слід викликати на основі *`action codes`*, обраних на попередній формі.
+
+TIP: Action codes -- кнопки у контекстному меню "Три крапки", змодельовані на UI-формі за допомогою елемента *`Edit Grid`*.
+
+image:best-practices/edit-grid-rows-action/edit-grid-rows-action-4.png[]
+
+[NOTE]
+====
+Якщо на формі *`defineActionActivity`* обрано чекбокс з декількома рядками (записами) таблиці, то для кожного з цих рядків запуститься підпроцес відповідно до обраної кнопки на UI-формі (у цьому контексті це мають бути _окремі кнопки_, змодельовані через компонент *Button*). Запуск підпроцесу для кожного з обраних рядків можливий завдяки функції мультиекземпляра *`Multi-instance`* (_див.xref:#call-activity-cancel[]_).
+
+Якщо ви обрали контекстне меню "Три крапки" навпроти певного рядка, то відповідний підпроцес запуститься лише для даних цього рядка. Який саме підпроцес запуститься -- регулюється логікою кодів дії  (action codes), змодельованих на формі у компоненті *Edit Grid*. Тобто контекстне меню "Три крапки" дозволяє обрати логіку виконання дії над одним рядком таблиці.
+====
+
+Залежно від дії, визначеної в action codes (у нашому прикладі ми оновлюємо дані лише по одному рядку на формі, тому використовуємо лише action codes через контекстне меню), основний процес ініціює один з наступних підпроцесів через *Call Activity*:
+
+. Процес "Зміна дати терміну дії ліцензії", якщо введений action code відповідає наступній умові:
++
+[source,juel]
+----
+${submission('defineActionActivity').formData.hasProp('_action_code') && submission('defineActionActivity').formData.prop('_action_code').value().equals('_action_update')}
+----
++
+image:best-practices/edit-grid-rows-action/edit-grid-rows-action-4-1.png[]
+
+. Процес "Скасування ліцензії", якщо введений action code відповідає наступній умові:
++
+[source,juel]
+----
+${submission('defineActionActivity').formData.hasProp('_action_code') && submission('defineActionActivity').formData.prop('_action_code').value().equals('_action_cancel')}
+----
++
+image:best-practices/edit-grid-rows-action/edit-grid-rows-action-4-2.png[]
+
+Після виклику відповідного підпроцесу за допомогою Call Activity, основний процес продовжується до кінцевої події. Далі розглянемо потік із викликом підпроцесу для скасування ліцензії.
+
+[#call-activity-cancel]
+=== Call для виклику підпроцесу скасування ліцензії
+
+Цей Call Activity виконує процес з іменем *`license-cancellation`* для кожного елемента в колекції даних, яка вказана в `multiInstanceLoopCharacteristics`.
+
+[TIP]
+====
+Детальніше про Call Activity та особливості їх застосування ви можете переглянути на сторінках:
+
+* xref:bp-modeling/bp/element-templates/bp-element-templates-installation-configuration.adoc[]
+* xref:bp-modeling/bp/bpmn/subprocesses/overview.adoc[]
+====
+
+Виконайте наступні налаштування: ::
++
+. У секції *Multi-instance* > *`Collection`* введіть значення:
++
+----
+${submission('defineActionActivity').formData.prop('licenses').elements()}
+----
+
+. Для *Multi-instance* > *`Element variable`* вкажіть змінну *`license`*.
++
+[NOTE]
+====
+Це означає, що Call Activity буде виконана для кожного елемента в колекції даних, який повертається функцією *`${submission('defineActionActivity').formData.prop('licenses').elements()}`*. Кожен елемент цієї колекції буде збережений до визначеної змінної *`license`*.
+
+Використання функції *`Multi-instance`* також показано на прикладі xref:registry-admin/user-notifications/email/e-mail-notification.adoc[].
+====
+
+. У полі *`Called element`* вкажіть ідентифікатор (Process ID) підпроцесу, який необхідно викликати та запустити. У нашому випадку -- це *`license-cancellation`*.
+
+. Для поля *`Asynchronous continuation`* вкажіть значення *`Before`*. Це означає, що ця активність буде виконана асинхронно. Асинхронне виконання починається перед виконанням самого Call Activity, тобто "асинхронно перед".
++
+[TIP]
+====
+.Що таке Asynchronous continuation?
+[%collapsible]
+=====
+*Asynchronous continuation* у Call Activity в Camunda BPM -- це механізм, що дозволяє виконати активність асинхронно відносно основного потоку процесу. Це означає, що активність (у цьому випадку Call Activity) може бути виконана пізніше, не затримуючи виконання наступних елементів в основному потоці.
+
+Asynchronous continuation часто використовується, коли потрібно запустити довготривалу або ресурсомістку операцію без блокування подальшого виконання процесу. Це може бути корисним, наприклад, коли Call Activity викликає зовнішній процес, який може тривати певний час.
+
+Після завершення асинхронної операції, робота процесу продовжується з наступної точки, після Call Activity. Asynchronous continuation також дозволяє системі керування процесами (наприклад, Camunda BPM) більш ефективно управляти ресурсами, розподіляючи навантаження між різними екземплярами процесу.
+
+*`Asynchronous continuation: before`* в контексті Camunda BPM означає, що асинхронний виклик відбувається перед запуском Call Activity, а не після його завершення.
+
+Такий варіант використання асинхронного продовження може бути корисним, коли вам потрібно запустити довготривалу або ресурсомістку активність (як-от Call Activity), але ви не хочете блокувати виконання основного потоку процесу, поки ця активність не буде виконана.
+=====
+====
+
++
+image:best-practices/edit-grid-rows-action/edit-grid-rows-action-5-1.png[]
+
+. У полі In mappings вкажіть:
+
+* `Source: *Type*`
+* `source: *license*`
+* `target: *license*`
++
+Це означає, що дані зі змінної license в основному процесі будуть передані до процесу `license-cancellation` і збережені до змінної під таким же іменем.
+
++
+image:best-practices/edit-grid-rows-action/edit-grid-rows-action-5.png[]
+
+=== Користувацька задача для ануляції ліцензії
+
+Змоделюйте користувацьку задачу (*User Task*), яка надасть можливість для користувача анулювати ліцензію.
+
+. Використовуйте шаблон делегата *`User Form`* для створення форми користувача.
+
+. Вкажіть ідентифікатор форми, яка повинна бути показана користувачу, у цьому випадку -- *`edit-grid-rows-action-cancel-license`*.
+
+. Задача може бути призначена користувачеві (`Assignee`), але в цьому випадку поле можна залишити порожнім, що означає, що будь-який користувач може взяти її до виконання.
+
+. У полі Candidate roles вкажіть роль. Поле вказує на те, що цю задачу зможуть бачити та виконувати користувачі з певною роллю/ролями, у нашому випадку -- *`op-regression`*.
+
+. У полі Form data pre-population передайте дані про ліцензію як змінну *`${license}`*, що будуть виведені на форму для попереднього заповнення даних.
+
+image:best-practices/edit-grid-rows-action/edit-grid-rows-action-6.png[]
+
+=== Підготовка даних для запису (transient var)
+
+Змоделюйте скрипт-задачу (Script Task) та застосуйте скрипт, який зможе отримати дані із попередньої задачі (форми) та підготує їх для запису до БД (у нашому випадку -- до оновлення сутності).
+
+image:best-practices/edit-grid-rows-action/edit-grid-rows-action-7.png[]
+
+._Groovy-скрипт для отримання даних з форми cancelLicenseActivity та підготовки їх до запису_
+[%collapsible]
+====
+[source,groovy]
+----
+def canceledLicense = submission('cancelLicenseActivity').formData
+        canceledLicense.prop('licensingStatus', 'canceled')
+        set_transient_variable('canceledLicense', canceledLicense)
+----
+
+Цей скрипт виконує наступні дії:
+
+. Отримує дані форми, що були відправлені користувачем у задачі *`cancelLicenseActivity`*. Результат цього виразу зберігається у змінній *`canceledLicense`*.
++
+[source,groovy]
+----
+submission('cancelLicenseActivity').formData
+----
+
+. Встановлює властивість *`licensingStatus`* об'єкта *`canceledLicense`* у значення *`canceled`*. Це означає, що ліцензію відмічено як "_скасовану_".
++
+[source,groovy]
+----
+canceledLicense.prop('licensingStatus', 'canceled')
+----
+
+. Створює тимчасову (transient) змінну з іменем *`'canceledLicense'`*, значення якої встановлюється в об'єкт *`canceledLicense`*. Тимчасова змінна зберігається лише протягом поточного виконання процесу і не зберігається до бази даних.
++
+[source,groovy]
+----
+set_transient_variable('canceledLicense', canceledLicense)
+----
+====
+
+=== Підписання даних КЕП та накладання системного підпису
+
+Далі змоделюйте відповідні задачі для підписання даних КЕП та системним ключем. Використовуйте для цього делегати *Officer sign task* та *System signature by DSO service відповідно*.
+
+TIP: Приклади моделювання таких задач ви можете переглянути на сторінці xref:best-practices/bp-officer-self-register-manual.adoc[].
+
+=== Зберегти оновлені дані обраного рядка у таблиці на формі до БД
+
+Змоделюйте сервісну задачу, яка виконає операцію оновлення даних за обраним записом у БД.
+
+. Використовуйте делегат *Update entity in data factory*, що є класом Java, який містить логіку для виконання цієї задачі.
++
+Альтернативно, ви можете застосувати загальний конектор до Фабрики даних *Connect to data factory*, використавши метод *`PUT`*.
++
+[TIP]
+====
+Детальніше про це див. на сторінці xref:bp-modeling/bp/element-templates/bp-element-templates-installation-configuration.adoc[].
+====
+
+. Вкажіть *`resource`*, що вказує на ресурс, тобто таблицю яку потрібно оновити, у цьому випадку -- *`licenses`*.
+
+. Вкажіть `Resource id`, що визначає ідентифікатор ліцензії, яку потрібно оновити. Наприклад:
++
+----
+${license.prop('licenseId').value()}
+----
+
+. У полі *`Payload`* передайте дані, що потрібно оновити для вказаної ліцензії. Ці дані беруться з тимчасової змінної `canceledLicense`, що була встановлена у попередніх кроках процесу. Це можна зробити за допомогою функції `submission()`. Наприклад:
++
+----
+${submission('signCanceledLicenseActivity').formData}
+----
+
+. Передайте токен доступу до ресурсу -- *`X-Access-Token`*, отриманий із задачі `signCanceledLicenseActivity`. Це можна зробити за допомогою функції completer(). Наприклад:
++
+----
+${completer('signCanceledLicenseActivity').accessToken}
+----
+
+. Передайте містять ключі для цифрового підпису даних КЕП та системним ключем у полях `X-Digital-Signature source` і `X_Digital-Signature-Derived source` відповідно. Наприклад:
++
+.КЕП
+----
+${sign_submission('signCanceledLicenseActivity').signatureDocumentId}
+----
++
+.Системний підпис
+----
+${system_signature_ceph_key}
+----
+
+. Результат запита збережіть у вихідний параметр *`response`*.
+
+image:best-practices/edit-grid-rows-action/edit-grid-rows-action-8.png[]
+
+=== Завершення процесу та повернення користувача на початкову форму
+
+Після оновлення сутності у Фабриці даних, підпроцес, що викликали, завершується, результат повертається назад до Call Activity, і користувач повертається на початок основного процесу. Переадресація користувача можлива завдяки змодельованим подіям "З'єднання" (*Link event*).
+
+image:best-practices/edit-grid-rows-action/edit-grid-rows-action-9.png[]
+
+TIP: Детальніше про подію "З'єднання" ви можете дізнатися на сторінці xref:bp-modeling/bp/bpmn/events/bp-link-events.adoc[].
+
+== Моделювання UI-форм до бізнес-процесу
+
+Розглянемо приклад моделювання користувацької форми для перегляду та виконання дій над певними рядками таблиці за допомогою компонента Edit Grid.
+
+Також змоделюємо дві кнопки через компонент Button для виконання додаткової логіки.
+
+[NOTE]
+====
+Якщо на формі *`defineActionActivity`* обрано чекбокс з декількома рядками (записами) таблиці, то для кожного з цих рядків запуститься підпроцес відповідно до обраної кнопки на UI-формі (у цьому контексті це мають бути _окремі кнопки_, змодельовані через компонент *Button*). Запуск підпроцесу для кожного з обраних рядків можливий завдяки функції мультиекземпляра *`Multi-instance`* (_див.xref:#call-activity-cancel[]_).
+
+Якщо ви обрали контекстне меню "Три крапки" навпроти певного рядка, то відповідний підпроцес запуститься лише для даних цього рядка. Який саме підпроцес запуститься -- регулюється логікою кодів дії  (action codes), змодельованих на формі у компоненті *Edit Grid*. Тобто контекстне меню "Три крапки" дозволяє обрати логіку виконання дії над одним рядком таблиці.
+====
+
+. Перейдіть до конструктора форм у Кабінеті адміністратора регламентів, створіть нову форму та змоделюйте компонент *Edit Grid*, який складається з 5-ти текстових полів (*Text Field*) для таблиці.
+
+. Перейдіть до налаштувань компонента *Edit Grid*.
++
+image:best-practices/edit-grid-rows-action/forms/edit-grid-rows-action-form-1.png[]
+
+. Введіть назву (*`Label`*) для цього компонента, що відображатиметься на формі, та активуйте опції `Multiple-record selection` та `Read Only`.
++
+* `Multiple-record selection` дозволяє користувачам вибирати кілька записів в таблиці одночасно.
+* `Read Only` показує дані через окремий елемент управління в контекстному меню (три вертикальних крапки), який дозволяє переглядати дані без можливості редагування.
+
++
+image:best-practices/edit-grid-rows-action/forms/edit-grid-rows-action-form-2.png[]
+
+. Перейдіть на вкладку *API* та введіть службову назву компонента для використання в API-запитах. У нашому випадку -- це `licences`, що відповідає назві таблиці в БД.
++
+image:best-practices/edit-grid-rows-action/forms/edit-grid-rows-action-form-3.png[]
+
+. Перейдіть на вкладку *Logic* та додайте коди дій (action codes) для опцій контекстного меню "Три крапки", які будуть доступні для виконання дії над певним рядком на формі під час виконання бізнес-процесу.
++
+image:best-practices/edit-grid-rows-action/forms/edit-grid-rows-action-form-4.png[]
+
+. Змоделюйте компонент *Button* для додаткової двох додаткових кнопок, щоб мати можливість виконувати дії над декількома рядками таблиці одночасно, коли активована опція `Multiple-record selection` в Edit Grid.
+
+* Додайте кнопку оновлення терміну дії ліцензії (для одного і більше записів у таблиці, за умови використання чекбоксу `Multiple-record selection` в Edit Grid).
++
+image:best-practices/edit-grid-rows-action/forms/edit-grid-rows-action-form-5.png[]
++
+image:best-practices/edit-grid-rows-action/forms/edit-grid-rows-action-form-6.png[]
+
+* Додайте кнопку скасування ліцензії (для одного і більше записів у таблиці, за умови використання чекбоксу `Multiple-record selection` в Edit Grid).
++
+image:best-practices/edit-grid-rows-action/forms/edit-grid-rows-action-form-7.png[]
++
+image:best-practices/edit-grid-rows-action/forms/edit-grid-rows-action-form-8.png[]
+
+. Збережіть зміни та застосуйте конфігурацію до майстер-гілки.
+
+TIP: Читайте про можливості Edit Grid у розділі документації xref:bp-modeling/forms/components/edit-grid/edit-grid.adoc[].
+
+== Використання у Кабінетах користувачів
+
+Змодельований бізнес-процес можна буде знайти у списку доступних послуг у Кабінеті посадової особи.
+
+.Бізнес-процес у Кабінеті
+image::release-notes:wn-1-9-4/whats-new-1-9-4-8.png[]
+
+.Виконання дії над одним рядком у таблиці
+image::release-notes:wn-1-9-4/whats-new-1-9-4-5.png[]
+
+.Виконання дії над декількома рядками у таблиці
+image::release-notes:wn-1-9-4/whats-new-1-9-4-9.png[]
+
+
+
+
+
