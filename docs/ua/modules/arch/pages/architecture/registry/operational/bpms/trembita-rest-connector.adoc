@@ -1,0 +1,179 @@
+= Універсальний конектор для виклику Trembita Rest API
+
+== Загальний опис
+
+На даний момент комунікація з учасниками інформаційного обміну через _ШБО "Трембіта"_ відбувається лише з використанням SOAP протоколу через типові специфічні SOAP-конектори (з ЄДР, ДРАЦС, ЄІБДВПО) або через xref:arch:architecture/registry/operational/bpms/soap-connector.adoc[універсальний SOAP-конектор].
+В той же час, _ШБО "Трембіта"_ надає можливість комунікувати зі своїми сервісами через REST.
+Наразі Платформа не надає користувачу можливості зручної інтеграції з ШБО для подібних випадків.
+Необхідно надати користувачам Платформи можливість через зручний інтерфейс виконувати налаштування взаємодії з _ШБО "Трембіта"_ через REST та відповідний _Trembita-REST_-конектор для гнучкого моделювання точок інтеграції на рівні бізнес-процесів в залежності від вимог.
+
+== Функціональні сценарії
+
+* Налаштування технічним адміністратором реєстру інформації про учасників інформаційного обміну _Трембіта_ через _REST_-інтеграцію
+* Моделювання точок інтеграції з налаштованим учасником інформаційного обміну на рівні бізнес-процесів з використанням універсального _Trembita-REST_-конектора.
+
+== Ролі користувачів
+
+* Технічний адміністратор реєстру
+* Розробник регламенту
+
+== Загальні принципи та положення
+
+Проголошені у xref:architecture/platform/administrative/control-plane/registry-regulation-secrets.adoc[Управління налаштуваннями та секретами зовнішніх інтеграцій] та xref:arch:architecture/registry/operational/bpms/soap-connector.adoc[Універсальний SOAP-конектор].
+
+== Високорівневий дизайн рішення
+
+[IMPORTANT]
+--
+Дана функціональність використовує механізми закладені в дизайні xref:architecture/platform/administrative/control-plane/registry-regulation-secrets.adocc[Управління налаштуваннями та секретами зовнішніх інтеграцій].
+--
+
+=== Налаштування інтеграцій через Центр управління платформою
+
+==== Інтерфейси адміністратора
+
+TODO: Add mockups
+
+.control-plane-gerrit:<registry>.git
+[%collapsible]
+====
+.deployment-templates/values.yaml
+[source,yaml]
+----
+trembita:
+  registries:
+    edrlike-registry:
+      url: "https://trembita.mdtu-ddm.projects.epam.com"
+      type: "registry"
+      protocol: "REST"
+      client:
+        x-road-instance: "THIS-REGISTRY"
+        member-class: "GOV"
+        member-code: "CODE"
+        subsystem-code: "Platform-registry"
+      service:
+        x-road-instance: "THAT-REGISTRY"
+        member-class: "GOV"
+        member-code: "CODE"
+        subsystem-code: "EdrLike-system"
+      # опційний блок авторизації
+      auth:
+        type: "AUTH_TOKEN"
+        secret: "vault:registry-kv/registry/<registry>/trembita-registries/<trembita-registry-name>"
+----
+====
+
+=== Налаштування інтеграцій на рівні регламенту
+
+.registry-gerrit:<registry-regulation>.git/bp-trembita/configuration.yml
+[source, yaml]
+----
+# new block on the same level as external-systems:
+trembita:
+  registries:
+    edrlike-registry:
+      operations:
+        get-subject:
+          resource-path: "/api/subject"
+          method: "GET"
+        create-subject:
+          resource-path: "/api/subject"
+          method: "POST"
+----
+
+=== Створення _ConfigMap_ ресурсів при публікації змін регламенту
+
+.ConfigMap: "trembita-rest-endpoint-configuration"
+[source,yaml]
+----
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: trembita-rest-endpoint-configuration
+  namespace: <registry-namespace>
+data:
+  trembita-rest-endpoint-configuration.yml: |
+    trembita:
+      registries:
+        edrlike-registry:
+          operations:
+            get-subject:
+              resource-path: "/api/subject"
+              method: "GET"
+            create-subject:
+              resource-path: "/api/subject"
+              method: "POST"
+----
+
+== Моделювання регламенту реєстру
+
+=== Новий Trembita-REST-конектор
+
+Новий конектор є схожим на стандартний REST-конектор, вже наявний у платформі, проте додається специфіка, необхідна для запитів через _Трембіта_
+
+==== URL запитів
+
+image::architecture/registry/operational/bpms/trembita-rest-connector/trembita-url-template.png[]
+
+==== Заголовки
+
+Обов'язковими є заголовки _Uxp-Client_ та _Uxp-Service_, які заповнюються відповідно до формату
+
+image::architecture/registry/operational/bpms/trembita-rest-connector/trembita-headers.png[]
+
+Також можна передавати інші заголовки, необхідні за специфікацією реєстру, до якого виконується запит
+
+==== Тіло/Параметри запиту
+
+Не стандартизовані, надаються для окремих реєстрів
+
+==== Конфігурація конектора
+
+|===
+|Конфігураційний параметр |Вхідний/Вихідний |Тип |Опис
+
+|Службова назва реєстру учаснику ШБО "Трембіта"
+|in
+|string
+|Назва яка була вказана в якості службової при створенні конфігурації в адміністративній консолі
+
+|Назва операції
+|in
+|string
+|Назва операції, яка буде виконуватись (з регламенту _trembita.registries.<>.operations_)
+
+|Заголовки запиту
+|in
+|string
+|Додаткові необхідні заголовки запиту
+
+|Параметри запиту
+|in
+|string
+|Необхідні параметри запиту (request params)
+
+|Дані запиту
+|in
+|string
+|Необхідне тіло запиту
+
+|Вихідний результат запиту
+|out
+|string
+|Строкове представлення відповіді від ШБО "Трембіта"
+
+|===
+
+== Високорівневий план розробки
+
+=== Технічні експертизи
+
+* _BE_ (Java, Go)
+
+=== План розробки
+
+* Створення нового розширення для camunda (`bpms`)
+* Розширення функціональності адмін консолі (`control-plane`) можливістю додавати нові реєстри для інтеграції через ШБО "Трембіта" REST.
+* Створення додаткових валідаційних правил регламенту (`registry-regulation-validator-cli`)
+* Створення референтного прикладу бізнес-процесу з використання конектору
+* Створення інструкцій для технічного адміністратора та розробника регламенту
