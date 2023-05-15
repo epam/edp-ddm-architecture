@@ -61,6 +61,22 @@ ssh sshmyip.com
 ----
 Якщо відсутні ресурси в Openshift Console, зверніться до L2-команди для перевірки доступу.
 ====
++
+[IMPORTANT]
+====
+При міграції реєстру, важливо щоб перед початком міграції на кластері B не було ресурсів пов'язаних з реестром. Якщо раніше реєстр не існував на цьому кластері, то подальші дії можно не робити. Якщо реєстр існував, то для видалення усіх ресурвіс треба перевірити/видалити наступні ресурси:
+
+* Видалити реєстр через control-plane-console.
++
+Перейти в control-plane-console на кластері B(Openshift-консоль > Projects > control-plane > Networking > control-plane-console), пройти аутентифікацію через openshift-sso, перейти в підрозділ - Реестри, та натиснути на корзину навпроти назви реестру, пітвердити зміни та дочекатись видалення реєстру
+* Після видалення перевірити відсутність проєкту в Gerrit
++
+Перейти в Gerrit-консоль ( Openshift-консоль > Projects > control-plane > Networking > control-plane-gerrit ), пройти аутентифікацію через openshift-sso, перейти в меню Browse > repositories та в пошуку ввести назву реєстру, якщо пошук знайде репозиторій, то треба перейти в Openshift-консоль > Projects > control-plane > Home > API Explorer > в пошуку ( Filter by kind ... ) знайти gerritproject > <назва реєстру> > Actions > Delete GerritProject. Після видалення Gerrit Project, перейти в Gerrit-консоль, та перевірити що репозиторій відсутній, якщо існує, видалити його через Gerrit-консоль( перейти репозиторій реєстру > Commands > Delete project )
+* Видалити директорії в Minio
++
+Для перевірки створенних директорій в Minio, треба перейти в MinioUI ( для кластерів VsPehere цей Route можна знайти в Openshit-консоль > Projects > control-plane > Networking > Routes > platform-minio-ui, у випадку відсутньості Route, треба перейти в secret - Openshift-консоль > Project > control-plane > Secret > backups-crednetials та скопіювати поле  - backup-s3-like-storage-url і додати до URL порт як у прикладі https://endpoint.com:9001 ). Данні для аутентифікації в Minio знаходяться в Openshift-консоль > Project > control-plane > Secret > backups-crednetials, де username це поле - backup-s3-like-storage-access-key-id а password -  backup-s3-like-storage-secret-access-key. Після аутентифікації перевірити/видалити директорії пов'язані в реестрі в бакеті це - openshift-backups/backups/<назва-реєстру>*;openshift-backups/restic/<назва-реєстру>;obc-backups/<назва реєстру>.
+
+====
 
 == Підготовка реєстру до міграції
 
@@ -153,7 +169,22 @@ export BACKUP_NAME="<назва резервної копії>"
 ----
 +
 TIP: Приклад назви резервної копії: `*abc-02-2023-04-18-19-03-14*`.
++
+[WARNING]
+====
+У випадку коли реєстр перед цим був мігрований на кластер A, а не розгорнутий на цій платформі, треба виконати додатковий export
+[source,bash]
+----
+export VAULT_KEY="<назва ключа>"
+----
+* де *`<назва ключа>`* -- ключ для unseal процессу, який можна знайти в Openshift-консоль ( КластерА ) > Projects > <назва реєстру> > ConfigMaps > hashicorp-vault-config, поле *key_name* і є назва ключа, прикад:
++
+[source,hcl]
+----
+       key_name        = "autounseal-migration"
+----
 
+====
 . Збережіть link:{attachmentsdir}/migrate-registry/registry-migration.zip[архів], розархівуйте його в нову директорію наступною командою:
 +
 ----
@@ -396,7 +427,7 @@ storage:
 oc -n <назва-реєстру> delete gerritgroupmember --all
 ----
 
-. Запустіть Jenkins-процес *`MASTER-Build-<назва реєстру>`*.
+. Після застосування змін повинен запуститись Jenkins-процес *`MASTER-Build-<назва реєстру>`*.
 . Після з завершення Jenkins-пайплайну *`MASTER-Build-<назва реєстру>`*, виправте Jenkins Credentials у Jenkins реєстру.
 +
 [NOTE]
@@ -481,7 +512,7 @@ find "." \( -type d -name .git -prune \) -o -type f -print0 | xargs -0 sed -i -e
 +
 [source,git]
 ----
-git add .
+git add --all
 ----
 +
 [source,git]
@@ -503,5 +534,22 @@ git push origin refs/heads/master:refs/for/master
 . Переконайтеся, що Кабінети користувачів працюють у штатному режимі, та бізнес-процеси мігрували успішно.
 
 . Усі Jenkins pipeline мають завершитися зі статусом *`Success`*.
+
+== Перенесення конфігурації реестру
+
+Перенести конфігурацію реєстру з кластера А на кластер B згідно з документацією:
+
+* Aдміністратори (лінк на документацію)
+* Дані про ключ  (лінк на документацію)
+* Поштовий сервер (лінк на документацію)
+* Ресурси реєстру
++
+Перенести секцію з values.yaml (секція global.registry ) реєстру на кластері А.
+
+* DNS (лінк на документацію)
+* Обмеження доступу (лінк на документацію)
+* Aвтентифікація надавачів послуг (лінк на документацію)
+* Aвтентифікація отримувачів послуг (лінк на документацію)
+* Резервне копіювання (лінк на документацію)
 
 NOTE: У випадку будь-яких проблем із міграцією, зверніться до Anatolii_Stoliarov@epam.com.
