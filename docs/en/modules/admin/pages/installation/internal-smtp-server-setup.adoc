@@ -1,0 +1,188 @@
+:toc-title: On this page:
+:toc: auto
+:toclevels: 5
+:experimental:
+:sectnums:
+:sectnumlevels: 5
+:sectanchors:
+:sectlinks:
+:partnums:
+
+//= Налаштування внутрішнього SMTP-сервера
+= Configuring internal SMTP server
+
+//== Загальна інформація
+== Introduction
+
+//Внутрішній SMTP-сервер – це платформенний компонент, призначений для відправлення нотифікацій кінцевим користувачам.
+
+An internal SMTP server is a Platform component that sends notifications to users.
+
+//Під час інсталяції платформи його буде розгорнуто у проекті `smtp-server`.
+//TODO: що саме ми називаємо "проектами"?
+During Platform installation it is deployed as the `smtp-server` project.
+
+//CAUTION: Оскільки ззовні доступний лише веб-інтерфейс, а всі інші порти ізольовані у кластері, що значно підвищує безпеку, доступна лише відправка листів. Отримати пошту на скриньку у цьому поштовому сервісі неможливо!
+
+CAUTION: Since only the web interface is accessible externally and all other ports are isolated within the cluster, which significantly enhances security, only sending emails is enabled. Receiving emails using this mail service is disabled.
+
+//NOTE: Тут і надалі `DNS_WILDCARD` - це доменне ім'я кластера.
+
+NOTE: In this topic, `DNS_WILDCARD` refers to the cluster's domain name.
+
+//Веб-інтерфейс користувача доступний за адресою `https://mail.<DNS_WILDCARD>/` .
+
+User web interface is available via the following URL: `https://mail.<DNS_WILDCARD>/`
+
+//Веб-інтерфейс адміністратора доступний за адресою `https://mail.<DNS_WILDCARD>/admin` .
+
+Administrator web interface is available via the following URL: `https://mail.<DNS_WILDCARD>/admin`
+
+//== Робота з DNS записами
+== Managing DNS records
+
+//=== Генерація DNS записів
+=== Generating DNS records
+//TODO: Shouldn't these steps be a numbered list?
+//Перейдіть у веб-інтерфейс адміністратора та авторизуйтесь.
+
+Sign in to the administrator web interface.
+
+//NOTE: Дані для авторизації можна знайти у секреті `mailu-admin-credentials` у проекті `smtp-server`. До `username` необхідно додати `@<DNS_WILDCARD>`
+
+NOTE: You can find the credentials in the `mailu-admin-credentials` secret in the `smtp-server` project. Add `@<DNS_WILDCARD>` to `username`.
+
+//У боковому меню у секції `Administration` оберіть `Mail domains`. На сторінці, що відкрилася, навпроти вашого домену у секції `Actions` натисніть на іконку `Details`.
+
+//TODO: Need to discuss formatting (UI elements should be bold or `xxx`?)
+In the side menu, under `Administration`, select `Mail domains`. On the page that opens, click the `Details` icon in the `Actions` column next to your domain name.
+
+//.Відкриття інформації про поштовий домен
+.Opening domain name details
+image::smtp-server/smtp-server-1.png[Opening domain name details]
+
+//На сторінці, що відкрилася, у верхньому правому кутку натисніть `Regenerate keys`. В результаті ви отримаєте список необхідних DNS записів, що необхідно додати до вашої *публічної* DNS зони (1 – `MX`, 3 – `TXT`).
+
+On the page that opens, click `Regenerate keys` in the upper-right corner. This gives you a list of DNS records that you need to add to your *public* DNS zone (1 – `MX`, 3 – `TXT`).
+
+//.Згенеровані DNS записи
+.Generated DNS records
+image::smtp-server/smtp-server-2.png[Generated DNS records]
+
+//До згенерованого `DNS SPF` запису необхідно додати публічну IP адресу шлюзу через який проходить вихідний трафік з машин кластеру (у випадку розгортання у AWS, це буде Elastic IP платформенного NAT Gateway).
+
+//TODO: Maybe "the gateway that handles outbound traffic" is better
+You need to add the public IP address of the gateway through which outbound traffic passes to the generated `DNS SPF` record. In case of AWS deployment, this will be the Elastic IP of the Platform's NAT gateway.
+
+//Таким чином, якщо, наприклад, IP вашого шлюзу це `12.34.56.78`, то запис буде виглядати так:
+`"v=spf1 mx a:mail.<DNS_WILDCARD> ip4:12.34.56.78 -all"`
+
+For example, if your gateway IP is `12.34.56.78`, then the record will look like this:
+`"v=spf1 mx a:mail.<DNS_WILDCARD> ip4:12.34.56.78 -all"`
+
+//Додайте записи до DNS зони.
+
+Add records to the zone's DNS.
+
+//CAUTION: Route53 у AWS має обмеження на довжину TXT запису. Таким чином, при додаванні `DNS DKIM` запису ви можете отримати помилку `Bad request. (InvalidChangeBatch 400: CharacterStringTooLong (Value is too long))`
+
+[CAUTION]
+====
+Route53 in AWS has a limit on the length of a TXT record. This may cause the following error when adding a `DNS DKIM` record: `Bad request. (InvalidChangeBatch 400: CharacterStringTooLong (Value is too long))`
+
+//В такому випадку текстову частину запису з публічним ключем треба розділити умовно навпіл за допомогою трьох символів: подвійні лапки, пробіл, подвійні лапки. Наприклад, TXT частина запису
+
+In this case, divide the text part of the record with the public key roughly in half using three characters: double quotes, space, double quotes. For example, the following TXT part:
+
+`"v=DKIM1; k=rsa; p=abcdefghijklmnopqrstuvwxyz"`
+
+will look like this:
+
+`"v=DKIM1; k=rsa; p=abcdefghijkl" "mnopqrstuvwxyz"`
+====
+
+//=== Перевірка правильності створених DNS записів
+=== Checking the DNS records
+
+//Після того, як записи буде оновлено на DNS серверах провайдера, рекомендується перевірити налаштування за допомогою сервіса https://mxtoolbox.com/emailhealth/[mxtoolbox].
+
+After the records are updated on the provider's DNS servers, we recommend checking the settings using the https://mxtoolbox.com/emailhealth/[mxtoolbox] service.
+
+//Введіть ваш `<DNS_WILDCARD>` у поле та натисніть кнопку `Check Email Health`. Зачекайте на результати перевірки.
+
+Enter your `<DNS_WILDCARD>` into the `Email Address or Domain Name` field and click the `Check Email Health` button. Wait for the test results.
+
+//Наявність лише цих трьох помилок свідчить про правильність налаштування:
+
+If you get only these three errors, it means the settings are correct:
+
+//.Перевірка у сервісі mxtoolbox
+.mxtoolbox check
+image::smtp-server/smtp-server-3.png[mxtoolbox check]
+
+//== Отримання дозволу на відправку email у AWS
+== Obtaining permission to send emails in AWS
+
+//У випадку розгортання платформи у AWS, за замовчуванням будь-який трафік з 25 порту (SMTP) заблокованийfootnote:[https://aws.amazon.com/premiumsupport/knowledge-center/ec2-port-25-throttle/[AWS Support - How do I remove the restriction on port 25 from my Amazon EC2 instance or AWS Lambda function?]].
+
+When deploying the Platform on AWS, all traffic from port 25 (SMTP) is blocked by defaultfootnote:[https://aws.amazon.com/premiumsupport/knowledge-center/ec2-port-25-throttle/[AWS Support - How do I remove the restriction on port 25 from my Amazon EC2 instance or AWS Lambda function?]].
+
+//Необхідно створити запит https://aws-portal.amazon.com/gp/aws/html-forms-controller/contactus/ec2-email-limit-rdns-request[Request to remove email sending limitations] у техпідтримку AWS. Час розглядання запиту – до 48 годин.
+
+You need to create an AWS support request: https://aws-portal.amazon.com/gp/aws/html-forms-controller/contactus/ec2-email-limit-rdns-request[Request to remove email sending limitations]. Request processing time is up to 48 hours.
+
+[options="header"]
+|================================================
+|Request field|Value
+|Email address|Your email where the reply should be sent.
+|Use case description|Explain why you need to remove the restrictions. Provide relevant details of your notification setup.
+
+For example:
+
+`We're going to deploy own SMTP server (https://mailu.io/) in containers inside Openshift Cluster to send notifications
+for our clients and employees. It's customer requirement to use own standalone cloud-agnostic SMTP server. This server
+has an authentication and is not accessible from Internet to connect and send emails.
+
+All openshift cluster nodes have one common NAT gateway (<NAT gateway resource ID or ARN>) with EIP <your Elastic IP address>.
+So could you please remove email sending limitation from EIP <your Elastic IP address> assigned to NAT gateway?`
+|Elastic IP address - optional|The IP address of the Platform's NAT Gateway
+|Reverse DNS record - optional|Leave this field empty
+|================================================
+
+//== Перевірка правильності відправлених email за допомогою сервісу apptoolbox
+== Checking emails using apptoolbox
+
+//Перейдіть на сайт сервіса https://www.appmaildev.com/en/dkim[apptoolbox] та натисніть Next step.
+
+Open the https://www.appmaildev.com/en/dkim[apptoolbox] website and click `Next step`.
+
+//Ви отримаєте знегеровану email адресу, куди треба відправити лист з платформенного SMTP-сервера.
+//TODO: ua typo "знегеровану"
+
+The service will generate an email address where you need to send an email from the Platform's SMTP server.
+
+//TODO: Should we add a message like "Do not close this page until the email check is completed."
+
+.A test email address
+image::smtp-server/smtp-server-4.png[A test email address]
+
+//Щоб відправити email, перейдіть у веб-інтерфейс користувача доступний за адресою `https://mail.<DNS_WILDCARD>/` .
+//Пройдіть авторизацію.
+
+To send an email, go to the user web interface at `https://mail.<DNS_WILDCARD>/` and sign in.
+
+//У боковому меню ліворуч натисніть `Compose` щоб створити новий лист. У поле `To` введіть згенеровану адресу, поле `Subject` та тіло листа може мати будь-який текст.
+
+In the side menu on the left, click `Compose` to create an email. Enter the test email address generated by apptoolbox into the `To` field. The subject and body of the email do not matter.
+
+//.Створення тестового email
+.Creating a test email
+image::smtp-server/smtp-server-5.png[Creating a test email]
+
+//Відправте email та поверніться на сайт. Через декілька секунд лист буде доставлено та ви отримаєте відповідь від сервіса. У випадку правильного налаштування відповідь має виглядати так:
+
+Send the email and return to the apptoolbox website. In a few seconds, the letter should be delivered, and you will receive a reply from the service. If configured correctly, the response should look like this:
+
+//.Результат перевірки
+.Test result
+image::smtp-server/smtp-server-6.png[Test result]
