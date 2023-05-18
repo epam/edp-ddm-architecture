@@ -1,0 +1,246 @@
+:toc-title: On this page:
+:toc: auto
+:toclevels: 5
+:experimental:
+:sectnums:
+:sectnumlevels: 5
+:sectanchors:
+:sectlinks:
+:partnums:
+
+//= Налаштування доступу до реєстрів
+= Configuring registry access
+
+//== Загальний опис
+== Introduction
+
+//Налаштування доступу між реєстрами відбувається в адміністративній панелі керування кластером та реєстрами *Control Plane*.
+
+Access between registries is configured via *Control Plane*, the admin console interface for managing clusters and registries.
+
+//Адміністратор може налаштувати доступ до даних цільового реєстру (майстер) для інших реєстрів, що розгорнуті на цій Платформі, або для зовнішніх систем. Для цього в майстер-реєстрі за запитом буде створено окремого користувача реєстру-клієнта, від імені якого здійснюватиметься доступ до майстер-реєстру.
+
+An administrator can grant access to the data of the target, or master registry for other registries deployed on the Platform, as well as for external systems. This is done by creating a separate user in the master registry, which the client registry then uses to access the master registry.
+
+//Процес формування запита про надання доступу можна умовно поділити на такі етапи: ::
+
+The process of requesting access consists of the following stages: ::
+
+//. Формування запита про надання доступу до реєстру в адміністративній панелі *Control Plane*.
+. Creating a registry access request in *Control Plane*.
+//. Проходження процедури перевірки коду та підтвердження запита.
+. Validating code and approving the request.
+//. Контроль за виконанням збірки коду в *Jenkins*.
+. Monitoring the build in *Jenkins*.
+
+[CAUTION]
+====
+//Окрім надання доступу до реєстру в адмін-консолі Control Plane, адміністратор регламенту має також відкрити доступ до відповідних представлень та REST API реєстру на рівні моделі даних (_детальну інструкцію ви можете переглянути на сторінці xref:registry-develop:data-modeling/data/physical-model/rest-api-view-access-to-registry.adoc[]_).
+//TODO: Change link to en version
+In addition to providing access to the registry via the Control Plane admin console, the regulations administrator must also open access to the corresponding views and REST API of the registry at the data model level (for details, see xref:registry-develop:data-modeling/data/physical-model/rest-api-view-access-to-registry.adoc[]).
+====
+
+[#create-access-request]
+//== Формування запита про надання доступу до реєстру
+== Creating a registry access request
+
+//Щоб створити запит про надання доступу до реєстру, необхідно виконати наступні кроки:
+
+To create a registry access request, perform the following steps:
+
+//. Увійдіть до адміністративної панелі керування кластером та реєстрами *Control Plane*.
+. Sign in to the *Control Plane* admin console.
++
+image:infrastructure/cluster-mgmt/update-cluster-mgmt-01.png[]
+//. Відкрийте меню _Реєстри_.
+//TODO: Validate instructions once the en UI is available
+. Open the _Registries_ section.
+//. Увійдіть до налаштувань реєстру.
+. Go to registry settings.
++
+image:registry-management/registry-grant-access/cp-registry-grant-access-1.png[]
+//. Перейдіть до секції _Доступ до реєстрів Платформи та зовнішніх систем_ і натисніть `+ Надати доступ`.
+. Open the _Access to Platform registries and external systems_ section and click `+ Grant access`.
++
+image:registry-management/registry-grant-access/cp-registry-grant-access-2.png[]
+//. Оберіть тип системи, для якої потрібно надати доступ:
+. Select the type of system to grant access to:
++
+//TIP: Це може бути як реєстр, розгорнутий на Платформі, так і зовнішня система (сервіс/реєстр поза межами кластера Платформи).
+TIP: You can grant access to the registry deployed on the Platform or some external system (such as a service or registry outside the Platform's cluster).
++
+//* Оберіть опцію _Внутрішній реєстр платформи_. Оберіть реєстр з переліку, для якого необхідно відкрити доступ.
+* Select the _Platform's internal registry_ option and pick the registry to grant access to from the drop-down list.
++
+//NOTE: Якщо реєстру немає в переліку -- його потрібно створити заздалегідь (_див. детальніше -- xref:registry-management/control-plane-create-registry.adoc[]_).
+//TODO: Change link to en version
+NOTE: If the registry is not listed, it must be created beforehand. For details, see xref:registry-management/control-plane-create-registry.adoc[].
++
+image:registry-management/registry-grant-access/cp-registry-grant-access-3.png[]
+//* Оберіть опцію _Зовнішня система_ та введіть назву системи.
+* Alternatively, select the _External system_ option and enter the name of the system into the _System name_ field.
++
+//TIP: Допустимі символи: `"a-z"`, `0-9`, `"-"`. Назва не може перевищувати довжину у 32 символи. Назва повинна починатись і закінчуватися символами латинського алфавіту або цифрами.
+TIP: The name may be a maximum of 32 characters long and consist of lowercase Latin letters (`a-z`), digits (`0-9`), and a hyphen (`-`). The name must start and end with either a Latin letter or number.
++
+image:registry-management/registry-grant-access/cp-registry-grant-access-4.png[]
++
+//NOTE: Пароль буде створено автоматично. Його можна буде перевірити після налагодження доступу до майстер-реєстру (_див. розділ xref:#password-change[]_).
+NOTE: The password is generated automatically. You can check it after establishing access to the master registry (_see xref:#password-change[]_).
+//. Натисніть `Надати`, щоб сформувати запит.
+. Click `Grant` to create the request.
++
+//В результаті буде сформовано запит про надання доступу. Він набуде статусу виконання _Новий_.
+This creates the access request with a _New_ status.
++
+//IMPORTANT: Неможливо виконати 2 і більше запитів про надання доступу підряд. Кожен запит має бути перевірений та підтверджений уповноваженою особою, і тільки після цього можливо сформувати наступний запит. Тобто запити формують та підтверджують по одному.
+IMPORTANT: You cannot submit two or more access requests in a row. You can submit a new request only after an authorized person has reviewed and confirmed the previous request. In other words, requests are created and confirmed one by one.
++
+image:registry-management/registry-grant-access/cp-registry-grant-access-5.png[]
++
+//Далі відбудеться передача змін (`git push`) до репозиторію Gerrit для подальшої перевірки коду та підтвердження змін (_детальніше -- див. у розділі xref:#request-confirmation[]_).
+Next, changes are pushed to the Gerrit repository (`git push`) for further code review and confirmation of changes (for details, see xref:#request-confirmation[]).
+
+[#note-examples-access-operations]
+[NOTE]
+====
+//Є також можливість заблокувати, розблокувати доступ до реєстру або повністю його скасувати. Механізм формування запитів на блокування, розблокування або скасування є ідентичним до механізму надання доступу.
+You can block, unblock, or completely cancel access to a registry. The process of requesting blocking, unblocking, or cancelling access is identical to requesting access.
+
+//.Приклад. Блокування доступу до реєстру для іншого реєстру на Платформі
+.An example of blocking one Platform registry's access to another registry
+image:registry-management/registry-grant-access/cp-registry-grant-access-9.png[]
+
+//.Приклад. Розблокування доступу до реєстру для іншого реєстру на Платформі
+.An example of unblocking one Platform registry's access to another registry
+image:registry-management/registry-grant-access/cp-registry-grant-access-10.png[]
+
+//.Приклад. Скасування доступу до реєстру для іншого реєстру на Платформі
+.An example of cancelling one Platform registry's access to another registry
+image:registry-management/registry-grant-access/cp-registry-grant-access-11.png[]
+====
+
+[#request-confirmation]
+//== Підтвердження запита про надання доступу до реєстру
+== Confirming a registry access request
+//TODO: Recommend breaking this H2 section into two H3 subsections ("Confirming in Control Plane" and "Confirming in Gerrit"), it might be easier to follow.
+
+//Після успішного створення запита про надання доступу до реєстру в інтерфейсі Control Plane, необхідно пройти процедуру перевірки коду. Це можна зробити як в інтерфейсі Control Plane, так і в системі Gerrit.
+
+After successfully creating a registry access request through the Control Plane console, you need to go through the code validation procedure. You can do this either in the Control Plane console or Gerrit.
+
+//Для цього виконайте наступні кроки:
+
+Perform the following steps:
+
+//. Відкрийте *Control Plane*.
+. Sign in to *Control Plane*.
+//. Перейдіть до секції _Запити на оновлення_ та знайдіть попередньо сформований запит.
+. Open the _Merge requests_ section and locate the request you created earlier.
+
++
+image:registry-management/registry-grant-access/cp-registry-grant-access-5.png[]
+//. Відкрийте сформований запит, натиснувши іконку перегляду -- 👁.
+. Click the view icon 👁 to open the request.
++
+//NOTE: Запропоновані зміни вносяться до конфігурації файлу _deploy-templates/values.yaml_ у разі підтвердження.
+NOTE: The proposed changes are applied to the _deploy-templates/values.yaml_ configuration file upon confirmation.
+//. У новому вікні зіставте 2 версії змін, переконайтеся, що внесені вами дані вірні, та натисніть `Підтвердити`.
+. Compare the changes between the two versions that open in a new window and make sure the data you entered is correct. Click `Confirm`.
++
+image:registry-management/registry-grant-access/cp-registry-grant-access-6.png[]
++
+//TIP: У вікні для порівняння можна зручно перевірити 2 версії змін: поточну (зліва) та нову (справа).
+TIP: The comparison window provides a convenient way of reviewing the differences between the two versions: the current (left) and the new (right).
+//. Після підтвердження, відбудеться автоматичний запуск процесу збірки внесених змін інструментом Jenkins (_детальніше -- у розділі xref:#jenkins-ci[]_)
+. After the confirmation, Jenkins automatically starts the build process using the latest changes (for details, see xref:#jenkins-ci[]).
++
+[NOTE]
+====
+//Ви також можете перейти до інтерфейсу *Gerrit* за відповідним посиланням, щоб підтвердити запит там.
+
+You can also confirm the request through the *Gerrit* interface.
+
+. Sign in to Gerrit using an appropriate link.
+//. Виконайте перевірку коду та підтвердьте внесення змін (`git merge`) до `master`-гілки репозиторію.
+. Review the code and confirm the changes (`git merge`) to the `master` branch of the repository.
++
+image:registry-management/registry-grant-access/cp-registry-grant-access-7.png[]
++
+//Підтверджений запит на створення доступу у секції _Запити на оновлення_ набуде статусу `Підтверджено`.
+The status of the confirmed access request in the _Merge requests_ section changes to `Merged`.
++
+image:registry-management/registry-grant-access/cp-registry-grant-access-8.png[]
++
+//У секції _Доступ до реєстрів платформи та зовнішніх систем_ відображатиметься статус доступу -- _"Активний"_.
+Registry's access status in the _Access to Platform registries and external systems_ section appears as _Active_.
++
+image:registry-management/registry-grant-access/cp-registry-grant-access-12.png[]
++
+//За фактом злиття змін до `master`-гілки репозиторію у Gerrit, відбудеться автоматичний запуск процесу збірки внесених змін інструментом Jenkins.
+After the changes are merged to the `master` branch of the Gerrit repository, Jenkins automatically starts the build process using the latest changes.
+====
+
+[#jenkins-ci]
+//== Контроль за виконанням збірки коду інструментом Jenkins
+== Monitoring the build process in Jenkins
+
+//Після успішного надходження змін до `master`-гілки репозиторію в Gerrit, необхідно переконатися, що Jenkins-pipeline `*Master-Build-<registry-name>*` запустився й успішно завершився.
+
+After the changes are merged to the `master` branch of the Gerrit repository successfully, you need to make sure that the `*Master-Build-<registry-name>*` pipeline has started and completed successfully in Jenkins.
+
+//TIP: `*<registry-name>*` -- назва реєстру, в якому ви налаштовуєте доступ.
+
+TIP: `*<registry-name>*` is the name of the registry to which you are configuring access.
+
+//. Відкрийте консоль керування кластером у *Control Plane*.
+//TODO: I assume that "cluster management console" is a particular section inside Control Plane and not its synonym
+. Open the cluster management console in *Control Plane*.
+//. Перейдіть до секції _Конфігурація_ > _CI_.
+. Open the _Configuration_ section.
+//. Перейдіть до інтерфейсу *Jenkins* за відповідним посиланням.
+. Click the link to Jenkins in the _CI_ column.
++
+image:registry-management/registry-grant-access/cp-registry-grant-access-13.png[]
+//. Дочекайтеся виконання всіх кроків збірки `*Master-Build-<registry-name>*`. Це може зайняти до 15 хвилин.
+. Wait until all the steps of the `*Master-Build-<registry-name>*` build are completed. This may take up to 15 minutes.
++
+image:registry-management/registry-grant-access/cp-registry-grant-access-6-1.png[]
+
+[IMPORTANT]
+====
+//Після успішної збірки зміни набувають чинності.
+The changes take effect after a successful build.
+====
+
+[#password-change]
+//== Зміна пароля доступу до реєстру
+== Changing the registry access password
+
+//Після формування запита про надання доступу, система автоматично генерує пароль доступу до реєстру.
+
+After the access request is created, the system generates the registry access password automatically.
+
+image:registry-management/registry-grant-access/cp-registry-grant-access-15-1.png[]
+
+//Пароль зберігається до сховища секретів Vault. Іконку згенерованого пароля можна побачити в інтерфейсі Control Plane. Ви можете переглянути, або скопіювати його пароль за необхідності.
+
+The password is saved to the Vault secrets storage. To view or copy the password, click the password icon that appears in the Control Plane interface.
+
+//Також пароль зберігається у зашифрованому вигляді до Keycloak для подальшої аутентифікації реєстрів та зовнішніх систем, а також перевірки створеного секрету у Vault.
+
+The encrypted password is also saved to Keycloak for further authentication of registries and external systems, as well as to verify the generated secret in Vault.
+
+//Якщо необхідно змінити пароль доступу: ::
+To change the password: ::
+//. xref:#note-examples-access-operations[Скасуйте старий доступ] для реєстру або зовнішньої системи. Для цього перейдіть до секції _Доступ для реєстрів Платформи та зовнішніх систем_ та натисніть `Скасувати доступ`.
+. xref:#note-examples-access-operations[Cancel access] to the registry or external system. To do this, go to the _Access to Platform registries and external systems_ section and click the `Cancel access` icon.
++
+image:registry-management/registry-grant-access/cp-registry-grant-access-11.png[]
+//. Надайте доступ повторно. Тобто сформуйте та підтвердьте новий xref:#create-access-request[запит про надання доступу].
+. Grant access again by creating a new xref:#create-access-request[access request].
++
+image:registry-management/registry-grant-access/cp-registry-grant-access-2.png[]
++
+//В результаті старий пароль буде анульовано, а новий пароль згенерується автоматично.
+Once you do that, the old password will be deprecated, and the new one will be generated automatically.
