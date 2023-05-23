@@ -1,77 +1,118 @@
-= Реєстрація послуг та налаштування виклику платформи даних із СЕВ ДЕІР "Трембіта"
-:toc:
 :toc-title: ЗМІСТ
+:toc: auto
 :toclevels: 5
+:experimental:
+:important-caption:     ВАЖЛИВО
+:note-caption:          ПРИМІТКА
+:tip-caption:           ПІДКАЗКА
+:warning-caption:       ПОПЕРЕДЖЕННЯ
+:caution-caption:       УВАГА
+:example-caption:           Приклад
+:figure-caption:            Зображення
+:table-caption:             Таблиця
+:appendix-caption:          Додаток
 :sectnums:
 :sectnumlevels: 5
 :sectanchors:
+:sectlinks:
+:partnums:
+
+= Реєстрація сервісів та виклик API дата-фабрики через ШБО "Трембіта"
 
 == Передумови
-Для початку необхідно мати розгорнутий регламент реєстру, в якому точки інтеграції позначені відповідним тегом, та розгорнутий SOAP API.
+
+. Отримайте доступ до інтерфейсу ШБО "Трембіта". Для цього зверніться до адміністратора інфраструктури, де розгорнуто ШБО. Він має видати вам IP-адресу та порт, а також логін та пароль для автентифікації.
+
+. Запросіть IP-адресу сервера ШБО "Трембіта" для забезпечення whitelisting між сервісами реєстру та ШБО. Додайте отриману IP-адресу до списку дозволених CIDR, вказавши її разом із підмережею. Наприклад, *`172.16.0.0/32`*.
++
+[NOTE]
+====
+Whitelisting налаштовується на рівні конфігурації доступу до компонентів реєстру в адміністративній панелі *Control Plane*.
+
+Детальніше про це -- див. на сторінці xref:admin:registry-management/control-plane-cidr-access-endpoints.adoc[].
+====
+
+. Для того, щоб інші реєстри могли звернутися до API-ендпоінтів Фабрики даних вашого реєстру через ШБО "Трембіта", виконайте передумови, описані на сторінці xref:data-modeling/data/physical-model/rest-api-view-access-to-registry.adoc[].
 
 == Додавання WSDL-файлу
 
-* Після входу до вебінтерфейсу ШБО "Трембіта", перейдіть до пункту меню **КЛІЄНТИ СЕРВЕРА БЕЗПЕКИ**.
+. Увійдіть до адміністративного інтерфейсу ШБО "Трембіта".
 
+. Відкрийте меню +++<b style="font-weight: 700">Клієнти Сервера Безпеки<b>+++.
++
 image:registry-admin/external-integration/api-publish/data-platform/trembita-add-wsdl-step-1.png[]
-
-В результаті має з'явитися список доступних клієнтів.
-
++
+У результаті ви побачите список доступних клієнтів.
++
 [TIP]
 ====
-Хорошим правилом є розділення клієнтів на "споживачів" (API consumers, `_cons`) та "постачальників" (API producers, `_prod`).
+Рекомендовано розділяти клієнтів на _споживачів API_ (API consumers -- додавайте суфікс *`_cons`*) та надавачів API_ (API producers -- додавайте суфікс *`_prod`*).
 
-Наприклад, `DDMTest_prod` -- постачальник, а `DDMTest_cons` -- споживач.
+Наприклад, `DDMTest**_prod**` -- надавач, а `DDMTest**_cons**` -- споживач.
 ====
 
-. Увійдіть до розділу конфігурації **Сервіси SOAP** клієнта-постачальника, натиснувши на відповідну іконку image:registry-admin/external-integration/api-publish/data-platform/soap-config.png[width="25"]
+. У розділі _клієнта-надавача_ перейдіть до налаштувань +++<b style="font-weight: 700">Сервіси SOAP<b>+++, натиснувши відповідну іконку image:registry-admin/external-integration/api-publish/data-platform/soap-config.png[width="25"]
 та оберіть `Додати WSDL`.
++
+image:registry-develop:registry-admin/external-integration/api-publish/bp/trembita-bp-invoking-1.png[]
 
+. У новому вікні введіть посилання до WSDL, що буде доступне в SOAP-вебсервісі після розгортання регламенту.
++
+[TIP]
+====
+WSDL-файл з описом вебсервісу можна отримати, наприклад, за таким шляхом:
+----
+https://bp-webservice-gateway-lowcode-gryffindor-qa.apps.cicd2.mdtu-ddm.projects.epam.com/ws/bpWebservice.wsdl
+----
+====
++
 image:registry-admin/external-integration/api-publish/data-platform/trembita-add-wsdl-step-2.png[]
 
-* У вікні, що з'явилося, введіть посилання до WSDL, що буде доступне в SOAP-вебсервісі після розгортання регламенту.
+. Натисніть кнопку `OK`.
 
-* Натисніть кнопку `OK`.
+У результаті посилання до відповідного WSDL у списку стане доступним з усіма методами, які можуть бути налаштовані як точки інтеграції із зовнішніми клієнтами.
 
 image:registry-admin/external-integration/api-publish/data-platform/trembita-add-wsdl-step-4.png[]
 
-В результаті стане доступним посилання до відповідного WSDL у списку, з усіма методами, які можуть бути сконфігуровані як точки інтеграції із зовнішніми клієнтами.
-
 == Налаштування прав доступу
 
-Трембіта дозволяє надавати доступ на рівні окремих SOAP-методів.
+"Трембіта" дозволяє надавати доступ на рівні окремих SOAP-методів.
 
 [NOTE]
-За замовчуванням, після додавання WSDL, доступ до точок інтеграції через Трембіту для всіх заборонений.
+За замовчуванням, після додавання WSDL, доступ до точок інтеграції через ШБО "Трембіта" для всіх заборонений.
 
 image:registry-admin/external-integration/api-publish/data-platform/trembita-setup-consumer-step-1.png[]
 
-* Для надання доступу до точки інтеграції іншому учасникові обміну, необхідно вибрати точку інтеграції та натиснути кнопку `Права доступу`.
-
+. Надайте доступ до точки інтеграції іншому учасникові обміну. Для цього виберіть точку інтеграції та натисніть кнопку `Права доступу`.
++
 image:registry-admin/external-integration/api-publish/data-platform/trembita-setup-consumer-step-2.png[]
 
-* У вікні, що з'явилося, натисніть кнопку `Додати об'єкт`.
-
+. У новому вікні натисніть `Додати об'єкт`.
++
 image:registry-admin/external-integration/api-publish/data-platform/trembita-setup-consumer-step-3.png[]
 
-* За допомогою рядка пошуку, знайдіть клієнта, якому необхідно надати доступ (у нашому випадку -- це `DDMTest_cons`).
+. У рядку пошуку знайдіть клієнта, якому необхідно надати доступ (у нашому випадку -- це *`DDMTest_cons`*).
 
-* Далі виділіть його та додайте за допомогою кнопки `Додати обране`.
-
+. Далі виділіть його та додайте за допомогою кнопки `Додати обране`.
++
 image:registry-admin/external-integration/api-publish/data-platform/trembita-setup-consumer-step-5.png[]
-
-В результаті, обраний клієнт має з'явитися в переліку учасників СЕВ ДЕІР.
-
++
+У результаті, обраний клієнт має з'явитися в переліку учасників СЕВ ДЕІР.
++
 image:registry-admin/external-integration/api-publish/data-platform/trembita-setup-consumer-step-6.png[]
 
-* Закрийте вікно за допомогою кнопки `Закрити`.
-
+. Закрийте вікно за допомогою кнопки `Закрити`.
++
 image:registry-admin/external-integration/api-publish/data-platform/trembita-setup-consumer-step-7.png[]
 
-NOTE: Також з'явиться цифра біля назви точки інтеграції, що буде відповідати кількості учасників, яким було надано доступ до цієї точки інтеграції.
+NOTE: Також з'явиться цифра біля назви інтеграційної точки, що відповідатиме кількості учасників, яким надано доступ до цієї точки.
 
 == Увімкнення сервісу
 
-Після налаштування всіх прав доступу, увімкніть сервіс в цілому. Для цього виділіть посилання (воно підсвічуватиметься червоним) та натисніть кнопку `Увімкнути`.
+Після налаштування усіх прав доступу, увімкніть сервіс. Для цього виділіть посилання (підсвічене червоним) та натисніть кнопку `Увімкнути`.
 
 image:registry-admin/external-integration/api-publish/data-platform/trembita-setup-consumer-step-8.png[]
+
+== Пов'язані сторінки
+
+* xref:registry-admin/external-integration/api-publish/trembita-bp-invoking.adoc[]
