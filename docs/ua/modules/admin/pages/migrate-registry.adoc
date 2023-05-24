@@ -28,6 +28,7 @@ NOTE: Міграція реєстру виконується з останньо
 
 == Передумови для міграції
 
+. Процес міграції містить запуск bash скрипта по переносу данних з кластеру А на кластер B, для успішної міграції, скрипт може бути виконаний на платформі Linux з архітектурою мікропроцесора - x86-64 (також AMD64, Intel 64, x64)
 . Користувач, який буде переносити реєстр на інший кластер, повинен бути доданий в адміністратори платформи на обох кластерах через *`control-plane-console`*.
 +
 TIP: Див. детальніше -- xref:admin:registry-management/control-plane-assign-platform-admins.adoc#add-platform-admin-cp[Створення адміністратора платформи].
@@ -54,12 +55,9 @@ TIP: Див. детальніше -- xref:admin:registry-management/control-plan
 ssh sshmyip.com
 ----
 
-Далі необхідно перевірити наявність IP адреси в annotations за шляхом: *Openshift*-консоль > *Project* -> *control-plane* > *Networking* > *Routes* -> *`platform-minio`* aбо *`platform-vault`* > *YAML*:
-----
-  annotations:
-    haproxy.router.openshift.io/ip_whitelist: <IP jumpbox>/32,....
-----
-Якщо відсутні ресурси в Openshift Console, зверніться до L2-команди для перевірки доступу.
+Далі необхідно перевірити наявність, або додати IP *jumpbox* через Control-plane-console в [перелік дозволенних СIDR на рівні керування платформою для кластеру] А та кластеру B. ( _див. детальніше на сторінці xref:admin:registry-management/control-plane-cidr-access-endpoints.adoc[]_ )
+
+Якщо відсутній доступ до control-plane-console, зверніться до L2-команди для перевірки доступу.
 ====
 +
 [IMPORTANT]
@@ -213,6 +211,15 @@ key_name        = "autounseal-migration"
 ----
 
 ====
++
+[WARNING]
+====
+У випадку міграції великого реєстру, виконайте експорт змінної
+[source,bash]
+----
+export LARGE_DATA="true"
+----
+====
 . Збережіть link:{attachmentsdir}/migrate-registry/registry-migration.zip[архів], розархівуйте його в нову директорію наступною командою:
 +
 ----
@@ -285,6 +292,20 @@ NOTE: Якщо функціональність консолі дозволяє 
 +
 NOTE: Треба дочекатись створення директорії <назва реєстру> та створення Jenkins pipeline, після запуску одразу зробити Abort білда.
 
+. Залишаючись в консолі Jenkins, треба змінити конфігурацію *`MASTER-Build-<назва реєстру>`* через *`MASTER-Build-<назва реєстру>`* > Configure, та в секції Build Trigers поставити галочку на параметрі *Disable this project* та зберігти зміни за допомогою Save.
+
+. Перенесення *values.yaml* та *values.gotmpl* файлів з репозиторія реєстру кластера А на кластер B.
+* Треба перейти в репозиторій реєстру на кластері А ( *Control-plane-console* > *Дашборд* > *Gerrit*  ), до *Browse* > *Repositories* та оберіть репозиторій *`<назва реєстру>`*, у репозиторії реєстру перейти *Branches* > *master*, далі перейти в *deploy-template* та відкрити *_values.yaml_* ( *_values.gotmpl_* ) та відкрити raw і скопіювати в буфер обміну.
+* Далі перейти в репозиторій реєстру на кластері B ( *Control-plane-console* > *Дашборд* > *Gerrit* ) до *Browse* > *Repositories* та оберіть репозиторій *`<назва реєстру>`*. Через *`commands`* > *`Create change`* створіть зміну (сhange) із наступними параметрами:
+
+** `Select branch for new change: master`.
+** `Description: Update registry before migration`.
++
+Після створення change, у самому change натисніть *`Edit`*. *`ADD/OPEN/UPLOAD`* - знадіть файл *_values.yaml_* ( *_values.gotmpl_* )
+Та перенесіть скопійовану конфігурацію  *_values.yaml_* ( *_values.gotmpl_* ) з кластеру А.
+* Півторити операцію для обох файлів - *_values.yaml_* та *_values.gotmpl_*
+* Збережіть зміни, дочекайтесь *Ci +1*, проставте *Code-review +2*,та зробіть *Submit*.
+
 . Перевірка наявності `*CustomResourceDefintition*`.
 +
 [WARNING]
@@ -316,7 +337,7 @@ NOTE: У випадку, коли процес завершується поми
 
 * Перейдіть в *Openshift*-консоль > Secrets, знайдіть secret для `operational-instance` -- *`operational-pguser-postgres`* (для `analytical-instance` -- це *`analytical-pguser-postgres`*).
 * Перейдіть в *Secret* та скопіюйте поле *`password`*.
-* Перейдіть в *Openshift*-консоль > *Pods* > знайдіть поду *`operational-instance`* або *`analytical-instance`* та виконайте по черзі наступні команди:
+* Перейдіть в *Openshift*-консоль > *Pods* > знайдіть поду *`operational-instance`*/*`analytical-instance`* та виконайте по черзі наступні команди:
 +
 [source,bash]
 ----
@@ -328,7 +349,7 @@ psql
 ALTER ROLE postgres WITH PASSWORD '<password>';
 ----
 
-** де *`<password>`* -- поле `password`, скопійоване у *Secret* для відповідного екземпляра -- `operational` або `analytical`.
+** де *`<password>`* -- поле `password`, скопійоване у *Secret* для відповідного екземпляра -- `operational`/`analytical`.
 
 * Після виконання усіх операцій, видаліть поду *`bpms`* та дочекайтеся, коли вона буде у статусі *`Running`* (активна/запущена).
 ====
