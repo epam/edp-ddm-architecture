@@ -1,0 +1,138 @@
+:toc-title: On this page:
+:toc: auto
+:toclevels: 5
+:experimental:
+:sectnums:
+:sectnumlevels: 5
+:sectanchors:
+:sectlinks:
+:partnums:
+
+//= Оновлення інфраструктурних компонентів Платформи
+= Updating Platform infrastructure components
+
+//== Загальний опис
+== Overview
+
+//Керування кластером Платформи відбувається за підходом *GitOps*. Це означає, що будь-які зміни у конфігурації кластера, компонентів кластера та компонентів Платформи відбуваються через внесення змін до конфігурації відповідних компонентів у git-гілках цих компонентів.
+
+Platform cluster management follows the *GitOps* approach. This means that any changes to the configuration of the OpenShift cluster, cluster components, and Platform components are made by modifying the configuration of these components in their respective Git branches.
+
+//Кожен компонент є окремим git-репозиторієм. Метадані усіх інфраструктурних компонентів, для яких реалізована можливість управління через GitOps-підхід, зберігаються в компоненті *cluster-management*.
+
+Each component is a separate Git repository. The metadata of all infrastructure components that can be managed using the GitOps approach is stored in the *cluster-management* component.
+
+//TIP: *Cluster Management* або *cluster-mgmt* -- це композитний репозиторій, який визначає конкретні версії інфраструктурних компонентів. Оновлення цього компонента дозволить автоматично оновити відповідні інфраструктурні компоненти Платформи.
+
+TIP: *Cluster Management* or *cluster-mgmt* is a composite repository that defines specific versions of infrastructure components. Updating this component will automatically update the corresponding infrastructure components of the Platform.
+
+//Нижче представлено список компонентів, для яких наразі імплементована можливість оновлення через GitOps-підхід:
+
+Here is a list of components which can be updated using the GitOps approach:
+
+* `catalog-source`;
+* `storage`;
+* `monitoring`;
+* `logging`;
+* `service-mesh`;
+* `velero`;
+* `control-plane-nexus`;
+* `user-management`.
+
+//Керування оновленнями інфраструктурних компонентів Платформи відбувається в адміністративній панелі керування кластером та реєстрами *Control Plane*.
+
+You can manage the updates of Platform infrastructure components in the *Control Plane* admin console interface.
+
+//Процес оновлення можна умовно поділити на такі етапи: ::
+
+The update process can be divided into these stages: ::
+
+//. Налаштування в адміністративній панелі керування кластером та реєстрами *Control Plane*.
+. Select update options in *Control Plane*.
+//. Проходження процедури перевірки коду в системі рецензування коду *Gerrit*.
+. Go through code review in *Gerrit*.
+//. Контроль за виконанням збірки коду в *Jenkins*.
+. Monitor the build process in *Jenkins*.
+
+//== Налаштування в адміністративній панелі керування кластером та реєстрами Control Plane
+== Update options in Control Plane
+
+//. Увійдіть до адміністративної панелі керування кластером та реєстрами *Control Plane*.
+. Sign in to *Control Plane*.
++
+image:infrastructure/cluster-mgmt/update-cluster-mgmt-01.png[]
+//. Відкрийте меню _Керування кластером_.
+//TODO: Треба оновити українську назву розділу
+. Open the *Platform management* section.
+//. У правому верхньому куті сторінки натисніть `Редагувати`.
+. Click the *`Edit`* button in the upper-right corner.
++
+image:admin:infrastructure/cluster-mgmt/update-cluster-mgmt-1.png[]
+//. На сторінці, що відкрилася, знайдіть секцію _Оновлення кластера_.
+. On the page that opens, go to the *Cluster update* section.
+//. У випадному списку оберіть версію, до якої необхідно оновити компоненти Платформи.
+. Select the version to which you wish to update the Platform components from the dropdown list.
++
+//NOTE: Доступні версії збірки для оновлення компонентів завжди будуть вищими за поточну.
+NOTE: Available update versions are always higher than the current build.
+//. Натисніть кнопку `Підтвердити` для збереження змін.
+. Click the *`Confirm`* button to save your changes.
++
+//В результаті буде сформовано запит на оновлення компонентів Платформи, тобто відбудеться передача змін (`git push`) до репозиторію Gerrit для подальшої перевірки коду.
+As a result, the system generates a Platform components version update request and pushes changes (via `git push`) to the Gerrit repository for further code validation.
++
+//TODO: Outdated screenshot
+image:admin:infrastructure/cluster-mgmt/cluster-mgmt-update.png[]
+
+//== Проходження процедури перевірки коду в системі рецензування коду Gerrit
+== Reviewing changes in the Gerrit code review system
+
+//Після успішного створення запита на оновлення в інтерфейсі Control Plane, необхідно пройти процедуру перевірки коду в системі Gerrit. Для цього виконайте наступні кроки:
+
+After successfully creating a version update request through the Control Plane admin console, you need to go through the code review procedure in Gerrit. To do this, perform these steps:
+
+//. Відкрийте консоль керування кластером у *Control Plane*.
+. Sign in to *Control Plane*.
+//TODO: Control Plane -> Platform management = консоль керування кластером у *Control Plane*, так?
+. Open the *Platform management* section.
+//. Перейдіть до секції _Запити на оновлення_ -> _Посилання_.
+//TODO: Схоже на те, що колонка "Посилання" зараз не має заголовка в UI (на жаль)
+. Scroll down to the *Update requests* section.
+//. Перейдіть до інтерфейсу *Gerrit* за відповідним посиланням.
+. Find your request and click the *View in Gerrit* icon next to it.
++
+image:admin:infrastructure/cluster-mgmt/update-cluster-mgmt-2.png[]
+//. Виконайте перевірку коду та підтвердьте внесення змін (`git merge`) до `master`-гілки репозиторію.
+. In Gerrit, review the code changes and approve merging the changes to the `master` branch of the repository (via `git merge`).
++
+image:admin:infrastructure/cluster-mgmt/cluster-mgmt-gerrit-mr.png[]
+
+//За фактом злиття змін до `master`-гілки репозиторію в Gerrit, відбудеться автоматичний запуск процесу збірки внесених змін інструментом Jenkins.
+
+After the changes are merged to the `master` branch of the Gerrit repository, Jenkins automatically starts the build process using the latest changes.
+
+//== Контроль за виконанням збірки коду в Jenkins
+== Monitoring the build process in Jenkins
+
+//Після успішного надходження змін до `master`-гілки репозиторію в Gerrit, необхідно переконатися, що Jenkins-pipeline `cluster-mgmt` запустився й успішно завершився. Для цього виконайте наступні кроки:
+
+After the changes are merged to the `master` branch of the Gerrit repository successfully, you need to make sure that the `cluster-mgmt` pipeline has started and completed successfully in Jenkins.
+
+//. Відкрийте консоль керування кластером у *Control Plane*.
+. Sign in to *Control Plane*.
+. Open the *Platform management* section.
+//. Перейдіть до секції _Конфігурація_ -> _CI_.
+. Scroll down to the *Configuration* section and click the *Jenkins* link icon in the *CI* column.
+//. Перейдіть до інтерфейсу *Jenkins* за відповідним посиланням.
++
+image:admin:infrastructure/cluster-mgmt/update-cluster-mgmt-3.png[]
+//. Дочекайтеся виконання всіх кроків збірки `MASTER-Build-cluster-mgmt`.
+. In Jenkins, wait until all the steps of the `MASTER-Build-cluster-mgmt` build are completed.
++
+image:admin:infrastructure/cluster-mgmt/cluster-mgmt-jenkins.png[]
+
+[IMPORTANT]
+====
+//Після успішної збірки, інфраструктурні компоненти Платформи оновлюються до обраної версії. Після цього стає доступною опція xref:update/update-registry-components.adoc[оновлення компонентів реєстру].
+After a successful build, Platform infrastructure components are updated to the version you selected. The option to xref:update/update-registry-components.adoc[update registry components] becomes available.
+====
