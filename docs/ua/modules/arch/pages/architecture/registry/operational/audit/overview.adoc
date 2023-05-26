@@ -17,21 +17,55 @@
 
 == Технічний дизайн підсистеми
 
+На даній діаграмі зображено компоненти, які входять в _Підсистему журналювання подій аудиту_ та їх взаємодію з іншими підсистемами в рамках реалізації функціональних сценаріїв.
+
 image::architecture/registry/operational/audit/audit-overview.svg[float="center",align="center",width=600]
 
-Аудитом в системі вважається фіксування аудито-важливих подій в момент їх настання в сервісах які підлягають аудиту.
+_Підсистема журналювання подій аудиту_ надає асинхронний _API_ у вигляді _Kafka_-топіка `audit-events` для публікації повідомлень про події аудиту цільовими підсистемами згідно визначеної схеми та використовує для зберігання даних в _Операційну БД подій аудиту_ механізм, який базується на https://kafka.apache.org/documentation.html#connect[Kafka Connect API] для забезпечення `exactly once` семантики обробки повідомлень.
 
-Для додавання аудиту до сервісу необхідно додати `бібліотеку інструментації коду` до переліку залежностей сервісу і проанотувати місця де відбуваються аудито-важливі події. +
-`Бібліотека інструментації коду` - відповідальна за створення і обробку подій сервісу та створення і відправку повідомлень до `брокера повідомлень`. +
-Події сервісу створюються як асинхронні події (`Applicaton Events`) і таким чином не вносять значний вплив на швидкодію сценаріїв в середині сервісів. +
-На основі кожної аудит події відправляється окреме повідомлення до `брокера повідомлень` згідно схеми яка зберігається в `сервісі збереження схем повідомлень подій аудиту`. +
-Збереження таких подій відбувається за допомогою `сервісу збереження подій аудиту` який побудований на основі https://kafka.apache.org/documentation.html#connect[Kafka Connect API], що забезпечує оброку повідомлень рівно один раз `exactly one`. +
-Всі повідомлення зберігаються до `операційної БД подій аудиту` та можуть бути переглянуті за допомогою `системних представлення для перегляду подій` через `сервіс перегляду звітів` які створюються під час розгортання реєстру підсистемою xref:arch:architecture/platform/administrative/overview.adoc[розгортання та налаштування Платформи та реєстрів]
+Функції перегляду журналу аудиту доступні адміністраторам через веб-інтерфейс _Підсистеми аналітичної звітності_ у вигляді набору службових дашбордів, які створюються під час розгортання реєстру  xref:arch:architecture/platform/administrative/overview.adoc[Підсистемою розгортання та налаштування Платформи та реєстрів].
 
-.Перелік сервісів які підлягають аудиту
+[TIP]
+--
+Детальніше з дизайном _Підсистеми аналітичної звітності_ можна ознайомитись у відповідному xref:arch:architecture/registry/operational/reporting/overview.adoc[розділі].
+--
+
+== Складові підсистеми
+
 |===
-|Назва|Представлення сервісу в платформі |Події аудиту
+|Назва компоненти|Представлення в реєстрі|Походження|Репозиторій|Призначення
 
+|_Сервіс збереження схем повідомлень подій аудиту_
+|`kafka-schema-registry`
+|3rd-party
+|https://gerrit-mdtu-ddm-edp-cicd.apps.cicd2.mdtu-ddm.projects.epam.com/admin/repos/mdtu-ddm/data-architecture/devops-application/kafka-schema-registry
+|Перевірка відповідності структури повідомлення поточній схемі
+
+|_Сервіс збереження подій аудиту_
+|`kafka-connect-cluster-connect`
+|3rd-party
+|https://gerrit-mdtu-ddm-edp-cicd.apps.cicd2.mdtu-ddm.projects.epam.com/admin/repos/mdtu-ddm/data-architecture/devops-application/strimzi-kafka-operator
+|Збереження повідомлень в базу даних
+
+|_xref:arch:architecture/registry/operational/audit/audit-db.adoc[Операційна БД подій аудиту]_
+|`operational:audit`
+|-
+|-
+|Відокремлена БД для збереження аудиту подій
+
+|===
+
+== Перелік сервісів, які підлягають аудиту
+
+[NOTE]
+--
+Секція потребує допрацювання...
+--
+
+|===
+|Підсистема власник|Назва компоненти|Представлення в реєстрі|Події аудиту
+
+.2+.^|xref:arch:architecture/registry/operational/registry-management/overview.adoc[]
 |_Сервіс синхронного управління даними реєстру_
 |*registry-rest-api*
 |//TODO посилання на опис подій аудиту сервісу
@@ -40,14 +74,7 @@ image::architecture/registry/operational/audit/audit-overview.svg[float="center"
 |*registry-kafka-api*
 |//TODO посилання на опис подій аудиту сервісу
 
-|_Сервіс управління налаштуваннями користувачів_
-|*user-settings*
-|//TODO посилання на опис подій аудиту сервісу
-
-|_Сервіс нотифікацій користувачів_
-|*ddm-notification-service*
-|//TODO посилання на опис подій аудиту сервісу
-
+.2+.^|xref:arch:architecture/registry/operational/bpms/overview.adoc[]
 |_Сервіс доступу до історичних даних БП_
 |*process-history-service-api*
 |//TODO посилання на опис подій аудиту сервісу
@@ -55,28 +82,16 @@ image::architecture/registry/operational/audit/audit-overview.svg[float="center"
 |_Сервіс фіксації історичних подій БП_
 |*process-history-service-persistence*
 |//TODO посилання на опис подій аудиту сервісу
-|===
 
+|xref:arch:architecture/registry/operational/user-settings/overview.adoc[]
+|_Сервіс управління налаштуваннями користувачів_
+|*user-settings*
+|//TODO посилання на опис подій аудиту сервісу
 
-== Складові підсистеми
-
-|===
-|Назва компоненти|Представлення в реєстрі|Походження|Призначення
-
-|_Сервіс збереження схем повідомлень подій аудиту_
-|`kafka-schema-registry`
-|3rd-party
-|Перевірка відповідності структури повідомлення поточній схемі
-
-|_Сервіс збереження подій аудиту_
-|`kafka-connect-cluster-connect`
-|3rd-party
-|Збереження повідомлень в базу даних
-
-|_Операційна БД подій аудиту_
-|`operational:audit`
-|3rd-party
-|Відокремлена БД для збереження аудиту подій
+|xref:arch:architecture/registry/operational/notifications/overview.adoc[]
+|_Сервіс нотифікацій користувачів_
+|*ddm-notification-service*
+|//TODO посилання на опис подій аудиту сервісу
 
 |===
 
@@ -84,18 +99,31 @@ image::architecture/registry/operational/audit/audit-overview.svg[float="center"
 
 * xref:arch:architecture/platform-technologies.adoc#kafka[Kafka]
 * xref:arch:architecture/platform-technologies.adoc#kafka-schema-registry[Kafka Schema Registry]
+* xref:arch:architecture/platform-technologies.adoc#strimzi-operator[Strimzi]
 
-== Атрибути якості
+== Атрибути якості підсистеми
+
+[NOTE]
+--
+Секція потребує допрацювання...
+--
 
 === Security
+
 Використання автентифікації за допомогою TLS для підключення до брокера повідомлень з боку додатка, унеможливлює здійснення атак типу `людина посередині` (`Man in the middle`).
 Всі дані в русі також шифруються за допомогою TLS.
 
 === Reliability
+
 Загальна надійність системи забезпечується переліком механізмів реалізованих в компонентах які використовуються підсистемою. +
 
 * Kafka (`Replication`, `Fault Tolerance`, `Message Persistence`, `Message immutabiliuty`, `Acknowledgment Mechanism`)
 * Crunchy PostgreSQL (`Replication and Failover`, `High Availability`)
 
 === Scalability
+
 Можливість паралельної обробки повідомлень та відсутність зберігання стану в додатку забезпечує горизонтальне масштабування.
+
+=== Performance
+
+Події сервісу створюються як асинхронні події (`Applicaton Events`) і таким чином не вносять значний вплив на швидкодію сценаріїв в середині сервісів.
