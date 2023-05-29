@@ -1,0 +1,125 @@
+:toc-title: On this page:
+:toc: auto
+:toclevels: 5
+:experimental:
+:sectnums:
+:sectnumlevels: 5
+:sectanchors:
+:sectlinks:
+:partnums:
+
+//= Оновлення компонентів реєстру
+= Updating registry components
+
+//== Загальний опис
+== Overview
+
+//Керування оновленнями реєстру відбувається за підходом *GitOps*. Це означає, що будь-які зміни у конфігурації реєстру, або його компонентах відбуваються через внесення змін до конфігурації відповідного компонента у git-гілці цього компонента. Кожен компонент є окремим git-репозиторієм.
+
+Registry updates management follows the *GitOps* approach. This means that any changes to the configuration of the registry or its components are made by modifying the configuration of these components in their respective Git branches. Each component is a separate Git repository.
+
+//Керування оновленнями компонентів реєстру відбувається в адміністративній панелі керування кластером та реєстрами *Control Plane*.
+
+You can manage updates of the registry components in the *Control Plane* admin console interface.
+
+//WARNING: Оновлення компонентів реєстру можна виконати лише після попереднього xref:update/update_cluster-mgmt.adoc[оновлення компонентів Платформи].
+
+WARNING: Make sure to xref:update/update_cluster-mgmt.adoc[update Platform components] before updating registry components.
+
+//Процес оновлення можна умовно поділити на такі етапи: ::
+The update process can be divided into these stages: ::
+
+//. Налаштування в адміністративній панелі керування кластером та реєстрами *Control Plane*.
+. Select update options in *Control Plane*.
+//. Проходження процедури перевірки коду в системі рецензування коду *Gerrit*.
+. Go through code review in *Gerrit*.
+//. Контроль за виконанням збірки коду в *Jenkins*.
+. Monitor the build process in *Jenkins*.
+
+//== Налаштування в адміністративній панелі керування кластером та реєстрами Control Plane
+== Update options in Control Plane
+
+//. Увійдіть до адміністративної панелі керування кластером та реєстрами *Control Plane*.
+. Sign in to *Control Plane*.
++
+image:infrastructure/cluster-mgmt/update-cluster-mgmt-01.png[]
+//. Відкрийте меню _Реєстри_.
+. Open the *Registries* section.
+//. Увійдіть до налаштувань реєстру.
+. Go to registry settings.
++
+image:infrastructure/update-registry-components/update-registry-components-1.png[]
+//. У правому верхньому куті сторінки натисніть `Редагувати`.
+. Click the *`Edit`* button in the upper-right corner.
++
+image:infrastructure/update-registry-components/update-registry-components-2.png[]
+//. На сторінці, що відкрилася, знайдіть секцію _Оновлення реєстру_.
+. On the page that opens, go to the *Registry update* section.
++
+image:infrastructure/update-registry-components/update-registry-components-4.png[]
+//. У випадному списку оберіть версію, до якої необхідно оновити компоненти реєстру.
+. Select the version to which you wish to update the registry components from the dropdown list.
++
+image:infrastructure/update-registry-components/update-registry-components-5.png[]
++
+//NOTE: Доступні версії збірки для оновлення компонентів реєстру завжди будуть вищими за поточну.
+NOTE: Available update versions are always higher than the current build.
+//. Натисніть кнопку `Підтвердити` для збереження змін.
+. Click the *`Confirm`* button to save your changes.
++
+image:infrastructure/update-registry-components/update-registry-components-6.png[]
++
+//В результаті буде сформовано запит на оновлення компонентів реєстру, тобто відбудеться передача змін (`git push`) до репозиторію Gerrit для подальшої перевірки коду.
+As a result, the system generates a registry components version update request and pushes changes (via `git push`) to the Gerrit repository for further code validation.
+
+//== Проходження процедури перевірки коду в системі рецензування коду Gerrit
+== Reviewing changes in the Gerrit code review system
+
+//Після успішного створення запита на оновлення в інтерфейсі Control Plane, необхідно пройти процедуру перевірки коду в системі Gerrit. Для цього виконайте наступні кроки:
+
+After successfully creating a version update request through the Control Plane admin console, you need to go through the code review procedure in Gerrit. To do this, perform these steps:
+
+//. Відкрийте консоль керування кластером у *Control Plane*.
+. Sign in to *Control Plane*.
+//. Перейдіть до секції _Запити на оновлення_ -> _Посилання_.
+. Open the *Registries* section.
+. Scroll down to the *Update requests* section.
+//. Перейдіть до інтерфейсу *Gerrit* за відповідним посиланням.
+. Find your request and click the *View in Gerrit* icon next to it.
++
+image:infrastructure/update-registry-components/update-registry-components-7.png[]
+//. Виконайте перевірку коду та підтвердьте внесення змін (`git merge`) до `master`-гілки репозиторію.
+. In Gerrit, review the code changes and approve merging the changes to the `master` branch of the repository (via `git merge`).
++
+image:infrastructure/update-registry-components/update-registry-components-8.png[]
+image:infrastructure/update-registry-components/update-registry-components-9.png[]
+
+//За фактом злиття змін до `master`-гілки репозиторію у Gerrit, відбудеться автоматичний запуск процесу збірки внесених змін інструментом Jenkins.
+
+After the changes are merged to the `master` branch of the Gerrit repository, Jenkins automatically starts the build process using the latest changes.
+
+//== Контроль за виконанням збірки коду в Jenkins
+== Monitoring the build process in Jenkins
+
+//Після успішного надходження змін до `master`-гілки репозиторію у Gerrit, необхідно переконатися, що Jenkins-pipeline `MASTER-Build-<registry-name>` запустився й успішно завершився, де `<registry-name>` -- назва реєстру, що необхідно оновити (тут -- `cert-labs`).
+
+After the changes are merged to the `master` branch of the Gerrit repository successfully, you need to make sure that the `MASTER-Build-<registry-name>` pipeline (where `<registry-name>` is the name of your registry) has started and completed successfully in Jenkins. In our example, the name of the registry is `cert-labs`.
+
+//Виконайте наступні кроки для контролю за виконанням збірки в Jenkins:
+To monitor the build process in Jenkins, perform these steps:
+
+//. Відкрийте консоль керування кластером у *Control Plane*.
+. Sign in to *Control Plane*.
+//. Перейдіть до секції _Конфігурація_ -> _CI_.
+. Open the *Registries* section.
+. Scroll down to the *Configuration* section and click the *Jenkins* link icon in the *CI* column.
+//. Перейдіть до інтерфейсу *Jenkins* за відповідним посиланням.
++
+image:infrastructure/update-registry-components/update-registry-components-10.png[]
+//. Дочекайтеся виконання усіх кроків у pipeline `MASTER-Build-cert-labs`.
+. In Jenkins, wait until all the steps of the `MASTER-Build-cert-labs` build are completed.
++
+image:infrastructure/update-registry-components/update-registry-components-11.png[]
+
+//Після успішної збірки, компоненти реєстру оновлюються до обраної версії.
+After a successful build, registry components are updated to the version you selected.
