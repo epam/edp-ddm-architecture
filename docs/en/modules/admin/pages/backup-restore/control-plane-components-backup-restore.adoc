@@ -1,0 +1,133 @@
+:toc-title: On this page:
+:toc: auto
+:toclevels: 5
+:experimental:
+:sectnums:
+:sectnumlevels: 5
+:sectanchors:
+:sectlinks:
+:partnums:
+
+//= Резервне копіювання та відновлення центральних компонентів
+= Central components backup and restoration
+//TODO: Central components or core components? Restoration or restore?
+
+//== Бекап центральних компонентів (резервне копіювання)
+== Central components backup
+
+//Адміністратор Платформи має можливість створити резервну копію центральних компонентів, що буде збережена до захищеного сховища бекапів (для прикладу, Minio).
+The platform administrator has the ability to create a backup of central components, which will be stored in a secure backup repository (for example, Minio).
+
+//*Для цього необхідно виконати наступні кроки:*
+*To do this, follow these steps:*
+
+//* Виконайте логін до OpenShift відповідного кластера.
+* Log into the OpenShift of the respective cluster.
+//* Скопіюйте команду для логіна – на вкладці профайлу користувача натисніть кнопку `Copy Login Command`:
+* Copy the login command—click the *Copy login command* button under the user profile name:
+image:admin:backup-restore/central/backup-restore-central-copy-login-command.png[]
+
+//* Після переадресації на сторінку показу токена, натисніть на посилання `Display Token`:
+* After being redirected to the token display page, click the `Display Token` link:
+
+image:admin:backup-restore/central/backup-restore-oauth-display-token.png[]
+
+//* Скопіюйте токен доступу до **OpenShift** відповідного кластера, куди буде виконане резервне копіювання:
+* Copy the access token to the **OpenShift** of the cluster into which the backup will be performed:
+
+image:admin:backup-restore/central/backup-restore-openshift-token.png[]
+
+//* Відкрийте **Git Bash**, вставте скопійований токен та натисніть `Enter`:
+* Open **Git Bash**, paste the copied token, and press `Enter`:
+
+[source,bash]
+----
+$ oc login --token=sha256~NyHYErh_JwJQаааааyIfmbbE-UY_Y3s_diQG422v9Rw --server=https://api.backup.mdtu-ddm.projects.epam.com:6443
+----
+
+//* Для перевірки наявних резервних копій, виконайте наступну команду:
+* To check for existing backups, execute the following command:
+
+[source,bash]
+----
+$ velero get backups
+----
+
+//* Для створення нової резервної копії, виконайте наступну команду:
+* To create a new backup, execute the following command:
+
+[source,bash]
+----
+$ velero backup create control-plane-nexus-release1-4-backup-28-10 --include-namespaces control-plane-nexus --ttl 120h
+----
+
+//TIP: де: +
+//- `control-plane-nexus-release1-4-backup-28-10` -- назва папки у сховищі, де зберігатиметься резервна копія (для зручності вказана назва кластера та дата створення бекапу); +
+//- `control-plane-nexus` -- назва центрального компонента, для якого буде виконане резервне копіювання; +
+//- `--ttl 120h` -- час зберігання резервної копії.
+
+TIP: where: +
+- `control-plane-nexus-release1-4-backup-28-10` -- is the folder name in the backup repository where the backup will be stored (the cluster name and backup creation date are provided for convenience); +
+- `control-plane-nexus` -- is the name of the central component for which the backup will be performed; +
+- `--ttl 120h` -- is the backup retention time.
+
+//* Для перевірки того, що резервна копія успішно створена,  виконайте таку команду:
+* To verify if the backup has been successfully created, execute the following command:
+
+[source,bash]
+----
+$ velero backup get
+----
+image:admin:backup-restore/central/backup-restore-central-get.png[]
+
+//TIP: де: +
+//- Status `New` -- запит на створення копії новий і знаходиться в черзі. +
+//- Status `InProgress` -- копія в процесі створення. +
+//- Status `Completed` -- копія створена.
+
+TIP: where: +
+- Status `New` -- the backup request is new and is in the queue +
+- Status `InProgress` -- the backup creation is in progress +
+- Status `Completed` -- the backup has been created.
+////
+Створені резервні копії центральних компонентів можна також перевірити у *Minio Console* у розділі *Buckets*
+
+image:admin:backup-restore/central/backup-restore-minio.png[]
+////
+
+[buckup-bucket-delete]
+//=== Видалення резервної копії зі сховища
+=== Deletion of backup from storage
+//Для видалення резервної копії, виконайте наступну команду:
+To delete a backup from storage, execute the following command:
+
+[source,bash]
+----
+$ velero backup delete control-plane-nexus-release1-4-backup-28-10
+----
+
+//TIP: де `control-plane-nexus-release1-4-backup-28-10` -- назва резервної копії, яку необхідно видалити.
+
+TIP: `control-plane-nexus-release1-4-backup-28-10` -- is the name of the backup to be deleted.
+
+//== Відновлення центральних компонентів (Restore)
+== Central components restoration (restore)
+
+//CAUTION: Перед виконанням процесу відновлення центральних компонентів переконайтеся, що створена їх резервна копія та ці компоненти видалені.
+CAUTION: Before starting the process restoration of central components, ensure that their backup has been created and these components have been removed.
+
+//Для того, щоб відновити центральний компонент, для якого була створена його резервна копія, виконайте наступну команду:
+To restore a central component for which the backup has been created, execute the following command:
+
+[source,bash]
+----
+$ velero restore control-plane-nexus --from-backup control-plane-nexus-backup-25-10
+----
+
+//TIP: де: +
+//- `control-plane-nexus` -- назва центрального компонента, який буде відновлюватись; +
+//- `backup control-plane-nexus-backup-25-10` -- назва папки у сховищі, де зберігається резервна копія, і з якої буде відновлюватися центральний компонент.
+
+TIP: where: +
+- `control-plane-nexus` -- is the name of the central component to be restored; +
+- `backup control-plane-nexus-backup-25-10` -- is the folder name in the backup repository where the backup is stored and from which the central component will be restored.
