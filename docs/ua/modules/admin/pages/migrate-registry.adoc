@@ -28,8 +28,8 @@ NOTE: Міграція реєстру виконується з останньо
 
 == Передумови для міграції
 
-. Процес міграції містить запуск bash скрипта по переносу данних з кластеру А на кластер B, для успішної міграції, скрипт може бути виконаний на платформі Linux з архітектурою мікропроцесора - x86-64 (також AMD64, Intel 64, x64)
-. Користувач, який буде переносити реєстр на інший кластер, повинен бути доданий в адміністратори платформи на обох кластерах через *`control-plane-console`*.
+. Процес міграції включає запуск bash-скрипту, що здійснює перенесення даних з кластера А до кластера B. Для успішної міграції, цей скрипт має бути виконаний на платформі Linux з архітектурою мікропроцесора `x86-64` (відомою також як `AMD64`, Intel 64, чи `x64`)
+. Користувач, який буде переносити реєстр на інший кластер, повинен бути доданий до адміністраторів Платформи на обох кластерах через *`control-plane-console`*.
 +
 TIP: Див. детальніше -- xref:admin:registry-management/control-plane-assign-platform-admins.adoc#add-platform-admin-cp[Створення адміністратора платформи].
 . На кластері, на який переноситься реєстр, повинна бути розгорнута та версія платформи, у якої версія `control-plane-gerrit` буде дорівнювати версії самого реєстру (наприклад, версія платформи -- *`1.9.4.11`*, версія реєстру -- *`1.9.4.7`*, версія `control-plane-gerrit` – *`1.9.4.7`*). Цю версію можна перевірити наявністю гілки у репозиторії *`cluster-mgmt`* в центральному *Gerrit*. Якщо гілка з версією реєстру існує, то версію реєстру можна переносити на кластер B. Якщо ні, то існує два шляхи:
@@ -50,12 +50,12 @@ TIP: Див. детальніше -- xref:admin:registry-management/control-plan
 +
 [NOTE]
 ====
-Якщо ви використовуєте *jumpbox*, то необхідно перевірити доступ до платформних Minio/Vault із IP-адреси *jumpbox*. Для отримання IP *jumpbox* виконайте наступну команду:
+Якщо ви використовуєте *jumpbox*, то необхідно перевірити доступ до платформних Minio/Vault з IP-адреси *jumpbox*. Для отримання IP *jumpbox* виконайте наступну команду:
 ----
 ssh sshmyip.com
 ----
 
-Далі необхідно перевірити наявність, або додати IP *jumpbox* через Control-plane-console в [перелік дозволенних СIDR на рівні керування платформою для кластеру] А та кластеру B. ( _див. детальніше на сторінці xref:admin:registry-management/control-plane-cidr-access-endpoints.adoc[]_ )
+Далі необхідно перевірити наявність або додати IP-адресу *jumpbox* до переліку дозволенних CIDR на рівні керування платформою для кластера А та кластера B ( _див. детальніше на сторінці xref:admin:registry-management/control-plane-cidr-access-endpoints.adoc[]_).
 
 Якщо відсутній доступ до control-plane-console, зверніться до L2-команди для перевірки доступу.
 ====
@@ -72,7 +72,7 @@ _Якщо раніше реєстр не існував на цьому клас
 TIP: Детальніше про це ви можете переглянути на сторінці xref:registry-management/control-plane-remove-registry.adoc[].
 +
 ////
-Перейти в control-plane-console на кластері B (Openshift-консоль > Projects > control-plane > Networking > control-plane-console), пройти аутентифікацію через openshift-sso, перейти в підрозділ - Реестри, та натиснути на корзину навпроти назви реестру, пітвердити зміни та дочекатись видалення реєстру
+Перейти в control-plane-console на кластері B (Openshift-консоль > Projects > control-plane > Networking > control-plane-console), пройти аутентифікацію через openshift-sso, перейти в підрозділ - Реєстри, та натиснути на кошик навпроти назви реєстру, підтвердити зміни та дочекатись видалення реєстру
 ////
 
 * Підтвердьте зміни та дочекатися видалення реєстру.
@@ -214,7 +214,7 @@ key_name        = "autounseal-migration"
 +
 [WARNING]
 ====
-У випадку міграції великого реєстру, виконайте експорт змінної
+У випадку міграції великого реєстру, виконайте експорт наступної змінної:
 [source,bash]
 ----
 export LARGE_DATA="true"
@@ -290,21 +290,26 @@ NOTE: Якщо функціональність консолі дозволяє 
 
 * Після створення, одразу перейдіть до Jenkins (namespace *`control-plane`* > *Networking* > *Routes* > *`jenkins`*), та зупиніть першу збірку *`MASTER-Build-<назва реєстру>`*.
 +
-NOTE: Треба дочекатись створення директорії <назва реєстру> та створення Jenkins pipeline, після запуску одразу зробити Abort білда.
+NOTE: Дочекайтеся створення директорії `<назва реєстру>` та створення Jenkins-пайплайну. Після запуску одразу зробити *Abort* збірки.
 
-. Залишаючись в консолі Jenkins, треба змінити конфігурацію *`MASTER-Build-<назва реєстру>`* через *`MASTER-Build-<назва реєстру>`* > Configure, та в секції Build Trigers поставити галочку на параметрі *Disable this project* та зберігти зміни за допомогою Save.
+. Залишаючись у консолі Jenkins, змініть конфігурацію *MASTER-Build-`<назва реєстру>`*: +
+Перейдіть до *MASTER-Build-`<назва реєстру>`* > *Configure*, та у секції *Build Triggers* встановіть прапорець на параметрі *Disable this project*. Далі збережіть зміни кнопкою *`Save`*.
 
-. Перенесення *values.yaml* та *values.gotmpl* файлів з репозиторія реєстру кластера А на кластер B.
-* Треба перейти в репозиторій реєстру на кластері А ( *Control-plane-console* > *Дашборд* > *Gerrit*  ), до *Browse* > *Repositories* та оберіть репозиторій *`<назва реєстру>`*, у репозиторії реєстру перейти *Branches* > *master*, далі перейти в *deploy-template* та відкрити *_values.yaml_* ( *_values.gotmpl_* ) та відкрити raw і скопіювати в буфер обміну.
-* Далі перейти в репозиторій реєстру на кластері B ( *Control-plane-console* > *Дашборд* > *Gerrit* ) до *Browse* > *Repositories* та оберіть репозиторій *`<назва реєстру>`*. Через *`commands`* > *`Create change`* створіть зміну (сhange) із наступними параметрами:
+. Перенесіть файли конфігурації *_values.yaml_* та *_values.gotmpl_* з репозиторію реєстру кластера А на кластер B.
+
+* Перейдіть до репозиторію реєстру на кластері А: +
+Відкрийте *Control-plane-console* > +++<b style="font-weight: 600">Дашборд<b>+++ > *Gerrit* > *Browse* > *Repositories* > оберіть репозиторій *`<назва реєстру>`*. +
+У репозиторії реєстру перейдіть до *Branches* > `master`, далі перейдіть до *deploy-templates*, відкрийте файл *_values.yaml_* ( *_values.gotmpl_* ) > Скопіюйте *raw*-код до буфера обміну.
+* Далі перейдіть до репозиторію реєстру на кластері B: +
+*Control-plane-console* > +++<b style="font-weight: 600">Дашборд<b>+++ > *Gerrit* ) > *Browse* > *Repositories* та оберіть репозиторій *`<назва реєстру>`*. Через *commands* > *`Create change`* створіть зміну (change) із наступними параметрами:
 
 ** `Select branch for new change: master`.
 ** `Description: Update registry before migration`.
 +
-Після створення change, у самому change натисніть *`Edit`*. *`ADD/OPEN/UPLOAD`* - знадіть файл *_values.yaml_* ( *_values.gotmpl_* )
-Та перенесіть скопійовану конфігурацію  *_values.yaml_* ( *_values.gotmpl_* ) з кластеру А.
-* Півторити операцію для обох файлів - *_values.yaml_* та *_values.gotmpl_*
-* Збережіть зміни, дочекайтесь *Ci +1*, проставте *Code-review +2*,та зробіть *Submit*.
+Після створення зміни, у самому change натисніть *`Edit`* > *`ADD/OPEN/UPLOAD`* -- знайдіть файл *_values.yaml_* (*_values.gotmpl_*).
+Перенесіть до цього файлу скопійовану конфігурацію *_values.yaml_* (*_values.gotmpl_*) із кластера А.
+* Повторіть операцію для обох файлів: *_values.yaml_* та *_values.gotmpl_*.
+* Збережіть зміни, дочекайтеся проходження пайплайну *Code Review* (*СІ Jenkins `+1`*), проставте `*Code-review +2*`,та виконайте злиття змін до `master`-гілки кнопкою `*Submit*`.
 
 . Перевірка наявності `*CustomResourceDefintition*`.
 +
@@ -325,7 +330,7 @@ for file in $(ls crds); do oc apply -f crds/$file; done
 
 == Відновлення реєстру на кластері B
 
-. Відрийте до Jenkins (namespace *`control-plane`* > *Networking* > *Routes* > *`jenkins`*), перейдіть до папки із назвою реєстру та запустіть Jenkins-пайплайн *`Restore-registry-<назва реєстру>`*. Після запуску пайплайну оберіть версію( на етапі cleanup-registry-before-restore ) та дочекатися, коли процес завершиться.
+. Відрийте до Jenkins (namespace *`control-plane`* > *Networking* > *Routes* > *`jenkins`*), перейдіть до папки із назвою реєстру та запустіть Jenkins-пайплайн *`Restore-registry-<назва реєстру>`*. Після запуску пайплайну оберіть версію (на етапі `cleanup-registry-before-restore`) та дочекайтеся, коли процес завершиться.
 +
 NOTE: У випадку, коли процес завершується помилкою або триває понад 1-2 години, зверніться до спеціалістів команди технічної підтримки L2-L3 "ЕПАМ".
 
@@ -335,9 +340,9 @@ NOTE: У випадку, коли процес завершується поми
 ====
 У випадку, коли пода із назвою *`bpms-*`* не запущена і має статус помилки, виправте паролі у `postgres` для *`operational-instance`* та *`analytical-instance`* под, для цього потрібно:
 
-* Перейдіть в *Openshift*-консоль > Secrets, знайдіть secret для `operational-instance` -- *`operational-pguser-postgres`* (для `analytical-instance` -- це *`analytical-pguser-postgres`*).
+* Перейдіть в *Openshift*-консоль > *Secrets*, знайдіть secret для `operational-instance` -- *`operational-pguser-postgres`* (для `analytical-instance` -- це *`analytical-pguser-postgres`*).
 * Перейдіть в *Secret* та скопіюйте поле *`password`*.
-* Перейдіть в *Openshift*-консоль > *Pods* > знайдіть поду *`operational-instance`*/*`analytical-instance`* та виконайте по черзі наступні команди:
+* Перейдіть в *Openshift*-консоль > *Pods* > знайдіть поду *`operational-instance`* або *`analytical-instance`* та виконайте по черзі наступні команди:
 +
 [source,bash]
 ----
@@ -349,7 +354,7 @@ psql
 ALTER ROLE postgres WITH PASSWORD '<password>';
 ----
 
-** де *`<password>`* -- поле `password`, скопійоване у *Secret* для відповідного екземпляра -- `operational`/`analytical`.
+** де *`<password>`* -- поле `password`, скопійоване у *Secret*, для відповідного екземпляра -- `operational` або `analytical`.
 
 * Після виконання усіх операцій, видаліть поду *`bpms`* та дочекайтеся, коли вона буде у статусі *`Running`* (активна/запущена).
 ====
@@ -377,7 +382,7 @@ metadata:
 +
 * Увійдіть до *_control-plane-gerrit_* (*Openshift*-консоль > *Projects* -> *`control-plane`* -> *Networking* -> *`gerrit`* > Логін через *`openshift-sso`*).
 +
-У Gerrit перейдіть до *Browse* > *Repositories* та оберіть репозиторій *`<назва реєстру>`*. Через *`commands`* > *`Create change`* створіть зміну (сhange) із наступними параметрами:
+У Gerrit перейдіть до *Browse* > *Repositories* та оберіть репозиторій *`<назва реєстру>`*. Через *`commands`* > *`Create change`* створіть зміну (change) із наступними параметрами:
 
 ** `Select branch for new change: master`.
 ** `Description: Update registry after migration`.
@@ -491,7 +496,7 @@ oc -n <назва-реєстру> delete gerritgroupmember --all
 
 . Оновіть посилання на Nexus у репозиторії регламенту.
 +
-Для цього перейдіть до Openshift-консоль -> Project -> <назва реєстру> -> Gerrit, та виконайте логін.
+Для цього перейдіть до *Openshift*-консолі > *Project* -> <назва реєстру> > *Gerrit* та виконайте логін.
 +
 Далі перевірте наявність доступу до проєктів у Gerrit та клонуйте локально репозиторій *_registry-regulations_*. Для цього:
 
@@ -499,7 +504,7 @@ oc -n <назва-реєстру> delete gerritgroupmember --all
 
 * Перейдіть до репозиторію *`registry-regulations`* > та скопіюйте команду  для клону *Anonymous HTTP* > *`Clone with commit-msg hook`*. +
 
-* Вставте команду для клону репозиторія до термінала та виконайте. Команда запитає логін та пароль. Логін в цьому випаду буде ваш email, а пароль -- той, який ви згенерували у першому підпункті.
+* Вставте команду для клону репозиторію до термінала та виконайте. Команда запитає логін та пароль. Логін в цьому випаду буде ваш email, а пароль -- той, який ви згенерували у першому підпункті.
 +
 TIP: Детальніше про роботу з репозиторієм Gerrit див. на сторінці xref:registry-develop:registry-admin/regulations-deploy/registry-admin-deploy-regulation.adoc[].
 +
