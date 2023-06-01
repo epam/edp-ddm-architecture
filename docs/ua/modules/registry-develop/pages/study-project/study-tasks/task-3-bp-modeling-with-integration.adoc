@@ -318,6 +318,128 @@ image:registry-develop:study-project/task-3/task-3-9-bp.png[]
 +
 image:registry-develop:study-project/task-3/task-3-10-bp.png[]
 
+[#create-branch-continue-bp]
+==== Створення гілки з подальшим продовженням бізнес-процесу
+
+Необхідно на гілці, що прямує від шлюзу `Дані присутні?` до користувацької задачі `Підписати дані про лабораторію` (_див. нижче xref:#create-user-task-lab-data-signing[]_) налаштуйте такі параметри:
+
+. У полі `Id` лишіть значення за замовчуванням.
+. У полі `Name` вкажіть `ні`.
+. у полі `Condition Type` вкажіть `Expression`.
+. У полі `Expression` вкажіть `${response.value.responseBody.elements().isEmpty()}`.
+
++
+image:study-project/task-3/task-3-create-branch-continue-bp.png[]
+
+[#create-user-task-lab-data-signing]
+==== Створення користувацької задачі для підпису даних
+
+Необхідно _створити користувацьку задачу для підпису даних_. Для цього виконайте наступні кроки:
+
+. Визначте тип задачі, натиснувши іконку ключа та обравши з меню пункт *User Task* (Користувацька задача).
+
+. Натисніть `Open Catalog`, оберіть шаблон *Officer Sign Task* та натисніть `Apply` для підтвердження.
+
+. На панелі налаштувань справа заповніть наступні поля:
+
+* у полі `Id` вкажіть `signLabFormActivity`;
+* у полі `Name` введіть `Підписати дані про лабораторію`;
+* у полі `Form key` введіть `add-lab-sign-lab-data`;
+* у полі `Assignee` вкажіть `${initiator}`;
+* у полі `Form data pre-population` введіть `${submission('addLabFormActivity').formData}`.
+
++
+image:study-project/task-3/task-3-create-user-task-lab-data-signing.png[]
+
+[#create-script-task-prepare-data-record-transient-var]
+==== Створення задачі скриптування "Підготовка даних до запису (transient var)"
+
+Створіть нову задачу скриптування для підготовки даних до запису. Для цього виконайте подальші налаштування:
+
+. Оберіть прямокутник із користувацькою задачею, змодельованою на xref:#create-user-task-lab-data-signing[попередньому етапі], та приєднайте нову задачу, натиснувши іконку *Append Task*.
+
+. Вкажіть тип задачі, натиснувши іконку ключа та обравши з меню пункт *Script Task* (Задача скриптування).
+
+. Виділіть додану задачу скриптування та налаштуйте наступні параметри:
+
+* у полі `Id` вкажіть `convertSignFormDataToDataFactoryFormatActivity`;
+* у полі `Name` вкажіть `Підготовка даних для запису (transient var)`;
+* у полі `Script Format` вкажіть тип (мову) скриптування -- `groovy`;
+* у полі `Script Type` вкажіть тип скрипту `InlineScript`;
+* у полі `Script` вставте безпосередньо groovy-скрипт:
++
+====
+[%collapsible]
+.Натисніть, щоб розгорнути або згорнути
+=====
+[source,groovy]
+----
+def signedFormData = submission('signLabFormActivity').formData
+
+signedFormData.prop('oblast', signedFormData.prop('oblast').prop('code').value())
+
+signedFormData.prop('koatuuId', signedFormData.prop('koatuu').prop('koatuuId').value())
+signedFormData.deleteProp('koatuu')
+signedFormData.prop('ownershipId', signedFormData.prop('ownership').prop('ownershipId').value())
+signedFormData.deleteProp('ownership')
+
+if (signedFormData.hasProp('premisesFile')
+    && !signedFormData.prop('premisesFile').isNull()
+    && !signedFormData.prop('premisesFile').elements().isEmpty()) {
+    signedFormData.prop('premisesFile', signedFormData.prop('premisesFile').elements()[0])
+} else {
+    signedFormData.prop('premisesFile', null as String)
+}
+
+if(signedFormData.hasProp('accreditationFile')
+    && !signedFormData.prop('accreditationFile').isNull()
+    && !signedFormData.prop('accreditationFile').elements().isEmpty()) {
+    signedFormData.prop('accreditationFile', signedFormData.prop('accreditationFile').elements()[0])
+} else {
+    signedFormData.prop('accreditationFile', null as String)
+}
+set_transient_variable('dataPayload', signedFormData)
+----
+=====
+====
+
++
+image:study-project/task-3/task-3-create-script-task-prepare-data-record-transient-var.png[]
+
+[#create-call-activity-sign-data-by-system-key]
+==== Моделювання сервісної задачі для підпису даних системним ключем
+
+Створіть сервісну задачу (Service Task) для підпису даних системним ключем та налаштуйте відповідне інтеграційне розширення. Для цього виконайте кроки, подані нижче:
+
+. Оберіть прямокутник зі [.underline]#скриптовою задачею#, змодельованою на попередньому етапі, та приєднайте нову задачу, натиснувши іконку *Append Task*.
+
+. Вкажіть тип задачі, натиснувши іконку ключа та обравши з меню пункт *Service Task*.
+
+. На панелі налаштувань справа натисніть `*Open Catalog*`, щоб відкрити список доступних шаблонів делегатів.
+
+. З отриманого переліку оберіть шаблон *System signature by DSO service*, який необхідно використовувати для підписання даних системним ключем.
+
+. На панелі налаштувань справа, відкрийте вкладку *General* та сконфігуруйте параметри делегата:
+
+* у полі `Name` вкажіть назву задачі -- "Підписати дані системним ключем";
+* у полі `Payload` передайте дані, на які треба накласти системний підпис -- ${dataPayload};
+•	у полі `X-Access-Token source` передайте токен доступу особи, яка наразі виконує задачу з ID `'signLabFormActivity'` -- `${completer('signLabFormActivity').accessToken}`;
++
+[WARNING]
+====
+Після відпрацювання першої користувацької задачі (User Task), намагайтеся використовувати функцію *`completer('<task_id>')`* для отримання даних користувача, замість `initiator()`.
+
+Токен доступу береться з АБО ініціатора (наприклад, `$initiator().accessToken}`), АБО виконавця останньої користувацької задачі (наприклад, `${completer('taskDefinitionId').accessToken}`).
+
+JWT-токен має свій термін дії, який триває 300 секунд. Якщо вказати токен ініціатора, який запустив бізнес-процес, а користувач довго не виконував задачу, то термін дії токена спливе, й бізнес-процес необхідно буде запускати повторно.
+
+Детальніше про JUEL-функції ви можете переглянути на сторінці xref:registry-develop:bp-modeling/bp/modeling-facilitation/modelling-with-juel-functions.adoc[].
+====
+•	у полі `Result variable` зазначте назву змінної, до якої запишеться цифровий підпис вказаних даних -- `system_signature_ceph_key`.
+
++
+image:study-project/task-3/task-3-create-call-activity-sign-data-by-system-key.png[]
+
 [#create-service-task-save-data-to-data-factory]
 ==== Створення сервісної задачі для збереження даних до Фабрики даних
 
