@@ -1,0 +1,116 @@
+:sectnums:
+:sectanchors:
+//= Відновлення кластера після зміни IP-адрес master-нод
+= Restoring the cluster after changing the IP addresses of master nodes
+:toclevels: 5
+:experimental:
+:sectnums:
+:sectnumlevels: 5
+:sectanchors:
+:sectlinks:
+:partnums:
+
+//TODO: Додала стандартні атрибути до документу, і у нас з'явилась нумерація розділів. Чи це ок? В оригінальному українському доку її немає.
+//== Опис проблеми
+== Problem Description
+
+//Може виникнути ситуація, коли у всіх мастер-нод Openshift кластера зміниться IP-адреса.
+There may be a situation where the IP addresses change for all master nodes of the Openshift cluster.
+//Така ситуація можлива в випадку, коли DHCP сервер по певній причині змінить ІР адреса, зарезервовані для мастер-нод.
+This can happen when the DHCP server, for some reason, changes the reserved IP addresses assigned to the master nodes.
+//Статична ІР адреса є критичною для etcd компонента Openshift  кластера. Після перезавантаження мастер-нод з новими IP адресами система не зможе завантажитись тому як поди etcd компонента будуть очікувати на отримання саме зарезервованих ІР адреси, виданих мастер нодам при інсталюванні кластеру Openshift.
+A static IP address is critical for the etcd component of the Openshift cluster. After rebooting the master nodes with the new IP addresses, the system will fail to boot because the etcd components will expect to receive the reserved IP addresses assigned to the master nodes during the installation of the Openshift cluster.
+
+//== Опис вирішення проблеми
+== Solution description
+
+//Дана проблема може бути вирішена двома способами. Першим способом являється статична зміна IP адрес для мастер нод. Після перезавантаження система відновить своє функціонуваннz. Другий спосіб є продовженням першого за вийнятком того, що в результаті виконання послідовності дій мастер нодам будуть повернена функція отримання динамічних ІР адрес, зарезервованих DHCP сервером.
+This problem can be solved in two ways. The first method involves statically changing the IP addresses for the master nodes. After rebooting, the system will resume functioning. The second method is an extension of the first, except that it allows the master nodes to receive dynamic IP addresses reserved by the DHCP server.
+
+//== Опис необхідних інструментів та доступів для вирішення проблеми
+== Required tools and access for resolving the issue
+
+//Для вирішення проблеми із зміною ІР адрес мастер-нод необхідний доступ по ssh на мастер-ноди та DHCP сервер.
+To resolve the issue of changing IP addresses for the master nodes, SSH access to the master nodes and DHCP server is required.
+
+//== Процедура відновлення мастер-нод
+== Master node recovery procedure
+//=== Спосіб перший
+=== The first method
+//Покрокова процедура відновлення мастер-нод є наступною:
+The step-by-step procedure for restoring the master nodes is as follows:
+
+//. Залогінитись по ssh на DHCP інстанс.
+. Log in via SSH to the DHCP instance.
+//. Зупинити DHCP сервер командою systemctl stop isc-dhcp-server.
+. Stop the DHCP server with the command: `systemctl stop isc-dhcp-server`.
+//. Зробити резервну копію файлу /var/lib/dhcp/dhcp.lease
+. Create a backup copy of the file _/var/lib/dhcp/dhcp.lease_.
+//. Залогінитись по ssh на одну із мастер-нод кластеру.
+. Log in via SSH to one of the cluster's master nodes.
+//. Знайти потрібний мережевий інтерфейс за допомогою команди
+. Find the relevant network interface using the next command:
+
+    # nmcli device|grep ovs-interface
+    br-ex ovs-interface *connected* ovs-if-br-ex
+
+//TODO: З цього моменту і нижче в мене злітає нумерація і мені не вдається її поправити. Як це правильно зробити?
+//. Перевірити, що це потрібний мережевий інтерфейс. Його ІР адреса повинна відповідати поточним налаштуванням мережі, відмінним повинен бути тільки *_IP4.ADDRESS[1]_*
+. Verify that it is the correct network interface. Its IP address should match the current network settings, and the only difference should be in *_IP4.ADDRESS[1]_*
+
+    # nmcli device show *br-ex*
+    IP4.ADDRESS[1]:                         10.9.1.235/24
+
+//. Змінити ІР адресу інстанса на статичну адресу командою, де замість *_<IP ADDRESS>_* необхідно вказати потрібну ІР адресу кластера.
+. Change the instance's IP address to a static address using the following command, replacing *_<IP ADDRESS>_* with the desired cluster IP address:
+
+    # nmcli connection modify br-ex ipv4.addresses <IP ADDRESS>/24
+
+//. Перевірити що, мережа працює, виконавши будь яку мережеву команду, наприклад провірити доступність шлюза за допомогою команди ping:
+. Verify that the network is working by executing any network command, such as checking the availability of the gateway with the 'ping' command:
+
+    # ping 10.9.1.1
+
+//. Перезагрузити мастер-ноду.
+. Reboot the master node.
+//. Після перезавантаження переконатись, що мастер-нода працює, використовуючи потрібну ІР-адресу.
+. After rebooting, ensure that the master node is functioning using the correct IP address.
+//. Перевірити, що на даній ноді піднялись усі сервісні поди Openshift. Для цього необхідно виконати команду:
+. Verify that all Openshift service pods are running on this node by executing the following command:
+
+    # crictl ps
+
+//. Перевірити, що після виконання наведених вище крокі стала доступною API Openshift кластера.
+. Verify that the Openshift cluster API is accessible after performing the above steps.
+//. Для повноцінного відновлення кластеру необхідно повторити процедуру для решти мастер-нод інстансів.
+. Repeat the procedure for the remaining master nodes to finalize restoring the cluster.
+
+//=== Спосіб другий
+=== The second method
+//. Спосіб другий включає в себе кроки 1-12 із <<_спосіб_перший, _першого способу_>>.
+. The second method includes steps 1-12 from <<The first method>>.
+//. Запустити DHCP сервер командою:
+. Start the DHCP server with the command:
+
+    # systemctl start isc-dhcp-server.
+
+//TODO: і тут нижче злітає нумерація.
+//. Виконати процедуру по заміні etcd member (мастер-ноди) згідно _https://docs.okd.io/latest/backup_and_restore/control_plane_backup_and_restore/replacing-unhealthy-etcd-member.html[документації]_ в наступному порядку:
+. Follow the _https://docs.okd.io/latest/backup_and_restore/control_plane_backup_and_restore/replacing-unhealthy-etcd-member.html[documentation]_ to perform the etcd member replacement (master nodes) in the following order:
+//. Послідновно замінити два наступних непрацюючих etcd member (мастер-ноди).
+. Sequentially replace the next two non-working etcd members (master nodes).
+//. Перевірити, що всі три мастер-ноди працюють і штатному режимі командою:
+. Verify that all three master nodes are functioning normally using the following command:
+
+    $ oc get nodes
+    NAME                         STATUS   ROLES    AGE   VERSION
+    mdtuddm-2n5bl-master-0       Ready    master   25h   v1.20.0+87cc9a4-1079
+    mdtuddm-2n5bl-master-1       Ready    master   25h   v1.20.0+87cc9a4-1079
+    mdtuddm-2n5bl-master-2       Ready    master   25h   v1.20.0+87cc9a4-1079
+
+//. Виключити мастер-ноду зі статичною адресою. Після того, як вона перейде в *Not Ready* стан, виконати заміну даного etcd member (мастер-ноди) згідно документації.
+. Exclude the master node with the static address. After it transitions to the *Not Ready* state, perform the replacement of this etcd member (master node) according to the documentation.
+//. Перевірити, що всі три мастер-ноди працюють в штатному режимі. Видалити виключену мастер-ноду із статичною ІР адресою.
+. Verify that all three master nodes are functioning normally. Remove the excluded master node with the static IP address.
+
+
