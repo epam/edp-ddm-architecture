@@ -1,0 +1,84 @@
+:toc-title: On this page:
+:toc: auto
+:toclevels: 5
+:experimental:
+:sectnums:
+:sectnumlevels: 5
+:sectanchors:
+:sectlinks:
+:partnums:
+
+//= Розширення дисків для CEPH
+= Extending Ceph storage
+
+//За потреби розширення дискового простору середовища зберігання даних Ceph, необхідно виконати представлений нижче алгоритм дій у кластері Openshift (OKD 4.x).
+This guide describes the procedure of increasing the disk space of the Ceph storage platform on the Openshift cluster (OKD 4.x).
+
+//TIP: Це може бути як планове збільшення простору, так і розширення при досягненні 85% порогу від наявного місця.
+TIP: Increasing the disk space may be part of a scheduled upgrade or something you need to do when storage reaches its 85% capacity.
+
+//== Передумови
+== Prerequisites
+
+//Адміністратор Платформи повинен мати права доступу до кластера з роллю `cluster-admin`.
+A Platform administrator must have access to the cluster with the `cluster-admin` role.
+
+//== Алгоритм
+== Procedure
+
+//1) Розширити кореневі томи (volumes) на рівні cloud-провайдера (у нашому випадку, як приклад, -- це AWS).
+//Для цього:
+. Expand the root volumes at the cloud provider level (we will use AWS as an example). To do this, perform these steps:
++
+//* перейдіть до вебконсолі OKD ->
+.. Go to the OKD web console.
+//* далі увійдіть до простору імен (namespace) `openshift-storage` ->
+.. Go to `openshift-storage` namespace.
+//* відкрийте розділ `Persistent Volume Claims` та виконайте виклики `Expand PVC` для трьох томів у контекстному меню (див. зображення нижче):
+.. Open the *Persistent Volume Claims* section and select the *`Expand PVC`* option from the context menu for these three volumes:
+
+* `ocs-deviceset-gp2-0-data-0-xxx`
+* `ocs-deviceset-gp2-1-data-0-xxx`
+* `ocs-deviceset-gp2-2-data-0-xxx`
++
+//* Опісля вкажіть необхідний розмір цих томів.
+.. Specify the size for these volumes.
++
+image:admin:file-system/ceph-space/ceph-volumes.png[]
++
+//2) У custom-ресурсах https://docs.openshift.com/container-platform/4.1/applications/crds/crd-managing-resources-from-crds.html[(CR)]:
+. Modify the following custom resources (CRs):
++
+TIP: For details, refer to OKD documentation: https://docs.openshift.com/container-platform/4.1/applications/crds/crd-managing-resources-from-crds.html[Managing resources from Custom Resource Definitions].
++
+//* Знайдіть `ocs-storagecluster` (екземпляр CRD `storagecluster.ocs.openshift.io`) ->
+* Find `ocs-storagecluster` (an instance of the `storagecluster.ocs.openshift.io` CRD).
+//* Знайдіть конфігураційний файл `.yaml` та в режимі редагування встановіть нове значення для параметру `storage`  замість попереднього `storage: 768Gi`, що було визначене і встановлене на етапі виконання попереднього пункту (див. п.1 вище) при розширенні кореневих  томів.
+* Find the `.yaml` configuration file and change the value of the `storage` parameter to `storage: 768Gi`, which was initially set at the stage of expanding the root volumes (see step 1).
++
+image:admin:file-system/ceph-space/ceph-cr.png[]
++
+//Також це значення можна змінити за допомогою інтерфейсу командного рядка (CLI):
+Alternatively, you can change this value using a command-line interface (CLI):
++
+[source,bash]
+----
+oc patch...
+----
++
+//3) У просторі імен `openshift-storage` перезапустіть необхідні pods:
+. In the `openshift-storage` namespace, restart the necessary pods:
++
+image:admin:file-system/ceph-space/ceph-pods.png[]
++
+//Також ви можете перезапустити всі pods цього простору імен.
+Alternatively, restart all pods in this namespace.
++
+//TIP: За детальною інформацією щодо роботи з Pods в Openshift зверніться до https://docs.openshift.com/container-platform/4.8/nodes/pods/nodes-pods-using.html[офіційного джерела].
+TIP: For details on working with pods in Openshift, refer to the Origin Kubernetes Distribution (OKD) documentation: https://docs.openshift.com/container-platform/4.8/nodes/pods/nodes-pods-using.html[Using pods].
+
+//Після виконання всіх наступних автоматичних процедур Ceph-кластера, дисковий простір буде розширено до нового, встановленого значення.
+After all the automatic Ceph cluster procedures that follow are done, the disk space will be extended to the size you specified.
+
+//CAUTION: Якщо дисковий простір Ceph після виконання пункту 3 алгоритму не почав розширюватись, а Ceph не працює, -- необхідно виконати примусовий перезапуск екземплярів у  MachineSet Ceph кластера Openshift.
+CAUTION: If the Ceph disk space does not expand after step 3 and Ceph stops working, perform a force restart of the instances in the Ceph MachineSet of the Openshift cluster.
