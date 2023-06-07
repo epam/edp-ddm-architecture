@@ -1,0 +1,155 @@
+:toc-title: On this page:
+:toc: auto
+:toclevels: 5
+:experimental:
+:sectnums:
+:sectnumlevels: 5
+:sectanchors:
+:sectlinks:
+:partnums:
+
+//= Масштабування розміру файлової системи Ceph
+= Ceph File System scaling
+
+//== Проблематика та загальні практики
+== Problem statement and general practice
+
+//Розробники Ceph-платформи https://docs.ceph.com/en/latest/rados/configuration/mon-config-ref/#storage-capacity[рекомендують] завчасно реагувати на зростання розміру файлової системи та не допускати переповнення дисків. Тому може виникнути типова потреба у масштабуванні розміру файлової системи.
+Ceph storage platform developers https://docs.ceph.com/en/latest/rados/configuration/mon-config-ref/#storage-capacity[recommend capacity planning and early response] to prevent the growing file system from reaching maximum storage capacity. That is why scaling your file system could become a routine operation.
+
+//WARNING: Рекомендується регулярно перевіряти місткість кластера, щоб побачити, чи досягає він верхньої межі місткості пам’яті. Коли кластер досягає свого майже повного співвідношення, додайте одне або кілька OSD, щоб збільшити місткість Ceph-кластера.
+WARNING: We recommend checking the cluster regularly to see if it is getting close to its maximum capacity. When the cluster is almost full, add one or more Object Storage Daemons (OSDs) to increase the capacity of the Ceph cluster.
+
+//== Принцип масштабування розміру файлової системи Ceph
+== How Ceph file system scaling works
+
+//На Платформі реєстрів масштабування Ceph відбувається виключно засобами платформи OKD та вбудованого Ceph-оператора реалізовуючи оператор паттерн.
+Within the registry management Platform, Ceph scaling is performed exclusively through the Origin Kubernetes Distribution (OKD) platform and the built-in Ceph operator using the operator pattern.
+
+//NOTE: Оператор паттерн — це підхід використання програмних розширень Платформи OKD, які використовують спеціальні ресурси для керування програмами, їхніми компонентами та конфігураціює. Оператори дотримуються принципів Kubernetes, зокрема циклу керування та автоматизації.
+NOTE: The operator pattern approach enables you to extend the OKD platform's behavior via operators, which are software extensions that use custom resources to manage applications, their components, and configurations. Operators follow Kubernetes principles, notably the automation and control loop.
+
+//NOTE: Реконсиляція (англ. Reconcilation) або приведення в узгоджений стан — є частиною здібностей самовідновлення OKD Платформи та є процесом приведення поточного стану конфігурації в бажаний стан.
+NOTE: Reconciliation, or bringing to an agreed state, is part of the self-healing capabilities of the OKD platform, which involves bringing the current state of the configuration to the desired state.
+
+//Розширення розміру файлової системи Ceph може бути виконано у два різні способи:
+There are two ways you can extend the Ceph file system: by adding disks to the current virtual machines and by adding new virtual machines.
+
+//=== Додаванням дисків до наявних віртуальних машин
+=== Adding disks to the current virtual machines
+
+//Для створення нових дисків у віртуальних машин та додавання їх у пул Ceph потрібно виконати наступні дії:
+To create new disks for the virtual machines and add them to the Ceph pool, perform these steps:
+
+//. Відкрити OKD Management Console.
+. Sign in to the OKD web console.
+//. Перейти до розділу *Storage* > *Overview* > *OpenShift Container Storage* > *All instances* -> *ocs-storagecluster*.
+. Go to *Storage* > *Overview* > *OpenShift Container Storage* > *All instances* > *ocs-storagecluster*.
+//. Натиснути `Actions` та оберіть `Add Capacity`. Наприклад:
+. Expand the *Actions* menu and select *`Add Capacity`*. For example:
++
+image::scaling/ceph/ceph-example-5.png[ceph-example,float="center",align="center"]
++
+//. У вікні натиснути на `Add` та почекати, поки нові диски створяться та Ceph підтягне їх собі в пул
+. In the *Add Capacity* window, click *`Add`* and wait until the new disks are created and added to the Ceph pool.
++
+image::scaling/ceph/ceph-example-6.png[alt=ceph-example,width=350,height=480,ceph-example,float="center",align="center"]
++
+//NOTE: Перевірити статус новостворених OSD можна командою у поді ceph-operator: `ceph  --conf=/var/lib/rook/openshift-storage/openshift-storage.config osd tree`
++
+[NOTE]
+====
+To check the status of the newly created OSDs, use the following command in the ceph-operator pod:
+----
+ceph  --conf=/var/lib/rook/openshift-storage/openshift-storage.config osd tree
+----
+====
+
+//TODO: ua typos: 1. требА 2. В процесі
+//NOTE: Можна запустити кілька OSD на одній віртуальній машині, але требі переконатися, що загальна пропускна здатність дисків OSD не перевищує пропускну здатність мережі, необхідну для обслуговування процесі читання або запису даних на ці диски.
+NOTE: You can run multiple OSDs on the same virtual machine, but you must ensure that the total bandwidth of the OSD disks does not exceed the network bandwidth required to support the process of reading or writing data to those disks.
+
+//=== Додавання нових віртуальних машин у Ceph MachineSet
+=== Adding new virtual machines to the Ceph MachineSet
+
+//Для додавання нових віртуальних машин в Ceph MachineSet потрібно виконати наступні дії.
+To add new virtual machines to the Ceph MachineSet, perform these steps:
+
+//. Відкрити OKD Management Console та у розділі `Compute -> MachineSets`
+. Sign in to the OKD web console.
+. Go to *Compute* > *MachineSets*.
++
+image::scaling/ceph/ceph-example-1.png[alt=ceph-example,width=200,height=480,ceph-example,float="center",align="center"]
++
+//знайти потрібний MachineSet. Наприклад:
+. Find the required MachineSet. For example:
++
+image::scaling/ceph/ceph-example-2.png[ceph-example,float="center",align="center"]
++
+//. Натиснути на додаткове меню та обрати `Edit Machine Count`
+. Expand the actions menu and select *`Edit Machine count`*.
++
+image::scaling/ceph/ceph-example-3.png[ceph-example,float="center",align="center"]
++
+//. Змінити на бажану кількість
+. Specify the desired amount of machines and click *`Save`*.
++
+image::scaling/ceph/ceph-example-4.png[alt=ceph-example,width=350,height=480,ceph-example,float="center",align="center"]
++
+//. Почекати поки нова віртуальна машина буде в статусі `Running`. Після цього вона вже буде доступна для використання її Ceph та додавання на неї нових дисків та OSD.
+. Wait until the status of the new virtual machine changes to `Running`. Once it does, it becomes available to Ceph, and you can add new disks and OSDs to it.
+
+//WARNING: Після виконання всіх кроків треба перевірити поточний статус Ceph або в OKD Management Console, або командою в ceph-operator поді ceph --conf=/var/lib/rook/openshift-storage/openshift-storage.config health detail
+[WARNING]
+====
+After completing all the steps, check the current status of Ceph either in the OKD web console or using the following command in the ceph-operator pod:
+----
+ceph --conf=/var/lib/rook/openshift-storage/openshift-storage.config health detail
+----
+====
+
+//== Принцип масштабування розміру Ceph-бакетів
+== How Ceph buckets scaling works
+
+//Кожний Ceph-бакет (bucket) динамічно розширяється при додаванні файлів та може досягнути розміру всього доступного місця у CephFS. Для масштабування треба виконати кроки, які розписані вище.
+Each Ceph bucket dynamically expands when files are added and can occupy all available space in the Ceph File System (CephFS). For scaling, follow the steps described earlier in this topic.
+
+//== Зміна репліка-фактора для Ceph
+== Changing the Ceph's replication factor
+
+//Щоб змінити репліка-фактор на вже розгорнутому кластері OKD, потрібно виконати наступні кроки:
+To change the replication factor on the deployed OKD cluster, perform these steps:
+
+//. Відкрити в OKD Management Console файл _.yaml_ з описом ресурсу `StorageCluster`, та змінити наступну секцію:
+. In the OKD web console, open the _.yaml_ file with the description of the `StorageCluster` resource and change the following section:
++
+From:
++
+----
+managedResources:
+    cephBlockPools: {}
+----
++
+To:
++
+----
+managedResources:
+    cephBlockPools:
+      reconcileStrategy: init
+----
++
+//. Відкрити в OKD Management Console файл _.yaml_ з описом ресурсу `CephBlockPool`, та змінити репліка-фактор у полі `replicated -> size`:
+. In the OKD web console, open the _.yaml_ file with the description of the `CephBlockPool` resource and change the replication factor in the `replicated > size` field:
++
+----
+spec:
+  enableRBDStats: true
+  failureDomain: rack
+  replicated:
+    replicasPerFailureDomain: 1
+    size: 3
+    targetSizeRatio: 0.49
+----
++
+//. Дочекатись, доки Ceph застосує зміни.
+. Wait until Ceph applies your changes.
