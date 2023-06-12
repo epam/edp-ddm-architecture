@@ -74,10 +74,12 @@ Gateway2 -> Service2 : Перенаправлення запита
 
 Технічний адміністратор реєстру відповідає за перевірку відповідності вказаних IP-адрес реальним адресам "Трембіти" й за коректність їх налаштувань. Якщо жодна IP-адреса не вказана у списку `ipList`, то маршрут до SOAP API не створюється, і доступ до API відсутній.
 
-Після внесення переліку дозволених IP-адрес, зміни потрапляють до конфігурації реєстру у файлі _deploy-templates/values.yaml_, звідки потрапляють до пакетного менеджера *Helm*, який додає їх до анотацій відповідного роута, таким чином дозволяючи доступ до SOAP API.
+Після внесення переліку дозволених IP-адрес, зміни потрапляють до конфігурації реєстру _deploy-templates/values.yaml_, звідки потрапляють до пакетного менеджера *Helm*, який додає їх до анотацій відповідного роута, таким чином дозволяючи доступ до SOAP API.
 
 [#control-plane-add-ip]
-== Налаштування доступу в Control Plane
+== Налаштування доступу
+
+=== Додавання IP-адрес у Control Plane
 
 . Увійдіть до консолі *Control Plane* як адміністратор реєстру.
 +
@@ -170,113 +172,26 @@ metadata:
 ====
 На цьому етапі варто розуміти, що система створила лише один роут -- *`bp-webservice-gateway-trembita`*.
 
-Для повноцінного налаштування обміну даними за SOAP-протоколом, вам необхідно мати активний другий роут -- *`registry-soap-api`*. Він створюється автоматично, після запуску Jenkins-процесу розгортання моделі даних -- *`data-model`*. _Особливості розгортання дата-моделі для SOAP-інтеграцій див. у розділах нижче поточного документа._
+Для повноцінного налаштування обміну даними за SOAP-протоколом, вам необхідно мати активний другий роут -- *`registry-soap-api`*. Він створюється автоматично, після запуску Jenkins-процесу розгортання моделі даних -- *`data-model`*, як описано у розділі xref:#retrigger-data-model[] поточного документа.
 ====
 
-[#configuration-scenarios]
-== Особливості конфігурації доступу при розгортанні, редагуванні та оновленні реєстру
+[#retrigger-data-model]
+=== Перезапуск Jenkins-процесу data-model у регламенті
 
-Залежно від потреб адміністратора, можна виділити декілька сценаріїв конфігурації доступу.
+Запустіть пайплайн *data-model*, щоб оновити конфігурацію моделі даних реєстру та створити відповідний роут `registry-soap-api`. Це можна зробити декількома способами:
 
-[tabs]
-====
-Розгортання реєстру з нуля ::
-+
---
-Під час xref:registry-management/control-plane-create-registry.adoc[] з нуля, Платформа не має жодних роутів для інтеграцій, ані `bp-webservice-gateway-trembita`, ані `registry-soap-api`. Ви можете виконати налаштування: одразу при первинному розгортанні реєстру або згодом, при xref:admin:registry-management/control-plane-edit-registry.adoc[редагуванні реєстру].
-
-. Додайте адреси ШБО "Трембіта" до списку дозволених через інтерфейс Control Plane (_див. розділ xref:#control-plane-add-ip[]_). +
-Таким чином Платформа створить роут `bp-webservice-gateway-trembita` із відповідною анотацією та запише в неї дозволені IP.
-
-. Створіть та розгорніть модель даних реєстру. Це можна реалізувати двома способами:
-+
-через створення змін у теці _data-model_ регламенту _registry-regulations_ у Gerrit-репозиторії (_див. детальніше на сторінках: xref:registry-develop:registry-admin/regulations-deploy/registry-admin-deploy-regulation.adoc[] та xref:registry-develop:data-modeling/data/physical-model/liquibase-ddm-ext.adoc[]_). +
+* через внесення та commit змін до теки _data-model_ регламенту _registry-regulations_ у Gerrit-репозиторії (_див. детальніше на сторінках: xref:registry-develop:registry-admin/regulations-deploy/registry-admin-deploy-regulation.adoc[] та xref:registry-develop:data-modeling/data/physical-model/liquibase-ddm-ext.adoc[]_). +
 У результаті оновлення моделі даних реєстру, запускається Jenkins-процес *MASTER-Build-registry-regulations*, який своєю чергою запускає пайплайн розгортання дата-моделі -- `data-model`. Цей пайплайн створює другий роут -- `registry-soap-api` із відповідною анотацією та записує в неї дозволені IP.
-+
-через створення змін до файлів моделі даних реєстру в Кабінеті адміністратора регламентів (_див. детальніше на сторінках: xref:registry-develop:registry-admin/admin-portal/registry-modeling/tables/xml-editor.adoc[] та xref:registry-develop:registry-admin/admin-portal/version-control/overview-new-change-request.adoc#push-changes-master[Застосування змін до майстер-версії]_). +
-У результаті створення моделі даних реєстру, запускається Jenkins-процес *MASTER-Build-registry-regulations*, який своєю чергою запускає пайплайн розгортання дата-моделі -- `data-model`. Цей пайплайн створює другий роут -- `registry-soap-api` із відповідною анотацією та записує в неї дозволені IP.
 
-Таким чином, ви маєте 2 роути для повноцінного обміну даними із зовнішніми системами через ШБО "Трембіта" за SOAP-протоколом.
-
---
-
-Редагування реєстру ::
-+
---
-Припустимо, ви навмисно пропустили налаштування ШБО "Трембіта" під час розгортання реєстру. На початкових етапах роботи з реєстром це може бути не потрібним.
-
-Реєстр вам потрібний для того, щоб в рамках певних бізнес-процесів ви могли обробляти певну інформацію та надавати інформаційні послуги. Для цього вам потрібні бізнес-процеси, які не запрацюють без створеної заздалегідь фізичної моделі даних.
-
-Таким чином, після розгортання реєстру, одним з перших кроків, на який варто звернути увагу, є розгортання моделі даних — це необхідно навіть у випадку, коли інтеграція з іншими системами поки що не потрібна.
-
-CAUTION: Втім, слід зауважити, що після того, як ви розгорнете модель даних, роут `registry-soap-api` автоматично не з’явиться. Це пов'язано з тим, що доступ до SOAP API обмежено на рівні Control Plane, де не вказані IP-адреси, з яких дозволено здійснювати підключення до ваших роутів.
-
-У цій ситуації виконайте наступні кроки:
-
-. Додайте адреси ШБО "Трембіта" до списку дозволених через інтерфейс Control Plane (_див. розділ xref:#control-plane-add-ip[]_). +
-Таким чином Платформа створить роут `bp-webservice-gateway-trembita` із відповідною анотацією та запише в неї дозволені IP.
-
-. Запустіть пайплайн *data-model*, щоб оновити конфігурацію моделі даних реєстру. Це можна зробити декількома способами:
-+
-через внесення та commit змін до теки _data-model_ регламенту _registry-regulations_ у Gerrit-репозиторії (_див. детальніше на сторінках: xref:registry-develop:registry-admin/regulations-deploy/registry-admin-deploy-regulation.adoc[] та xref:registry-develop:data-modeling/data/physical-model/liquibase-ddm-ext.adoc[]_). +
+* через внесення змін до файлів моделі даних реєстру в Кабінеті адміністратора регламентів (_див. детальніше на сторінках: xref:registry-develop:registry-admin/admin-portal/registry-modeling/tables/xml-editor.adoc[] та xref:registry-develop:registry-admin/admin-portal/version-control/overview-new-change-request.adoc#push-changes-master[Застосування змін до майстер-версії]_). +
 У результаті оновлення моделі даних реєстру, запускається Jenkins-процес *MASTER-Build-registry-regulations*, який своєю чергою запускає пайплайн розгортання дата-моделі -- `data-model`. Цей пайплайн створює другий роут -- `registry-soap-api` із відповідною анотацією та записує в неї дозволені IP.
-+
-через внесення змін до файлів моделі даних реєстру в Кабінеті адміністратора регламентів (_див. детальніше на сторінках: xref:registry-develop:registry-admin/admin-portal/registry-modeling/tables/xml-editor.adoc[] та xref:registry-develop:registry-admin/admin-portal/version-control/overview-new-change-request.adoc#push-changes-master[Застосування змін до майстер-версії]_). +
-У результаті оновлення моделі даних реєстру, запускається Jenkins-процес *MASTER-Build-registry-regulations*, який своєю чергою запускає пайплайн розгортання дата-моделі -- `data-model`. Цей пайплайн створює другий роут -- `registry-soap-api` із відповідною анотацією та записує в неї дозволені IP.
-+
-через запуск Jenkins-пайплайну *data-model* вручну. У результаті запускається Jenkins-процес *data-model*, який створює другий роут -- `registry-soap-api` із відповідною анотацією та записує в неї дозволені IP.
+
+* через запуск Jenkins-пайплайну *data-model* вручну. У результаті запускається Jenkins-процес *data-model*, який створює другий роут -- `registry-soap-api` із відповідною анотацією та записує в неї дозволені IP.
 
 +
 TIP: Детальніше про це дивіться на сторінці xref:faq:faq.adoc#trigger-data-model-manually[Як запустити Jenkins-процес розгортання моделі даних?].
 
-Таким чином на ви маєте 2 роути для повноцінного обміну даними із зовнішніми системами через ШБО "Трембіта" за SOAP-протоколом.
---
-
-Оновлення реєстру ::
-+
---
-Після оновлення реєстру до нової версії, видаляться SOAP API-роути. Тому, щоб їх зберегти, перед оновленням необхідно вручну додати IP-адреси ШБО "Трембіта" до конфігурації файлу _deploy-templates/values.yaml_ та виконати commit до `master`-гілки репозиторію https://gerrit-control-plane.<dns-wildcard>[] (центральний компонент -- Gerrit Платформи).
-
-.Приклад 3. Конфігурація trembita.ipList у файлі deploy-templates/values.yaml
-[source,yaml]
-----
-trembita:
-  ipList:
-    - 85.223.209.18
-    - 85.223.209.18
-    - 172.16.0.0
-    - 127.0.0.1
-----
-
-.Приклад 4. Helm-анотація metadata.annotations, яка додається до SOAP API-роутів OpenShift
-[source, yaml]
-----
-metadata:
-  annotations:
-    haproxy.router.openshift.io/ip_whitelist: 85.223.209.18/32 85.223.209.19 172.16.0.0/32 127.0.0.1/32
-----
-
-[WARNING]
-_Що робити, якщо реєстр оновили, але забули попередньо перенести дані IP-адрес до deploy-templates/values.yaml?_ +
-Виконайте наступні кроки:
-
-. Додайте адреси ШБО "Трембіта" до списку дозволених через інтерфейс Control Plane (_див. розділ xref:#control-plane-add-ip[]_). +
-Таким чином Платформа створить роут `bp-webservice-gateway-trembita` із відповідною анотацією та запише в неї дозволені IP.
-
-. Запустіть пайплайн *data-model*, щоб оновити конфігурацію моделі даних реєстру. Це можна зробити декількома способами:
-+
-через внесення та commit змін до теки _data-model_ регламенту _registry-regulations_ у Gerrit-репозиторії (_див. детальніше на сторінках: xref:registry-develop:registry-admin/regulations-deploy/registry-admin-deploy-regulation.adoc[] та xref:registry-develop:data-modeling/data/physical-model/liquibase-ddm-ext.adoc[]_). +
-У результаті оновлення моделі даних реєстру, запускається Jenkins-процес *MASTER-Build-registry-regulations*, який своєю чергою запускає пайплайн розгортання дата-моделі -- `data-model`. Цей пайплайн створює другий роут -- `registry-soap-api` із відповідною анотацією та записує в неї дозволені IP.
-+
-через внесення змін до файлів моделі даних реєстру в Кабінеті адміністратора регламентів (_див. детальніше на сторінках: xref:registry-develop:registry-admin/admin-portal/registry-modeling/tables/xml-editor.adoc[] та xref:registry-develop:registry-admin/admin-portal/version-control/overview-new-change-request.adoc#push-changes-master[Застосування змін до майстер-версії]_). +
-У результаті оновлення моделі даних реєстру, запускається Jenkins-процес *MASTER-Build-registry-regulations*, який своєю чергою запускає пайплайн розгортання дата-моделі -- `data-model`. Цей пайплайн створює другий роут -- `registry-soap-api` із відповідною анотацією та записує в неї дозволені IP.
-+
-через запуск Jenkins-пайплайну *data-model* вручну. У результаті запускається Jenkins-процес *data-model*, який створює другий роут -- `registry-soap-api` із відповідною анотацією та записує в неї дозволені IP.
-+
-TIP: Детальніше про це дивіться на сторінці xref:faq:faq.adoc#trigger-data-model-manually[Як запустити Jenkins-процес розгортання моделі даних?].
-
---
-====
+Таким чином ви матимете 2 роути для повноцінного обміну даними із зовнішніми системами через ШБО "Трембіта" за SOAP-протоколом.
 
 == Налаштування авторизації у регламенті та використання SOAP API
 
