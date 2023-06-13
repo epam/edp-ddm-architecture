@@ -12,5 +12,5 @@ USER node
 RUN npm install
 
 FROM nexus-docker-registry.apps.cicd2.mdtu-ddm.projects.epam.com/nginx:1.23.3 as runner
-COPY --from=builder /antora/antora.conf /etc/nginx/conf.d/default.conf
-COPY --from=builder /antora/output /usr/share/nginx/html
+COPY --from=builder /antora/ddm-architecture/antora.conf /etc/nginx/conf.d/default.conf
+COPY --from=builder /antora/ddm-architecture/output /usr/share/nginx/html
