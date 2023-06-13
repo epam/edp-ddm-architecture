@@ -1,0 +1,237 @@
+= Завантаження файлів більше ніж 50 рядків
+
+== Загальний опис
+
+В поточній імплементації існує механізм який дозволяє завантажити csv файл з даним які будуть завантажені до відповідної таблиці. Цей процес відбувається синхронно, тому відповідь клієнт має отримати за 30 секунд (максимальний допустимий таймаут). Окрім того оскільки комунікація між сервісами синхронного та асинхронного управління даними реєстру відбувається через брокер повідомлень, існує ліміт в один мегабайт для повідомлень. Тому було встановлено штучний ліміт в 50 рядків. В процесі експлуатації виникла необхідність завантажувати більші об'єми даних, за розміром завантаження яких може займати значно довший час.
+
+
+== Функціональні сценарії
+
+* Збереження даних з файлу який більше одного мегабайта і збереження якого може тривати довше ніж 30 секунд.
+* Збереження даних з файлу у декілька таблиць.
+
+== Ролі користувачів
+
+* Розробник регламенту
+* Надавач послуг
+
+== Загальні принципи та положення
+
+* Збереження даних з файлу відбуваються в одній транзакції.
+* Опрацювання файлу відбувається по рядках.
+* Бізнес процес будується на подіях які виникають при відправці повідомлення до брокера.
+* Події завантаження в бізнес процес мають обробляться головним процесом і не можуть бути проасоційовані із саб-процесом.
+* Операція збереження відбувається асинхронно.
+* Прогрес завантаження не відслідковується.
+* В якості посилання на похідний документ для всіх сутностей буде один ключ на весь файл без вказання на конкретний рядок.
+* Фали що не відповідають правилам встановленим моделювальникам не можуть бути завантажені.
+
+
+
+== Високорівневий дизайн рішення
+
+image:architecture-workspace/platform-evolution/async/context.svg[]
+
+
+=== Ключові сценарії взаємодії сервісів
+
+.Опрацювання файлу
+[plantuml, req, svg]
+----
+participant "BPMS Kafka Listener" as listener
+participant "BPMS Kafka Delegate " as delegate
+queue "Kafka" as kafka
+collections "Ceph" as ceph
+participant "Registry Kafka API" as kafkaApi
+database "Database" as db
+participant "Keycloak" as keycloak
+
+delegate -> kafka: повідомлення завантаження \n [вхідна черга повідомлень]
+kafkaApi -> kafka: отримання запиту на збереження файлу
+kafkaApi -> keycloak: валідація токену
+return результат валідації
+kafkaApi -> ceph: завантаження файлу
+return файл за данними
+kafkaApi -> kafkaApi: фалідація файлу
+
+kafkaApi -> ceph: збереження файлу в окреме сховище
+return
+group цикл [кожен рядок]
+kafkaApi -> db: збереження відповідним сервісом
+return результат збереження
+end
+
+
+kafkaApi -> kafkaApi: формування відповіді
+kafkaApi --> kafka: повідомлення з результатом обробки \n [вихідна черга повідомлень]
+listener -> kafka
+listener -> listener: кореляція з запитом,\n формування події згідно зі статусом
+----
+
+
+== Моделювання регламенту реєстру
+
+=== Розширення для моделювання
+
+Для реалізації можливості асинхронного завантаження сутностей до БД, конфігурація складається з двох частин:
+
+Конфігурація на рівні моделі даних за допомогою розширення liquibase та використання делегату асинхронної взаємодії при моделюванні БП.
+
+Атрибут `limit` є обовʼязковим при створенні `createAsyncLoad`
+[source, xml]
+----
+<changeSet>
+    <createTable name="item">
+        <!-- Опис полів таблиці !-->
+    </createTable>
+    <createTable name="demo_entity">
+        <!-- Опис полів таблиці !-->
+    </createTable>
+
+    <createCompositeEntity name="item_with_references">
+        <!-- Опис полів складної сутності !-->
+    </createCompositeEntity>
+
+    <createAsyncLoad name="allowedAsyncLoads">
+        <entityList>
+            <entity name="item" limit="100"/>
+            <entity name="item_with_references" limit="1000"/>
+            <entity name="demo_entity" limit="1000000"/>
+        </entityList>
+    </createAsyncLoad>
+
+    <deleteAsyncLoad name="removeEntities">
+        <entityList>
+            <entity name="demo_entity"/>
+        </entityList>
+    </deleteAsyncLoad>
+
+</changeSet>
+
+----
+
+
+image:architecture-workspace/platform-evolution/async/business-process.png[]
+
+В результаті обробки, можливе виникнення декількох подій, в залежності від статусу результату.
+Тип події складається з назви сутності та статусу.
+
+.Приклади налаштування обробки подій успішного завантаження сутності item
+====
+image:architecture-workspace/platform-evolution/async/succesEvent.png[]
+====
+
+
+.Приклади налаштування обробки подій для при збереженні сутності item
+====
+image:architecture-workspace/platform-evolution/async/constraintViolation.png[]
+====
+
+.Можливі статуси результату опрацювання
+|===
+|Результат операції |Опис |Приклад події на бізнес процесі
+
+|SUCCESS
+|Операція  закінчилась успішно.
+|%item%Success
+
+|CONSTRAINT_VIOLATION
+|Дані з файлу не можуть бути завантаженні оскільки один з них порушує існуючі правила БД.
+|%item%ConstraintViolation
+
+|OPERATION_FAILED
+|Під час опрацювання файлу виникла помилка.
+|%item%OperationFailed
+|===
+
+
+== Низькорівневий дизайн сервісів
+
+=== Бібліотека Liquibase-розширень для моделювання дата моделі реєстру
+
+Результатом обробки тегів `createAsyncLoad` `deleteAsyncLoad` є формування переліку структур для яких дозволено асинхронне завантаження даних з файлів в таблиці метаданих.
+
+=== Делегат для відправки асинхронних повідомлень
+
+При відправці повідомлення за допомогою делегата, разом з тілом повідомлення відправляються службові заголовки для трасування.
+
+.Приклад тіла повідомлення для збереження даних з файлу
+[source,json]
+----
+{
+  "requestContext": {
+    "businessProcessInstanceId": "...",
+    "businessProcessName": "...",
+    "...": "..."
+  },
+  "securityContext": {
+    "signature": "...",
+    "jwtToken": "...",
+    "...": "..."
+  },
+  "payload": {
+    "file": {
+      "checksum": "....",
+      "id": "ceph-key"
+    },
+    "entityName": "item/item_with_references"
+  }
+}
+----
+
+=== Сервіс синхронного управління даними реєстру
+Валідація відбувається згідно існуючого процесу за рахунок проксювання запитів до сервісу синхронного управління даними, правила щодо дозволеної кількості сутностей виставлених моделювальником формується на етапі генерації сервісу.
+
+=== Сервіс асинхронного управління даними реєстру
+
+
+
+Процес обробки повідомлення здійснюється існуючим обробниками для збереження сутностей (`createEntity`, `createCompositeEntity`) який обирається динамічно по тупи сутності в залежності від значення поля `entityName`, перелік можливих `entityName` та роутін відбувається на етапі генерації.
+
+Результатом обробки буде перелік ідентифікаторів створених сутностей та назва сутності.
+
+[source, json]
+----
+{
+  "payload": {
+    "entityName": "item",
+    "ids": [
+      "c4a760a8-dbcf-4e14-9f39-0f4f2a5a6a6e",
+      "0e8c7a9b-2ae5-4c8d-9e50-7a5b6a4c8d9d",
+      "a8d1c6f9-9e9d-4d5a-8c8c-0c2b8c5a4d0e"
+    ]
+  },
+  "status": "SUCCESS",
+  "details": "OK"
+}
+----
+
+=== Обробник повідомлень подій результатів завантаження даних для сервісу виконання бізнес-процесів
+
+Кореляція результату з бізнес процесом відбувається за рахунок `BusinessProcessInstanceId` з контексту.
+А тип повідомлення формується динамічно на підставі типу сутності та результату.
+
+.Приклад можливої кореляції
+[source, java]
+----
+@Component
+public class AsyncDataLoadResponseKafkaListener {
+    @Autowired
+    private RuntimeService runtimeService;
+
+    @KafkaListener("data-load.csv.outbound")
+    public void processAsyncMessages(
+            @Payload AsyncDataLoadResponse message,
+            MessageHeaders headers) {
+        AsyncDataLoadResult payload = message.geyPayload();
+
+        RequestContext requestContext = message.getRequestContext();
+
+        runtimeService.createMessageCorrelation(payload.getEntityName() + message.getStatus())
+          .processInstanceBusinessKey(requestContext.getProcessInstanceId())
+          .setVariable("RESULT", payload.getIds())
+          .correlate();
+    }
+
+}
+----
