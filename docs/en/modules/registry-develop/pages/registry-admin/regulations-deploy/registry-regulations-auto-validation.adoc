@@ -1,0 +1,231 @@
+:toc-title: On this page:
+:toc: auto
+:toclevels: 5
+:experimental:
+:sectnums:
+:sectnumlevels: 5
+:sectanchors:
+:sectlinks:
+:partnums:
+
+//= Автоматична валідація змін до регламенту
+= Automatic validation of the regulations changes
+
+//== Загальний опис
+== Overview
+
+//Цей документ описує валідацію змін до регламенту на прикладі виникнення помилок при збірці pipeline `MASTER-build-registry-regulations` у реєстрах.
+This document illustrates how the regulations changes are validated using `MASTER-build-registry-regulations` pipeline errors as an example.
+
+//Відповідно до архітектури безпеки Платформи та реєстрів, що на ній розгортаються, регламент кожного реєстру має проходити процедуру перевірки коду (Code Review) перед внесенням змін до цільового репозиторію.
+According to the security architecture of the Platform and the registries deployed on it, the regulations of each registry must go through a code review procedure before updating the target repository.
+
+//Така процедура є надійним фільтром для виявлення небажаних помилок при моделюванні елементів регламенту, і, за потреби, коригування змін. Однак там, де існує людський фактор, існує і ймовірність додаткових помилок. Прикладом таких помилок під час роботи з налаштуваннями файлів регламенту є неправильне використання регістру, внесення неунікальних значень та дублювання атрибутів тощо.
+A code review procedure provides a reliable way of detecting errors when modeling the regulations elements before the changes are applied. Still, there is always a possibility of human error. For example, when working with the regulations configuration files, someone may use the wrong letter case, provide non-unique values, or duplicate attributes.
+
+//З метою уникнення подібних помилок, на Платформі реалізована додаткова автоматична валідація змін.
+To avoid similar mistakes, the Platform performs additional automatic validation of changes.
+
+//Автоматична валідація змін до регламенту наразі передбачає: ::
+Automatic validation of the regulations changes currently includes the following checks: ::
+
+//. Перевірку регістрів при налаштуванні зовнішніх ключів у моделі даних.
+. Checking that the foreign keys in the data model use the correct letter case.
+//. Перевірку регістрів при налаштуванні ролей посадових осіб.
+. Checking that the officer roles use the correct letter case.
++
+//IMPORTANT: Значення параметрів необхідно вказувати у нижньому регістрі, тобто всі символи -- з маленької літери. Механізм валідації для обох випадків є однаковим.
+IMPORTANT: Attribute values must use lower case. The validation works the same in both situations.
++
+//. Перевірку на дублювання та унікальність атрибутів у формах бізнес-процесів.
+. Checking that the attributes in the business process forms are not duplicated and have unique values.
+//. Перевірку на унікальність значення ідентифікатора бізнес-процесу.
+. Checking that the business process identifiers have unique values.
+//. Перевірку наявності бізнес-процесу в регламенті за значенням ідентифікатора.
+. Checking that the business processes with the specified identifiers are present in the regulations.
+
+//При внесенні змін до регламенту (_див. xref:registry-admin/regulations-deploy/registry-admin-deploy-regulation.adoc[]_), автоматично запускається процес збірки файлів регламенту, що має назву `MASTER-build-registry-regulations`.
+Merging changes to the regulations automatically starts the regulations files build process titled `MASTER-build-registry-regulations`. For details, see xref:registry-admin/regulations-deploy/registry-admin-deploy-regulation.adoc[].
+
+//IMPORTANT: Якщо не дотримано критеріїв правильності внесення інформації до регламенту, у процесі складання коду станеться помилка.
+IMPORTANT: If the regulations data is not correct, the build will fail.
+
+//== Перевірка регістрів при налаштуванні зовнішніх ключів у моделі даних
+== Checking the foreign keys letter case
+
+//У системі реалізовано регламентну валідацію для перевірки регістрів у значенні параметра `foreignKeyName` в рамках моделювання структур даних реєстру у каталозі _data-model_.
+When building the regulations, the system performs letter case validation of the `foreignKeyName` attribute value as part of the registry data structures modeling in the _data-model_ directory.
+
+//Якщо в одному з файлів на рівні Фабрики даних (наприклад, _data-model/tablesSubjects.xml_, що визначає структуру таблиць та зв'язків між ними) значення параметра зовнішнього ключа `foreignKeyName` вказано у верхньому регістрі (наприклад, `foreignKeyName="FK_suBject_subject_id"`), то збірка не пройде валідацію та завершиться помилкою на кроці `registry-regulations-validation`.
+If in one of the files at the data factory level (for example, _data-model/tablesSubjects.xml_, which defines the structure of the tables and the relationships between them) the value of the foreign key attribute `foreignKeyName` is specified in uppercase (for example `foreignKeyName="FK_suBject_subject_id"`), the build will fail at the `registry-regulations-validation` step.
+
+[#example-validation-fk-name]
+//.Приклад. Спрацьовування автоматичної валідації для значення параметра foreignKeyName
+.Automatic validation of the foreignKeyName attribute
+====
+//Розглянемо приклад спрацьовування автоматичної валідації при внесенні змін до файлу _data-model/tablesSubjects.xml_.
+Consider an example of automatic validation triggering when you update the _data-model/tablesSubjects.xml_ file.
+
+Perform these steps: ::
+
+//. Відкрийте файл _data-model/tablesSubjects.xml_ у середовищі розробки та моделювання регламенту.
+. Open the _data-model/tablesSubjects.xml_ file in the regulations development and modeling environment.
+//. В рамках моделювання структур даних, у тегу `<constraints>`, для атрибута `foreignKeyName` введіть значення `"Fk_subject_subject_id"`, використовуючи верхній регістр.
+. When modeling your data structures, provide a value that contains uppercase letters (`"Fk_subject_subject_id"`) for the `foreignKeyName` attribute in the `<constraints>` tag.
+//. Перенесіть локальні зміни до цільового репозиторію в Gerrit (_див. xref:registry-admin/regulations-deploy/registry-admin-deploy-regulation.adoc[]_).
+. Push local changes to the target repository in Gerrit (for details, see xref:registry-admin/regulations-deploy/registry-admin-deploy-regulation.adoc[]).
+//. Пройдіть процедуру перевірки коду в Gerrit.
+. Go through the code review procedure in Gerrit.
++
+image:registry-admin/regulations-deploy/auto-validation/registry-regulations-auto-validation-4.png[]
++
+//. Виконайте злиття змін (`git merge`) до `master`-гілки репозиторію.
+. Merge the changes (via `git merge`) with the `master` branch of the repository.
++
+image:registry-admin/regulations-deploy/auto-validation/registry-regulations-auto-validation-3.png[]
++
+//За фактом злиття змін до `master`-гілки репозиторію в Gerrit, відбудеться автоматичний запуск процесу збірки внесених змін інструментом Jenkins.
+Merging the changes with the `master` branch of the Gerrit repository automatically starts the build process in Jenkins.
++
+//. Перейдіть до інтерфейсу *Jenkins* за відповідним посиланням для перегляду процесу збірки.
+. To monitor the build process, go to *Jenkins* using a corresponding link.
++
+image:registry-admin/regulations-deploy/auto-validation/registry-regulations-auto-validation-5.png[]
++
+//Збірка завершиться помилкою на кроці `registry-regulations-validation`.
+The build fails with a validation error at the `registry-regulations-validation` step.
++
+//. Відкрийте деталі збірки, натиснувши її номер. Далі перейдіть до журналу подій у консолі (*Console Output*).
+. Click the build number to open its details and select the *Console Output* section in the leftmost menu.
++
+image:registry-admin/regulations-deploy/auto-validation/registry-regulations-auto-validation-8.png[]
++
+image:registry-admin/regulations-deploy/auto-validation/registry-regulations-auto-validation-7.png[]
++
+//. Ознайомтеся із причинами виникнення помилки. До консолі виводиться відповідне повідомлення та значення параметра, до якого застосовано валідацію:
+. Find out what is causing the validation error. The log contains a corresponding error message and mentions the value of the parameter that triggered the validation check.
++
+//[ERROR] Наступні foreign keys містять символи у верхньому регістрі, що неприпустимо: [Fk_subject_subject_id]
++
+----
+[ERROR] The following foreign keys contain uppercase letters, which is not allowed: [Fk_subject_subject_id]
+----
++
+image:registry-admin/regulations-deploy/auto-validation/registry-regulations-auto-validation-1.png[]
++
+//. Прокрутіть бігунок униз сторінки та знайдіть повідомлення про результат невдалої збірки:
+. Scroll to the bottom of the page and look for the build failed message:
++
+----
+ERROR: Registry regulations files did not pass validation
+Finished: FAILURE
+----
++
+image:registry-admin/regulations-deploy/auto-validation/registry-regulations-auto-validation-2.png[]
+====
+
+//== Перевірка регістрів при налаштуванні ролей посадових осіб
+== Checking the officer roles letter case
+
+//У системі реалізовано регламенту валідацію для перевірки регістрів для значень параметра `name` у файлі _roles/officer.yml_. Допускається лише нижній регістр.
+When building the regulations, the system performs letter case validation of the `name` parameter value in the _roles/officer.yml_ file. Only lowercase letters are allowed.
+
+//Якщо у файлі _roles/officer.yml_, на рівні бізнес-процесів, значення параметра `name`, тобто назву ролі посадової особи, вказано у верхньому регістрі (наприклад, `name: Officer`), то збірка не пройде валідацію та завершиться помилкою на кроці `registry-regulations-validation`.
+If the value of the `name` parameter in the _roles/officer.yml_ file at the business processes level contains uppercase letters (for example, `name: Officer`), the build will fail at the `registry-regulations-validation` step.
+
+//TIP: Процес спрацьовування валідації дивіться на прикладі перевірки регістрів у каталозі _data-model_ за xref:#example-validation-fk-name[посиланням].
+TIP: For an example of how validation triggers when checking the letter case in the _data-model_ directory, see the xref:#example-validation-fk-name[previous section].
+
+//== Перевірка на дублювання та унікальність атрибутів у формах бізнес-процесів
+== Checking the uniqueness of attributes in the business process forms
+
+//У системі реалізовано регламентну валідацію для перевірки атрибутів `name`, `display`, `title` і `type` на унікальність у каталозі _forms_. Валідація призначена для того, щоб коректно генерувати назву, тип і шлях знаходження форми у порталах (Кабінетах).
+When building the regulations, the system checks the uniqueness of the `name`, `display`, `title`, and `type` attributes in the _forms_ directory. This validation ensures that the name, type, and path to the form in user portals are generated correctly.
+
+//Якщо значення параметрів не є унікальними та дублюються, то збірка регламенту не пройде валідацію та завершиться помилкою на кроці `registry-regulations-validation`.
+If the attributes are duplicated and their values are not unique, the build will fail at the `registry-regulations-validation` step.
+
+//Виділять 2 основних критерії у цьому типі валідації: ::
+There are 2 main criteria for this type of validation: ::
+//. Атрибути `name`, `display`, `title` і `type` не повинні дублюватись у каталозі `forms`.
+. The `name`, `display`, `title`, and `type` attributes cannot be duplicated in the `forms` directory.
+//.Приклад. Дублювання атрибута у формі
++
+.The attribute is duplicated
+====
+[source,json]
+----
+{
+"path": "add-lab-bp-add-lab",
+"path": "add-lab-bp-add-lab"
+}
+----
+====
++
+//. Атрибути `name`, `display`, `title` і `type` мають бути унікальними у каталозі `forms` при розгортанні регламенту реєстру.
+. The `name`, `display`, `title`, and `type` attributes must have unique values in the  `forms` directory when the registry regulations are deployed.
+//.Приклад. Неунікальність атрибута у формі
++
+.The attribute value is not unique
+====
+[source,json]
+----
+{
+"title": "Add lab info",
+"title": "Add lab address"
+}
+----
+====
+
+//TIP: Процес спрацьовування валідації дивіться на прикладі перевірки регістрів у каталозі _data-model_ за xref:#example-validation-fk-name[посиланням].
+TIP: For an example of how validation triggers when checking the letter case in the _data-model_ directory, see the xref:#example-validation-fk-name[previous section].
+
+//== Перевірка на унікальність значення ідентифікатора бізнес-процесу
+== Checking the uniqueness of business process identifiers
+
+//У системі реалізовано регламентну валідацію для перевірки значення атрибута `process_definition_id` на унікальність у каталозі _bp-auth_. Валідація призначена для того, щоб коректно визначати ідентифікатор бізнес-процесу, до якого надається доступ користувачу.
+When building the regulations, the system checks the uniqueness of the `process_definition_id` attribute value is unique in the _bp-auth_ directory. This validation ensures the correct identification of the business process to which access is given.
+
+//Якщо _значення_ атрибута `process_definition_id` в масиві `process_definitions` не є унікальним, то збірка не пройде валідацію та завершиться помилкою на кроці `registry-regulations-validation`, а в журналі виводитиметься опис помилки із текстом: `"[Process_id] Process_id не унікальний".`
+If the value of the `process_definition_id` attribute in the `process_definitions` array is not unique, the build will fail on the `registry-regulations-validation` step. The log will display the following error message: `"[Process_id] Process_id is not unique"`
+
+//.Приклад. Неунікальність значення атрибута 'process_definition_id'
+.The process_definition_id value is not unique
+====
+[source,yaml]
+----
+process_definitions:
+    - process_definition_id: 'add-lab'
+    - process_definition_id: 'add-lab'
+----
+====
+
+//TIP: Процес спрацьовування валідації дивіться на прикладі перевірки регістрів у каталозі _data-model_ за xref:#example-validation-fk-name[посиланням].
+TIP: For an example of how validation triggers when checking the letter case in the _data-model_ directory, see the xref:#example-validation-fk-name[previous section].
+
+//== Перевірка наявності бізнес-процесу в регламенті за значенням ідентифікатора
+== Checking the existence of business processes in the regulations
+
+//У системі реалізовано регламенту перевірку наявності бізнес-процесу за значенням атрибута `process_definition_id` у каталозі _bp-auth_. Валідація призначена для того, щоб адміністратор регламенту міг внести значення _лише_ наявного в системі бізнес-процесу, до якого необхідно призначити доступ.
+When building the regulations, the system checks that a business process with a specified `process_definition_id` in the _bp-auth_ directory exists. This validation ensures that the registry administrator only grants access to business processes that exist in the system.
+
+//Якщо _значення_ атрибута `process_definition_id` в масиві `process_definitions` не збігається з ідентифікатором вже змодельованого бізнес-процесу, то збірка не пройде валідацію та завершиться помилкою на кроці `registry-regulations-validation`.
+If the `process_definition_id` attribute value in the `process_definitions` array does not match any of the available business processes, the build will fail at the `registry-regulations-validation` step.
+
+//.Приклад. Значення атрибута 'process_definition_id' для бізнес-процесу, що не існує в реєстрі
+.The process_definition_id value does not match any business processes in the registry
+====
+[source,yaml]
+----
+authorization:
+    realm: 'officer'
+    process_definitions:
+        - process_definition_id: 'add-lab777777777777777'
+        process_name: 'Create lab'
+        process_description: 'Lab creation regulations'
+        roles:
+          - officer
+----
+====
+
+TIP: For an example of how validation triggers when checking the letter case in the _data-model_ directory, see the xref:#example-validation-fk-name[previous section].
