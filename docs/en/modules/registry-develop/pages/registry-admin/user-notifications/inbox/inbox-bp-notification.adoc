@@ -1,0 +1,356 @@
+:toc-title: On this page:
+:toc: auto
+:toclevels: 5
+:experimental:
+:sectnums:
+:sectnumlevels: 5
+:sectanchors:
+:sectlinks:
+:partnums:
+
+//= Налаштування відправлення in-app повідомлень користувачам
+= Configuring in-app notifications
+
+//== Загальний опис
+== Overview
+
+//Для можливості надсилати текстові повідомлення до скриньки користувача у Кабінеті отримувача послуг, адміністратор регламенту повинен спочатку змоделювати відповідний шаблон для каналу зв'язку _inbox_ та додати його в структуру регламенту реєстру.
+To be able to send notifications to the user's inbox in the citizen portal, the regulations administrator must first define the template for the _inbox_ communication channel and add it to the structure of the registry regulations.
+
+//== Налаштування регламенту
+== Regulations settings
+
+//Репозиторій розгортання регламенту _registry-regulations_ розширено базовою директорією _inbox/business-process-notification-template_. Ця директорія містить файли шаблону _in-app_-повідомлень, які користувач може отримувати через канал зв'язку _inbox_ в особистому кабінеті.
+The regulation deployment repository _registry-regulations_ includes the base directory called _inbox/business-process-notification-template_. This directory contains template files for _in-app_ messages that users can receive through the _inbox_ communication channel in their account.
+
+//Адміністратор регламенту може змоделювати та додати будь-яку кількість шаблонів до структури регламенту, залежно від бізнес-потреб.
+The registry administrator can design and add any number of templates to the regulations structure, depending on business needs.
+
+//NOTE: Шаблон _business-process-notification-template_ -- це базовий шаблон у структурі регламенту для цього каналу зв'язку. Шаблонів може бути багато. Назва кожного шаблону в рамках одного каналу зв'язку має бути унікальною.
+NOTE: The _business-process-notification-template_ is the default template for this communication channel. You can have multiple templates. The names of each template within the same communication channel must be unique.
+
+//Для забезпечення вимог щодо підтримки відправлення повідомлень користувачам, структуру регламенту розширено додатковою директорією _<registry-regulation>/notifications_.
+To support sending notifications to users, the regulations structure contains an additional directory called _<registry-regulation>/notifications_.
+
+//Шлях до шаблону виглядає наступним чином: ::
+Here is the path to the template: ::
++
+----
+registry-regulations/notifications/inbox/<template-directory>
+----
+
+//Типовий шаблон in-app-повідомлень має наступну структуру: ::
+A typical template for in-app notifications has the following structure: ::
+
+[plantuml, email-notification-structure, svg]
+----
+@startsalt
+{
+{T
++ <&folder> registry-regulations
+++ ...
+++ <&folder> notifications
++++ <&folder> inbox
+++++ <&folder> <b><template-directory></b>
++++++ <&file> notification.ftl
++++++ <&file> notification.yml
+++++ ...
+}
+}
+@endsalt
+----
+
+//* _<template-directory>_ -- директорія з ресурсами шаблону, яка має унікальне ім'я для заданого каналу зв'язку;
+Where:
+
+* _<template-directory>_ is the directory containing the template resources. The directory name must be unique for the corresponding communication channel.
++
+//* _<template-directory>/notification.ftl_ -- Текстовий https://freemarker.apache.org/[FreeMarker] шаблон для подальшої генерації тіла повідомлення.
+* _<template-directory>/notification.ftl_ is the text-based https://freemarker.apache.org/[FreeMarker] template for generating the message body.
+//.FreeMarker-шаблон із плейсхолдерами для параметрів тіла повідомлення
+//У кредитну історію надійшла інформація про новий кредитний договір:
+//дата відкриття - ${dateCredOpen}, кредитор - ${creditor}.
+//Отримати кредитну історію можна на сайті Українського бюро кредитних історій - ubki.ua.
+//У разі виявлення шахрайських дій щодо вас або помилки кредитора - оскаржіть дані у кредитній історії.
++
+.A FreeMarker template with placeholders inside the message body
+====
+[source,ftl]
+----
+Information about a new credit agreement was added to the credit history:
+effective date - ${dateCredOpen}, creditor - ${creditor}.
+In case of fraud or creditor's mistake, you can file a dispute in the credit history.
+----
+====
+
+//* _<template-directory>/notification.yml_ -- Конфігураційний файл із метаданими шаблону, що містить заголовок повідомлення.
+* _<template-directory>/notification.yml_ is the configuration file with template metadata that contains the message title.
+//.Конфігураційний файл із заголовком повідомлення
++
+.A configuration file with the message title
+====
+[source,yaml]
+----
+title: "A notification from the Bureau of Credit Histories"
+----
+//TIP: Для прикладу використано шаблон повідомлення від УБКІ -- https://www.ubki.ua/[Українське бюро кредитних історій].
+====
+
+//Адміністратор може редагувати як вже створені шаблони, так і додавати нові. При додаванні нового шаблону в структуру регламенту, на пайплайні розгортання викликається додатковий крок, і шаблон публікується в сховище.
+The administrator can edit templates and create new ones. When a new template is added to the regulations structure, the deployment pipeline calls an additional step to publish the new template to the repository.
+
+//IMPORTANT: Кожний опублікований шаблон повідомлення повинен мати унікальну назву, яку надалі можна використовувати при моделюванні бізнес-процесу.
+IMPORTANT: Each published template must have a unique name that can be used later when modeling business processes.
+
+//== Моделювання відправлення in-app повідомлень
+== Modeling in-app notifications
+
+//Розглядаються два основних сценарії моделювання відправлення повідомлень у межах моделювання бізнес-процесів:
+There are two main scenarios for sending notifications when modeling business processes:
+
+//* xref:#send-user-notification[відправлення повідомлень одному користувачу];
+//* xref:#send-many-user-notifications[відправлення повідомлень багатьом користувачам].
+* xref:#send-user-notification[notifying a single user];
+* xref:#send-many-user-notifications[notifying multiple users].
+
+[#send-user-notification]
+//=== Відправлення повідомлень одному користувачу
+=== Notifying a single user
+
+//Після розгортання регламенту, і публікації шаблону push-сповіщення до сховища, моделювальник бізнес-процесів може використовувати унікальну назву шаблону у полі `Notification message template` при моделюванні кроку відправлення push-повідомлення користувачу.
+After deploying the regulations and publishing the notification template to the repository, you can use the unique template name in the `Notification message template` field when modeling the push notification step in a business process.
+
+//Для моделювання бізнес-процесу використовується типове розширення для задач на відправлення повідомлення (Send Task) -- *Send User Notification*.
+A standard extension for notification tasks (Send Task) is used to model the business process: *Send User Notification*.
+
+//Розширення *Send User Notification* -- делегат для відправлення повідомлень отримувачам послуг через налаштований канал зв'язку, з використанням заданого шаблону.
+The *Send User Notification* extension is a delegate for sending messages to citizens through a configured communication channel using a specified template.
+
+[NOTE]
+====
+//Перед налаштуванням шаблону в Сamunda Modeler переконайтеся, що папка із застосунком _resources → element-templates_ містить _sendUserNotification.json_
+Before configuring templates in Camunda Modeler, make sure the _resources_ > _element-templates_ application folder contains the _sendUserNotification.json_ file.
+====
+
+//Для того, щоб змоделювати відправлення повідомлення користувачу, виконайте наступні кроки: ::
+To model sending notifications to a user, perform these steps: ::
+
+//. Перейдіть до інтерфейсу моделювання бізнес-процесів.
+. Open the business process modeling interface.
++
+//. Створіть *Send Task*.
+. Create a *Send Task*.
++
+image:registry-develop:registry-admin/e-mail-notification/e-mail-notification-02.png[]
++
+//. На панелі налаштувань справа натисніть кнопку `Open Catalog` та оберіть шаблон (template) делегата -- *Send User Notification*. Для підтвердження натисніть `Apply`.
+. In the settings panel on the right, click the *`Open Catalog`* button and select the *Send User Notification* delegate template. Click *`Apply`* to confirm your action.
++
+image:registry-develop:registry-admin/e-mail-notification/e-mail-notification-03.png[]
++
+//. Виконайте подальші налаштування:
+. Set up the following options:
++
+//* У полі `Name` вкажіть назву задачі. Наприклад, `Відправлення in-app-повідомлення користувачу`.
+* *Name*: Specify the task name. For example, `Sending an in-app notification`.
++
+//* У полі `Recipient` вкажіть унікальний ідентифікатор -- `<username>` отримувача повідомлення. Наприклад, `${initiator().userName}`.
+* *Recipient*: Specify the notification recipient's unique identifier (`<username>`). For example, `${initiator().userName}`.
++
+//TIP: У цьому випадку зазначено ім'я ініціатора процесу як реципієнта -- `${initiator().userName}`. Також можна вписати, наприклад виконавця задачі, вказавши `${completer('<taskDefinitionId>').userName}`, де `<taskDefinitionId>` -- ідентифікатор користувацької задачі.
+TIP: In this case, the recipient is the user who initiated the process, specified as `${initiator().userName}`. Alternatively, you set the recipient to the user who completed the task by specifying `${completer('<taskDefinitionId>').userName}`, where `<taskDefinitionId>` is the identifier of the user task.
++
+//* У полі `Subject` вкажіть текстову назву теми повідомлення. Наприклад, `Notification successfully generated`.
+* *Subject*: Specify the text subject of the notifications. For example, `Notification is generated successfully`.
++
+//* У полі `Notification message template` вкажіть унікальну назву шаблону для формування тіла повідомлення, яка відповідає назві директорії наявного шаблону у регламенті (наприклад, `business-process-notification-template`).
+* *Notification message template*: Specify the unique name of a template to use for the body of the message. The template name must match this template's directory name in the regulations (for example, `business-process-notification-template`).
++
+//* У полі `Notification template model` вкажіть змінну, яка використовуватиметься для опрацювання шаблону -- `${templateModel}`.
+* *Notification template model*: Specify the variable to use for template processing -- `${templateModel}`.
++
+image:registry-admin/inbox-templates/inbox-template-1.png[]
+
++
+//Користувач зможе отримувати сповіщення до скриньки Кабінету отримувача послуг у розділі _Повідомлення_.
+A user can read the notifications in the citizen portal in the *Notifications* section.
+
++
+[TIP]
+====
+For details, see xref:user:citizen/user-notifications/inbox-notifications.adoc[].
+====
+
+[#send-many-user-notifications]
+//=== Відправка повідомлень багатьом користувачам
+=== Notifying multiple users
+
+//Для відправлення повідомлень багатьом користувачам моделювання бізнес-процесу відбувається за аналогією з xref:#send-user-notification[моделюванням бізнес-процесу відправки повідомлення одному користувачу], за виключенням використання функції мультиекземпляра (Multi Instance). Ця функція дозволяє виконати одночасне відправлення повідомлень усім зазначеним користувачам із масиву.
+To notify multiple users, you need to model a business process similarly to xref:#send-user-notification[notifying a single user], but this time using the `Multi Instance` function. This function allows sending messages to all users in an array simultaneously.
+
+image:registry-admin/inbox-templates/inbox-template-2.png[]
+
+//* У полі `Collection` вкажіть xref:#related-delegates[масив користувачів, що отримані за атрибутами із сервісу Keycloak]. У цьому випадку масив записаний до змінної `${usersByAttributes}`, яку і вказуємо у полі.
+* In the *Collection* field, specify the xref:#related-delegates[array of users obtained via Keycloak service attributes]. In our example, the array is stored in the `${usersByAttributes}` variable, so we enter it here.
++
+//TIP: У нашому прикладі вказана змінна `${usersByAttributes}`, до якої попередньо збережений масив імен (username) користувачів у бізнес-процесі. Також імена отримувачів повідомлення можна задати простими константами через кому. Наприклад, `username1,username2,username3`.
+TIP: In our example, we use the `${usersByAttributes}` variable, which already contains an array of usernames from the business process. Alternatively, you can provide usernames as comma-separated values. For example: `username1,username2,username3`.
++
+//* У полі `Element Variable` зазначте локальну змінну екземпляра під заданим іменем.
+//TODO: "локальну змінну екземпляра під заданим іменем" might need additional context
+* In the *Element Variable* field, specify the local instance variable under the given name.
+
+//Процес відправки повідомлення не блокує основний потік виконання бізнес-процесу та виконується асинхронно.
+The message-sending process does not block the main flow of the business process and runs asynchronously.
+
+[NOTE]
+====
+//Детальніше ознайомитися з функцією Multi Instance ви можете за посиланням:
+For details on the `Multi Instance` function, refer to Camunda documentation: https://docs.camunda.io/docs/0.26/reference/bpmn-workflows/multi-instance/[Multi-Instance].
+====
+
+[#related-delegates]
+//=== Пов'язані делегати для отримання користувачів
+=== Related delegates for getting usernames
+
+//З метою отримання списку користувачів (отримувачів послуг) для відправки їм повідомлень, доступне типове розширення для сервісних задач:
+You can obtain a list of citizens to send notifications to using the following standard extension for service tasks:
+
+//* Делегат `getCitizenUsersByAttributesFromKeycloak` -- використовується для пошуку користувачів Кабінету отримувачів послуг у Keycloak за їх атрибутами.
+* The `getCitizenUsersByAttributesFromKeycloak` delegate is used to find citizen portal users in Keycloak by their attributes.
+
+[NOTE]
+====
+//Детальну інформацію щодо налаштування делегата можна отримати за посиланням:
+//* xref:bp-modeling/bp/element-templates/bp-element-templates-installation-configuration.adoc#get-citizen-users-by-attributes-from-keycloak[Пошук отримувачів послуг у Keycloak за їх атрибутами]
+For details on setting up the delegate, see xref:bp-modeling/bp/element-templates/bp-element-templates-installation-configuration.adoc#get-citizen-users-by-attributes-from-keycloak[Finding citizens in Keycloak by their attributes].
+====
+
+//== Логування відправлення повідомлень у журналі аудиту
+== Notifications logging
+
+//Події успішного, або неуспішного відправлення повідомлень користувачу у застосунок "Дія" логуються в журналі аудиту та зберігаються у базі даних `audit`.
+//TODO: omitting ua-specific mention of Diia
+Successful or failed attempts to send a notification are logged in the audit log and saved to the `audit` database.
+
+[TIP]
+====
+//Ви можете самостійно переглянути фіксацію подій відправлення повідомлень у логах бази даних `audit`, під'єднатися до якої можливо за інструкцією:
+//* xref:admin:connection-database-openshift.adoc[]
+You can manually view notification events in the `audit` database logs. To learn how to connect to this database, see xref:admin:connection-database-openshift.adoc[].
+====
+
+//.Аудит подій відправлення inbox-повідомлень
+.Inbox notification events audit
+====
+
+//.Фіксація події успішного відправлення повідомлення у БД audit
+.Logging a successful notification event in the audit DB
+[%collapsible]
+=====
+[source,json]
+----
+{
+  "result": "SUCCESS",
+  "notification": {
+    "channel": "inbox",
+    "subject": "A notification from the Bureau of Credit Histories",
+    "message": "Information about a new credit agreement was added to the credit history:\neffective date - Wed Jul 26 12:54:51 UTC 1978, creditor - auto-user-notification-f278366.\nIn case of fraud or creditor's mistake, you can file a dispute in the credit history.",
+    "recipient": {
+      "id": "auto-user-notification-f",
+      "email": null
+    }
+  },
+  "delivery": {
+    "channel": "inbox",
+    "status": "SUCCESS",
+    "failureReason": null
+  },
+  "action": "SEND_USER_NOTIFICATION",
+  "step": "AFTER"
+}
+----
+Where:
+//* Параметр `result` вказує на результат надсилання повідомлення.
+//* Параметр `channel` вказує, який канал зв'язку із користувачем використано.
+//* Параметр `message` -- тіло повідомлення із бізнес-даними, сформоване на базі шаблону.
+//* Атрибут `recipient` показує інформацію про отримувача повідомлення.
+//* Атрибут `delivery` відображає статус доставлення за відповідним каналом зв'язку.
+
+* The `result` parameter indicates the result of sending the message.
+* The `channel` parameter specifies which communication channel was used.
+* The `message` parameter is the message body with business data created from the template.
+* The `recipient` attribute specifies the message recipient.
+* The `delivery` attribute reflects the delivery status for the corresponding communication channel.
+=====
+
+//.Фіксація події неуспішного відправлення повідомлення у БД audit
+//TODO: Example contains ua-specific diia channel data, needs to be removed
+.Logging a failed notification event in the audit DB
+[%collapsible]
+=====
+[source,json]
+----
+{
+  "result": "FAILURE",
+  "notification": {
+    "context": {
+      "system": "Low-code Platform",
+      "application": "ddm-bpm",
+      "businessProcess": "bpmn-send-inbox-with-form",
+      "businessProcessDefinitionId": "bpmn-send-inbox-with-form:2:1f54abab-65b2-11ed-8fda-0a580a822841",
+      "businessProcessInstanceId": "b84ceb8f-65b8-11ed-8fda-0a580a822841",
+      "businessActivity": "Activity_0l2g5sf",
+      "businessActivityInstanceId": "Activity_0l2g5sf:b84e9948-65b8-11ed-8fda-0a580a822841"
+    },
+    "notification": {
+      "title": null,
+      "templateName": "inbox-template-ubki111",
+      "ignoreChannelPreferences": false
+    },
+    "recipients": [
+      {
+        "id": "auto-user-citizen",
+        "channels": [
+          {
+            "channel": "diia",
+            "email": null,
+            "rnokpp": "1010101014"
+          },
+          {
+            "channel": "email",
+            "email": "auto1-user-citizen@inbucket.inbucket.svc.cluster.local",
+            "rnokpp": null
+          }
+        ],
+        "parameters": {
+          "dateCredOpen": "inbox-template-ubki",
+          "creditor": "inbox-template-ubki"
+        }
+      }
+    ]
+  },
+  "delivery": {
+    "channel": "inbox",
+    "status": "FAILURE",
+    "failureReason": "Notification template inbox-template-ubki111 not found"
+  },
+  "action": "SEND_USER_NOTIFICATION",
+  "step": "AFTER"
+}
+----
+Where:
+//* Параметр `result` вказує на результат надсилання повідомлення.
+//* Параметр `context` надає деталі про бізнес-процес, в рамках якого змодельовано відправлення повідомлення, а також його складові.
+//* Параметр `templateName` вказує, який шаблон було використано для надсилання повідомлення.
+//* Масив `recipients` показує інформацію про отримувачів повідомлення, а також канали зв'язку.
+//* Атрибут `delivery` відображає статус доставлення за відповідним каналом зв'язку та причину помилки.
+
+* The `result` parameter indicates the result of sending the message.
+* The `context` parameter provides details about the business process for which the message is modeled and its components.
+* The `templateName` parameter indicates which template was used to send the message.
+* The `recipients` array shows information about message recipients and communication channels.
+* The `delivery` attribute reflects the delivery status for the corresponding communication channel and the failure reason.
+=====
+
+====
