@@ -1,0 +1,134 @@
+:toc-title: On this page:
+:toc: auto
+:toclevels: 5
+:experimental:
+:sectnums:
+:sectnumlevels: 5
+:sectanchors:
+:sectlinks:
+:partnums:
+
+//= Налаштування шаблону повідомлення з кодом для підтвердження каналу зв'язку Email
+= Setting up a message template with an email confirmation code
+
+//== Загальний опис
+== Overview
+
+//Для налаштування функції відправлення поштових повідомлень користувачам на електронну пошту, користувач має спочатку підтвердити, тобто авторизувати канал зв'язку `email`. Таким чином, користувач верифікує обмін даними (email-повідомленнями).
+To enable email notifications, the user must first confirm their consent to use the email communication channel. This way, the user verifies the exchange of data (email messages).
+
+//Підтвердження каналу зв'язку використовує механізм верифікації даних за допомогою псевдовипадкового 6-значного OTP-коду, що генерується платформою і надходить до сервісу електронної пошти за вказаною адресою користувача.
+//TODO: moved OTP footnote to the first mention
+The confirmation of a communication channel is based on a data verification mechanism that uses a pseudorandom 6-digit OTPfootnote:[A one-time password (OTP) is a password that is valid for only one authentication session. Its validity may also be limited to a specific time interval. The advantage of such a password over a static one is that it cannot be reused.] code that the Platform generates and sends to the email address specified by the user.
+
+//Власне відправлення OTP-коду -- це вже повідомлення, що містить OTP-код. І відправлення такого повідомлення вимагає попередньо xref:#registry-regulations-modeling[змодельованого шаблону] у структурі регламенту реєстру.
+An email message with an OTP code is also a notification that requires a xref:#registry-regulations-modeling[configured template] in the registry regulations structure.
+
+[#registry-regulations-modeling]
+//== Моделювання регламенту
+== Regulations modeling
+
+//Базовий репозиторій розгортання регламенту _registry-regulations_ розширено директорією _channel-confirmation_, яка містить шаблон поштового повідомлення із плейсхолдеромfootnote:[Плейсхолдер (_англ. -- *placeholder_*) -- заповнювач тексту.] для OTP-кодуfootnote:[Одноразовий пароль (_англ. -- *one time password, OTP_*) -- це пароль, який є дійсним тільки для одного сеансу автентифікації. Його дія також може бути обмежена певним проміжком часу. Перевага такого пароля перед статичним полягає у тому, що його неможливо використовувати повторно.], що генеруватиметься системою та надсилатиметься громадянам за вказаною адресою електронної пошти.
+The base _registry-regulations_ deployment repository includes the _channel-confirmation_ directory containing an email message template with a placeholder for an OTP code that the Platform generates and sends to the email address specified by the user.
+
+//Шаблон повідомлення необхідно створити у розмітці HTML за допомогою технології шаблонізації Apache FreeMarker (розширення файлів _.ftlh_ та _.ftl_ для HTML та текстових документів відповідно).
+The message template must be created in HTML using the Apache FreeMarker template language. HTML templates have the _.ftlh_ extension, and text documents have the _.ftl_ extension.
+
+[NOTE]
+====
+//Детальну інформацію щодо Apache FreeMarker можливо отримати за посиланням:
+//* https://freemarker.apache.org/
+To learn more about Apache FreeMarker, refer to https://freemarker.apache.org/
+====
+
+//Типовий шаблон поштового повідомлення має наступну структуру:
+A typical email message template has the following structure:
+
+[plantuml, email-notification-structure, svg]
+----
+@startsalt
+{
+{T
++ <&folder> registry-regulations
+++ ...
+++ <&folder> notifications
++++ <&folder> email
+++++ <&folder> <b>channel-confirmation</b>
++++++ <&folder> css
+++++++ <&file> style.css
++++++ <&folder> image
+++++++ <&file> image.jpg
+++++++ <&file> ...
++++++ <&file> notification.ftlh
++++++ <&file> notification.yml
+++++ ...
+}
+}
+@endsalt
+----
+Where:
+
+//- _channel-confirmation_ -- директорія з ресурсами шаблону;
+* _channel-confirmation_ is the directory containing the template resources.
++
+//- _channel-confirmation/css/style.css_ -- єдиний CSS-файл стилів, які використовуються в HTML-документі (Приклад: _<link rel="stylesheet" href="css/style.css">_);
+//TODO: трошки не розумію, до чого саме тут цей приклад - мається на увазі, що такий path прописується в html документах автоматично чи вручну?
+* _channel-confirmation/css/style.css_ is a unified CSS file that contains the styles used in the HTML document. For example: _<link rel="stylesheet" href="css/style.css">_
++
+//- _channel-confirmation/image/*.*_ -- перелік файлів зображень, які використовуються в HTML-документі (Приклад: _<img src="images/image.jpg">_);
+* _channel-confirmation/image/*.*_ contains image files used in the HTML document. For example: _<img src="images/image.jpg">_
++
+//- _channel-confirmation/notification.ftlh_ -- HTML-документ шаблону для подальшої генерації тіла повідомлення з плейсхолдером для OTP-коду.
+* _channel-confirmation/notification.ftlh_ is the HTML template used to generate the message body. The template contains a placeholder for an OTP code.
+//.HTML-документ шаблону для подальшої генерації тіла повідомлення з плейсхолдером для OTP-коду
++
+[%collapsible]
+.An HTML template used to generate the message body with an OTP code placeholder
+====
+[source,html]
+----
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0"/>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="header">
+        <div class="logo-wrap">
+            <img src="image/trident.jpg" alt="Diia" class="logo">
+        </div>
+        <div class="platform-name">Registry<br>Platform</div>
+    </div>
+    <div class="main">
+        Verification code: ${verificationCode}
+    </div>
+    <div class="footer">
+        <br>
+        Contacts or service information
+    </div>
+</body>
+</html>
+----
+====
++
+//- _channel-confirmation/notification.yml_ -- Конфігураційний файл з метаданими для відправлення поштового повідомлення з OTP-кодом.
+* _channel-confirmation/notification.yml_ is the configuration file containing metadata for sending the email notification with an OTP code.
+//.Конфігураційний файл з метаданими для відправлення поштового повідомлення з OTP-кодом
++
+.A configuration file with metadata for sending the email notification with an OTP code
+====
+[source,yaml]
+----
+title: "Email confirmation"
+----
+====
+
+//Згенерований 6-значний псевдовипадковий код (наприклад, `345870`) автоматично надсилатиметься користувачеві на Email для перевірки та підтвердження контактних даних при внесенні, або зміні адреси поштової скриньки у профілі Кабінету отримувача послуг.
+The generated 6-digit pseudorandom code (for example, `345870`) will be automatically emailed to the user for verification and confirmation when they enter or change their email address in their citizen portal profile.
+
+TIP: For details, see xref:user:citizen/user-notifications/email-otp.adoc[].
+
+//IMPORTANT: Після оновлення наявного реєстру, для правильної роботи функціональності, адміністратор регламенту має в ручному режимі додати до каталогу _notifications/email_ папку _channel-confirmation_ із відповідними файлами шаблону підтвердження, як показано на прикладах вище.
+IMPORTANT: After updating the registry, the regulations administrator must manually add the _channel-confirmation_ folder with the corresponding confirmation template files to the _notifications/email_ directory, as shown in the examples above.
