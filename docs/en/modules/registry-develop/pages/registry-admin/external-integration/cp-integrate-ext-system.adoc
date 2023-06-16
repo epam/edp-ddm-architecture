@@ -1,0 +1,388 @@
+:toc-title: On this page:
+:toc: auto
+:toclevels: 5
+:experimental:
+:sectnums:
+:sectnumlevels: 5
+:sectanchors:
+:sectlinks:
+:partnums:
+
+//= Налаштування взаємодії з іншими системами у Control Plane
+= Configuring integrations with external systems in Control Plane
+
+[WARNING]
+====
+//Налаштування взаємодії через адміністративну панель Control Plane доступне для версій реєстру 1.9.3 і вище.
+Configuring integrations through the Control Plane admin console is available for registries version 1.9.3 or later.
+
+//Для версій реєстру 1.9.2 та нижче налаштувати інтеграцію можливо на рівні регламенту реєстру у файлі _bp-trembita/configuration.yml_ (_зверніться до сторінки xref:registry-develop:bp-modeling/bp/rest-connector.adoc#regulations-configuration[REST-конектор: налаштування регламенту]_).
+For registries version 1.9.2 or earlier, you can configure integrations at the registry regulations level using the _bp-trembita/configuration.yml_ file. For details, see xref:registry-develop:bp-modeling/bp/rest-connector.adoc#regulations-configuration[REST connector: configuring the regulations].
+====
+
+//== Загальний опис
+== Overview
+
+//Щоб мати змогу використовувати розроблений на Платформі інтеграційний REST-конектор до зовнішніх сервісів та отримувати інформацію від зовнішніх систем та реєстрів, необхідно попередньо виконати конфігурації на рівні екземпляра реєстру.
+To use the Platform's REST connector for integration with external systems and registries and fetch data from them, you must first configure the connector at the registry instance level.
+
+//Для того, щоб налаштувати взаємодію із зовнішніми реєстрами та системами, необхідно створити конфігурацію у консолі Control Plane. Це дозволить розгорнути *`Service Entry`* та відкрити доступ для трафіку за межі кластера Платформи, а також створити секрет для доступу до ресурсів зовнішньої системи.
+To configure external interactions, you need to create a corresponding configuration in the Control Plane console. This enables deploying a *Service Entry*, which serves as an entry point for the outbound traffic, and creating a secret for accessing the external resources.
+
+[TIP]
+====
+//* Service Entry створюється автоматично, при розгортанні реєстру за допомогою Jenkins-пайплайну -- `*MASTER-Build-<registry-name>*` (_детальніше -- див. розділ xref:registry-develop:bp-modeling/bp/rest-connector.adoc#create-service-entry[Створення ServiceEntry]_).
+* A Service Entry is created automatically when a registry is deployed using the *MASTER-Build-`<registry-name>`* Jenkins pipeline. For details, see xref:registry-develop:bp-modeling/bp/rest-connector.adoc#create-service-entry[Rest connector: creating a Service Entry].
+//* Секрети (токен, пароль тощо) аналогічно створюються автоматично після застосування налаштувань пайплайном Jenkins -- `*MASTER-Build-<registry-name>*`. Він додається до *user-management:hashicorp-vault* для тієї системи/сервісу, до якої необхідно виконувати запити (_детальніше -- див. розділ xref:registry-develop:bp-modeling/bp/rest-connector.adoc#create-secret[Створення секрету для авторизації сервісу]_).
+* Similarly, the secrets (such as a token or password) are created automatically after the settings are applied using the *MASTER-Build-`<registry-name>`* Jenkins pipeline. The secret is added to the *user-management:hashicorp-vault* for the system or service to which requests will be made. For details, see xref:registry-develop:bp-modeling/bp/rest-connector.adoc#create-secret[Rest connector: creating a secret for service authorization].
+====
+
+//CAUTION: Інтеграція зі сторонніми (3rd-party) системами потребує додаткової конфігурації на рівні регламенту, зокрема необхідно визначити перелік операцій та їх типів, які використовує реєстр через типове інтеграційне розширення-конектор *Connect to external system* (*REST*-конектор). +
+//Детальніше -- див. на сторінці xref:registry-develop:bp-modeling/bp/rest-connector.adoc#regulations-configuration[REST-конектор: налаштування регламенту].
+CAUTION: Integration with third-party systems requires additional configuration at the regulations level. Namely, you need to list the operations and their types used by the registry through the standard *Connect to external system* integration extension (*REST* connector). For details, see xref:registry-develop:bp-modeling/bp/rest-connector.adoc#regulations-configuration[REST connector: configuring the regulations].
+
+[#external-integration]
+//== Налаштування зовнішньої інтеграції у Control Plane
+== Configuring external integrations in Control Plane
+
+//Налаштуйте зовнішню інтеграцію у Control Plane: ::
+Configure an external integration in Control Plane: ::
++
+//. Увійдіть до консолі *Control Plane* як адміністратор реєстру.
+. Sign in to the *Control Plane* admin console as a registry administrator.
++
+image:admin:infrastructure/cluster-mgmt/update-cluster-mgmt-01.png[]
++
+//. Перейдіть до розділу [.underline]#Реєстри# та відкрийте необхідний.
+. Open the *Registries* section and open your registry.
++
+[IMPORTANT]
+====
+//Налаштування взаємодії із зовнішніми системами можливе лише при редагуванні реєстру.
+You can only configure external integrations when editing a registry.
+
+//Алгоритм наступний: ::
+Here is the general procedure: ::
+//* Спочатку необхідно створити реєстр.
+.. First, create a registry.
+//* Надалі адміністратор зможе налаштувати зовнішні взаємодії та взаємодію з ШБО "Трембіта". +
+//За замовчуванням при розгортанні реєстру, створюється три не налаштовані точки для сервісів ШБО й одна для "Дії".
+//TODO: ua-specific mention of Trembita, translated as a general SEG. Omitted diia mention
+.. Then an administrator can configure external integrations and secure exchange gateway (SEG).
+//* Після застосування конфігурації, автоматично розгорнеться Service Entry та секрет авторизації сервісу.
+.. After the configuration is applied, the Service Entry and the service authorization secret are deployed automatically.
+====
++
+image:registry-admin/cp-auth-setup-officers/cp-id-gov-ua-iit-setup-01.png[]
++
+image:registry-admin/external-integration/cp-integrate-ext-system/cp-ext-sys-1.png[]
++
+//. Знайдіть секцію [.underline]#Налаштування взаємодії з іншими системами# та натисніть kbd:[+ ДОДАТИ ЗОВНІШНЮ СИСТЕМУ].
+. Expand the *Setting up interaction with other systems* section and click *`Add external system`*.
++
+image:registry-admin/external-integration/cp-integrate-ext-system/cp-ext-sys-2.png[]
++
+//. У новому вікні налаштуйте інтеграцію із зовнішньою системою для подальшої взаємодії згідно з регламентом реєстру.
+. In the *Add external system for interaction* window that opens, configure the external integration with the registry regulations.
++
+//NOTE: Мережеві політики доступу будуть створені автоматично.
+NOTE: Network access policies are created automatically.
++
+//* У полі `Назва зовнішньої системи` введіть назву системи, з якою необхідно налаштувати взаємодію. Наприклад, `diia`.
+* *External system name*: Enter the name of the system to integrate with.
++
+[CAUTION]
+====
+//Назва не впливає на механізм інтеграції, але ви не зможете її відредагувати після застосування конфігурації реєстру.
+The name does not affect the integration, but you cannot change it once you apply the registry configuration.
+====
++
+//* У полі `Адреса зовнішньої системи` введіть базовий URL сервера, до якого необхідно під'єднатися. Наприклад, `https://wallpapercave.com`.
+* *External system address*: Enter the base URL of the server to connect to. For example, `https://wallpapercave.com`.
++
+[NOTE]
+====
+//URL має починатися з `http://` або `https://`, що вказує на те, що зовнішній сервіс буде доступний через порти `80` або `443` відповідно. +
+//Ці налаштування автоматично додаються до YAML-конфігурації Service Entry після її застосування (_див. xref:#result-service-entry[пункт нижче]_).
+The URL must start with `http://` or `https://`, meaning that the external service will be accessible through port `80` or `443`, respectively.
+
+These settings are automatically added to the Service Entry YAML configuration (see the steps xref:#result-service-entry[further in this topic]).
+====
++
+//* Протокол інтеграції -- *`REST`*. Наразі підтримується лише REST-інтеграція.
+* *Integration protocol*: *REST* is the only supported option.
++
+//* Вкажіть тип автентифікації -- оберіть `*NO_AUTH*` з випадного списку. +
+//Цей метод дозволяє звертатися до відкритих ресурсів без перевірки облікових даних (імені користувача та пароля, токена авторизації тощо).
+* *Select authentication type*: Select *NO_AUTH* from a dropdown list. This method allows accessing public resources without authorization.
++
+image:registry-admin/external-integration/cp-integrate-ext-system/cp-ext-sys-3.png[]
++
+[#auth-methods]
+[NOTE]
+====
+//Наразі підтримуються такі методи автентифікації:
+The Platform supports the following authentication methods:
+
+`NO_AUTH`::
+//Метод/тип аутентифікації, який не потребує жодних облікових даних або токенів аутентифікації для доступу до певного ресурсу або сервісу. Це означає, що будь-хто може отримати доступ до ресурсу або сервісу без будь-яких обмежень або перевірки його ідентичності.
+An authentication method that does not require any credentials or authentication tokens to access a specific resource or service. This means that anyone can access the resource without restrictions or identity verification.
+
+`AUTH_TOKEN` ::
+//Скорочення від «токен автентифікації» -- це фрагмент даних, який використовується для автентифікації користувача або системи для доступу до певного сервісу чи ресурсу. Токени автентифікації зазвичай використовують у вебдодатках, API та інших мережевих системах для забезпечення безпечного та ефективного доступу до ресурсів. Токени можуть приймати різні форми, наприклад випадкові рядки символів, зашифровані дані або навіть вебтокени JSON (JWT), які містять інформацію про користувача та термін дії.
+AUTH_TOKEN is short for "authentication token," which is a fragment of data used to grant a user or system access to a specific resource or service. Authentication tokens are typically used in web applications, APIs, and other network systems to ensure secure and efficient access to resources. Tokens come in various forms, such as random strings of characters, encrypted data, or JSON web tokens (JWT) that contain information about the user and expiration time.
+
+`BEARER` ::
+//Bearer-автентифікація є методом автентифікації, який використовується в комунікації на основі `HTTP`. Вона полягає в тому, що запит містить токен безпеки, відомий як «Bearer-токен», у заголовку для аутентифікації запита.
+BEARER authentication method is used in HTTP-based communication. It is based on security tokens called bearer tokens.
++
+//У цьому методі клієнт, який запитує доступ до захищеного ресурсу, включає токен доступу в заголовок `Authorization` запита, який зазвичай є довгим рядком символів, що представляє ідентичність та дозволи користувача. Сервер потім перевіряє правильність токена, і якщо він є дійсним, надає доступ до захищеного ресурсу.
+In this method, the client requesting access to a secured resource includes a bearer token in the request's `Authorization` header, which is usually a long string of characters representing the user's identity and permissions. The server then verifies the token's validity and grants access to the secured resource.
++
+//Bearer-токен може бути отриманий через окремий процес аутентифікації, такий як OAuth або OpenID Connect, і використовується в API для управління доступом до ресурсів. Оскільки Bearer-токен включається в заголовок запита, то може бути легко бути перехоплений. Тому важливо забезпечити безпечну його передачу, наприклад, за допомогою HTTPS-з'єднання.
+The bearer token can be obtained through a separate authentication process, such as OAuth or OpenID Connect, and is used in APIs for managing access to resources. Since the bearer token is included in the request header, it can be easily intercepted. Therefore, it is essential to ensure its secure transmission, for example, by using an HTTPS connection.
+
+`BASIC` ::
+//BASIC-автентифікація -- це метод аутентифікації, який використовується в `HTTP`-протоколі для захисту вебресурсів від несанкціонованого доступу. Цей метод передбачає передачу імені користувача та пароля у вигляді незашифрованого тексту у заголовку HTTP-запита.
+BASIC authentication method is used in the HTTP protocol to protect web resources from unauthorized access. This method involves transmitting a username and password as unencrypted text in the HTTP request header.
++
+//У BASIC-автентифікації, сервер запитує ім'я користувача та пароль від клієнта, після чого перевіряє їх відповідність збереженим відомостям аутентифікації. Якщо ім'я користувача та пароль збігаються з відомостями аутентифікації, сервер надає доступ до захищеного ресурсу. Якщо ж дані не збігаються, сервер повертає код помилки (зазвичай це `401`).
+In BASIC authentication, the server requests the username and password from the client, and then verifies that they match the authentication records. If the username and password match the authentication records, the server grants access to the protected resource. If records do not match, the server returns an error code (usually `401`).
++
+//Більшість вебсерверів та додатків підтримують BASIC-автентифікацію. Однак, оскільки ім'я користувача та пароль передаються у відкритому вигляді, BASIC-автентифікація не є надійним методом аутентифікації. Тому важливо забезпечити захист з'єднання шифруванням, наприклад, за допомогою протоколу HTTPS.
+Most web servers and applications support BASIC authentication. However, since the username and password are sent in plain text, BASIC authentication is not a reliable authentication method. Therefore, it is essential to ensure connection protection through encryption, for example, using an HTTPS protocol.
+
+`AUTH_TOKEN+BEARER` ::
+//Комбінований метод аутентифікації, що використовується для захисту доступу до API. Цей метод використовує два типи токенів: "токен доступу" (BEARER token) та "токен автентифікації" (`AUTH_TOKEN`). Використання цього методу передбачає двоетапну авторизацію з отриманням токена доступу (`BEARER`) на основі токена автентифікації (`AUTH_TOKEN`).
+A combined authentication method is usually used to protect access to APIs. This method uses two types of tokens: the "access token" (bearer token) and the "authentication token" (`AUTH_TOKEN`). This method involves a two-step authorization process with obtaining an access token (`BEARER`) based on an authentication token (`AUTH_TOKEN`).
++
+[NOTE]
+=====
+[%collapsible]
+//.Особливості кешування BEARER-токенів
+.How bearer tokens are cached
+======
+//Платформа забезпечує ефективне кешування токенів авторизації для взаємодії із зовнішніми системами, зокрема, за допомогою загального xref:bp-modeling/bp/rest-connector.adoc[REST-конектора], що працює у сервісі *`bpms`*.
+The Platform provides efficient caching of authorization tokens for external integrations when using a xref:bp-modeling/bp/rest-connector.adoc[REST connector], which is part of the `bpms` service.
+
+//Механізм передбачає, що токен, отриманий для взаємодії із зовнішньою системою, зберігається у кеші, що покращує продуктивність, уникаючи непотрібних запитів на аутентифікацію.
+Caching the tokens obtained for external integrations improves performance by avoiding unnecessary authentication requests.
+
+//Час "життя" токена визначається за допомогою JWT-клейма *`exp`* (expire time), який міститься в авторизаційному токені. Це відповідає специфікації JWT, визначеній у https://www.rfc-editor.org/rfc/rfc7519[RFC 7519].
+The token's time to live is determined by the `exp` (expiration time) JWT claim in the authorization token. For details on this JWT specification, refer to https://www.rfc-editor.org/rfc/rfc7519[RFC 7519].
+
+//Після того, як вказані дата і час, визначені у клеймі `exp` пройшли, токен відхиляється системою, яка його перевіряє, і Платформа запитує новий токен.
+After the date and time specified in the `exp` claim have passed, the token is rejected by the verification system, and the Platform requests a new token.
+
+//За відсутності у токені клейма `exp`, кешування не проводиться.
+If the `exp` claim is absent, caching is not performed.
+
+======
+
+=====
+
+====
++
+//. Натисніть kbd:[Додати], щоб зберегти налаштування.
+. Click *`Add`* to save your settings.
++
+//В результаті формується запит на внесення змін до конфігурації реєстру.
+As a result, the system creates a registry configuration update request.
++
+//. Відкрийте розділ [.underline]#Запити на оновлення# та перегляньте сформований запит, натиснувши іконку перегляду -- 👁.
+. In registry settings, scroll down to the *Update requests* section and click the view icon 👁 to open your request.
++
+//NOTE: Запропоновані зміни [.underline]#автоматично підтверджуються# системою та зберігаються до конфігурації реєстру у файлі *_deploy-templates/values.yaml_*.
+NOTE: The system automatically confirms the changes and saves them to the registry configuration _deploy-templates/values.yaml_ file.
++
+image:registry-admin/external-integration/cp-integrate-ext-system/cp-ext-sys-4.png[]
++
+//. У новому вікні ви можете переглянути, які саме параметри додано до конфігурації.
+. Review the parameters added to the configurations in the *Update request* window.
++
+//TIP: У вікні для порівняння можна зручно зіставити 2 версії змін: попередню (зліва) та нову (справа).
+TIP: The comparison window provides a convenient way of reviewing the differences between the two versions: the current (left) and the new (right).
++
+//У нашому прикладі ми бачимо наступну конфігурацію:
+In our example, the configuration looks like this:
+//.Конфігурація deploy-templates/values.yaml. Налаштування взаємодії із зовнішньою системою через метод NO_AUTH
++
+.Configuring an external integration using the NO_AUTH method in deploy-templates/values.yaml
+====
+[source,yaml]
+----
+external-systems:
+    test-external-system:
+        url: https://wallpapercave.com
+        type: registry
+        protocol: REST
+        auth:
+            type: NO_AUTH
+----
+====
++
+image:registry-admin/external-integration/cp-integrate-ext-system/cp-ext-sys-4-1.png[]
++
+[TIP]
+====
+//Перегляньте налаштування інтеграції для обраної системи. +
+//Ви можете відредагувати, або видалити налаштування, натиснувши на відповідні позначки `🖉` та `🗑`.
+Review the integration settings for the selected system.
+
+You can edit or cancel these settings using edit (🖉) or delete (🗑) icons.
+
+image:registry-admin/external-integration/cp-integrate-ext-system/cp-ext-sys-5.png[]
+====
++
+//В результаті запускається Jenkins-пайплайн `*MASTER-Build-<registry-name>*`, де [.underline]#`<registry-name>`# -- назва реєстру. Він застосовує параметри заданої конфігурації.
+As a result, the *MASTER-Build-`<registry-name>`* pipeline starts. It applies the integration settings you provided.
++
+//. Зачекайте, доки виконається збірка коду. Це може зайняти до 15 хвилин.
+. Wait until the build is completed. This may take up to 15 minutes.
++
+//Ви можете перевірити поточний статус та результат виконання за посиланням *`CI`* на інтерфейсі.
+To monitor the build status and result, use the link in the *CI* column.
++
+image:registry-admin/cp-auth-setup-officers/cp-id-gov-ua-iit-setup-6.png[]
++
+image:registry-admin/cp-auth-setup-officers/cp-id-gov-ua-iit-setup-7.png[]
++
+image:registry-admin/cp-auth-setup-officers/cp-id-gov-ua-iit-setup-8.png[]
++
+[#result-service-entry]
+//[start=9]
+//. При успішному виконанні збірки, задана конфігурація буде застосована, і нова Service Entry буде створена у проєкті вашого реєстру. Перевірити результат можна в Openshift-консолі.
+. Once the build is completed successfully, the system applies your configuration and creates a new Service Entry in your registry project. You can check the result in the Openshift console.
++
+image:registry-admin/external-integration/cp-integrate-ext-system/cp-ext-sys-6.png[]
++
+//. Виконайте додаткові конфігурації на рівні регламенту реєстру у файлі _bp-trembita/configuration.yml_.
+. Configure additional parameters at the registry regulations level in the _bp-trembita/configuration.yml_ file.
++
+//Налаштування для інтеграції з іншою системою можуть виглядати так:
+External system integration parameters may look like this:
+//.Налаштування регламенту версії реєстру 1.9.3+ для інтеграції з іншою системою
++
+.External integration parameters in the registry regulations version 1.9.3 or later
+====
+[source,yaml]
+----
+external-systems:
+  #provide the name of the system with which the integration is configured
+  system-name:
+    #specify the types of allowed operations
+    operations:
+      get-operation:
+        resource-path: "/get"
+        method: "GET"
+----
+====
++
+//TIP: Для отримання деталей щодо конфігурації регламенту зверніться до сторінки xref:registry-develop:bp-modeling/bp/rest-connector.adoc#regulations-configuration[REST-конектор: налаштування регламенту].
+TIP: For details on configuring the regulations, see xref:registry-develop:bp-modeling/bp/rest-connector.adoc#regulations-configuration[REST connector: configuring the regulations].
+
+//TODO: omitting ua-specific Diia integration section
+////
+[diia-integration]
+=== Налаштування інтеграції з "Дія"
+
+Цей підрозділ надає приклад налаштування взаємодії із зовнішньою системою "Дія".
+
+. Увійдіть до консолі *Control Plane* як адміністратор реєстру.
++
+image:admin:infrastructure/cluster-mgmt/update-cluster-mgmt-01.png[]
+
+. Перейдіть до розділу [.underline]#Реєстри# та відкрийте необхідний.
++
+[IMPORTANT]
+====
+Налаштування взаємодії із зовнішніми системами можливе лише при редагуванні реєстру.
+
+Алгоритм наступний: ::
+* Спочатку необхідно створити реєстр.
+* Надалі адміністратор зможе налаштувати зовнішні взаємодії та взаємодію з ШБО "Трембіта". +
+За замовчуванням при розгортанні реєстру, створюється три не налаштовані точки для сервісів ШБО й одна для "Дії".
+* Після застосування конфігурації, автоматично розгорнеться Service Entry та секрет авторизації сервісу.
+====
++
+image:registry-admin/cp-auth-setup-officers/cp-id-gov-ua-iit-setup-01.png[]
++
+image:registry-admin/external-integration/cp-integrate-ext-system/cp-ext-sys-1.png[]
+
+. Знайдіть секцію [.underline]#Налаштування взаємодії з іншими системами# та навпроти `*diia*` натисніть позначку редагування `🖉`.
++
+image:registry-admin/external-integration/cp-integrate-ext-system/cp-ext-sys-7.png[]
+
+. У новому вікні налаштуйте інтеграцію для подальшої взаємодії згідно з регламентом реєстру.
++
+NOTE: Мережеві політики доступу будуть створені автоматично.
+
+* У полі `Назва зовнішньої системи` введіть назву системи, з якою необхідно налаштувати взаємодію. Наприклад, `diia`.
++
+[CAUTION]
+====
+У цьому випадку назва встановлена за замовчуванням.
+
+Назва не впливає на механізм інтеграції, але ви не зможете її відредагувати після застосування конфігурації реєстру.
+====
+
+* У полі `Адреса зовнішньої системи` введіть базовий URL сервера, до якого необхідно під'єднатися. Наприклад, `http://api2.diia.gov.ua`.
++
+[NOTE]
+====
+URL має починатися з `http://` або `https://`, що вказує на те, що зовнішній сервіс буде доступний через порти `80` або `443` відповідно. +
+Ці налаштування автоматично додаються до YAML-конфігурації Service Entry після її застосування (_див. xref:#result-service-entry[пункт вище]_).
+====
++
+image:registry-admin/external-integration/cp-integrate-ext-system/cp-ext-sys-8.png[]
+
+* Протокол інтеграції -- *`REST`*. Наразі підтримується лише REST-інтеграція.
+
+* Вкажіть тип автентифікації -- `*AUTH_TOKEN+BEARER*` (встановлюється за замовчування для цього типу з'єднання). +
+Наразі підтримується лише цей тип автентифікації.
++
+TIP: Детальніше про методи автентифікації дивіться у секції xref:#auth-methods[Методи автентифікації].
+
+* Вкажіть ендпоінт автентифікації партнера -- `/api/v1/auth/partner`.
++
+NOTE: Необхідно вказати абсолютну адресу (`https://example.ua/auth`) або relative path відносно адреси, вказаної у полі `Адреса зовнішньої системи` (`/auth`)
+
+* Вкажіть json-path для отримання токена доступу -- `$.token`.
+
+* Вкажіть токен авторизації. Наприклад, він може виглядати так:
++
+----
+eyJhbGciOiJIUzI1NiIsInR5cCI6Ik
+----
++
+image:registry-admin/external-integration/cp-integrate-ext-system/cp-ext-sys-9.png[]
+
+
+. Натисніть kbd:[Підтвердити], щоб зберегти налаштування.
++
+В результаті формується запит на внесення змін до конфігурації реєстру та виконується пайплайн, що застосовує зміни до реєстру.
++
+TIP: Подальші кроки розгортання однакові для усіх систем. Див. кроки 6-9 розділу xref:#external-integration[].
+
+. Виконайте додаткові конфігурації на рівні регламенту реєстру у файлі _bp-trembita/configuration.yml_.
++
+Налаштування для інтеграції з "Дія" може виглядати так:
++
+.Налаштування регламенту для інтеграції з "Дія" версії реєстру 1.9.3+
+====
+[source,yaml]
+----
+external-systems:
+  diia:
+    operations:
+      get-damaged-property:
+        resource-path: "/api/v1/public-service/damaged-property/filtered"
+        method: "GET"
+      create-distribution:
+        resource-path: "/api/v1/notification/distribution/push"
+        method: "POST"
+----
+====
++
+TIP: Для отримання деталей щодо конфігурації регламенту зверніться до сторінки xref:registry-develop:bp-modeling/bp/rest-connector.adoc#regulations-configuration[REST-конектор: налаштування регламенту].
+////
