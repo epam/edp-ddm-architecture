@@ -1,0 +1,360 @@
+:toc-title: On this page:
+:toc: auto
+:toclevels: 5
+:experimental:
+:sectnums:
+:sectnumlevels: 5
+:sectanchors:
+:sectlinks:
+:partnums:
+
+//= Інтеграція із зовнішніми сервісами за допомогою REST-конектора
+= Integration with external services using the REST connector
+
+//`REST Connector` -- це конектор для підключення до зовнішніх захищених сервісів/систем поза кластером Платформи.
+You can use the `REST connector` to connect to secured services or systems outside the Platform cluster.
+
+//Для налаштування конектора необхідно виконати наступні кроки.
+This guide describes the steps required to set up the connector.
+
+[#create-service-entry]
+//== Створення ServiceEntry
+== Creating a Service Entry
+
+//Для того, щоб запит на отримання зовнішніх ресурсів міг вийти за межі кластера Платформи, необхідно на рівні реєстру створити *`Service Entry`* -- точку виходу трафіку за межі системи.
+Before a request for an external resource can go beyond the Platform cluster, you need to create a *Service Entry* at the registry level to serve as an entry point for the outbound traffic.
+
+[NOTE]
+====
+//Service Entry створюється автоматично, після того, як адміністратор реєстру налаштує інтеграцію в адміністративній панелі Control Plane. Після застосування змін до конфігурації реєстру та проходження Jenkins-пайплайну `*MASTER-Build-<registry-name>*`, підключення до зовнішньої системи буде налаштовано.
+A Service Entry is created automatically after the registry administrator configures the integration in the Control Plane admin console. Once the changes are applied to the registry configuration and the *MASTER-Build-`<registry-name>`* Jenkins pipeline runs, the connection to the external system is set up.
+
+//За деталями налаштувань у консолі Control Plane зверніться до сторінки xref:registry-develop:registry-admin/external-integration/cp-integrate-ext-system.adoc[].
+For details on Control Plane settings, see xref:registry-develop:registry-admin/external-integration/cp-integrate-ext-system.adoc[].
+====
+
+[WARNING]
+====
+//Для версій реєстру 1.9.2 та нижче Service Entry створюється автоматично, після запуску пайплайну публікацій та розгортання змін до регламенту реєстру.
+For registry versions 1.9.2 or earlier, a Service Entry is created automatically after the publication pipeline is launched and changes to the registry regulations are deployed.
+====
+
+//Перевірити, що Service Entry створено, можна у списку `*ServiceEntries*` в OpenShift-консолі. Для цього:
+You can check whether the Service Entry was created using the `*ServiceEntries*` list in the OpenShift console.
+
+//. Увійдіть до OpenShift консолі.
+. Sign in to the OpenShift web console.
++
+//. Перейдіть до меню `Home` → `API Explorer`. У рядку пошуку `Filter by kind` введіть значення `ServiceEntry`, в результатах фільтрування виберіть відповідний сервіс.
+. Go to *Home* > *API Explorer*.
+. In the *Filter by kind* search field, search for `ServiceEntry` and select the corresponding service.
++
+image:registry-develop:bp-modeling/bp/rest-connector/rest-connector-1.png[]
++
+//. Виберіть реєстр з випадного списку `Project`, в якому буде використовуватись зовнішній сервіс. Перейдіть до меню `Instances` і знайдіть необхідну `ServiceEntry`.
+. From the *Project* dropdown list, select the registry that will use the external service.
+. Open the *Instances* tab and find the required `ServiceEntry`.
++
+image:registry-develop:bp-modeling/bp/rest-connector/rest-connector-2-1.png[]
+
+// The following text was commented out in the original doc
+////
+
+Starting from 1.8.2 release, the ServiceEntry is created automatically
+
+How to create ServiceEntry manually? ONLY for versions up to 1.8.1
+
+. Авторизуйтесь до OpenShift консолі.
+
+. Перейдіть до меню `Home` → `API Explorer`. У рядку пошуку `Filter by kind` введіть значення `ServiceEntry`, в результатах фільтрування виберіть відповідний сервіс.
++
+image:registry-develop:bp-modeling/bp/rest-connector/rest-connector-1.png[]
+
+. Виберіть проєкт з випадного списку `Project`, в якому буде використовуватись зовнішній сервіс. Перейдіть до меню `Instances` і натисніть `Create ServiceEntry`.
++
+image:registry-develop:bp-modeling/bp/rest-connector/rest-connector-2.png[]
+
+. Далі необхідно вказати налаштування для YAML файлу.
++
+image:registry-develop:bp-modeling/bp/rest-connector/rest-connector-3.png[]
++
+* для параметра `name` потрібно вказати назву сервісу, наприклад, `httpbin-org`;
+* для параметра `spec` необхідно зазначити наступне:
++
+[source, yaml]
+----
+spec:
+  exportTo:
+    - .
+  hosts:
+    - httpbin.org
+  location: MESH_EXTERNAL
+  ports:
+    - name: https
+      number: 443
+      protocol: HTTPS
+    - name: http
+      number: 80
+      protocol: HTTP
+  resolution: DNS
+----
++
+** у параметрі `hosts` зазначається адреса сервісу, що буде використовуватися;
+** у параметрі `ports` вказуються налаштування виклику для `https` чи `http`, або для обох варіантів одночасно.
+
+. Після налаштування натисніть `Create`.
++
+image:registry-develop:bp-modeling/bp/rest-connector/rest-connector-4.png[]
+
+. У результаті успішного виконання налаштувань буде створено сервіс, через який буде дозволено пропускати трафік із кластера.
++
+image:registry-develop:bp-modeling/bp/rest-connector/rest-connector-5.png[]
+////
+
+[#create-secret]
+//== Створення секрету для авторизації сервісу
+== Creating a secret for service authorization
+
+[WARNING]
+====
+//Для версій реєстру 1.9.3 і вище не потрібно створювати секрети вручну в Openshift.
+For registry versions 1.9.3 or later, there is no need to create secrets manually in Openshift.
+
+//Секрети (токен, пароль тощо) створюються автоматично після застосування налаштувань взаємодії з іншими системами, які необхідно виконати в адмін-панелі Control Plane.
+The secrets (such as a token or password) are created automatically after the external system interaction settings are applied via the Control Plane admin console.
+
+//В результаті застосування змін до конфігурації реєстру та проходження Jenkins-пайплайну `*MASTER-Build-<registry-name>*`, разом із Service Entry створюється й секрет для авторизації у зовнішньому сервісі. Він додається до *user-management:hashicorp-vault* для тієї системи/сервісу, до якої необхідно виконувати запити.
+Once the changes are applied to the registry configuration and the *MASTER-Build-`<registry-name>`* Jenkins pipeline runs, a secret for external service authorization is created along with the Service Entry. The secret is added to the *user-management:hashicorp-vault* for the system or service to which requests will be made.
+
+//Зверніться до сторінки xref:registry-admin/external-integration/cp-integrate-ext-system.adoc[] для отримання детальної інформації щодо налаштування взаємодії з іншими системами.
+For details on configuring interactions with external systems, see xref:registry-admin/external-integration/cp-integrate-ext-system.adoc[].
+====
+
+//Щоб створити секрет вручну, необхідно виконати наступні кроки:
+To create the secret manually, perform these steps:
+
+//. В OpenShift консолі перейдіть до меню `Workloads` → `Secrets` та оберіть відповідний проєкт з випадного списку `Project`. Натисніть `Create` → `Key/value secret`.
+. Sign in to the OpenShift web console.
+. Go to *Workloads* > *Secrets* and select your project from the *Project* dropdown list.
+. Select *`Create`* > *Key/value secret*.
++
+image:registry-develop:bp-modeling/bp/rest-connector/rest-connector-6.png[]
++
+//. Вкажіть назву секрету у полі `Secret name`, наприклад, `httpbin-basic-authentication`.
+. Enter the name of the secret into the *Secret name* field. For example: `httpbin-basic-authentication`.
++
+//NOTE: Назву секрету необхідно буде використати у параметрі `*secret-name*` при налаштуванні регламенту (_див. детальніше у розділі xref:#regulations-configuration[]_).
+NOTE: You will need the name of the secret for the `*secret-name*` parameter when configuring the regulations. For details, jump to xref:#regulations-configuration[].
++
+image:registry-develop:bp-modeling/bp/rest-connector/rest-connector-7.png[]
++
+//. Доступно два типи аутентифікації сервісу:
+. Specify the type of service authentication to use:
+//* Для типу аутентифікації `BASIC` необхідно додати два параметри `Key`:
+* For `BASIC` authentication, add two *Key* parameters:
+** `username`
+** `password`
++
+image:registry-develop:bp-modeling/bp/rest-connector/rest-connector-8.png[]
++
+//* Для типу аутентифікації `PARTNER_TOKEN` необхідно додати один параметр `Key`:
+* For `PARTNER_TOKEN` authentication, add one *Key* parameter:
+** `token`
++
+image:registry-develop:bp-modeling/bp/rest-connector/rest-connector-9.png[]
++
+//. У результаті успішного виконання налаштувань буде створено секрет, за допомогою якого можливо авторизуватися в зовнішньому сервісі.
+. Once the settings are applied successfully, the secret is created. You can use this secret for authorization in the external service.
++
+image:registry-develop:bp-modeling/bp/rest-connector/rest-connector-10.png[]
+
+[#regulations-configuration]
+//== Налаштування регламенту
+== Configuring the regulations
+
+[WARNING]
+====
+//Для версій реєстру 1.9.3+ та вище основні інтеграційні налаштування виконуються на рівні екземпляра реєстру в адміністративній панелі Control Plane (_див. детальніше -- xref:registry-admin/external-integration/cp-integrate-ext-system.adoc[]_).
+For registry versions 1.9.3 or later, the main integration settings are performed at the registry instance level in the Control Plane admin console. For details, see xref:registry-admin/external-integration/cp-integrate-ext-system.adoc[].
+
+//На рівні налаштувань регламенту адміністратор конфігурує лише: ::
+At the regulations level, the administrator configures only the following: ::
+
+//* назву системи;
+* system name
+//* дозволені операції:
+* allowed operations:
+//** ендпоінт/шлях до ресурсу;
+** endpoint and resource path
+//** метод.
+** method
+
+//.Налаштування external-systems у файлі bp-trembita/configuration.yml для версій реєстру 1.9.3+
+.external-systems config in the bp-trembita/configuration.yml file for registries version 1.9.3 or later
+=====
+[source, yaml]
+----
+# reusing external system names configured on registry level
+external-systems:
+  diia:
+    operations:
+      get-damaged-property:
+        resource-path: "/api/v1/public-service/damaged-property/filtered"
+        method: "GET"
+      create-distribution:
+        resource-path: "/api/v1/notification/distribution/push"
+        method: "POST"
+  http-bin:
+    operations:
+      get-operation:
+        resource-path: "/get"
+        method: "GET"
+----
+=====
+====
+
+//Для версії реєстру 1.9.2 та нижче виконайте попередні конфігурації на рівні регламенту реєстру.
+For registries version 1.9.2 or earlier, perform the configuration at the registry regulations level.
+
+//Для цього потрібно налаштувати параметри блоку `*external-systems*` у конфігураційному файлі *_bp-trembita/configuration.yml_* відповідного реєстру.
+To do this, you need to configure the `*external-systems*` block in the *_bp-trembita/configuration.yml_* file of a corresponding registry.
+
+//.Приклад для типу аутентифікації `BASIC`
+.An example of `BASIC` authentication
+[example]
+[source, yaml]
+----
+external-systems:
+  httpbin:
+    url: http://httpbin.org/
+    methods:
+      get:
+        path: /get
+        method: GET
+    auth:
+      type: BASIC
+      secret-name: httpbin-basic-authentication
+----
+
+[NOTE]
+====
+//* після заголовка `external-systems` зазначається назва сервісу, що буде використовуватись, наприклад, `httpbin`;
+//* для параметра `url` вказується адреса сервісу, наприклад, `http://httpbin.org/`;
+//* в заголовку `methods` вказується назва методу взаємодії з сервісом, наприклад, `get`:
+//** `path` шлях до сервісу, наприклад, `/get`;
+//** `method` HTTP-метод взаємодії з сервісом, наприклад, `GET`.
+//* для заголовка `auth` зазначаються параметри секрету:
+//** `type` створений типу аутентифікації `BASIC` або `PARTNER_TOKEN`;
+//** `secret-name` назву секрету, наприклад, `httpbin-basic-authentication`.
+* The `external-systems` header must be followed by the name of the external service, for example, `httpbin`.
+* The `url` parameter must contain the service address, for example, `http://httpbin.org/`
+* The `methods` header must contain the name of the method used to interact with the service, for example, `get`.
+** The `path` is the path to the service, for example, `/get`.
+** The `method` is the HTTP method of interacting with the service, for example, `GET`.
+* The `auth` header must contain the secret parameters:
+** The `type` is the authentication type: `BASIC` or `PARTNER_TOKEN`.
+** The `secret-name` is the name of the secret, for example, `httpbin-basic-authentication`.
+====
+
+//.Приклад для типу аутентифікації `PARTNER_TOKEN`
+//TODO: Example contains ua-specific diia mention, but maybe as a url example that's fine?
+.An example of `PARTNER_TOKEN` authentication
+[example]
+[source, yaml]
+----
+external-systems:
+  diia:
+    url: http://api2.diia.gov.ua
+    methods:
+      get-damaged-property:
+        path: /api/v1/public-service/damaged-property/filtered
+        method: GET
+    auth:
+      type: PARTNER_TOKEN
+      secret-name: secret2
+      partner-token-auth-url: https://api2t.diia.gov.ua/api/v1/auth/partner
+      token-json-path: $.token
+----
+
+[#bp-modeling]
+//== Моделювання бізнес-процесу з використанням делегата Connect to external system
+== Modeling business processes using the "Connect to external system" delegate
+
+//Для налаштування шаблону делегата в Camunda Modeler, необхідно виконати наступні кроки:
+To configure the delegate template in Camunda Modeler, perform these steps:
+
+//. Створіть *Service Task*.
+. Open the business process modeling interface.
+. Create a *Service Task*.
++
+//. На панелі налаштувань справа натисніть кнопку kbd:[*Open Catalog*], оберіть відповідний шаблон *`Connect to external system v2`* зі списку та натисніть kbd:[*Apply*] для підтвердження.
+. In the settings panel on the right, click the *`Open Catalog`* button and select the *Connect to external system v2* delegate template from the list. Click *`Apply`* to confirm your action.
++
+image:registry-develop:bp-modeling/bp/rest-connector/rest-connector-11.png[]
++
+//. Сконфігуруйте обраний шаблон:
+. Configure the following options:
+
+//* У полі `Name` вкажіть назву задачі, наприклад, `Створити запит (GET)`.
+* *Name*: Specify the task name. For example, `Create a GET request`.
+* *Input Parameters*:
+//** Розгорніть блок `External system name` та вкажіть назву сервісу, з яким буде відбуватися взаємодія:
+** Expand the *External system name* section and specify the name of the target external system:
+//*** Активуйте позначку `Local Variable Assignment` → `ON`. Це дозволить створити локальну змінну для метода.
+*** Set the *Local Variable Assignment* toggle to *On*. This will allow creating a local variable for the method.
+//*** У полі `Variable Assignment Type` оберіть з випадного списку тип призначення змінної — `String or Expression`.
+*** From the *Variable Assignment Type* dropdown list, select *String or Expression*.
+//*** У полі `Variable Assignment Value` введіть назву сервісу — `httpbin`.
+*** In the *Variable Assignment Value* field, enter the name of the external system. For example, `httpbin`.
++
+image:registry-develop:bp-modeling/bp/rest-connector/rest-connector-12.png[]
++
+//** Розгорніть блок `External system method name` та вкажіть HTTP-метод для взаємодії з сервісом:
+** Expand the *External system method name* section and specify the HTTP method for interacting with the external system:
+//*** Активуйте позначку `Local Variable Assignment` → `ON`. Це дозволить створити локальну змінну для метода.
+*** Set the *Local Variable Assignment* toggle to *On*. This will allow creating a local variable for the method.
+//*** У полі `Variable Assignment Type` оберіть з випадного списку тип призначення змінної — `String or Expression`.
+*** From the *Variable Assignment Type* dropdown list, select *String or Expression*.
+//*** У полі `Variable Assignment Value` введіть назву методу — `get`.
+*** In the *Variable Assignment Value* field, enter the name of the method. For example, `get`.
++
+image:registry-develop:bp-modeling/bp/rest-connector/rest-connector-13.png[]
++
+//TODO: parametErs in ua version
+//** Розгорніть блок `Request parametrs` (використовується для методу GET) та вкажіть необхідні параметри запиту:
+** When using the GET method, expand the *Request parameters* section and specify the required request parameters:
+//*** Активуйте позначку `Local Variable Assignment` → `ON`. Це дозволить створити локальну змінну для метода.
+*** Set the *Local Variable Assignment* toggle to *On*. This will allow creating a local variable for the method.
+//*** У полі `Variable Assignment Type` оберіть з випадного списку тип призначення змінної — `Map`.
+*** From the *Variable Assignment Type* dropdown list, select *Map*.
+//**** `Key` вкажіть ключ параметра запита.
+**** *Key*: Specify the request parameter key.
+//**** `Value` вкажіть значення параметра запита.
+**** *Value*: Specify the request parameter value.
++
+image:registry-develop:bp-modeling/bp/rest-connector/rest-connector-14.png[]
++
+//** Розгорніть блок `Additional request headers` та вкажіть додаткові заголовки запиту:
+** Expand the *Additional request headers* section and specify additional request headers:
+//*** Активуйте позначку `Local Variable Assignment` → `ON`. Це дозволить створити локальну змінну для метода.
+*** Set the *Local Variable Assignment* toggle to *On*. This will allow creating a local variable for the method.
+//*** У полі `Variable Assignment Type` оберіть з випадного списку тип призначення змінної — `Map`.
+*** From the *Variable Assignment Type* dropdown list, select *Map*.
+//**** `Key` вкажіть ключ заголовка запита.
+**** *Key*: Specify the request header key.
+//**** `Value` вкажіть значення заголовка запита.
+**** *Value*: Specify the request header value.
++
+image:registry-develop:bp-modeling/bp/rest-connector/rest-connector-15.png[]
++
+//** Блок `Request payload` використовується для POST і PUT методів запиту.
+** The *Request payload* section is used for the POST and PUT request methods.
+* *Output Parameters*:
+//** Розгорніть блок `Result variable` та вкажіть назву змінної процесу, до якої необхідно записати результат (за замовчуванням — `response`):
+** Expand the *Result variable* section and specify the process variable to put response to. The default value is `response`.
+//** Активуйте позначку `Process Variable Assignment` → `ON`.
+** Set the *Process Variable Assignment* toggle to *On*.
+//** У полі `Assign to Process Variable` введіть назву результівної змінної (за замовчуванням — `response`).
+** In the *Assign to Process Variable* field, enter the name of the result variable or leave the default `response` value.
++
+image:registry-develop:bp-modeling/bp/rest-connector/rest-connector-16.png[]
