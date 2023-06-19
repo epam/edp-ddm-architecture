@@ -1,4 +1,4 @@
-= Завантаження файлів більше ніж 50 рядків
+= Асинхронне завантаження даних
 
 == Загальний опис
 
@@ -32,40 +32,60 @@
 
 image:architecture-workspace/platform-evolution/async/context.svg[]
 
+image:architecture-workspace/platform-evolution/async/context-details.svg[]
+
 
 === Ключові сценарії взаємодії сервісів
 
 .Опрацювання файлу
 [plantuml, req, svg]
 ----
-participant "BPMS Kafka Listener" as listener
-participant "BPMS Kafka Delegate " as delegate
+!theme plain
+participant "Кабінет" as portal
+participant "Сервіс завантаження\n документів" as dds
+box "BPMS" #LightBlue
+participant "Бізнес процес" as bpms
+participant "Kafka делегат " as delegate
+participant "Kafka Listener" as listener
+end box
+participant "Registry Rest API" as restApi
 queue "Kafka" as kafka
 collections "Ceph" as ceph
 participant "Registry Kafka API" as kafkaApi
-database "Database" as db
+database "Операційна\nбаза даних" as db
 participant "Keycloak" as keycloak
 
+== Збереження файлів ==
+portal -> dds: завантаження файлу
+dds -> restApi: валідація вмісту файлу по відношенню до структури та кількості сутностей
+return структура та вміст валідні
+dds -> ceph: збереження документу
+return документ завантажено
+dds --> portal: ключ ceph до документу
+portal -> bpms: відправка форми з ключем файлу
+bpms -> delegate:
+
+== Завантаження даних ==
 delegate -> kafka: повідомлення завантаження \n [вхідна черга повідомлень]
 kafkaApi -> kafka: отримання запиту на збереження файлу
-kafkaApi -> keycloak: валідація токену
-return результат валідації
+kafkaApi -> keycloak: отримання сертифікату для валідації токену
+return публічний сертифікату
+kafkaApi -> kafkaApi: валідація токену
 kafkaApi -> ceph: завантаження файлу
 return файл за данними
-kafkaApi -> kafkaApi: фалідація файлу
-
+kafkaApi -> kafkaApi: валідація вмісту файлу по відношенню до\nструктури та кількості сутностей
 kafkaApi -> ceph: збереження файлу в окреме сховище
 return
 group цикл [кожен рядок]
 kafkaApi -> db: збереження відповідним сервісом
 return результат збереження
 end
-
-
 kafkaApi -> kafkaApi: формування відповіді
 kafkaApi --> kafka: повідомлення з результатом обробки \n [вихідна черга повідомлень]
 listener -> kafka
 listener -> listener: кореляція з запитом,\n формування події згідно зі статусом
+listener -> bpms: формування події
+bpms --> portal: результат опрацювання
 ----
 
 
@@ -127,21 +147,23 @@ image:architecture-workspace/platform-evolution/async/succesEvent.png[]
 image:architecture-workspace/platform-evolution/async/constraintViolation.png[]
 ====
 
+Загальне правило для формування подій при асинхронній взаємодії формується за допомогою `camel case` і складається з `назви сутності над якою здійснюється операція + назва операція + результат операції`
+
 .Можливі статуси результату опрацювання
 |===
 |Результат операції |Опис |Приклад події на бізнес процесі
 
 |SUCCESS
 |Операція  закінчилась успішно.
-|%item%Success
+|%item%DataLoadCsvSuccess
 
 |CONSTRAINT_VIOLATION
 |Дані з файлу не можуть бути завантаженні оскільки один з них порушує існуючі правила БД.
-|%item%ConstraintViolation
+|%item%DataLoadCsvConstraintViolation
 
 |OPERATION_FAILED
 |Під час опрацювання файлу виникла помилка.
-|%item%OperationFailed
+|%item%DataLoadCsvOperationFailed
 |===
 
 
@@ -170,11 +192,12 @@ image:architecture-workspace/platform-evolution/async/constraintViolation.png[]
     "...": "..."
   },
   "payload": {
+    "resultVariable": "asyncDataLoadResult", // Змінна бізнес процесу в яку мають бути збережено результат
     "file": {
       "checksum": "....",
       "id": "ceph-key"
     },
-    "entityName": "item/item_with_references"
+    "entityName": "item" // Назва сутності
   }
 }
 ----
@@ -188,23 +211,32 @@ image:architecture-workspace/platform-evolution/async/constraintViolation.png[]
 
 Процес обробки повідомлення здійснюється існуючим обробниками для збереження сутностей (`createEntity`, `createCompositeEntity`) який обирається динамічно по тупи сутності в залежності від значення поля `entityName`, перелік можливих `entityName` та роутін відбувається на етапі генерації.
 
-Результатом обробки буде перелік ідентифікаторів створених сутностей та назва сутності.
+Результатом обробки буде статус та деталі до повідомлення.
 
 [source, json]
 ----
 {
   "payload": {
-    "entityName": "item",
-    "ids": [
-      "c4a760a8-dbcf-4e14-9f39-0f4f2a5a6a6e",
-      "0e8c7a9b-2ae5-4c8d-9e50-7a5b6a4c8d9d",
-      "a8d1c6f9-9e9d-4d5a-8c8c-0c2b8c5a4d0e"
-    ]
+    "resultVariable": "...",
+    "requestContext": {
+        "businessProcessInstanceId": "...",
+        "businessProcessName": "...",
+        "...": "..."
+    }
   },
   "status": "SUCCESS",
   "details": "OK"
 }
 ----
+
+[source, json]
+----
+{
+  "status": "CONSTRAINT_VIOLATION",
+  "details": "values in column 'name' should be unique"
+}
+----
+
 
 === Обробник повідомлень подій результатів завантаження даних для сервісу виконання бізнес-процесів
 
@@ -216,6 +248,7 @@ image:architecture-workspace/platform-evolution/async/constraintViolation.png[]
 ----
 @Component
 public class AsyncDataLoadResponseKafkaListener {
+    private static final String ACTION = "DataLoadCsv";
     @Autowired
     private RuntimeService runtimeService;
 
@@ -226,10 +259,10 @@ public class AsyncDataLoadResponseKafkaListener {
         AsyncDataLoadResult payload = message.geyPayload();
 
         RequestContext requestContext = message.getRequestContext();
-
-        runtimeService.createMessageCorrelation(payload.getEntityName() + message.getStatus())
-          .processInstanceBusinessKey(requestContext.getProcessInstanceId())
-          .setVariable("RESULT", payload.getIds())
+        Result result = new Result(message.getStatus(), message.getDetails());
+        runtimeService.createMessageCorrelation(payload.getEntityName() + ACTION + message.getStatus())
+          .processInstanceId(requestContext.getProcessInstanceId())
+          .setVariable(payload.getResultVariable(), result)
           .correlate();
     }
 
