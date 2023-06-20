@@ -1,0 +1,276 @@
+:toc-title: On this page:
+:toc: auto
+:toclevels: 5
+:experimental:
+:sectnums:
+:sectnumlevels: 5
+:sectanchors:
+:sectlinks:
+:partnums:
+
+//= Інтеграційна REST-взаємодія реєстрів з іншими реєстрами на Платформі та зовнішніми системами
+= Interacting via REST between Platform registries and with external systems
+
+//== Загальний опис
+== General description
+
+//Платформа підтримує [.underline]#інтеграційну взаємодію реєстрів# за допомогою *REST API*-інтерфейсів. Така взаємодія можлива завдяки [.underline]#Підсистемі міжреєстрових інтеграцій#.
+The Platform supports [.underline]#integrative interaction of registries# using *REST API* interfaces. This interaction is made possible due to the [.underline]#Inter registry integration subsystem#.
+
+//Функціональність забезпечує інтероперабельність Платформи з можливістю надавати доступи до бізнес-процесів та API читання даних, а також дозволяє читати дані та викликати бізнес-процеси в інших реєстрах.
+The functionality ensures interoperability of the Platform, providing access to business processes and data reading APIs, as well as allowing reading data and invoking business processes in other registers.
+////
+//TODO: not sure if the below paragraphs is needed.
+За замовчуванням на Платформі використовується інтеграційна взаємодія між реєстрами через шлюз безпечного обміну (ШБО) https://trembita.gov.ua/ua[«Трембіта»]. Така взаємодія здійснюється за протоколом SOAP та вимагає розв'язання підготовчих питань у юридичній площині (_див. детальніше -- xref:registry-develop:registry-admin/external-integration/registration-subsystem-trembita/registration-subsystem-trembita.adoc[]_).
+By default, the Platform utilizes interregister interaction between registers through the secure exchange gateway (SEG) *Trembita* (for details, see https://trembita.gov.ua/ua[«Трембіта»]). This interaction is carried out using the SOAP protocol and requires resolving preparatory matters in the legal domain (for more details, see xref:registry-develop:registry-admin/external-integration/registration-subsystem-trembita/registration-subsystem-trembita.adoc[]_).
+
+//Міжреєстрова взаємодія за допомогою REST дозволяє зменшити надлишкове використання обчислювальних потужностей, зовнішнього трафіку, скоротити час відповіді при інтеграції між реєстрами, не використовуючи SOAP-інтерфейси ШБО «Трембіта», а також відійти від складних бюрократичних механізмів.
+Interregister interaction via REST allows reducing excessive utilization of computational resources, external traffic, and response time in register integration, without employing SOAP interfaces of the Trembita SEG, as well as moving away from complex bureaucratic mechanisms.
+////
+
+//Основні функції підсистеми міжреєстрових інтеграцій: ::
+Main functions of the inter registry integration subsystem: ::
+
+//* [*] Надання API для виклику бізнес-процесів реєстру сторонніми для реєстру системами.
+* [*] Providing an API for invoking registry business processes by external systems.
++
+//* [*] Надання доступу іншим реєстрам або системам до окремих запитів читання Підсистеми управління даними реєстру.
+* [*] Providing access for other registries or systems to individual data read requests of the registry data management subsystem.
++
+//* [*] Маршрутизація запитів до зовнішніх реєстрів, до яких було надано доступ.
+* [*] Routing requests to external registries with granted access.
+
+//== Схеми міжреєстрової REST-взаємодії
+== Inter registry REST interaction schemes
+
+//Виділяють 2 схеми інтеграційної взаємодії реєстрів, що розгорнуті на Платформі: ::
+There are two schemes of integration of the registries deployed on the Platform: ::
+
+* xref:#int-registry-ext-system[]
+* xref:#platform-registries[]
+
+[#int-registry-ext-system]
+//=== REST-взаємодія реєстрів на Платформі із зовнішньою інформаційною системою
+=== REST interaction of registries on the Platform with an external information system
+
+//Інтеграційну взаємодію реєстрів із зовнішніми системами можна поділити на [.underline]#вихідну# та [.underline]#вхідну#, залежно від напряму трафіку.
+Integration interaction of registers with external systems can be divided into [.underline]#outbound# and [.underline]#inbound#, depending on the direction of traffic.
+
+//.Взаємодія реєстрів на Платформі зі сторонньою інформаційною системою
+.Interaction of registries on the Platform with a third-party information system
+
+image::registry-develop:registry-admin/external-integration/rest-api-no-trembita/int-reg-ext-system.png[]
+
+
+//. [.underline]#Вихідна взаємодія# можлива завдяки інтеграційному [.underline]#REST-конектору# *Connect to external system*. Конектор має REST-інтерфейс для виклику зовнішніх ендпоінтів. Його можна використовувати при моделюванні бізнес-процесів у регламенті певного реєстру. Для автентифікації необхідно використовувати OpenShift (Kubernetes) секрети.
+. Outbound interaction is possible through the integration [.underline]#REST connector# -- *Connect to external system*. The connector has a REST interface for calling external endpoints. It can be used when modeling business processes in the regulations of a specific register. OpenShift (Kubernetes) secrets should be used for authentication.
++
+//. [.underline]#Вхідна взаємодія# можлива завдяки імплементованим реєстровим сервісам `*external-system-api-kong-proxy*` та `*registry-rest-api-ext*`.
+. [.underline]#Inbound interaction# is possible through the implemented registry services: *`external-system-api-kong-proxy`* and *`registry-rest-api-ext`*.
++
+[NOTE]
+//Зовнішня система має спочатку отримати пароль доступу від адміністратора реєстру. З цим паролем -- отримати токен доступу у сервісі Keycloak. З цим токеном надалі можливо авторизуватися у сервісах та отримувати доступ до ресурсів.
+The external system needs to initially obtain an access password from the registry administrator. With this password, it can obtain an access token in the Keycloak service. This token can then be used for authorization in services and accessing resources.
++
+//* Сервіс `*external-system-api-kong-proxy*` розгортається автоматично, разом з реєстром та має REST-інтерфейс, що дозволяє ініціювати бізнес-процеси у реєстрах на Платформі та отримувати з них дані. Сервіс використовує точку входу (ендпоінт) `*/startBp*` для старту бізнес-процесу.
+* The *`external-system-api-kong-proxy`* service is automatically deployed along with the register and has a REST interface that allows initiating business processes in registers on the Platform and retrieving data from them. The service uses the entry point (endpoint) /*`startBp`* to start a business process.
++
+//* Сервіс `*registry-rest-api-ext*` розгортається автоматично, після створення моделі даних у регламенті реєстру. Він дозволяє звертатися до API-представлень операційної бази даних реєстру.
+* The *`registry-rest-api-ext`* service is automatically deployed after creating the data model in the registry regulations. It allows accessing API representations of the registry operational database.
+
+[#platform-registries]
+//=== REST-взаємодія реєстрів в межах одного екземпляра Платформи
+=== REST interaction of registries within a single Platform
+
+//При інтеграційній взаємодії реєстрів в межах Платформи завжди є [.underline]#реєстр-клієнт (споживач/запитувач даних)# та [.underline]#цільовий реєстр (власник даних)#.
+During the integration interaction of registries within the Platform, there is always a [.underline]#registry client (data consumer/requester)# and a [.underline]#target registry (data owner)#.
+
+//.REST-взаємодія реєстрів в межах одного екземпляра Платформи
+.REST Interaction of registries within a single Platform
+
+image::registry-develop:registry-admin/external-integration/rest-api-no-trembita/internal-registries-platform.png[]
+
+//Реєстр-клієнт може запитати дані у цільового реєстру 2-ма шляхами: ::
+The registry client can request data from the target registry in two ways: ::
++
+[NOTE]
+//Реєстр-клієнт має спочатку отримати токен доступу іншого реєстру у сервісі Keycloak. З цим токеном надалі можливо авторизуватися у сервісах.
+The registry client needs to obtain an access token from the Keycloak service for another registry. This token can be used for authentication in the services.
+
+//. Через сервіс `*bp-webservice-gateway*` -- розгортається автоматично, разом з реєстром та має REST-інтерфейс, що дозволяє ініціювати бізнес-процеси у реєстрах на Платформі та отримувати з них дані. Сервіс використовує точку входу (ендпоінт) `*/startBp*` для старту бізнес-процесу.
+. Through the *`bp-webservice-gateway`* service, which is automatically deployed with the registry and has a REST interface allowing the initiation of business processes in the registries on the Platform and retrieving data from them. The service utilizes the entry point (endpoint) /*`startBp`* to start a business process.
++
+[NOTE]
+====
+//* Ініціювати бізнес-процеси в іншому (цільовому) реєстрі можливо за допомогою спеціального розширення-делегата -- *Start business process in another registry*. Він призначений _лише_ для інтеграції реєстрів у межах Платформи.
+* Initiating business processes in another (target) registry is possible using a special delegate extension called *Start business process in another registry*. It is designed solely for registry integration within the Platform.
++
+//* Отримати дані з операційної БД реєстру іншого (цільового) реєстру в рамках виконання бізнес-процесів можливо за допомогою спеціального розширення-делегата -- *Search for entities from another registry data factory*. Він призначений _лише_ для інтеграції реєстрів у межах Платформи.
+* To retrieve data from the operational database of another (target) registry within the execution of business processes, a special delegate extension called *Search for entities from another registry data factory* can be used. It is intended only for registry integration within the Platform.
+====
++
+//. Через сервіс `*registry-rest-api-ext*` -- розгортається автоматично, після створення моделі даних у регламенті реєстру. Він дозволяє звертатися до API-представлень операційної бази даних реєстру з форм Кабінету користувача (за критеріями пошуку).
+. Through the *`registry-rest-api-ext`* service, which is automatically deployed after creating a data model in the registry regulations, it is possible to access the API representations of the registry's operational database from the User interface (based on search condition) in the User portal.
+
+//== Налаштування взаємодії між реєстрами
+== Setting up interaction between registries
+
+//Налаштуйте REST-взаємодію з іншими реєстрами в межах одного екземпляра Платформи, або зовнішніми системами.
+Configure REST interaction with other registries within a single Platform instance or external systems.
+
+//* Якщо ваш реєстр отримує запити та віддає дані, зверніться до розділу
+* If your registry receives requests and provides data, refer to the section xref:#target-registry-setup[].
+//* Якщо ваш реєстр запитує дані з інших реєстрів на Платформі, зверніться до розділу
+* If your registry queries data from other registries on the Platform, refer to the section xref:#client-registry-setup[].
+
+//* Для зовнішніх систем важливо отримати токен доступу до реєстру з Keycloak, щоб використовувати його при подальшій авторизації у сервісах реєстру. Приклад реалізації логіки отримання токена через Postman дивіться на сторінці
+* For external systems, it is important to obtain an access token to the registry from Keycloak to use it for further authorization in registry services. An example of implementing token retrieval logic through Postman can be found here:  xref:#get-access-token-keycloak[].
+
+//* Окремим сценарієм є налаштування вихідної взаємодії із зовнішніми системами, при якій реєстру на Платформі необхідно викликати інші системи. Це можна зробити за допомогою REST-конектора (_дивіться розділ xref:#rest-connector[]_).
+* A separate scenario is configuring outbound interaction with external systems, where the registry on the Platform needs to call other systems. This can be done using a REST connector (see xref:#rest-connector[]).
+
+[#target-registry-setup]
+//=== Налаштування цільового реєстру (власника даних)
+=== Configuring target registry (data owner)
+
+//Якщо ваш реєстр є власником даних, і ви хочете виставляти інтеграційні API-точки, отримувати запити та віддавати дані іншим реєстрам або системам, виконайте наступні налаштування регламенту:
+If your registry is the data owner and you want to expose integration API endpoints, receive requests, and provide data to other registries or systems, perform the following regulations settings:
+
+//. Виконайте авторизаційні налаштування -- надайте доступ для виклику бізнес-процесу.
+. Configure authorization settings -- provide access for invoking the business process.
+//. Змоделюйте бізнес-процес, що викликатиметься іншим реєстром.
+. Model the business process to be invoked by another registry.
+//. Створіть модель даних (надайте доступ на читання даних реєстру через API-представлення).
+. Create a data model (grant read access to the registry data through the API representation).
+
+//TIP: Детальніше про налаштування регламенту для кроків 1-3 див. на сторінці
+TIP: For more details on setting regulatory requirements for steps 1-3, refer to xref:registry-admin/external-integration/api-publish/rest-soap-api-expose.adoc[].
+
+[start=4]
+//. _Також для REST-взаємодії_ -- надайте доступ до реєстру для іншого реєстру на Платформі або зовнішньої системи в адміністративній панелі *Control Plane*. Адміністратор може додавати, видаляти, або призупиняти доступ до реєстру для інших реєстрів на Платформі та зовнішніх систем.
+. _Also, for REST interaction_, grant access to the registry for another registry on the Platform or external system in the *Control Plane* administrative panel. Administrators can add, delete, or suspend access to the registry for other registries on the Platform and external systems.
++
+//TIP: Деталі дивіться на сторінці
+TIP: For more details, see xref:admin:registry-management/control-plane-registry-grant-access.adoc[].
+
+[#client-registry-setup]
+//TODO: Не впевнена, що правильно перекладаю реєстру-клієнта та реєстру-споживача даних (нижче).
+//=== Налаштування реєстру-клієнта (споживача даних)
+=== Configuring the client registry (data consumer)
+
+//Налаштуйте взаємодію з іншими реєстрами для реєстру-споживача даних. Для цього: ::
+Configure interaction with other registries for the data-consuming registry. To do this: ::
++
+//. Змоделюйте бізнес-процес з можливістю виклику зовнішнього реєстру.
+. Model the business process with the ability to call an external registry.
++
+[TIP]
+====
+//Приклад _.bpmn_-моделі процесу, а також користувацькі _.json_-форми до нього ви можете знайти у регламенті демо-реєстру *_consent-data_* за посиланням:
+//https://admin-tools-consent-data.apps.envone.dev.registry.eua.gov.ua/gerrit.
+Example _.bpmn_ process model, as well as custom _.json_ forms for it, can be found in the *_consent-data_* demo registry regulatory document at the following link: https://admin-tools-consent-data.apps.envone.dev.registry.eua.gov.ua/gerrit.
+
+//Процес буде доступний за назвою *_BPMN-create-school-auto.bpmn_*. Назви форм ви можете знайти всередині відповідних користувацьких задач бізнес-процесу у полі *`Form key`*.
+The process will be available under the name *_BPMN-create-school-auto.bpmn_*. You can find the form names inside the respective user tasks of the business process in the *`Form key`* field.
+====
++
+//. В рамках бізнес-процесу використовуйте типові інтеграційні розширення для взаємодії з іншими реєстрами на Платформі:
+. Within the business process, use standard integration extensions to interact with other registries on the Platform:
++
+//* старту бізнес-процесів в іншому реєстрі на Платформі -- для цього використовуйте типове інтеграційне розширення-конектор *Start business process in another registry*;
+* Start business processes in another registry on the Platform - use the standard integration extension-connector *Start business process in another registry*.
+//* отримання даних з операційної БД іншого реєстру на Платформі -- для цього використовуйте типове інтеграційне розширення-конектор *Search for entities from another registry data factory*.
+* Retrieve data from the operational database of another registry on the Platform - use the standard integration extension-connector *Search for entities from another registry data factory*.
++
+[TIP]
+//Опис та налаштування делегатів ви можете знайти на сторінці
+For descriptions and configurations of delegates, see xref:registry-develop:bp-modeling/bp/element-templates/rest-integration-registries/rest-integration-registries-overview.adoc[].
++
+[NOTE]
+====
+//Для того, щоб запустити бізнес-процес у цільовому реєстрі, вам необхідно передати стартові змінні, які ним очікуються.
+To start a business process in the target registry, you need to pass the initial variables that are expected by it.
+
+//Наприклад, стартові змінні можна передати як *`Map`* вхідних параметрів (*Input Parameters*), тобто як _ключі-значення_, при налаштуванні делегата для старту бізнес-процесу.
+For example, you can pass the initial variables as a *`Map`* of input parameters (*Input Parameters*), for example, as _key-value_ pairs when configuring the delegate for starting the business process.
+
+//.Формування стартових змінних процесу у реєстрі-клієнті для передачі до цільового реєстру
+
+.Formation of initial variables of the process in the client registry for transfer to the target registry
+image::registry-develop:registry-admin/external-integration/rest-api-no-trembita/pass-map-params-bp.png[]
+====
++
+//. Змоделюйте UI-форму для читання даних з операційної БД реєстру за критеріями пошуку (search condition). Це дозволить звертатися до БД іншого реєстру з користувацької форми. Для цього:
+. Model a UI form to read data from the operational database of the registry based on search condition. This allows accessing the database of another registry from a user form. To do this:
++
+//* Перейдіть до [.underline]#Кабінету адміністратора регламентів# > Відкрийте розділ [.underline]#UI-форми# > Створіть форму введення даних > Відкрийте [.underline]#Конструктор форм#.
+* Go to the [.underline]#Regulations administrator portal#> Open the [.underline]#UI Forms# section > Create a data input form > Open the [.underline]#Form builder#.
+//* У компоненті *Select* перейдіть на вкладку *Data* > У полі `*Data Source URL*` введіть шлях до ресурсу у фабриці даних іншого реєстру:
+* In the *Select* component, switch to the *Data* tab > In the *`Data Source URL`* field, enter the path to the resource in the data factory of another registry:
+//TODO: Please help restore the formatting of the below table and image (they have to be moved to the right to be under the bullet point.
+//.Поле Data Source URL на UI-формі
+
+.Data Source URL field on the UI form
+====
+----
+/api/integration/data-factory/test-registry/resource-name
+----
+
+
+|===
+//| Параметр/Шлях | Опис
+| Parameter/Path | Description
+
+| `/api/integration/data-factory`
+//| Кореневий шлях (не змінюється).
+| Root path (unchanged).
+
+| `test-registry`
+//| Службова назва цільового реєстру, вказана у Control Plane.
+| Service name of the target registry specified in the Control Plane.
+
+| `resource-name`
+//| Назва ресурсу/ендпоінту, до якого звертатися для отримання даних. Наприклад, `/edu-type`.
+| Name of the resource/endpoint to be accessed for data retrieval. For example, `/edu-type`.
+|===
+
+====
+
+//.Запит до БД іншого реєстру за критерієм пошуку з UI-форми користувача
+.Request to the database of another registry based on the search condition from the UI form.
+image::registry-develop:registry-admin/external-integration/rest-api-no-trembita/create-sc-data-source-url.png[]
+
+[#get-access-token-keycloak]
+//=== Отримання токена авторизації зовнішніми системами
+=== Obtaining authorization token from external systems
+
+//Щоб отримати дозвіл на звернення до ресурсів реєстру, зовнішня система має отримати спеціальний токен доступу -- JWT-токен. Він призначений для подальшої авторизації зовнішніх систем при взаємодії з реєстрами, що розгорнуті в межах Платформи.
+To access registry resources, an external system needs to obtain a special access token --a *_JWT_* token. It is intended for further authorization of external systems when interacting with registries deployed within the Platform.
+
+//TIP: Детальніше дивіться на сторінці
+TIP: For more details see xref:registry-develop:registry-admin/external-integration/api-publish/get-jwt-token-postman.adoc[].
+
+[#rest-connector]
+//=== Вихідна інтеграція із зовнішніми системами
+=== Outbound integration with external systems
+
+//Якщо необхідно інтегруватися із зовнішнім сервісом, або системою, що знаходиться поза кластером Платформи, використовуйте спеціальний REST-конектор -- *Connect to external system*.
+If there is a need to integrate with an external service or a system outside the Platform cluster, use a special REST connector -- *Connect to external system*.
+
+[TIP]
+//Детальніше дивіться на сторінці
+For more details, see
+xref:registry-develop:bp-modeling/bp/rest-connector.adoc[].
+
+//=== Пов'язані сторінки
+=== Related pages
+
+//Опис функціональності охоплює пов'язані сторінки з документацією. Вони подані списком у цьому розділі для зручності.
+The functionality description includes related pages from the documentation. They are listed in this section for convenience.
+
+* xref:admin:registry-management/control-plane-registry-grant-access.adoc[]
+* xref:registry-admin/external-integration/api-publish/rest-soap-api-expose.adoc[]
+* xref:registry-develop:data-modeling/data/physical-model/rest-api-view-access-to-registry.adoc[]
+* xref:registry-develop:bp-modeling/bp/element-templates/rest-integration-registries/rest-integration-registries-overview.adoc[]
+* xref:registry-develop:registry-admin/external-integration/api-publish/get-jwt-token-postman.adoc[]
+* xref:registry-develop:bp-modeling/bp/rest-connector.adoc[]
