@@ -1,0 +1,153 @@
+:toc-title: On this page:
+:toc: auto
+:toclevels: 5
+:experimental:
+:sectnums:
+:sectnumlevels: 5
+:sectanchors:
+:sectlinks:
+:partnums:
+
+//= Інструмент створення та керування фізичною моделлю даних Liquibase
+= Liquibase: physical data model creation and management tool
+
+//== Вступ
+== Introduction
+
+//Платформа для розгортання та супроводження державних електронних реєстрів — це набір конструкторів, кожен з яких виконує певну роль.
+The Platform for deployment and maintenance of state electronic registers is a set of constructors, each of which performs a specific role.
+
+//Для створення фізичної моделі даних реєстру для СКБД PostgreSQL використовується https://docs.liquibase.com/home.html[Liquibase].
+The Platform uses https://docs.liquibase.com/home.html[Liquibase] to create a physical data model of the registry for PostgreSQL DBMS.
+
+//Liquibase за замовчуванням підтримує функціональність для розгортання та версіонування об'єктів в базі даних, тобто створення або видалення таблиць, створення зв'язків між цими таблицями, створення views та налаштування обмежень (constraints) тощо.
+Out of the box, Liquibase supports deploying and versioning objects in a database, that is, creating or deleting tables, establishing relationships between these tables, creating views, setting constraints, and more.
+
+
+//Для цього Liquibase має власний набір конструкцій -- https://docs.liquibase.com/change-types/home.html[**change types**],  кожна з яких визначає певну версію змін до БД, а формується набором XML-тегів. Наприклад, `<createTable>`, `<dropTable>`, тощо.
+Liquibase uses its own constructs called https://docs.liquibase.com/change-types/home.html[*Change Types*], each defining a specific version of database changes using XML tags. For example: `<createTable>`, `<dropTable>`.
+
+//Оскільки в рамках Платформи реєстрів Liquibase використовується як єдиний інструмент для роботи з фізичною моделлю даних в PostgreSQL, то його стандартної функціональності не достатньо з одного боку, а з іншого — деяка функціональність є надлишковою.
+Since Liquibase is used within the Platform as a single tool for working with the physical data model in PostgreSQL, its out-of-the-box functionality can be insufficient and redundant at the same time.
+
+//NOTE: З метою безпеки, БД-розробники або інші категорії користувачів не мають прямого доступу до даних, тобто вони не зможуть виконати SQL-запит до PostgreSQL напряму.
+NOTE: For security purposes, database developers and other categories of users do not have direct access to the data, meaning they cannot run SQL queries directly to PostgreSQL.
+
+//Liquibase має набір впроваджених розширень, які:
+Liquibase has a set of built-in extensions, which:
+
+//1) розширюють функціональність стандартного додатка Liquibase зовнішнім модулем xref:registry-develop:data-modeling/data/physical-model/liquibase-ddm-ext.adoc[Liquibase DDM Extension].
+* Extend the functionality of the standard Liquibase application with an external xref:registry-develop:data-modeling/data/physical-model/liquibase-ddm-ext.adoc[Liquibase DDM Extension] module.
+//2) розширюють систему керування змінами моделі даних Liquibase: xref:registry-develop:data-modeling/data/physical-model/liquibase-changes-management-sys-ext.adoc[Створення сценаріїв побудови фізичної моделі даних реєстру за допомогою функціональних розширень Liquibase].
+* Extend the Liquibase data model change management system: xref:registry-develop:data-modeling/data/physical-model/liquibase-changes-management-sys-ext.adoc[].
+
+//:sectnums:
+
+//== Запуск Liquibase та розширень
+== Starting Liquibase with extensions
+
+//=== Що відбувається на стороні Java?
+=== What happens on the Java side?
+
+//**Liquibase** - це програмне забезпечення з відкритим кодом, написане мовою Java, що являє собою `.jar`-файл зі стандартною назвою `liquibase.jar`.
+*Liquibase* is an open-source program written in Java and distributed via a _liquibase.jar_ file.
+
+//Архітектура Liquibase дозволяє розробляти розширення (додаткову функціональність) і цю функціональність складати в інший, окремий `.jar`-файл зі стандартною назвою для розширень — `liquibase-ext.jar` (в нашому випадку — `liquibase-ddm-ext.jar`).
+The Liquibase architecture allows developing extensions with additional functionality and compiling them into separate .jar files, typically called _liquibase-ext.jar_ (in our case, _liquibase-ddm-ext.jar_).
+
+//==== Локальний запуск Liquibase та розширень із командного рядка
+==== Starting Liquibase and extensions locally from the command line
+
+//Для того, аби запрацюв Liquibase та його розширення, необхідно запустити й сам Liquibase, і також підкласти файл з розширеннями в командному рядку.
+For Liquibase and its extensions to work, you need to start Liquibase with the extensions file from the command line.
+
+//TIP: Приклад локального запуску Liquibase та розширень із командного рядка для ОС Windows:
+TIP: Here is an example of starting Liquibase with extensions locally from the Windows command line:
+
+[source, shell script]
+----
+Java -jar liquibase.jar --driver=org.postgresql.Driver --classpath=postgresql-{version}.jar;liquibase-ddm-ext-{version}.jar --changeLogFile=changeLog.xml --url="jdbc:postgresql://{server_ip}:{server_port}/{db_name}" --username={username} --password={password} --labels="!citus" update -Dbname={db_name}
+----
+
+//TIP: Приклад локального запуску Liquibase та розширень із командного рядка для ОС Linux:
+TIP: Here is an example of starting Liquibase with extensions locally from the Linux command line:
+
+[source, bash]
+----
+Java -jar liquibase.jar --driver=org.postgresql.Driver --classpath=postgresql-{version}.jar:liquibase-ddm-ext-{version}.jar --changeLogFile=changeLog.xml --url="jdbc:postgresql://{server_ip}:{server_port}/{db_name}" --username={username} --password={password} --labels="!citus" update -Dbname={db_name}
+----
+
+//Оскільки це Java-застосунок, розробник повинен явно вказати наступне:
+Since this is a Java application, the developer must explicitly specify the following:
+
+//- `liquibase.jar` — файл, який використовується для Liquibase;
+* The file with Liquibase: `liquibase.jar`.
+//- підключаємося до PostgresSQL, відповідно драйвер має бути `org.postgresql.Driver`;
+* The driver: `org.postgresql.Driver` (since we are connecting to PostgresSQL).
+//- розширення знаходяться у файлі `liquibase-ddm-ext-{version}.jar`;
+* The file with the extensions: `liquibase-ddm-ext-{version}.jar`.
+//- changelog, що має застосуватися — `changeLog.xml`.
+* The changelog to be applied: `changeLog.xml`.
+//- username та password, для яких має бути створена сесія підключення до БД.
+* The username and password for which a session must be created to connect to the database.
+
+//NOTE: Локальний запуск `.jar`-файлів з Liquibase та розширеннями Liquibase є зручним для тестових цілей. У промисловому середовищі буде впроваджено автоматизований процес на базі Jenkins pipelines. В такому випадку вихідні XML-шаблони буду завантажуватися до репозитарію з вихідним кодом певного реєстру, звідки Jenkins автоматично відстежуватиме та застосовуватиме зміни.
+NOTE: Running _.jar_ files with Liquibase and its extensions locally is convenient for testing. In a production environment, the process is automated by the Jenkins pipelines. In this case, the XML templates are uploaded to the source code repository of a specific registry, where Jenkins tracks and applies changes automatically.
+
+//==== Changelog та changesets в Liquibase
+==== Liquibase changelog and changesets
+
+//https://docs.liquibase.com/concepts/basic/changelog.html[**Changelog**] - це файл, який містить записи всіх змін, які вносяться до бази даних. Такі зміни називаються https://docs.liquibase.com/concepts/basic/changeset.html[**changesets**]. Він може бути оформлений одним окремим файлом — таким чином, що всі зміни до структури БД будуть зазначені в одному файлі, а може складатися з окремих файлів, розташованих за певною ієрархією. Тобто, наприклад, візьмемо файл `changeLog.xml`. Він може містити найперші "master" changesets на початку, а далі — лише посилання до окремих файлів з атомарними змінами (changesets). В одному такому файлі може бути описано декілька таких змін.
+A https://docs.liquibase.com/concepts/basic/changelog.html[changelog] is a text-based file that contains all changes made to the database. An individual unit of change in a changelog is called a https://docs.liquibase.com/concepts/basic/changeset.html[changeset]. A changelog can be set up as a single file or several files arranged in a hierarchy. For example, a _changeLog.xml_ file may contain "master" changesets followed by references to separate files with minor changesets. Each file may contain descriptions of several changesets.
+
+//TIP: Отже, changelog - набір атомарних змін, які називаються changesets, що наповнюють XML-шаблони, які в результаті перетворюються на SQL-запити та виконуються на цільовій базі даних (_див. xref:registry-develop:data-modeling/data/physical-model/liquibase-changes-management-sys-ext.adoc[Створення сценаріїв побудови фізичної моделі даних реєстру за допомогою функціональних розширень Liquibase]_).
+TIP: In summary, a changelog is a collection of changes called changesets that populate the XML templates, which are then converted into SQL queries and executed on the target database (for details, see xref:registry-develop:data-modeling/data/physical-model/liquibase-changes-management-sys-ext.adoc[]).
+
+//==== Відновлення попереднього стану (Changeset rollback)
+==== Changeset rollback
+
+//Кожну зміну (changeset) можна "відкотити" до одного з попередніх станів. Для деяких тегів, наприклад, https://docs.liquibase.com/change-types/community/create-index.html[`createIndex`], rollback реалізований за замовчуванням. Там, де він не реалізований, необхідно в рамках тегу `<changeset>` додати тег `<rollback>`.
+You can revert each changeset to one of the previous states. Rollback statements are implemented automatically for some tags, for example, https://docs.liquibase.com/change-types/community/create-index.html[createIndex]. For custom rollbacks, you need to add the `<rollback>` tag within the `<changeset>` tag.
+
+//=== Що відбувається на стороні бази даних?
+=== What happens on the database side?
+
+//Коли вперше застосовується Liquibase, тобто вперше виконується changelog, Liquibase перевіряє наявність двох службових таблиць:
+When Liquibase applies a changelog for the first time, it verifies that the following two service tables exist in the database:
+
+* `ddm_db_changelog`
+* `ddm_db_change_loglock`
+
+//Таблиця `ddm_db_changelog` зберігає історію застосування changesets в Liquibase. Кожний changeset тут представлений окремим записом.
+The `ddm_db_changelog` table stores the history of changesets applied in Liquibase. Each changeset is represented as a separate record.
+
+//Найважливіша інформація представлена в колонках `id`, `author` та `filename`, записи в яких зберігають інформацію про ідентифікатор зміни, автора зміни та файл, в якому така зміна застосована.
+The `id`, `author`, and `filename` columns store the most critical information: the change identifier, change author, and the name of the file in which the change was made.
+
+//Таблиця `ddm_db_change_loglock` використовується для того, щоб Liquibase міг переконатися, що одночасно запущений лише один його екземпляр.
+The `ddm_db_change_loglock` table ensures that only one instance of Liquibase is running at a time.
+
+[TIP]
+====
+//Для чого все це фіксується?
+Why keep track of all this information?
+
+//Якщо повторно виконати один і той самий changelog, Liquibase проаналізує, які з changesets цього changelog ще не були застосовані, та застосує тільки їх.
+If the same changelog is executed repeatedly, Liquibase will apply only those changesets that have not been applied yet.
+====
+
+[checksum]
+//==== Checksum як додатковий механізм захисту
+==== Additional protection with checksum
+
+//По кожному changeset рахується checksum, тобто його хеш, що представлений колонкою `md5sum`.
+Liquibase computes a checksum (hash) for each changeset and stores it in the `md5sum` column.
+
+//Якщо адміністратор раптом змінив наявний changeset та намагається виконати його повторно, то Liquibase перевірить колонку `exectype` та її статус (значення) для цього changeset. Якщо статус `EXECUTED` (виконано), то Liquibase встановить, що такий changeset вже було виконано, згенерує для нього checksum із поточної версії, яку адміністратор намагається перевиконати, і, коли хеш-суми не збігатимуться, користувач отримає помилку.
+If an administrator accidentally modifies an existing changeset and tries to execute it again, Liquibase will check the `exectype` column and its status. If the status is `EXECUTED`, Liquibase will determine that this changeset has already been executed. It will then generate a checksum for the version the administrator is trying to re-execute, and if the hashes don't match, the user will receive an error.
+
+//WARNING: Checksum не може збігатися при зміні changeset. Якщо changeset має статус `EXECUTED`, то він НЕ підлягає модифікації, а лише відновленню до попереднього стану (тобто можна виконати rollback).
+WARNING: Checksums cannot match when a changeset is modified. A changeset with an `EXECUTED` status should never be modified -- only reverted to a previous state via a rollback.
+
+//NOTE: Є виключні випадки, коли changeset містить зміни, які постійно еволюціонують. В таких випадках модифікація допускається. Коли changeset застосується повторно, то буде позначений в БД статусом `REEXECUTED` (перевиконано).
+NOTE: There is an exception when a changeset contains changes that constantly evolve. In this case, changeset modification is allowed. When a changeset is applied again, it gains a `REEXECUTED` status in the database.
