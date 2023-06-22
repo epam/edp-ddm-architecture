@@ -1,0 +1,994 @@
+:toc-title: On this page:
+:toc: auto
+:toclevels: 5
+:experimental:
+:sectnums:
+:sectnumlevels: 5
+:sectanchors:
+:sectlinks:
+:partnums:
+
+////
+Use the following syntax to apply asciidoctor/tabs:
+
+[tabs]
+====
+Tab A:: Contents of tab A.
+
+Tab B::
++
+Contents of tab B.
+
+Tab C::
++
+--
+Contents of tab C.
+
+Contains more than one block.
+--
+====
+////
+
+//= Робота з геоданими у реєстрі
+= Working with geodata in the registry
+
+[#general-description]
+//== Загальний опис
+== General description
+
+//Адміністратори реєстрів та розробники регламенту мають змогу налаштовувати роботу із геопросторовими данимиfootnote:1[[.underline]#Геопросторові дані# -- це дані, які мають географічне положення та можуть бути пов'язані з конкретними географічними об'єктами, такими як міста, річки, ліси, будівлі тощо.] у рамках бізнес-процесів завдяки геомодулю ГІСfootnote:2[[.underline]#ГІС (Геоінформаційна система)# -- це програмне забезпечення, яке дозволяє збирати, зберігати, аналізувати, візуалізувати та навіть прогнозувати різні геопросторові дані.], який був імплементований у систему.
+Registry administrators and regulations developers have the ability to configure work with geospatial data (_geodata_)footnote:1[[.underline]#Geospatial data (geodata)# -- is data that includes information related to geographic location and can be associated with specific geographic objects, such as cities, rivers, forests, buildings, and so on.] within the framework of business processes using the GISfootnote:2[[.underline]#GIS (Geographic Information System)# -- is software that enables the collection, storage, analysis, visualization, and even forecasting of various geospatial data.] GeoServer, which has been implemented in the system.
+
+//У центрі рішення лежить компонент https://geoserver.org/[Geoserver] -- сервер із відкритим кодом, який дозволяє отримувати дані з БД у вигляді *`https://uk.wikipedia.org/wiki/GeoJSON[GeoJSON]`*.
+At the core of the solution lies the https://geoserver.org/[GeoServer] component, an open-source server that allows retrieving data from the database in the form of *`https://uk.wikipedia.org/wiki/GeoJSON[GeoJSON]`*.
+
+[NOTE]
+====
+[%collapsible]
+//.Основні типи -- GeoJSON, Feature, Layer
+.The main types are GeoJSON, Feature, and Layer.
+=====
+//* *`GeoJSON`* -- формат даних, який може бути інтерпретований LeafletJS і відображений на карті.
+* *`GeoJSON`* -- a data format that can be interpreted by LeafletJS and displayed on a map.
+//* *`Feature`* -- це об'єкт, який містить геометрію (інформацію про географічне положення об'єкта) та атрибути (додаткову інформацію про об'єкт) певного географічного об'єкта.
+* *`Feature`* -- an object that contains geometry (information about the geographic location of the object) and attributes (additional information about the object) of a specific geographic entity.
+//* *`Layer`* (шар) -- растровий або векторний набір даних, представлений набором географічних об'єктів, які можуть бути відображені на карті. Шар може містити інформацію про географічні об'єкти, такі як точки, лінії, полігони тощо, а також про їхні атрибути та метадані.
+* *`Layer`* (layer) -- a raster or vector dataset represented by a set of geographic objects that can be displayed on a map. A layer can contain information about geographic entities such as points, lines, polygons, and also their attributes and metadata.
+=====
+====
+
+//Для відображення геопросторових даних на UI-формах Кабінетів, використовується бібліотека `https://leafletjs.com/[LeafletJs]`, яка інтегрує всі аспекти геомодуля та дозволяє відображати мапи на HTML-сторінках.
+The `https://leafletjs.com/[LeafletJs]` library is used to display geospatial data on UI forms in the User portals, integrating all aspects of the GeoServer and enabling map display on HTML pages.
+
+[#scenarios]
+//=== Сценарії використання геомодуля
+=== GeoServer use cases
+
+//Платформа надає наступну функціональність для роботи із геопросторовими даними у реєстрі: ::
+The platform provides the following functionality for working with geospatial data in the registry: ::
+
+//* [*] Відображення мап, супутникових знімків які підтримуються сторонніми системами, у порталі посадових осіб або отримувачів послуг, із можливістю їх перемикання між собою та зміни масштабу.
+* [*] Displaying maps and satellite images supported by third-party systems in the portal for officials or service recipients, with the ability to switch between them and change the scale.
++
+//* [*] Відображення об'єктів реєстру, які мають прив'язку до місцевості на мапі -- шари (layers).
+* [*] Displaying registry objects with a spatial reference on the map as layers.
++
+//* [*] Включення декількох шарів на мапі.
+* [*] Enabling multiple layers on the map.
++
+//* [*] Пошук об'єктів реєстру на мапі за атрибутами.
+* [*] Searching registry objects on the map by attributes.
++
+//* [*] Можливість вибору координати точки, внесення ліній або полігонів шляхом нанесення їх на карту в рамках бізнес-процесу.
+* [*] Ability to select coordinate points, draw lines or polygons by overlaying them on the map within a business process.
++
+//* [*] Геокодування -- пошук координати на мапі за публічною адресою або назвою об'єкта.
+* [*] Geocoding -- searching for coordinates on the map by a public address or object name.
++
+//* [*] Зворотне геокодування -- пошук адреси або назви об'єкта за координатами.
+* [*] Reverse geocoding - searching for an address or object name by coordinates.
+
+//=== План дій з використання геомодуля у реєстрі
+=== Utilizing GeoServer in the registry
+
+//Скористайтеся наступним планом дій для налаштування та використання геомодуля у реєстрі:
+Use the following action plan to configure and utilize the GeoServer in the registry:
+
+//Основні налаштування: ::
+Basic configuration: ::
++
+[%interactive]
+* [ ] xref:#geoserver-deployment[]
+* [ ] xref:#create-data-model[]
+* [ ] xref:#bp-modeling[]
+
+//Робота з даними: ::
+Working with data: ::
++
+[%interactive]
+* [ ] xref:#officer-citizen-portals[]
+* [ ] xref:#geoserver[]
+* [ ] xref:#db-tables[]
+
+//Додаткова інформація: ::
+Additional information: ::
++
+[%interactive]
+* [ ] xref:#openapi[]
+
+[#geoserver-deployment]
+//== Розгортання геомодуля
+== GeoServer deployment
+
+//Найперше -- розгорніть реєстр із геомодулем.
+First, deploy the registry with the GeoServer.
+
+//_Геомодуль_ є складовою частиною окремого шаблону реєстру та _автоматично розгортається разом з реєстром_ із відповідного шаблону. При розгортанні реєстру з такого шаблону, додатково встановлюються GeoServer та Nominatimfootnote:[*Nominatim* -- це геокодер, який може перетворювати адреси або назви місць на їхні відповідні географічні координати та зворотно -- географічні координати на адреси або назви місць.].
+_GeoServer_ is a component of a separate registry template and is automatically deployed together with the registry from the corresponding template. When deploying the registry from such a template, `*GeoServer*` and **``Nominatim``**footnote:[*Nominatim* -- is a geocoder that can convert addresses or place names into their corresponding geographic coordinates, and vice versa -- geographic coordinates into addresses or place names.] are additionally installed.
+
+//NOTE: Конфігурація GeoServer та публікація шарів відбувається під час розгортання регламенту.
+NOTE: Configuration of GeoServer and publication of layers occur during the regulation deployment.
+
+//Розгорнути реєстр із конфігурацією геомодуля можна в адміністративній панелі *Control Plane*. Для цього виконайте наступні кроки:
+To deploy the registry with GeoServer configuration in the *Control Plane* administrative panel , follow these steps:
+
+//. Увійдіть до *Control Plane* та відкрийте розділ [.underline]#Реєстри#.
+. Access the *Control Plane* and open the [.underline]#Registries# section.
+//. У процесі налаштування, на кроці `Шаблон реєстру`, оберіть шаблон із геомодулем. Використовуйте конфігурацію `*-recommended*`:
+. During the configuration process, on the `Registry template` step, select a template with the GeoServer. Use the *`recommended`* configuration:
++
+`templates/registry-tenant-template-geo-server-recommended`
++
+image:registry-admin/geoserver/geoserver-1.png[]
++
+//Після виконання та підтвердження усіх змін, запуститься Jenkins-процес `MASTER-Build-<назва-реєстру>`, який розгорне реєстр із геосервером.
+After making and confirming all the changes, the Jenkins process *MASTER-Build-*`<registry-name>` will start, deploying the registry with GeoServer.
++
+//TIP: Детальніше про розгортання реєстру -- див. на сторінці
+TIP: For more details, see
+xref:admin:registry-management/control-plane-create-registry.adoc[].
+
+//== Моделювання регламенту для використання геопросторових даних у бізнес-процесах
+== Modeling regulations for using geospatial data in business processes
+
+[#create-data-model]
+//=== Створення моделі даних реєстру
+=== Creating a registry data model
+
+//Після розгортання реєстру, ви зможете створити дата-модель та використовувати геопросторові дані у регламенті.
+After deploying the registry, you can create a data model and use geospatial data in the regulations.
+
+//Найперше необхідно створити модель даних. Для використання геопросторових даних у реєстрі імплементовано спеціальний атрибут *`type="geometry"`*, який розширює можливості стандартної бібліотеки Liquibase.
+First, it is necessary to create a data model. To use geospatial data in the registry, a special attribute *`type="geometry"`* has been implemented, which extends the capabilities of the standard _Liquibase_ library.
+
+//Такий параметр можна використовувати на рівні колонок як при побудові _таблиць_, так і _критеріїв пошуку_ (таблиць-представлень).
+This parameter can be used at the column level both in _table_ construction and _search conditions_ (view tables).
+[TIP]
+====
+//* Детальніше про моделювання таблиць див.
+* For more information on table modeling, see
+xref:data-modeling/data/physical-model/liquibase-ddm-ext.adoc#createTable[Теги створення таблиць].
+//* Детальніше про моделювання критеріїв пошуку див.
+* For more information on search conditions modeling, see
+xref:data-modeling/data/physical-model/liquibase-ddm-ext.adoc#create-search-conditions[Керування критеріями пошуку (Search Conditions)]
+====
+
+//.Моделювання таблиці із типом geometry
+.Modeling a table with the geometry type
+====
+[source,xml]
+----
+<changeSet id="table geometry type" author="registry owner">
+    <createTable tableName="entity_with_geo_type" ext:historyFlag="true" remarks="Сутність з геотипом">
+        <column name="entity_id" type="UUID" defaultValueComputed="uuid_generate_v4()">
+            <constraints nullable="false" primaryKey="true" primaryKeyName="pk_entity_id"/>
+        </column>
+        <column name="name" type="TEXT">
+            <constraints nullable="false"/>
+        </column>
+        <column name="address" type="TEXT">
+            <constraints nullable="false"/>
+        </column>
+        <column name="entity_location" type="geometry">
+            <constraints nullable="false"/>
+        </column>
+    </createTable>
+</changeSet>
+----
+====
+
+//.Моделювання таблиці-представлення (Search Condition) із типом geometry
+.Modeling a view table (Search Condition) with the geometry type
+====
+[source,xml]
+----
+<changeSet author="registry owner" id="create SC get_entity_with_geo_type_not_equals">
+    <ext:createSearchCondition name="get_entity_with_geo_type_not_equals">
+        <ext:table name="entity_with_geo_type">
+            <ext:column name="entity_id"/>
+            <ext:column name="name" searchType="notEqual"/>
+            <ext:column name="address"/>
+            <ext:column name="entity_location"/>
+        </ext:table>
+    </ext:createSearchCondition>
+</changeSet>
+----
+====
+
+//Після застосування змін до майстер-гілки регламенту реєстру, запускається Jenkins-процес *`MASTER-Build-registry-regulations`*, який публікує структури, що містять тип "геометрія" (`geometry`), як шари до геосервера.
+After applying the changes to the master branch of the registry regulations, the Jenkins process *MASTER-Build-registry-regulations* is triggered, which publishes structures containing the `geometry` type as layers to the GeoServer.
+
+[NOTE]
+====
+//В результаті GeoServer міститиме опубліковані сутності `entity_with_geo_type` та `get_entity_with_geo_type_not_equals_v`, до яких можна звертатися для відображення геоданих на UI-формах бізнес-процесу.
+As a result, GeoServer will contain published entities `entity_with_geo_type` and `get_entity_with_geo_type_not_equals_v`, which can be accessed to display geodata on UI forms in business processes.
+
+//Детальніше -- див. у розділі
+For more details, see
+xref:#geoserver[].
+====
+
+[#bp-modeling]
+//=== Сценарії моделювання бізнес-процесів та форм
+=== Modeling business process scenarios and forms
+
+//Після розгортання моделі даних реєстру та створення шарів даних (Layers) відповідно до дата-моделі, ви зможете записувати до, або зчитувати з БД об'єкти, які містять координати певних точок, ліній, або полігонів тощо.
+After deploying the registry data model and creating data layers according to the data model, you will be able to write to or read from the database objects that contain coordinates of specific points, lines, polygons, etc.
+
+//==== Внесення координат до бази даних вручну
+==== Manually entering coordinates into the database
+
+//Вручну вносимо адресу та координати об'єкта (широту та довготу) у відповідні поля форми введення даних.
+Manually enter the address and coordinates of the object (latitude and longitude) in the corresponding fields of the data entry form.
+
+//Використовуємо стандартний компонент *Text Field* при моделюванні форм.
+Use the standard *Text Field* component when modeling forms.
+
+//Використовуємо Groovy-скрипти для отримання даних із форми та збереження даних до дата-фабрики.
+Use Groovy scripts to retrieve data from the form and save the data to the data factory.
+
+
+//===== Моделювання бізнес-процесу
+===== Modeling the business process
+
+//Змоделюйте бізнес-процес, який дозволить вам внести дані з координатами об'єкта та зберегти їх до фабрики даних.
+Model a business process that allows you to enter data with object coordinates and save them to the data factory.
+
+//. Змоделюйте користувацьку задачу (*User Task*) для введення даних та поєднайте її з відповідною UI-формою за параметром `*Form key*`.
+. Model a *User Task* for data entry and associate it with the corresponding UI form using the *`Form key`* parameter.
++
+image:registry-admin/geoserver/geoserver-2.png[]
++
+//. Змоделюйте користувацьку задачу (*User Task*) для підпису даних КЕП та поєднайте її з відповідною UI-формою за параметром `*Form key*`.
+. Model a *User Task* for signing data with a Qualified Digital Signature and associate it with the corresponding UI form using the *`Form key`* parameter.
++
+//Передайте дані для підпису із попередньої форми через функцію `submission()` у полі `Form data pre-population`. Наприклад:
+Pass the data for signing from the previous form through the `submission()` function in the *Form data pre-population* field. For example:
++
+[source,groovy]
+----
+${submission('addGeoActivity').formData}
+----
++
+image:registry-admin/geoserver/geoserver-3.png[]
++
+//. Змоделюйте скриптову задачу (Script Task) для отримання даних з UI-форми за відповідним ID, для подальшої обробки та збереження координат об'єкта до БД.
+. Model a script task to retrieve data from a UI form based on the corresponding ID for further processing and saving the object's coordinates to the database.
++
+[%collapsible]
+._Скрипт отримання координат з UI-форми та створення об'єкта для збереження геоданих_
+._Script to retrieve coordinates from a UI form and create an object for storing geodata_
+====
+[source,groovy]
+----
+def signedFormData = submission('signGeoActivity').formData
+
+def entityLocation = [:]
+entityLocation.type = 'point'
+entityLocation.latitude = signedFormData.prop('latitude').value()
+entityLocation.longitude = signedFormData.prop('longitude').value()
+
+signedFormData.prop('entityLocation', S(entityLocation, 'application/json'))
+signedFormData.deleteProp('latitude')
+signedFormData.deleteProp('longitude')
+
+set_transient_variable('payload', signedFormData)
+----
+
+//Цей скрипт об'єднує значення широти та довготи в один об'єкт із назвою *`entityLocation`* і зберігає цей об'єкт у *`signedFormData`*:
+This script combines latitude and longitude values into a single object named *`entityLocation`* and stores this object in *`signedFormData`*.
+
+//. Отримує дані форми (`formData`) за допомогою функції `submission ()`, в якій передається ID форми підпису -- `'signGeoActivity'`, і зберігає їх у змінну `signedFormData`.
+. It retrieves form data (`formData`) using the `submission()` function, passing the signature form ID `signGeoActivity`, and saves them into the variable *`signedFormData`*.
++
+//. Створює об'єкт (Map ключів-значень) із назвою `*entityLocation*`.
+. It creates an object (a map of key-value pairs) named *`entityLocation`*.
++
+[NOTE]
+=====
+//Параметр *`entityLocation`* дорівнює назві колонки *`entity_location`* у базі даних `*registry*` реєстру, яку ви визначили як таку, яка зберігатиме ваші геодані.
+The *`entityLocation`* parameter corresponds to the *`entity_location`* column name in the *registry* database, which you have defined as the one to store your geodata.
+
+//Колонка створюється відповідно до вашої моделі даних з атрибутом *`type="geometry"`*.
+The column is created according to your data model with the attribute *`type="geometry"`*.
+
+[source,xml]
+----
+<column name="entity_location" type="geometry">
+    <constraints nullable="false"/>
+</column>
+----
+=====
++
+//. Визначає тип *`'point'`* (точка на мапі) для *`entityLocation`*.
+. It defines the type as *`point`* (point on map) for *`entityLocation`*.
++
+//. Зберігає значення широти (*`latitude`*) та довготи (*`longitude`*) із `signedFormData` в `entityLocation`.
+. It saves the latitude (*`latitude`*) and longitude (*`longitude`*) values from `signedFormData` into `entityLocation`.
++
+//. Додає новий атрибут `'entityLocation'` до signedFormData і передає JSON-представлення об'єкта `entityLocation` як значення.
+It adds a new attribute `entityLocation` to `signedFormData` and assigns the JSON representation of the `entityLocation` object as its value.
++
+//. Встановлює змінну *`'payload'`* як тимчасову змінну, що зберігає `signedFormData`. Її можна надалі використовувати у бізнес-процесі.
+. It sets the *`payload`* variable as a temporary variable storing `signedFormData`. It can be further used in the business process.
+
+====
++
+image:registry-admin/geoserver/geoserver-4.png[]
++
+//. Змоделюйте сервісну задачу (Service Task) для підпису даних системним ключем.
+. Model a Service Task to sign data with a system key.
++
+//Налаштування: ::
+Configuring: ::
+
+//* Використовуйте делегат *System signature by DSO service* із каталогу шаблонів для накладання системного підпису.
+* Use the delegate *System signature by DSO service* from the template catalog for applying a system signature.
+//* Вхідні дані передайте як змінну *`${payload}`* у відповідному полі.
+* Pass the input data as a variable *`${payload}`* in the corresponding field.
+//* Передайте токен виконавця останньої користувацької задачі у бізнес-процесі: *`${completer('signGeoActivity').accessToken}`*.
+* Pass the token of the executor of the last user task in the business process: *`${completer('signGeoActivity').accessToken}`*.
+//* Відповідь запишіть у змінну `*system_signature_key*`.
+* Store the response in the variable *`system_signature_key`*.
+
++
+image:registry-admin/geoserver/geoserver-5.png[]
+[start=5]
+//. Збережіть дані до БД. Створіть новий запис у базі даних, зберігши значення об'єкта *`entityLocation`* до відповідної колонки.
+. Save the data to the database. Create a new record in the database, storing the value of the *`entityLocation`* object in the corresponding column.
++
+//* Використовуйте делегат *Create entity in data factory*, щоб створити сутність у базі даних.
+* Use the delegate *Create entity in data factory* to create an entity in the database.
+//* Вкажіть ресурс/API-ендпоінт *`entity-with-geo-type`*, що відповідає назві таблиці із геоданими, яку ви визначили при створенні моделі даних реєстру -- *`entity_with_geo_type`*.
+* Specify the resource/API endpoint *`entity-with-geo-type`* corresponding to the name of the table with geodata defined in the data model registry - *`entity_with_geo_type`*.
+//* Вхідні дані передайте як змінну *`${payload}`* у відповідному полі.
+* Pass the input data as a variable *`${payload}`* in the corresponding field.
+//* Передайте токен виконавця останньої користувацької задачі у бізнес-процесі: *`${completer('signGeoActivity').accessToken}`*.
+* Pass the token of the executor of the last user task in the business process: *`${completer('signGeoActivity').accessToken}`*.
+//* Вкажіть джерело системного підпису. Для цього використовуйте функцію `sign_submission()`:
+* Specify the source of the system signature. Use the function sign_submission(): +
+*`${sign_submission('signGeoActivity').signatureDocumentId}`*.
+//* Вкажіть як змінну *`${system_signature_key}`* ключ Ceph-документа, який містить інформацію про підписані дані.
+* Specify as the variable *`${system_signature_key}`* the Ceph document key containing information about the signed data.
+//* Запишіть відповідь до результівної змінної, наприклад, `createGeoResponse`.
+* Save the response to the result variable, for example, `createGeoResponse`.
+
++
+image:registry-admin/geoserver/geoserver-6.png[]
+
+//===== Моделювання UI-форм введення даних
+===== Modeling data input UI forms
+
+//Змоделюйте форми внесення даних до вашого бізнес-процесу. Службові назви форм мають відповідати значенню параметра Form key у відповідних користувацьких задачах бізнес-процесу.
+Model the data input forms for your business process. The form's names should correspond to the value of the Form key parameter in the respective user tasks of the business process.
+
+//. Змоделюйте UI-форму для введення даних про об'єкт: назву, адресу та координати (широту та довготу).
+. Model a UI form for entering data about an object: name, address, and coordinates (latitude and longitude).
++
+//* Для усіх 4-х полів використовуйте компонент *Text Field*.
+* Use the *Text Field* component for all four fields.
++
+//* Для кожного поля визначте бізнес-назву (Вкладка *`Display` > `Label`*) та назву параметра для API відповідно (Вкладка *`API` > `Property Name`*).
+* For each field, define a business label (Tab *`Display`* > *`Label`*) and a parameter name for the API (Tab *`API`* > *`Property Name`*).
++
+image:registry-admin/geoserver/geoserver-7.png[]
++
+image:registry-admin/geoserver/geoserver-7-1.png[]
++
+//* UI-форма у Кабінеті користувача може виглядати так:
+* The UI form in the User portal may look like this:
++
+image:registry-admin/geoserver/geoserver-8.png[]
++
+//* Параметри, що зберігатимуться до фабрики даних, матимуть наступний вигляд:
+* The parameters to be stored in the data factory will have the following format:
++
+image:registry-admin/geoserver/geoserver-9.png[]
++
+//. Змоделюйте UI-форму для підпису введених даних КЕП. Вона матиме однакові поля із формою введення даних. На цій формі користувач зможе лише перевірити правильність введених даних перед підписом.
+. Model a UI form for verifying the entered data before signing it with a qualified digital signature. This form will have the same fields as the data input form. On this form, the user can only verify the accuracy of the entered data before signing.
+
+//==== Вибір координат на мапі та збереження їх до бази даних
+==== Selecting coordinates on the map and saving them to the database
+
+//Моделюємо UI-форму із компонентом *Map* (Мапа) для використання мапи у бізнес-процесі.
+Model a UI form with a *Map* component for using the map in the business process.
+
+//Використовуємо Groovy-скрипти для отримання даних із форми та збереження даних до дата-фабрики.
+Use Groovy scripts to retrieve data from the form and save it to the data factory.
+
+//===== Моделювання бізнес-процесу
+===== Modeling the business process
+
+//Змоделюйте бізнес-процес, який дозволить вам обрати координати об'єкта (точка, лінія, або полігон) на мапі та зберегти їх до фабрики даних.
+Model a business process that allows you to select coordinates (point, line, or polygon) on the map and save them to the data factory.
+
+//. Змоделюйте користувацьку задачу (User Task) для вибору координат на мапі та поєднайте її з відповідною UI-формою за параметром `*Form key*`.
+. Model a user task for selecting coordinates on the map and integrate it with the corresponding UI form using the *`Form key`* parameter.
+
+image:registry-admin/geoserver/geoserver-10.png[]
+
+[start=2]
+//. Змоделюйте скриптову задачу (Script Task) для отримання даних з UI-форми із мапою за відповідним ID, для подальшої обробки та збереження координат об'єкта до БД.
+. Model a script task for retrieving data from the UI form with the map based on the corresponding ID, for further processing and saving the object's coordinates to the database.
++
+[%collapsible]
+._Скрипт отримання координат з мапи та створення об'єкта для збереження геоданих_
+._Script for retrieving coordinates from the map and creating an object to store geodata_:
+====
+[source,groovy]
+----
+def formDataForm = submission('show-map').formData
+
+def data = S([:], 'application/json')
+	data.prop("name", formDataForm.prop("name"))
+	data.prop("address", formDataForm.prop("address"))
+	data.prop("entityLocation", formDataForm.prop('entityLocation').prop('geometry').toString())
+
+println "data: " + data
+
+execution.removeVariable('payload')
+set_transient_variable('payload', data)
+----
+
+//Загалом, цей скрипт отримує дані з форми, створює новий JSON-об'єкт з отриманими даними та записує його до тимчасової змінної *`'payload'`*:
+In general, this script retrieves data from a form, creates a new JSON object with the received data, and stores it in a temporary variable *`payload`*:
+
+//. Він створює змінну *`formDataForm`* і отримує дані форми з ідентифікатором *`'show-map'`* за допомогою JUEL-функції `submission()`.
+. It creates a variable *`formDataForm`* and retrieves form data with the identifier *`show-map`* using the JUEL `submission()` function.
+//. Створює новий JSON-об'єкт *`data`* з порожнім словником та типом даних *`'application/json'`*.
+* It creates a new JSON object called *`data`* with an empty dictionary and the data type *`application/json`*.
+//. Заповнює об'єкт *`data`* властивостями *`"name"`*, `*"address"*` та `*"entityLocation"*`, витягуючи відповідні значення з об'єкта `formDataForm`.
+. It populates the data object with properties "*`name`*," "*`address`*," and "*`entityLocation`*", extracting the corresponding values from the *`formDataForm`* object.
++
+//NOTE: Зверніть увагу, що у властивості *`"entityLocation"`* вкладений об'єкт *`'geometry'`* перетворюється в рядок.
+NOTE: Note that the nested object '*`geometry`*' in the "*`entityLocation`*" property is converted into a string.
++
+//. Встановлює нову змінну *`'payload'`*, використовуючи значення об'єкта *`data`*, яку можна надалі використати у бізнес-процесі.
+. It sets a new variable '*`payload`*' using the values of the data object, which can be further used in the business process.
+
+====
+
++
+image:registry-admin/geoserver/geoserver-11.png[]
++
+//. Змоделюйте користувацьку задачу (User Task) для підпису даних КЕП та поєднайте її з відповідною UI-формою за параметром `*Form key*`.
+. Model a user task (User Task) for signing the data with a digital signature and link it to the corresponding UI form using the *`Form key`* parameter.
++
+//Передайте дані для підпису як змінну *`${payload}`* у полі `Form data pre-population`.
+Pass the data to be signed as the variable *`${payload}`* in the *Form data pre-population* field.
++
+image:registry-admin/geoserver/geoserver-12.png[]
++
+//. Змоделюйте скриптову задачу для обробки та збереження підписаних даних. Скрипт тут використовується майже ідентичний до попереднього, з єдиною відмінністю, що у властивості *`"entityLocation"`* вкладений об'єкт *`'geometry'`* не перетворюється в рядок і передається JSON-об'єктом.
+. Model a script task for processing and saving the signed data. The script used here is almost identical to the previous one, with the only difference being that the '*`geometry`*' object in the '*`entityLocation`*' property is not converted to a string but passed as a JSON object.
++
+[%collapsible]
+._Скрипт для обробки та запису даних, підписаних КЕП_
+._Script for processing and saving data, signed with the qualified electronic signature:_
+====
+[source,groovy]
+----
+def formDataForm = submission('show-map').formData
+
+def data = S([:], 'application/json')
+	data.prop("name", formDataForm.prop("name"))
+	data.prop("address", formDataForm.prop("address"))
+	data.prop("entityLocation", formDataForm.prop('entityLocation').prop('geometry'))
+
+println "data: " + data
+
+execution.removeVariable('payload')
+set_transient_variable('payload', data)
+----
+====
++
+//. Змоделюйте сервісну задачу (Service Task) для підпису даних системним ключем.
+. Model a service task for signing the data with a system key.
++
+//* Використовуйте делегат *System signature by DSO service* із каталогу шаблонів для накладання системного підпису.
+* Use the delegate *System signature by DSO service* from the template catalog for applying the system signature.
+//* Вхідні дані передайте як змінну *`${payload}`* у відповідному полі.
+* Pass the input data as the variable *`${payload}`* in the respective field.
+//* Передайте токен виконавця останньої користувацької задачі у бізнес-процесі: *`${completer('signGeoActivity').accessToken}`*.
+* Pass the token of the executor of the last user task in the business process: *`${completer('signGeoActivity').accessToken}`*.
+//* Відповідь запишіть у змінну `*system_signature_key*`.
+* Store the response in the variable *`system_signature_key`*.
+
++
+image:registry-admin/geoserver/geoserver-5.png[]
+
++
+//. Збережіть дані до БД. Створіть новий запис у базі даних, зберігши значення об'єкта *`entityLocation`* до відповідної колонки.
+. Save the data to the database. Create a new record in the database, saving the value of the *`entityLocation`* object to the corresponding column.
++
+//* Використовуйте делегат *Create entity in data factory*, щоб створити сутність у базі даних.
+* Use the delegate *Create entity in data factory* to create an entity in the database.
+//* Вкажіть ресурс/API-ендпоінт *`entity-with-geo-type`*, що відповідає назві таблиці із геоданими, яку ви визначили при створенні моделі даних реєстру -- *`entity_with_geo_type`*.
+* Specify the resource/API endpoint *`entity-with-geo-type`*, which corresponds to the table name of the geodata you defined when creating the registry data model -- *`entity_with_geo_type`*.
+//* Вхідні дані передайте як змінну *`${payload}`* у відповідному полі.
+* Pass the input data as the variable *`${payload}`* in the respective field.
+//* Передайте токен виконавця останньої користувацької задачі у бізнес-процесі: *`${completer('ID задачі для підпису даних КЕП').accessToken}`*.
+* Pass the token of the executor of the last user task in the business process: *`${completer`*('*ID of the task for signing the data with a qualified digital signature*').*`accessToken}.`*
+//* Вкажіть джерело системного підпису. Для цього використовуйте функцію `sign_submission()`: +
+* Specify the source of the system signature. Use the function `sign_submission()`: +
+//*`${sign_submission('ID задачі для підпису даних КЕП').signatureDocumentId}`*.
+*`${sign_submission`('*ID of the task for signing the data with a qualified digital signature*').*`signatureDocumentId}`*.
+//* Вкажіть як змінну *`${system_signature_key}`* ключ Ceph-документа, який містить інформацію про підписані дані.
+* Specify as the variable *`${system_signature_key}`* the key of the Ceph document that contains information about the signed data.
+//* Запишіть відповідь до результівної змінної, наприклад, `createGeoResponse`.
+* record your response in the result variable, for example, `createGeoResponse`.
+
++
+image:registry-admin/geoserver/geoserver-6.png[]
+
+//===== Моделювання UI-форм введення даних
+===== Modeling data input UI forms
+
+//Змоделюйте UI-форми введення даних. На відміну від попереднього випадку, коли ми вносимо координати вручну, тепер розглянемо можливість вносити координати об'єкта прямо з мапи до БД.
+Model the data input UI forms. Unlike the previous case where we manually enter coordinates, we will now consider the possibility of entering object coordinates directly from the map into the database.
+
+//. Змоделюйте форму для вибору координат на карті за допомогою компонента *`MAP`* ("Мапа").
+. Create a form for selecting coordinates on the map using the *`MAP`* component.
++
+//* Визначте `Label`, наприклад, `entityLocation`.
+* Define a `label`, for example, `entityLocation`.
+//* Виконайте налаштування на вкладці *Data*.
+* Configure it on the *Data* tab.
+//* Перейдіть на вкладку *API* та визначте `Property Name` як *`entityLocation`*. Цей параметр використовується для обміну даними через API.
+* Go to the *API* tab and define the `Property Name` as *`entityLocation`*. This parameter is used for data exchange through the API.
+
++
+//TIP: Детальніше -- див. на сторінці
+TIP: For more details, see
+xref:bp-modeling/forms/components/map/map.adoc[]
+
++
+image:bp-modeling/forms/components/map/map-1.png[]
+
++
+//. Створіть форму для підпису даних КЕП. Змоделюйте 3 текстових поля для даних, які після цифрового підпису будуть збережені до БД:
+. Create a form for signing the data with the qualified digital signature. Model three text fields for the data that will be saved to the database after digital signing:
++
+//* `address` -- адреса об'єкта;
+* `address` -- object address;
+//* `name` -- назва об'єкта;
+* `name` -- object name;
+//* `entityLocation` -- координати об'єкта (точка на мапі, лінія, або полігон).
+* `entityLocation` - object coordinates (a point on the map, line, or polygon).
+
++
+image:registry-admin/geoserver/geoserver-16.png[]
+
+//==== Зміна координат та інформації про них
+==== Changing coordinates and information about them
+
+//Ви можете змінювати внесені раніше координати. Для цього просто запустіть відповідний бізнес-процес, оберіть певний географічний об'єкт на мапі (точка, лінія чи полігон), який необхідно змінити, далі оберіть новий об'єкт та перезапишіть значення до БД.
+You can modify previously entered coordinates. To do this, simply initiate the corresponding business process, select a specific geographic object on the map (point, line, or polygon) that needs to be changed, then select a new object and overwrite the values in the database.
+
+//===== Моделювання бізнес-процесу
+===== Modeling the business process
+
+//. Змоделюйте користувацьку задачу (User Task) для вибору координат на мапі, які необхідно змінити, та поєднайте її з відповідною UI-формою за ключем *`Form key`* (службова назва форми).
+. Model a user task to select coordinates on the map that need to be changed, and link it to the corresponding UI form using the *`Form key`* (form's internal name).
++
+image:registry-admin/geoserver/geoserver-21.png[]
+
++
+//. За допомогою скрипту отримайте ідентифікатор сутності у БД (*`entityId`*), яку необхідно змінити.
+. Using a script, obtain the entity ID in the database (*`entityId`*) that needs to be changed.
+
++
+image:registry-admin/geoserver/geoserver-22.png[]
+
++
+._Скрипт для отримання даних з форми, включно з entityId сутності_
+._Script for retrieving form data, including the entityId entity_
+[%collapsible]
+====
+[source,groovy]
+----
+def formDataForm = submission('choose-coordinates-id').formData
+println "formDataForm: " +  formDataForm
+
+def data = S([:], 'application/json')
+
+	data.prop("entityId", formDataForm.prop('map').prop('properties').prop("id").value())
+	data.prop("name", formDataForm.prop('map').prop('properties').prop("name").value())
+	data.prop("address", formDataForm.prop('map').prop('properties').prop("address").value())
+
+execution.removeVariable('payload')
+set_transient_variable('payload', data)
+----
+
+//Цей скрипт виконує такі дії:
+This script performs the following actions:
+
+//. Він визначає змінну `formDataForm`, яка отримує дані з форми, що була відправлена з ідентифікатором `'choose-coordinates-id'` за допомогою JUEL-функції `submission()`.
+. It defines the `formDataForm` variable, which retrieves data from the form that was submitted with the identifier *`choose-coordinates-id`* using the JUEL *`submission()`* function.
+//. Створює новий об'єкт *`data`* з порожнього словника та типом даних `'application/json'`.
+. It creates a new object called *`data`* with an empty dictionary and the data type *`application/json`*.
+//. Заповнює об'єкт `data` даними з formDataForm, такими як: *`entityId`*, `name` та `address`.
+. It populates the `data` object with data from *`formDataForm`*, such as `entityId`, `name`, and `address`.
+//. Встановлює змінну `*'payload'*` як тимчасову змінну і надає їй значення data.
+. It sets the *`payload`* variable as a temporary variable and assigns it the value of data.
+
+====
++
+//. Далі створіть користувацьку задачу (User Task) для вибору нових координат на мапі та поєднайте її з відповідною UI-формою за ключем *`Form key`* (службова назва форми).
+. Next, create a user task to select new coordinates on the map and link it to the corresponding UI form using the *`Form key`* (form's internal name).
++
+//Дані зі скрипту на форму передайте як змінну `${payload}` у полі `Form data pre-population`.
+Pass the data from the script to the form as a variable `${payload}` in the *Form data pre-population field*.
++
+image:registry-admin/geoserver/geoserver-23.png[]
+
++
+//. За допомогою скрипту отримайте оновлені дані сутності, які необхідно записати до БД.
+. Using a script, retrieve the updated entity data that needs to be saved in the database.
+
++
+image:registry-admin/geoserver/geoserver-24.png[]
+
++
+._Скрипт для отримання оновлених даних та координат з форми_
+._Script for retrieving updated data and coordinates from the form_
+[%collapsible]
+====
+[source,groovy]
+----
+def formDataForm = submission('ID користувацької задачі для вибору нових координат').formData
+println "formDataForm: " +  formDataForm
+
+def data = S([:], 'application/json')
+
+	data.prop("entityId", formDataForm.prop('map').prop('properties').prop("id").value())
+	data.prop("name", formDataForm.prop('map').prop('properties').prop("name").value())
+	data.prop("address", formDataForm.prop('map').prop('properties').prop("address").value())
+
+execution.removeVariable('payload')
+set_transient_variable('payload', data)
+----
+
+//Цей скрипт виконує такі дії:
+This script performs the following actions:
+
+//. Він визначає змінну `formDataForm`, яка отримує дані з форми, що була відправлена з ідентифікатором `'choose-coordinates-id'` за допомогою JUEL-функції `submission()`.
+. It defines the variable `formDataForm`, which receives data from the form submitted with the identifier `choose-coordinates-id` using the JUEL function `submission()`.
+//. Створює новий об'єкт *`data`* з порожнього словника та типом даних `'application/json'`.
+. Creates a new object called *`data`* with an empty dictionary and the data type `application/json`.
+//. Заповнює об'єкт `data` даними з formDataForm, такими як: *`entityId`*, `name` та `address`.
+. Populates the `data` object with the data from *formDataForm*, such as `entityId`, `name`, and `address`.
+//. Встановлює змінну `*'payload'*` як тимчасову змінну і надає їй значення data.
+. Sets the variable *`payload`* as a temporary variable and assigns it the value of data.
+====
++
+//. Далі створіть користувацьку задачу (User Task) для підпису даних КЕП та поєднайте її з відповідною UI-формою за ключем *`Form key`* (службова назва форми).
+. Then, create a user task for signing the data with the qialified digital signature and link it to the corresponding UI form using the *`Form key`* (form's internal name).
++
+//Дані зі скрипту на форму підпису передайте як змінну `${payload}` у полі `Form data pre-population`.
+Pass the data for signature from the script to the form as a variable `${payload}` in the `Form data pre-population` field.
+
++
+image:registry-admin/geoserver/geoserver-25.png[]
+
++
+//. За допомогою скрипту отримайте підписані КЕП дані, які необхідно записати БД.
+. Using a script, obtain the data signed with the qualified digital signature that needs to be saved in the database.
+
++
+image:registry-admin/geoserver/geoserver-24.png[]
+
++
+._Скрипт для отримання підписаних даних з форми_
+._Script for retrieving signed data from a form_
+[%collapsible]
+====
+[source,groovy]
+----
+def formDataForm = submission('choose-new-coord').formData
+println "formDataForm choose-new-coord " + formDataForm
+
+def data = S([:], 'application/json')
+
+	data.prop("entityId", formDataForm.prop("entityId"))
+	data.prop("name", formDataForm.prop("name"))
+	data.prop("address", formDataForm.prop("address"))
+	data.prop("entityLocation", formDataForm.prop('entityLocation').prop('geometry'))
+
+execution.removeVariable('payload')
+set_transient_variable('payload', data)
+
+println "payloadData: " + data
+----
+
+//. Він визначає змінну `formDataForm`, яка отримує дані з форми, що була відправлена з ідентифікатором `'choose-coordinates-id'` за допомогою JUEL-функції `submission()`.
+. It defines the variable `formDataForm`, which receives data from the form submitted with the identifier `choose-coordinates-id` using the JUEL function submission().
+//. Створює новий об'єкт *`data`* з порожнього словника та типом даних `'application/json'`.
+. Creates a new object called *`data`* with an empty dictionary and the data type `application/json`.
+//. Заповнює об'єкт `data` даними з formDataForm, такими як: *`entityId`*, `name` та `address`.
+. Populates the `data` object with the data from *formDataForm*, such as `entityId`, `name`, and `address`.
+//. Встановлює змінну `*'payload'*` як тимчасову змінну і надає їй значення data.
+. Sets the variable *`payload`* as a temporary variable and assigns it the value of data.
+
+//Цей скрипт схожий на попередній, але з однією невеликою відмінністю: він не викликає метод `toString()` для властивості ``'geometry``' об'єкта `'entityLocation'`. Таким чином, значення `'entityLocation'` залишається у своєму вихідному форматі (об'єкт) замість рядка.
+This script is similar to the previous one, but with one small difference: it does not invoke the `toString()` method for the *`geometry`* property of the `entityLocation` object. As a result, the value of `entityLocation` remains in its original format (an object) instead of being converted to a string.
+====
++
+//. Змоделюйте сервісну задачу (Service Task) для підпису даних системним ключем.
+. Model a service task for data signing with a system key.
++
+//* Використовуйте делегат *System signature by DSO service* із каталогу шаблонів для накладання системного підпису.
+* Use the delegate *System signature by DSO service* from the template catalog to apply a system signature.
+//* Вхідні дані передайте як змінну *`${payload}`* у відповідному полі.
+* Pass the input data as the variable *`${payload}`* in the corresponding field.
+//* Передайте токен виконавця останньої користувацької задачі у бізнес-процесі: *`${completer('ID останньої користувацької задачі для підпису даних').accessToken}`*.
+* Pass the token of the executor of the last user task in the business process: *`${completer('ID останньої користувацької задачі для підпису даних').accessToken}`*.
+//* Відповідь запишіть у змінну `*system_signature_key*`.
+* Store the response in the variable *`system_signature_key`*.
+
++
+image:registry-admin/geoserver/geoserver-5.png[]
+
++
+//. Оновіть сутність у базі даних.
+. Update the entity in the database.
++
+//Використовуйте для цього делегат *Update entity in data factory*, або загальний конектор *Connect to data factory* із методом *`PUT`*.
+Use the *Update entity in data factory* delegate or the generic connector C**onnect to data factory** with the *`PUT`* method.
++
+image:registry-admin/geoserver/geoserver-27.png[]
++
+//Наприклад, передайте значення ресурсу та ідентифікатор сутності наступним чином, через функцію submission:
+For example, pass the resource value and entity identifier as follows, using the submission function:
+//entity-with-geo-type/${submission('ID користувацької задачі для вибору нових координат').formData.prop('entityId').value()}
++
+----
+entity-with-geo-type/${submission('ID of the user task for selecting new coordinates').formData.prop('entityId').value()}
+----
++
+//* *`entity-with-geo-type`* -- ресурс/ендпоінт, що відповідає таблиці *`entity_with_geo_type`* у БД.
+* *`entity-with-geo-type`* - the resource/endpoint corresponding to the *`entity_with_geo_type`* table in the database.
+//* *`entityId`* -- ідентифікатор сутності, яку необхідно оновити, отриманий з відповідної форми.
+* *`entityId`* - the identifier of the entity to be updated, obtained from the respective form.
+
++
+[TIP]
+====
+//Детальніше -- див. на сторінці
+For more info, see
+xref:bp-modeling/bp/element-templates/bp-element-templates-installation-configuration.adoc[].
+====
+
+//===== Моделювання форм введення даних
+===== Modeling data input forms
+
+//. Змоделюйте форму для вибору координат на карті за допомогою компонента *`MAP`* ("Мапа").
+. Model a form for selecting coordinates on the map using the *`MAP`* component.
++
+//* Визначте `Label`, наприклад, `Map`.
+* Define a `label`, for example, *`Map`*.
+//* Виконайте налаштування на вкладці *Data*.
+* Configure it on the *Data* tab.
+//* Перейдіть на вкладку *API* та визначте `Property Name` як *`map`*. Цей параметр використовується для обміну даними через API.
+* Go to the *API* tab and define the `Property Name` as *`map`*. This parameter is used for data exchange through the API.
+
++
+//TIP: Детальніше -- див. на сторінці
+TIP: For mor details, see
+xref:bp-modeling/forms/components/map/map.adoc[]
+
++
+image:registry-admin/geoserver/geoserver-14.png[]
+
++
+//. Далі змоделюйте ще одну форму для оновлення координат та інформації про об'єкт. Для цього використовуйте компоненти *Text Field* для текстових полів та компонент *`MAP`* (Мапа) для вибору нових координат на карті.
+. Next, model another form for updating coordinates and object information. Use *Text Field* components for text fields and the *`MAP`* component for selecting new coordinates on the map.
++
+//* Визначте `Label`, наприклад, `entityLocation`.
+* Define a `label`, for example, *`entityLocation`*.
+//* Виконайте налаштування на вкладці *Data*.
+* Configure it on the *Data* tab.
+//* Перейдіть на вкладку *API* та визначте `Property Name` як *`entityLocation`*. Цей параметр використовується для обміну даними через API.
+* Go to the *API* tab and define the `Property Name` as *`entityLocation`*. This parameter is used for data exchange through the API.
+
++
+//TIP: Детальніше про компонент *`MAP`* -- див. на сторінці
+TIP: For more details about the *`MAP`* component, see
+xref:bp-modeling/forms/components/map/map.adoc[]
+
+
++
+image:registry-admin/geoserver/geoserver-15.png[]
+
++
+//. Створіть форму для підпису даних КЕП. Змоделюйте 3 поля текстових поля для даних, які після цифрового підпису будуть збережені до БД:
+. Create a form for signing data with the qualified digital signature. Model three text fields for the data that will be saved to the database after digital signing:
++
+//* `address` -- адреса об'єкта;
+* `address` -- object address;
+//* `name` -- назва об'єкта;
+* `name` -- object name;
+//* `entityLocation` -- координати об'єкта (точка на мапі, лінія, або полігон).
+* `entityLocation` - object coordinates (point on the map, line, or polygon).
+
++
+image:registry-admin/geoserver/geoserver-16.png[]
+
+//==== Пошук географічних об'єктів на мапі з функцією геокодування
+==== Searching for geographic objects on the map with geocoding functionality
+
+//Користувачі мають змогу переглядати усі географічні об'єкти на мапі, які є записаними до бази даних, а також шукати такі об'єкти за допомогою геокодування.
+Users have the ability to view all geographic objects on the map that are stored in the database and search for these objects using geocoding.
+
+//===== Моделювання бізнес-процесу
+===== Modeling the business process
+
+//Для відображення мапи з координатами усіх доступних об'єктів достатньо змоделювати простий процес зі стартовою формою.
+To display a map with coordinates of all available objects, it is sufficient to model a simple process with a start form.
+
+//Поєднайте стартову задачу із формою введення даних за ключем `Form key`.
+Connect the start task to a data input form using the `Form key`.
+
+image:registry-admin/geoserver/geoserver-13.png[]
+
+//===== Моделювання форми пошуку об'єктів
+===== Modeling the object search form
+
+//Візуалізувати геодані на UI-формах Кабінетів користувача можна завдяки компоненту FormIO «Мапа» (*Map*). Цей компонент надає повну функціональність по роботі із геопросторовими даними у реєстрі.
+Visualizing geodata on user interface forms in user dashboards can be achieved using the FormIO component *Map*. This component provides full functionality for working with geospatial data in the registry.
+
+//Геокодування (пошук географічних об'єктів) активується безпосередньо на UI-формах, у налаштуваннях компонента `*Map*`.
+Geocoding (searching for geographic objects) is activated directly on the UI forms through the settings of the *Map* component.
+
+image:bp-modeling/forms/components/map/map-5.png[]
+
+//TIP: Детальніше про компонент *`MAP`* -- див. на сторінці
+TIP: For more information about the *`MAP`* component, refer to
+xref:bp-modeling/forms/components/map/map.adoc[].
+
+[#officer-citizen-portals]
+//=== Робота з геоданими у Кабінетах користувачів
+=== Working with geodata in user dashboards
+
+//Користувачі можуть використовувати попередньо змодельовані бізнес-процеси для роботи із мапою та геоданими у реєстрі.
+Users can utilize pre-modeled business processes to work with maps and geodata in the registry.
+
+//Для цього достатньо перейти в особистий кабінет, знайти розділ [.underline]#Доступні послуги# та запустити один із наявних процесів (наприклад, внесення координат об'єкта до бази даних тощо).
+To do this, simply go to the personal dashboard, find the section [.underline]#Available services#, and launch one of the available processes (e.g., entering object coordinates into the database, and so on).
+
+image:registry-admin/geoserver/geoserver-28.png[]
+
+[#geoserver]
+//== Робота з GeoServer
+== Working with GeoServer
+
+*GeoServer* -- сервіс, який дозволяє отримувати дані з БД у вигляді GeoJSON для їх подальшої обробки та відображення на мапі у бізнес-процесах.
+//*GeoServer* is a service that allows retrieving data from the database in GeoJSON format for further processing and displaying on the map in business processes.
+
+//Усі структури даних регламенту, які містять тип "геометрія" (`geometry`), публікуються як шари (Layers) до геосервера.
+All data structures within the regulations that contain the `geometry` type are published as layers to the GeoServer.
+
+
+//Конфігурація публікується на етапі розгортання регламенту, на кроці `publish-geoserver-configuration` основного Jenkins-процесу *`MASTER-Build-registry-regulations`*.
+The configuration is published during the deployment of the regulations, in the `publish-geoserver-configuration` step of the main Jenkins process *MASTER-Build-registry-regulations*.
+
+//TIP: Для керування налаштуваннями геосервера передбачений вебінтерфейс, який можна знайти за посиланням у середовищі вашого реєстру:
+TIP: To manage the GeoServer settings, a web interface is provided, which can be accessed through the environment of your registry:
+//https://geo-server-<назва-реєстру>.apps.envone.dev.registry.eua.gov.ua/geoserver.
+https://geo-server-<registry-name>.apps.envone.dev.registry.eua.gov.ua/geoserver.
+
+[#layer-preview]
+[layer-preview]
+//=== Перегляд шарів у геосервері
+=== Viewing layers is GeoServer
+
+//Шар (*Layer*) -- це колекція об'єктів (*Features*).
+Layer (*Layer*) -- is a collection of objects (*Features*).
+
+//*Feature* -- це окремий об'єкт на мапі, який містить геометричні та атрибутивні дані.
+*Feature* is an individual object on the map that contains geometric and attribute data.
+
+//Об'єкти можуть бути:
+Objects can be:
+
+//* точками (*`"type": "Point"`*);
+//* лініями (*`"type": "Polyline"`*);
+//* полігонами (*`"type": "Polygon"`*).
+* points (*`"type": "Point"`*);
+* lines (*`"type": "Polyline"`*);
+* polygons (*`"type": "Polygon"`*). +
+
+//Вони представляють різні елементи на земній поверхні, такі як будівлі, річки, озера, дороги тощо. Кожен об'єкт `*feature*` містить геометрію, яка вказує на його розміщення у просторі (наприклад, `entityLocation`), та властивості, які містять додаткову інформацію про об'єкт (наприклад, `name` та `address`).
+They represent various elements on the Earth's surface, such as buildings, rivers, lakes, roads, etc. Each object *`feature`* contains geometry that indicates its spatial location (e.g., `entityLocation`) and properties that provide additional information about the object (e.g., `name` and `address`).
+
+//У контексті роботи із геосервером реєстру, опублікований там шар (layer) є або _таблицею_, або _представленням_ (Search Condition).
+In the context of working with the GeoServer of the registry, a published layer is either a _table_ or a _view_ (Search Condition).
+
+//Для того, щоб переглянути усі шари, які публікуються до геосервера, виконайте наступні кроки:
+To view all layers published to the GeoServer, follow these steps:
+
+//. Увійдіть до геосервера як адміністратор.
+. Log in to the GeoServer as an administrator.
++
+image:registry-admin/geoserver/geoserver-18.png[]
+
++
+//. Відкрийте розділ *Layer Preview*.
+. Open the *Layer Preview* section.
++
+image:registry-admin/geoserver/geoserver-19.png[]
++
+//Ви побачите усі шари (таблиці або представлення із вашої бази даних `*registry*`), які містять тип *`geometry`*.
+You will see all layers (tables or views from your `*registry*` database) that contain the type *`geometry`*.
++
+//. Навпроти відповідного шару виберіть у випадному списку формат перегляду даних -- *`GeoJSON`*.
+. Select the *`GeoJSON`* data format from the drop-down list next to the corresponding layer for data preview.
++
+image:registry-admin/geoserver/geoserver-19-1.png[]
++
+//В результаті ви побачите величезний об'єкт типу *`FeatureCollection`* із набором геометричних (координати) та атрибутивних (назва об'єкта на мапі, адреса тощо) даних.
+As a result, you will see a large *`FeatureCollection`* object with a set of geometric (coordinates) and attribute (object name on the map, address, etc.) data.
++
+image:registry-admin/geoserver/geoserver-20.png[]
+
+[#db-tables]
+//== Робота з таблицями у базі даних реєстру
+== Working with tables in the registry database
+
+//Геопросторові дані зберігаються у спеціалізованій таблиці бази даних реєстру, яку ви визначаєте як сховище для цих даних. Саме геометричні елементи (координати точок, ліній та полігонів) зберігаються у відведеній для них колонці, що підтримує тип даних *`geometry`*, відповідно до вашої дата-моделі (_див. детальніше розділ xref:#create-data-model[]_).
+Geospatial data is stored in a specialized table in the registry database, which you define as the repository for this data. The geometric elements themselves (coordinates of points, lines, and polygons) are stored in a dedicated column that supports the geometry data type, according to your data model (for more details, see _xref:#create-data-model[]_).
+
+.Приклад зберігання геоданих у колонці entity_location таблиці entity_with_geo_type
+.Example of storing geodata in the column entity_location of the table entity_with_geo_type
+image::registry-admin/geoserver/geoserver-29.png[]
+
+.Візуалізація геоданих на мапі
+.Visualization of geodata on the map
+image::registry-admin/geoserver/geoserver-30.png[]
+
+[#openapi]
+//== Робота з API
+== Working with the API
+
+//Інформацію за усіма features-об'єктами (геометрія та атрибути) по кожному з шарів (layers) можна отримати напряму з API реєстру, у сервісі *`registry-rest-api`*.
+Information about all features (geometry and attributes) for each layer can be obtained directly from the registry's API in the *`registry-rest-api`* service.
+
+//Відповідні точки доступу будуть створені автоматично, на основі вказаних у моделі даних таблиць та критеріїв пошуку. Наприклад, `entity-with-geo-type` тощо.
+The corresponding access points will be automatically created based on the specified tables and search conditions in the data model. For example, `entity-with-geo-type`, and so on.
+
+[TIP]
+====
+//Усі згенеровані API-ендпоінти відповідного реєстру представлені в openapi-специфікації та доступні за посиланням:
+All generated API endpoints for the respective registry are presented in the openapi specification and can be accessed at:
+//https://registry-rest-api-<назва-реєстру>.apps.envone.dev.registry.eua.gov.ua/openapi.
+https://registry-rest-api-<registry-name>.apps.envone.dev.registry.eua.gov.ua/openapi.
+
+//Обов'язково додавайте *`/openapi`* в кінець посилання, інакше ви потрапите до тестового середовища (пісочниці) Swagger.
+Make sure to add *`/openapi`* at the end of the link, otherwise, you will be directed to the Swagger testing environment (sandbox).
+====
+
+//== Пов'язані сторінки
+== Related pages
+
+* xref:registry-develop:bp-modeling/forms/components/map/map.adoc[]
