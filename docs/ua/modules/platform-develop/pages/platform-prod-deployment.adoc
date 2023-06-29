@@ -36,16 +36,12 @@ CAUTION: Сторінка у процесі формування.
 
 === Навчання технічного адміністратора реєстру
 
-//TODO: IN PROGRESS
+* xref:registry-develop:registry-admin-study/registry-admin-profile.adoc[]
 
-#TBD# ::
+* xref:registry-develop:registry-admin-study/registry-admin-study.adoc[]
 
-* Робота у Control Plane
-* Робота з Keycloak
-* Чого ще не вистачає?
 * xref:registry-develop:study-project/index.adoc[]
 
-TIP: xref:registry-develop:registry-admin-study/reg-admin-study-overview.adoc[]
 
 === Планування резервного сховища бекапів Платформи та реєстрів
 
@@ -63,11 +59,78 @@ TIP: xref:registry-develop:registry-admin-study/reg-admin-study-overview.adoc[]
 
 === Зберігання цифрових печаток адміністратора для платформи та реєстрів
 
-//TODO: Pasha, Liana or Emil or Zhenya Zvarych
+//TODO: Roma Kovtun
 
-У промисловій експлуатації рекомендованим сховищем зберігання ключів є програмно-апаратний комплекс #*Гряда*#, деталі щодо налаштування знаходяться тут (#*додати посилання*#). Це означає, що технічний адміністратор платформи повинен мати змогу генерувати та сертифікувати ключі для Платформи та реєстрів, що будуть на ній розгорнуті.
+У промисловій експлуатації рекомендованим сховищем зберігання ключів є програмно-апаратний комплекс #*Гряда*#, деталі щодо налаштування знаходяться тут (#*додати посилання*#). Це означає, що технічний адміністратор Платформи повинен мати змогу генерувати та сертифікувати ключі для Платформи та реєстрів, що будуть на ній розгорнуті.
 
-#*Нерекомендованим шляхом*#, _який не пройде КСЗІ згідно з законом_, є використання файлових ключів для підпису. Якщо інстанс знаходиться в AWS, потрібно забезпечити #*whitelisting*# зв'язку між дата-центром AWS та відповідними АЦСК (#*додати або створити посилання разом Федоренко*#).
+Виконайте наступні налаштування: ::
+
+. Забезпечити загальне network connectivity між OpenShift і Грядою.
+
+. На стороні Гряди дозволити трафік з OpenShift. Цим займається адміністратор Гряди. Адміністратор Платформи має надати IP-адреси, з яких необхідно дозволити трафік від Платформи до Гряди.
+
+. На поді DSO реєстру дозволити вихідний трафік на Гряду:
+
+Зайти в налаштування поди DSO-сервісу та перевірити налаштування `sidecar.istio`:
+
+Якщо вказано:
+
+----
+metadata:
+  annotations:
+    sidecar.istio.io/inject: 'false'
+----
+
+То трафік дозволено за замовчуванням.
+
+Якщо вказано
+
+----
+metadata:
+  annotations:
+    sidecar.istio.io/inject: 'true'
+    traffic.sidecar.istio.io/excludeOutboundIPRanges: 10.129.71.251/32
+----
+
+То переконатися, що у YAML на поді DSO додані такі анотації:
+
+----
+traffic.sidecar.istio.io/excludeOutboundIPRanges: {{ .Values.griada.ip }}
+traffic.sidecar.istio.io/excludeOutboundPorts: '{{ .Values.griada.port }}'
+----
+
+де замість {{ .Values.griada.ip }} буде 10.0.0.1
+
+а замість '{{ .Values.griada.port }}' буде 3080
+
+Анотації з helm chart для DSO-сервісу автоматично сформуються, якщо у _deploy-templates/values.yaml_ реєстру вказано наступне:
+
+IP гряди й порт:
+
+----
+griada:
+  enabled: true
+  ip: 10.0.0.1
+  port: 3080
+----
+
+. Виконати налаштування всередині самої Гряди, щоб технічний адміністратор Платформи мав змогу генерувати та сертифікувати ключі для Платформи та реєстрів, що будуть на ній розгорнуті.
+
+* Встановлення Гряди та інші корисні документи - див. за посиланням https://iit.com.ua/products[]
+* Налаштування доступу до Гряди - дока на ШП
+* Використання криптомодуля при роботі із ключами цифрового підпису на Платформі:
+
+** xref:admin:registry-management/system-keys/control-plane-platform-keys.adoc[]
+** xref:admin:registry-management/system-keys/control-plane-registry-keys.adoc[]
+
+
+
+// TODO: В чаті з Мішею
+
+Файлові ключі ::
+
+. #*Нерекомендованим шляхом*#, _який не пройде КСЗІ згідно з законом_, є використання файлових ключів для підпису.
+. Якщо інстанс знаходиться в AWS, потрібно забезпечити #*whitelisting*# зв'язку між дата-центром AWS та відповідними АЦСК (#*додати або створити посилання разом Федоренко*#).
 
 Посилання на документацію: xref:admin:installation/griada-301-deployment.adoc[] #???#
 
@@ -92,11 +155,9 @@ TIP: xref:registry-develop:registry-admin-study/reg-admin-study-overview.adoc[]
 
 === Налаштування відправлення повідомлень моніторингу
 
-#TBD#:: Взяти матеріал із сесій по КТ-L2
+//TODO: HERE
 
-* Monitoring Alerts
-
-//TODO: Віталій Моспан
+Перенести сюди доку з КБ: https://kb.epam.com/pages/viewpage.action?pageId=1877964289
 
 === Налаштування базових бордів в Kibana
 
@@ -162,7 +223,7 @@ TIP: xref:registry-develop:registry-admin-study/reg-admin-study-overview.adoc[]
 . Додати про розгортання реєстру через Control Plane та smoke-testing.
 
 * xref:admin:registry-management/control-plane-create-registry.adoc[]
-* xref:admin:registry-management/control-plane-view-registry.adoc[]
+* xref:admin:registry-management/control-plane-edit-registry.adoc[]
 
 . Додати інформацію про найперші дії, які має виконати тестувальник/адмін регламенту для того, щоб переконатися, що реєстр розгорнуто успішно.
 
@@ -170,14 +231,20 @@ TIP: xref:registry-develop:registry-admin-study/reg-admin-study-overview.adoc[]
 
 * xref:admin:update/update-registry-components.adoc[]
 
-=== #*! Типові проблеми з аутентифікацією у користувачів реєстру та при підписанні БП*#
+=== Типові проблеми з аутентифікацією у користувачів реєстру та при підписанні БП
 
-#TBD# ::
+* Перевірка ключа на https://id.gov.ua/sign[].
+* Перевірка, що на подах DSO реєстру і проєкті `user-management` встановлені останні сертифікати цифрового підпису.
 
-//TODO: Check with Liana
+Якщо ключі та сертифікати застаріли або з якоїсь причини не працюють, їх необхідно оновити.
 
-* Перевірка ключа на https://id.gov.ua/sign +
-* Перевірка, що в у ДСО реєстру і namespace user-management встановлені останні сертифікати ІІТ.
+[TIP]
+====
+Детальніше про оновлення ключів та сертифікатів цифрового підпису читайте на сторінках:
+
+* xref:admin:registry-management/system-keys/control-plane-platform-keys.adoc[]
+* xref:admin:registry-management/system-keys/control-plane-registry-keys.adoc[]
+====
 
 === Спеціальні кроки для оновлення реєстру
 
@@ -194,7 +261,6 @@ TIP: xref:registry-develop:registry-admin-study/reg-admin-study-overview.adoc[]
 * xref:registry-develop:registry-admin/regulations-deploy/registry-regulations-structure.adoc[]
 * xref:registry-develop:study-project/index.adoc#preconditions-setup[Що необхідно для початку роботи?]
 * xref:registry-develop:registry-admin/regulations-deploy/registry-admin-deploy-regulation.adoc[]
-//TODO: UPDATE
 * xref:platform-develop:registry-regulations-deployment.adoc[]
 * xref:registry-develop:registry-admin/regulations-deploy/registry-regulations-auto-validation.adoc[]
 * xref:registry-develop:registry-admin/admin-portal/overview.adoc[]
@@ -204,17 +270,66 @@ TIP: xref:registry-develop:registry-admin-study/reg-admin-study-overview.adoc[]
 
 === Рекомендований алгоритм внесення змін до регламенту реєстру
 
-#TBD#
+Після розгортання реєстру адміністратором Платформи, реєстр матиме порожній репозиторій Gerrit із регламентом.
 
-//TODO: Уточнити, які наші рекомендації
+Внесення змін до регламенту з нуля або згодом, під час оновлення регламенту, процесуально не відрізняється й відбувається за GitOps-підходом.
 
-Оновлення компонентів регламенту відбувається за тим самим підходом, що й розгортання: файли оновлюються в локальному середовищі, публікуються до віддаленого Gerrit-репозиторію. Пайплайн публікацій відстежує зміни у файлах директорій регламенту, і при git merge змін до майстер-гілки репозиторію, спрацьовує пайплайн публікацій `Master-build-registry-regulations`, який збирає увесь код. Після виконання пайплайну, зміни набувають чинності, а регламент оновлюється до нової версії останнього комміта.
+[TIP]
+====
+.Що таке GitOps-підхід?
+[%collapsible]
+=====
+GitOps -- це підхід до керування інфраструктурою та розгортання програмного забезпечення, який базується на використанні системи контролю версій Git.
 
-Також розказати про те, що у нас є можливість оновлювати регламент як за хардкорним шляхом, так і за більш зручним.
+У GitOps-підході всі конфігураційні файли, описи інфраструктури та код програмного забезпечення зберігаються в репозиторії Git. Це означає, що будь-які зміни в інфраструктурі або програмному забезпеченні відбуваються через коміти до Git-репозиторію.
+=====
+====
+
+Файли оновлюються в локальному середовищі, публікуються до віддаленого Gerrit-репозиторію. Пайплайн публікацій відстежує зміни у файлах директорій регламенту, і при git merge змін до майстер-гілки репозиторію, спрацьовує пайплайн публікацій *Master-Build-registry-regulations*, який збирає увесь код. Після виконання пайплайну, зміни набувають чинності, а регламент оновлюється до версії останнього коміту.
+
+Є можливість оновлювати регламент як за хардкорним шляхом, так і за більш зручним.
 
 _Хардкорний шлях_ -- це робота з каталогами файлів, git та Gerrit, через Git Bash консоль, або в інших інструментах, робота з Jenkins тощо.
 
+Алгоритм внесення змін:
+
+. Клонуйте на локальну машину порожній Gerrit-репозиторій із регламентом реєстру.
+. Додайте до каталогу _registry-regulations_ відповідні файли:
+* Створіть модель даних реєстру (_data-model_).
+* Змоделюйте бізнес-процеси (_bpmn_).
+* Змоделюйте UI-форми до бізнес-процесів (_forms_).
+* Визначте ролі для вашого реєстру (_roles_).
+* Визначте доступи до бізнес-процесів для відповідних ролей (_bp-auth_).
+* Визначте інші налаштування, передбачені регламентом вашого реєстру (сповіщення, витяги, глобальні змінні тощо).
+. Виконайте наступні команди:
++
+--
+git add --all
+
+git commit -m "message commit"
+
+git push refs/for/master
+--
+
+. Пройдіть рецензування коду -- Code Review. Спочатку має пройти автоматичний Jenkins процес перевірки *MASTER-Code-review-registry-regulations*, далі потрібно, щоб уповноважений адміністратор підтвердив внесення змін до регламенту.
+
+. Виконайте git merge (злиття змін) до master-гілки Gerrit репозиторію із регламентом реєстру.
+
 _Зручний спосіб_ -- це використання нового порталу адміністратора регламенту та його вбудованих можливостей.
+
+Алгоритм внесення змін:
+
+. Увійдіть до Кабінету адміністратора регламентів.
+. Створіть нову версію-кандидат на внесення змін.
+. Додайте відповідні зміни:
+* Створіть модель даних реєстру (Таблиці).
+* Змоделюйте бізнес-процеси (Моделі процесів).
+* Змоделюйте UI-форми до бізнес-процесів (Форми).
+* Визначте інші налаштування, передбачені регламентом вашого реєстру.
+
+. Перейдіть на вкладку Огляд версії та натисніть Застосувати зміни до майсте-гілки.
+
+Внаслідок цього створиться автоматичний запит на внесення змін до регламенту, який автоматично підтвердиться, зміни опублікуються в регламенті.
 
 * xref:registry-develop:registry-admin/regulations-deploy/registry-admin-deploy-regulation.adoc[]
 * xref:registry-develop:registry-admin/admin-portal/overview.adoc[]
@@ -262,15 +377,45 @@ _Зручний спосіб_ -- це використання нового по
 
 === Конфігурація реєстру під навантаження
 
-#TBD# ::
+Кожен реєстр має свої специфічні задачі, логіку роботи й налаштування, а звідси -- й набір певних сервісів, які залучені під виконання цих задач більшою або меншою мірою.
 
-// TODO: ask Yevgen Mospan
+Відповідно до навантаження на певний реєстр, а це напряму залежить від кількості запитів від активних користувачів, сервіси реєстру потребують певної кількості ресурсів та можуть бути розгорнуті в одному та більше екземплярах.
 
-Поки незрозуміло, про що мова.
+Для прикладу, під навантаженням у 1500 користувачів на 1 годину, умовний реєстр повинен мати приблизно наступну конфігурацію:
 
-#Йдеться про можливість обрати шаблон реєстру із необхідною кількістю ресурсів?#
+.Конфігурація реєстру
+[width="100%",cols="72%,28%",options="header",]
+|===
+|Admin portal/Officer portal/Citizen portal |1 instance
+|BPMS |4 instances
+|BP WS gateway |1 instance
+|BP admin portal |1 instance
+|DB/DB read replica |1 instance
+|Digital document service |1 instance
+|Digital signature service |2 instances
+|Excerpt services |1 instance
+|Form schema provider |3 instances
+|Form schema validator |3 instances
+|Istio gateway |1 instance
+|Infra (jenkins/gerrit/nexus etc.) |1 instance
+|Kafka services (exporter, schema registry) |1 instance
+|Kafka cluster |3 instances
+|Kafka cluster zookeeper |3 instances
+|Kong |3 instance
+|Language server |1 instance
+|Process history rest api |2 instances
+|Process history persistence service |1 instance
+|Redash services |1 instance
+|Registry rest api |4 instances
+|Registry kafka api |4 instances
+|Redis rfr (1000m) |2 instances
+|Redis rfs |3 instances
+|User settings rest api |1 instance
+|User task management |3 instances
+|User process management |2 instances
+|===
 
-Чи, можливо, про розділ із ресурсами у Control Plane?
+TIP: Детальніше про тестування навантаження див. на сторінці xref:testing:perf-test/perf-test-overview.adoc[].
 
 === Планування місця для сховищ реєстру
 
@@ -285,9 +430,10 @@ _До Стаса/Віталія._
 
 === Отримання доступу для L2 до системи сповіщень, моніторингу та логування у реєстрі
 
-#TBD# :: _До Віталія_
+Надайте права доступу до компонента `cluster-mgmt` у розділі Керування Платформою на Control Plane. Все, що потрібно зробити, -- це створити адміністратора Платформи, й відповідні права автоматично додадуться.
 
-Сповіщення які: monitoring alerts?
+TIP: Детальніше про це див. сторінку xref:admin:registry-management/control-plane-assign-platform-admins.adoc[].
+
 
 === Налаштування бекапів реєстру
 
@@ -296,11 +442,7 @@ _До Стаса/Віталія._
 
 === Налаштування реплікації файлів реєстру
 
-#TBD# ::
-
-#?..?#
-
-//TODO: Щось про реплікейшн-джобу, до Толі або Олесі
+//TODO: Налаштування резервного копіювання реплікації
 
 === Інтеграція з http://id.gov.ua[id.gov.ua] на рівні реєстру та використання стилізованого віджета
 
@@ -308,23 +450,14 @@ _До Стаса/Віталія._
 
 * xref:user:citizen-officer-portal-auth.adoc[]
 
-
-
-
-
-
-//TODO: HERE
-
-
-
-
-
-
 === Визначення порядку надання доступу надавачам послуг адміністратором доступу
 
-#TBD# ::
+//TODO: Аліса
 
-До Ліани.
+. Створюємо посадову особу.
+. Додаємо їй ролі у Keycloak, зокрема системну роль `officer` та інші передбачені логікою реєстру ролі.
+. Ці самі ролі визначаємо на рівні Gerrit-репозиторію з регламентом реєстру у файлі _roles/officer.yml_.
+. Налаштовуємо доступи до певних бізнес-процесів для відповідних ролей у файлі _bp-auth/officer.yml_.
 
 === Рекомендації щодо онбордингу надавачів та отримувачів послуг
 
@@ -335,11 +468,9 @@ _До Стаса/Віталія._
 ** xref:registry-develop:best-practices/bp-officer-self-register-auto.adoc[]
 
 * Отримувачам послуг:
-
-#TBD# ::
-
++
 //TODO:Оновлено процес онбордингу в рамках https://jiraeu.epam.com/browse/MDTUDDM-17161
-* xref:arch:architecture/platform/operational/user-management/citizen-onboarding.adoc[]
+** xref:arch:architecture/platform/operational/user-management/citizen-onboarding.adoc[]
 
 === Аутентифікація юридичних осіб до реєстру як отримувачів послуг
 
@@ -360,6 +491,10 @@ xref:registry-develop:registry-admin/regulations-deploy/cleanup-job.adoc[]
 === Налаштування обмежень доступу на мережевому рівні до адміністративних ендпоінтів реєстру, кабінетів отримувачів та надавачів послуг (CIDR)
 
 * xref:admin:registry-management/control-plane-cidr-access-endpoints.adoc#cidr-registry-components[Обмеження доступу до компонентів реєстру]
+
+=== Обмеження доступу на рівні IP до SOAP-роутів ШБО "Трембіта"
+
+* xref:admin:registry-management/control-plane-soap-api-access-trembita.adoc[]
 
 === Налаштування власних DNS-імен
 
