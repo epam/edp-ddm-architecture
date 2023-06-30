@@ -1,0 +1,345 @@
+= Цифровий регламент реєстру
+
+== Загальний опис
+
+_Регламент реєстру_ - цифрове представлення важливих аспектів функціонування реєстру, яке складається з декларативних описів організаційної структури, моделі даних, інформаційних та адміністративних послуг, інтеграцій з зовнішніми системами, тощо.
+
+Регламент реєстру зберігається в окремому репозиторії системи контроля версій _Git_ (_Gerrit_), що забезпечує реалізацію вимог безпеки, аудиту та відновлюваності.
+
+== Структура регламенту реєстру
+
+На даній структурній діаграмі представлено складові частини _регламенту реєстру_, які наразі підтримуються _Платформою Реєстрів_.
+
+image::architecture/registry/administrative/regulation-management/registry-regulation/regulation-structure.svg[width=800,float="center",align="center"]
+
+=== Структура репозиторію
+
+Представлення регламенту реєстру на файловій системі в _Git_-репозиторії:
+[plantuml, registry-regulation-structure, svg]
+----
+@startsalt
+{
+{T
++ <&folder> <i><registry-regulation></i>
+++ <&folder> <b>data-model</b>
++++ <&file> main-liquibase.xml
++++ <&file> <i><liquibase-file></i>.xml
++++ <&file> ...
+++ <&folder> <b>bpmn</b>
++++ <&file> <i><bp-name></i>.bpmn
++++ <&file> ...
+++ <&folder> <b>bp-grouping</b>
++++ <&file> bp-grouping.yml
+++ <&folder> <b>dmn</b>
++++ <&file> <i><rule-name></i>.dmn
++++ <&file> ...
+++ <&folder> <b>forms</b>
++++ <&file> <i><form-name></i>.json
++++ <&file> ...
+++ <&folder> <b>form-scripts</b>
++++ <&file> <i><script-name></i>.js
++++ <&file> ...
+++ <&folder> <b>roles</b>
++++ <&file> citizen.yml
++++ <&file> officer.yml
+++ <&folder> <b>bp-auth</b>
++++ <&file> citizen.yml
++++ <&file> external-system.yml
++++ <&file> officer.yml
+++ <&folder> <b>excerpts-csv</b>
++++ <&file> <i><template-name></i>.json
++++ <&file> ...
+++ <&folder> <b>excerpts-docx</b>
++++ <&file> <i><template-name></i>.docx
++++ <&file> ...
+++ <&folder> <b>excerpts</b>
++++ <&folder> <i><template-name></i>
+++++ <&file> index.html.ftl
++++ <&folder> ...
+++ <&folder> <b>reports</b>
++++ <&file> <i><report-name></i>.json
++++ ...
+++ <&folder> <b>notifications</b>
++++ <&folder> <b>inbox</b> (<i>channel</i>)
+++++ <&folder> <i><template-name></i>
++++++ <&file> notification.ftl
++++++ <&file> notification.yml
+++++ <&folder> ...
++++ <&folder> <b>email</b> (<i>channel</i>)
+++++ <&folder> <i><template-name></i>
++++++ <&file> notification.ftlh
++++++ <&file> notification.yml
+++++ <&folder> ...
++++ <&folder> <b>diia</b> (<i>channel</i>)
+++++ <&folder> <i><template-name></i>
++++++ <&file> notification.diia
++++++ <&file> notification.yml
+++++ <&folder> ...
+++ <&folder> <b>bp-trembita</b>
++++ <&file> configuration.yml
++++ <&file> external-system.yml
+++ <&folder> <b>global-vars</b>
++++ <&file> camunda-global-system-vars.yml
+++ <&folder> <b>settings</b>
++++ <&file> settings.yml
+++ <&folder> <b>mock-integrations</b>
++++ <&file> <i><external-system-name></i>.json
++++ <&file> ...
+++ <&folder> <b>autotests</b>
++++ <&file> ...
+++ <&file> settings.yml
+}
+}
+@endsalt
+----
+
+== Складові регламенту реєстру
+
+=== Загальні налаштування реєстру
+
+[IMPORTANT]
+--
+Заплановано та задокументовано редизайн. Детальніше можна ознайомитись у розділі xref:arch:architecture-workspace/platform-evolution/registry-settings/registry-settings.adoc[]
+--
+
+Дана складова частина регламенту відповідає за налаштування кастомізацій реєстру та представлена в репозиторії двома директоріями та файлами налаштувань в _YAML_-форматі:
+
+- `./settings/settings.yml` - Налаштування кастомізацій реєстру (коротка назва, повна назва, тощо.)
+
+.Формат визначення загальних налаштувань реєстру в _YAML_-форматі:
+[source, yaml]
+----
+settings:
+  general:
+    title: "<Значення налаштування>"
+    titleFull: "<Значення налаштування>"
+----
+
+- `./global-vars/camunda-global-system-vars.yml` - Налаштування реєстру (активна тема кабінетів, поштова адреса служби підтримки, тощо.)
+
+.Формат визначення загальних налаштувань реєстру в _YAML_-форматі:
+[source, yaml]
+----
+supportEmail: "<Значення налаштування>"
+themeFile: "<Значення налаштування>"
+----
+
+[TIP]
+--
+Детальніше з дизайном підсистем, які відповідають за налаштування та застосування загальних налаштувань реєстру можна ознайомитись у відповідних розділах:
+
+* xref:arch:architecture/registry/administrative/regulation-management/overview.adoc[]
+* xref:arch:architecture/registry/administrative/regulation-publication/overview.adoc[]
+* xref:arch:architecture/registry/operational/portals/overview.adoc[]
+--
+
+=== Шаблони аналітичних звітів
+
+Дана складова частина регламенту відповідає за налаштування шаблонів інформаційних панелей для перегляду даних та журналу подій аудиту реєстру. Представлена відповідною директорією:
+
+- `./reports` - містить шаблони інформаційних панелей у вигляді файлів _JSON_-формату, сумісного з _Redash_
+
+[TIP]
+--
+Детальніше з дизайном підсистем, які відповідають за моделювання та використання шаблонів інформаційних панелей можна ознайомитись у відповідних розділах:
+
+* xref:arch:architecture/registry/administrative/regulation-management/overview.adoc[]
+* xref:arch:architecture/registry/administrative/regulation-publication/overview.adoc[]
+* xref:arch:architecture/registry/operational/reporting/overview.adoc[]
+--
+
+=== Шаблони витягів з реєстру
+
+Дана складова частина регламенту відповідає за налаштування шаблонів для генерації витягів з реєстру. Представлена трьома директоріями з урахуванням типів витягів, які підтримуються _Платформою Реєстрів_:
+
+- `./excerpts` - містить файли шаблонів у _FTLH_-форматі для генерації _PDF_-витягів
+- `./excerpts-docx` - містить файли шаблонів у _DOCX_-форматі для генерації _DOCX_-витягів
+- `./excerpts-csv` - містить файли шаблонів у _JSON_-форматі для генерації _CSV_-витягів
+
+[TIP]
+--
+Детальніше з дизайном підсистем, які відповідають за моделювання та використання шаблонів витягів можна ознайомитись у відповідних розділах:
+
+* xref:arch:architecture/registry/administrative/regulation-management/overview.adoc[]
+* xref:arch:architecture/registry/administrative/regulation-publication/overview.adoc[]
+* xref:arch:architecture/registry/operational/excerpts/overview.adoc[]
+--
+
+=== Шаблони інформаційних повідомлень реєстру
+
+Дана складова частина регламенту відповідає за налаштування шаблонів для відправки інформаційних повідомлень користувачам реєстру. Представлена трьома директоріями з урахуванням каналів зв'язку, які підтримуються _Платформою Реєстрів_:
+
+- `./notifications/inbox` - містить файли шаблонів у _FTL_-форматі для генерації _in-app_-повідомлень
+- `./notifications/email` - містить файли шаблонів у _FTLH_-форматі для генерації тіла поштових повідомлень
+- `./notifications/diia` - містить файли шаблонів у текстовому _DIIA_-форматі, який застосовується в екосистемі _Дія_ для генерації повідомлень
+
+[TIP]
+--
+Детальніше з дизайном підсистем, які відповідають за моделювання та використання шаблонів інформаційних повідомлень можна ознайомитись у відповідних розділах:
+
+* xref:arch:architecture/registry/administrative/regulation-management/overview.adoc[]
+* xref:arch:architecture/registry/administrative/regulation-publication/overview.adoc[]
+* xref:arch:architecture/registry/operational/notifications/overview.adoc[]
+--
+
+=== Ролі користувачів реєстру
+
+Дана складова частина регламенту відповідає за налаштування ролей користувачів реєстру та представлена в репозиторії окремою директорією з двома файлами налаштувань в _YAML_-форматі:
+
+- `./roles/citizen.yml` - містить перелік ролей отримувачів послуг реєстру
+- `./roles/officer.yml` - містить перелік ролей надавачів послуг реєстру
+
+.Формат визначення регламентних ролей реєстру в _YAML_-форматі:
+[source, yaml]
+----
+roles:
+  - name: "<Службова назва ролі>"
+    description: "<Опис регламентної ролі>"
+  - ...
+----
+
+=== Бізнес-процеси реєстру
+
+Дана складова частина регламенту відповідає за моделі бізнес-процесів у BPMN-нотації та представлена окремою директорією:
+
+- `./bpmn` - містить файли у _BPMN_-форматі з моделями адміністративних та інформаційних послуг реєстру
+
+[TIP]
+--
+Детальніше з дизайном підсистем, які відповідають за моделювання та використання шаблонів інформаційних повідомлень можна ознайомитись у відповідних розділах:
+
+* xref:arch:architecture/registry/administrative/regulation-management/overview.adoc[]
+* xref:arch:architecture/registry/administrative/regulation-publication/overview.adoc[]
+* xref:arch:architecture/registry/operational/bpms/overview.adoc[]
+--
+
+=== Модель даних реєстру
+
+Дана складова частина регламенту відповідає за опис фізичної моделі даних реєстру, API доступу до даних та налаштування прав доступу. Представлена окремою директорією:
+
+* `./data-model` - містить набір _Liquibase_-файлів з декларативними описами:
+** Типи даних
+** Структури таблиць
+** Аналітичні представлення
+** Пошукові критерії
+** Складені сутності
+** Операції часткових змін даних
+** Налаштування прав доступу до даних
+
+[TIP]
+--
+Детальніше з дизайном підсистем, які відповідають за моделювання та використання моделі даних можна ознайомитись у відповідних розділах:
+
+* xref:arch:architecture/registry/administrative/regulation-management/overview.adoc[]
+* xref:arch:architecture/registry/administrative/regulation-publication/overview.adoc[]
+* xref:arch:architecture/registry/operational/registry-management/overview.adoc[]
+--
+
+=== Тестування регламенту реєстру
+
+Дана складова частина регламенту відповідає за налаштування симуляції API зовнішніх систем та набір автоматизованих тестів. Представлена двома директоріями:
+
+- `./autotests` - набір _BDD_ функціональних тестів для автоматизованого тестування реєстру
+- `./mock-integrations` - набір _JSON_-файлів у _Wiremock_-форматі з описом правил мокування API зовнішніх систем з ціллю їх подальшої симуляції у процесі ручного та автоматизованого тестування реєстру.
+
+[TIP]
+--
+Детальніше з дизайном підсистем, які відповідають за моделювання та використання складової регламенту можна ознайомитись у відповідних розділах:
+
+* xref:arch:architecture/registry/administrative/regulation-management/overview.adoc[]
+* xref:arch:architecture/registry/administrative/regulation-publication/overview.adoc[]
+* xref:arch:architecture/registry/operational/ext-systems-simulation/overview.adoc[]
+--
+
+=== Права доступу до бізнес-процесів реєстру
+
+Дана складова частина регламенту відповідає за налаштування прав доступу до бізнес-процесів та представлена в репозиторії окремою директорією з трьома файлами налаштувань в _YAML_-форматі:
+
+- `./bp-auth/officer.yml` - Налаштувань прав доступу надавачів послуг до бізнес-процесів
+- `./bp-auth/citizen.yml` - Налаштувань прав отримувачів надавачів послуг до бізнес-процесів
+- `./bp-auth/external-system.yml` - Налаштувань прав доступу зовнішніх систем до бізнес-процесів
+
+.Формат визначення прав доступу до бізнес-процесів в _YAML_-форматі:
+
+[source, yaml]
+----
+authorization:
+  realm: "<realm: [officer,citizen,external-system]>"
+  process_definitions:
+    - process_definition_id: "<Ключ бізнес-процесу>"
+      process_name: "<Назва бізнес-процесу>"
+      process_description: "<Опис бізнес-процесу>"
+      roles:
+        - '<Роль>'
+        - '...'
+    - ...
+----
+
+[TIP]
+--
+Детальніше з дизайном підсистем, які відповідають за налаштування та використання прав доступу можна ознайомитись у відповідних розділах:
+
+* xref:arch:architecture/registry/administrative/regulation-management/overview.adoc[]
+* xref:arch:architecture/registry/administrative/regulation-publication/overview.adoc[]
+* xref:arch:architecture/registry/operational/bpms/overview.adoc[]
+* xref:arch:architecture/registry/operational/portals/overview.adoc[]
+* xref:arch:architecture/registry/operational/external-integrations/overview.adoc[]
+--
+
+=== UI-форми бізнес-процесів реєстру
+
+Дана складова частина регламенту відповідає за налаштування UI-форм користувацьких задач бізнес-процесів реєстру. Представлена двома директоріями:
+
+- `./forms` - містить файли з описом структур UI-форм у _JSON_-форматі, сумісному з _Form.UI_
+- `./form-scripts` - містить _JavaScript_-файли з описом функцій, які використовується в UI-формах
+
+[TIP]
+--
+Детальніше з дизайном підсистем, які відповідають за моделювання та використання UI-форм бізнес-процесів можна ознайомитись у відповідних розділах:
+
+* xref:arch:architecture/registry/administrative/regulation-management/overview.adoc[]
+* xref:arch:architecture/registry/administrative/regulation-publication/overview.adoc[]
+* xref:arch:architecture/registry/operational/bpms/overview.adoc[]
+--
+
+=== Інтеграція реєстру з зовнішніми системами
+
+Дана складова частина регламенту відповідає за налаштування вихідних та вхідних інтеграцій реєстру та представлена окремою директорією з двома файлами налаштувань в _YAML_-форматі:
+
+- `./bp-trembita/configuration.yml` - Налаштування точок інтеграції з зовнішніми системами згідно конфігурації реєстру
+
+.Формат визначення загальних налаштувань реєстру в _YAML_-форматі:
+[source, yaml]
+----
+external-systems:
+  external-system-name1:
+        operations:
+          ...
+  external-system-name2:
+        operations:
+          ...
+  ...
+----
+
+- `./bp-trembita/external-systems.yml` - Налаштування API для виклику бізнес-процесів зовнішніми системами
+
+.Формат визначення загальних налаштувань реєстру в _YAML_-форматі:
+[source, yaml]
+----
+trembita:
+  process_definitions:
+    - process_definition_id: '<Ключ бізнес-процесу>'
+      start_vars: []
+      return_vars: []
+   - ...
+----
+
+[TIP]
+--
+Детальніше з дизайном підсистем, які відповідають за налаштування та використання налаштувань інтеграцій з зовнішніми системами можна ознайомитись у відповідних розділах:
+
+* xref:arch:architecture/registry/administrative/regulation-management/overview.adoc[]
+* xref:arch:architecture/registry/administrative/regulation-publication/overview.adoc[]
+* xref:arch:architecture/registry/operational/bpms/overview.adoc[]
+* xref:arch:architecture/registry/operational/external-integrations/overview.adoc[]
+--
