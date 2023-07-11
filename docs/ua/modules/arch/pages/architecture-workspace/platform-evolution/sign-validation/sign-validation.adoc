@@ -1,0 +1,253 @@
+= Можливість перевіряти валідність підпису КЕП і ким підписано контент, що прийшов в бізнес процес по API
+
+== Загальний опис
+
+В бізнес-процесах є необхідність мати можливість перевіряти цілісність даних включаючи файлів отриманих з інших джерел за допомогою перевірки КЕП.
+
+== Функціональні сценарії
+
+* Перевірка даних які містять в собі КЕП після завантаження файлу зі сторонньої системи в скрипт-задачі.
+* Отримання деталей про підписанта файлу.
+* Перевірка даних на відповідність підпису.
+* Отримання контенту з даних ASiC-формату
+
+== Ролі користувачів
+
+* Моделювальник
+
+== Загальні принципи та положення
+
+* Дані опрацьовуються в скрипт-задачах бізнес-процесу.
+* Отримання даних з сторонніх джерел поза межами цього дизайну.
+* Валідація даних за окремим підписом здійснюється за допомогою існуючих механізмів
+* Байтові дані між системами передаються закодованими за допомогою Base64
+
+== REST API
+
+=== Специфікація REST-методу
+
+_POST /asic-verify_
+
+.Структура тіла запиту
+|===
+|Json Path|Тип|Опис
+
+|*$.data*
+|String
+|Дані закодовані в формат Base64
+
+|===
+
+.Приклад тіла запиту
+[source, json]
+----
+{
+  "data": "dGVzdCBkYXRh"
+}
+----
+
+.Структура тіла відповіді
+|===
+|Json Path|Тип|Опис
+
+|*$.isValid*
+|boolean
+|Результат перевірки даних
+|*$.errorCode*
+|String
+|Відповідний код статусу
+|*$.errorMessage*
+|String
+|Деталі та опис помилки
+|===
+
+
+_POST /asic-sign-info_
+
+.Структура тіла запиту
+|===
+|Json Path|Тип|Опис
+
+|*$.data*
+|String
+|Дані закодовані в формат Base64
+
+|===
+
+.Приклад тіла запиту
+[source, json]
+----
+{
+  "data": "dGVzdCBkYXRh"
+}
+----
+
+.Структура тіла відповіді
+|===
+|Json Path|Тип|Опис
+
+|*$.signInfo.issuer*
+|String
+|
+|*$.signInfo.issuerCN*
+|String
+|
+|*$.signInfo.serial*
+|String
+|
+|*$.signInfo.subject*
+|String
+|
+|*$.signInfo.subjCN*
+|String
+|
+|*$.signInfo.subjOrg*
+|String
+|
+|*$.signInfo.subjOrgUnit*
+|String
+|
+|*$.signInfo.subjTitle*
+|String
+|
+|*$.signInfo.subjState*
+|String
+|
+|*$.signInfo.subjLocality*
+|String
+|Локаль підписанта
+|*$.signInfo.subjFullName*
+|String
+|ПІБ підписанта
+|*$.signInfo.subjAddress*
+|String
+|Адреса підписанта
+|*$.signInfo.subjPhone*
+|String
+|Телефон підписанта
+|*$.signInfo.subjDNS*
+|String
+|
+|*$.signInfo.subjEDRPOUCode*
+|String
+|ЄДРПОУ підписанта
+|*$.signInfo.subjDRFOCode*
+|String
+|ДРФО підписанта
+|*$.errorCode*
+|String
+|Відповідний код статусу
+|*$.errorMessage*
+|String
+|Деталі та опис помилки
+|===
+
+_POST /asic-data_
+
+.Приклад тіла запиту
+[source, json]
+----
+{
+  "data": "dGVzdCBkYXRh"
+}
+----
+
+.Структура тіла відповіді
+|===
+|Json Path|Тип|Опис
+
+|*$.data*
+|String
+|Дані закодовані в формат Base64
+|*$.errorCode*
+|String
+|Відповідний код статусу
+|*$.errorMessage*
+|String
+|Деталі та опис помилки
+|===
+
+
+Валідація та отримання деталей про підпис відбувається за допомогою `ІІТ`-бібліотеки, розглядаються два сценарії в залежності від формату даних.
+Коли дані і підпис існують окремо та коли дані і підпис в архіві (формат ASiC).
+
+Для валідації даних за допомогою окремо існуючих підписів використовується існуючї інтеграції з сервісом цифрових підписів `/api/eseal/verify`
+
+Для операцій з даними в ASiC-форматі використовується метод `EndUser:ASiCVerify` і відповідні методи обʼєкту `EndUserSignInfo` для отримання інформації про підписанта і валідації даних `EndUserSignInfo:GetOwnerInfo` та для отримання контенту в форматі `Base64` який був підписаний `EndUserSignInfo:GetDataString`
+
+== JUEL функції
+
+=== get_sign_info(<string|data>)
+
+[plantuml]
+----
+participant "get_sign_details(<string|data>)" as sign
+participant "Camunda Execution Context" as camunda
+participant "Digital Signature Ops service" as dso
+-> sign: виклик функції
+sign -> camunda: відправка закодованих даних\nу форматі Base64
+camunda -> dso: /api/eseal/asic-verify-details
+return відповідь сервісу
+camunda --> sign: SignInfo
+<-- sign: отримання результату
+----
+
+=== get_sign_info(<string|data>, <string|signature>)
+
+[plantuml]
+----
+participant "get_sign_info(<string|data>, <string|signature>)" as sign
+participant "Camunda Execution Context" as camunda
+participant "Digital Signature Ops service" as dso
+-> sign: виклик функції
+sign -> camunda: відправка закодованих даних\nі підпису у форматі Base64
+camunda -> dso: /api/eseal/verify
+return відповідь сервісу
+camunda --> sign: SignInfo
+<-- sign: отримання результату
+----
+
+=== validate_signature(<string|data>)
+[plantuml]
+----
+participant "validate_signature(<string|data>)" as sign
+participant "Camunda Execution Context" as camunda
+participant "Digital Signature Ops service" as dso
+-> sign: виклик функції
+sign -> camunda: відправка закодованих даних\nу форматі Base64
+camunda -> dso: /api/eseal/asic-verify
+return відповідь сервісу
+camunda -> camunda: опрацювання відповіді
+camunda --> sign: boolean
+<-- sign: отримання результату
+----
+
+=== validate_signature(<string|data>, <string|signature>)
+[plantuml]
+----
+participant "validate_signature(<string|data>, <string|signature>)" as sign
+participant "Camunda Execution Context" as camunda
+participant "Digital Signature Ops service" as dso
+-> sign: виклик функції
+sign -> camunda: відправка закодованих даних\nі підпису у форматі Base64
+camunda -> dso: /api/eseal/verify
+return відповідь сервісу
+camunda -> camunda: опрацювання відповіді
+camunda --> sign: boolean
+<-- sign: отримання результату
+----
+
+=== get_content(<string|data>)
+[plantuml]
+----
+participant "get_content(<string|data>)" as sign
+participant "Camunda Execution Context" as camunda
+participant "Digital Signature Ops service" as dso
+-> sign: виклик функції
+sign -> camunda: відправка закодованих даних\nу форматі Base64
+camunda -> dso: /api/eseal/asic-data
+return відповідь сервісу
+camunda -> camunda: декодування даних Base64
+camunda --> sign: byte[] дані
+<-- sign: отримання результату
+----
