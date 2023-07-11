@@ -1,0 +1,174 @@
+:toc-title: On this page:
+:toc: auto
+:toclevels: 5
+:experimental:
+:sectnums:
+:sectnumlevels: 5
+:sectanchors:
+:sectlinks:
+:partnums:
+
+//= Генерація унікального номера для створених у реєстрі сутностей
+= Generating a unique number for registry entities
+
+//== Загальний опис
+== Overview
+
+//На платформі реалізовано можливість налаштувати для певного атрибута сутності формування системою унікального номера. Кожний створений у бізнес-процесі екземпляр отримує унікальний та зрозумілий для користувача номер. Номер формується під час збереження сутності та є унікальним у рамках окремого реєстру.
+The Platform supports generating a unique number for a specific attribute of an entity. Each entity created via a business process receives a unique and user-friendly number. The number is generated when the entity is saved and is unique within the registry instance.
+
+[TIP]
+====
+//Сутностями можуть бути документи, наприклад, акти виконаних робіт тощо.
+The entities may include documents such as certificates of completion and so on.
+====
+
+//Моделювальник даних має можливість обрати, для яких сутностей необхідно генерувати такий номер, та в якому атрибуті сутності він зберігатиметься.
+A data modeler can choose the entities for which a number should be generated and the attribute where it should be stored.
+
+//Генерація номера відбувається згідно з маскою, вказаною користувачем. Маска може відрізнятися, залежно від сутностей та бізнес-процесів. Маску можна вказати як шаблон за замовчуванням.
+The number is generated according to the mask you specify. The mask may vary depending on the entities and business processes. You can specify a default mask template.
+
+//== Конфігурація
+== Configuration
+
+//Налаштування функціональності відбувається на рівні моделі даних регламенту реєстру, у директорії _data-model_.
+The number generator feature is configured at the registry regulations' data model level, in the _data-model_ directory.
+
+//_Моделювальник даних має:_
+_A data modeler must do the following:_
+
+//. У регламенті реєстру відкрити директорію _data-model_.
+. Open the _data-model_ directory in the registry regulations.
+//. Відкрити файл для створення таблиць.
+. Open the file for creating tables.
+//. В рамках `changeSet` для створення нової таблиці, знайти тег `<column>` і всередині цього тегу визначити атрибут `ext:autoGenerate` з маскою (шаблоном) для генерації номерів у відповідному форматі.
+. Within the `changeSet` for creating a new table, find the `<column>` tag.
+. Define the `ext:autoGenerate` attribute and a mask for generating numbers in the appropriate format within the `<column>` tag.
+//. Виконати commit до Gerrit-репозиторію з регламентом реєстру для застосування змін (_детальніше -- див. сторінку xref:registry-admin/regulations-deploy/registry-admin-instruments-access.adoc#commit-changes-to-gerrit[Внесення змін до регламенту]_).
+. Commit the changes to the registry regulations Gerrit repository. For details, see xref:registry-admin/regulations-deploy/registry-admin-instruments-access.adoc#commit-changes-to-gerrit[Applying changes to the regulations].
+
+._XML schema of using the ext:autoGenerate attribute_
+[%collapsible]
+====
+[source,xml]
+----
+<createTable ...>
+...
+    <column name="column_name" type="TEXT" ext:autoGenerate="AA-{dd-MM-yyyy}-{SEQ}">
+    </column>
+...
+</createTable>
+----
+
+//`AA-{dd-MM-yyyy}-{SEQ}` -- Маска, відповідно до якої генерується номер для сутності (документа/акту), де:
+`AA-{dd-MM-yyyy}-{SEQ}` is the template used to generate the number for the entity (such as a document or certificate), where:
+
+//* Константа `АА` -- код типу документа (літери українською).
+* The `AA` constant is the document code.
+//* Змінна `{dd-MM-yyyy}` -- дата у форматі Java.
+* The `{dd-MM-yyyy}` variable is the date in Java format.
+//* Змінна `{SEQ}` -- згенерований порядковий номер. Додається за принципом `{SEQ} + 1`. Це означає, що кожний новий документ матиме унікальний номер, більший на одиницю за попередній.
+* The `{SEQ}` variable is the sequence number. It is generated using the `{SEQ} + 1` principle, meaning that each new document will have a unique number incremented by 1.
+====
+
+//._Приклад. Використання атрибута автогенерації номерів для актів у реєстрі_
+._Example of generating numbers for certificates in the registry_
+[%collapsible]
+====
+[source,xml]
+----
+<changeSet id="table auto generated number build" author="registry owner">
+	<createTable tableName="entity_build_acts" ext:historyFlag="true" remarks="Registry type, building certificates">
+		<column name="entity_id" type="UUID" defaultValueComputed="uuid_generate_v4()">
+			<constraints nullable="false" primaryKey="true" primaryKeyName="pk_entity_build_acts"/>
+		</column>
+		<column name="build_number" type="TEXT">
+			<constraints nullable="false"/>
+		</column>
+		<column name="section_number" type="TEXT" remarks="Section"/>
+		<column name="flat_number" type="TEXT"/>
+		<column name="auto_generated_number" type="TEXT" ext:autoGenerate="AA-{dd-MM-yyyy}-{SEQ}">
+			<constraints nullable="false" unique="true"/>
+		</column>
+		<column name="build_type" type="UUID" remarks="IDs array">
+			<constraints nullable="false"
+						 foreignKeyName="fk_build_type"
+						 referencedTableName="build_type"
+						 referencedColumnNames="build_type_id"/>
+		</column>
+	</createTable>
+</changeSet>
+----
+====
+
+[NOTE]
+====
+//Для формування та валідації маски дати та часу система використовує https://docs.oracle.com/javase/8/docs/api/java/time/format/DateTimeFormatter.html[Java Date Time Format].
+The system uses the https://docs.oracle.com/javase/8/docs/api/java/time/format/DateTimeFormatter.html[Java Date Time Format] to generate and validate the timestamp template.
+
+//Послідовність символів, наявність дефісів, а також регістр для днів, місяців та років не має значення.
+The sequence of characters, the use of hyphens, and the letter case for days, months, and years are not important.
+====
+
+//Ми рекомендуємо використовувати наступні схеми формату Java Date Time для встановлення маски у моделі даних:
+We recommend using the following Java Date Time format schemas when defining a template in the data model:
+
+//.Схеми дати й часу Java-формату та результат
+.Java date and time schemas and examples
+|===
+|Schema|Example
+
+|`dd-MM-yyyy hh:mm:ss`
+|`02-09-2022 06:07:59`
+
+|`YYYYMMDD hh:mm:ss`
+|`20220902 06:07:59`
+
+|`MM/dd/yyyy`
+|`09/02/2022`
+
+|`dd/MM/yyyy`
+|`02/09/2022`
+|===
+
+//== Застосування атрибута ext:autoGenerate у бізнес-процесі
+== Using the ext:autoGenerate attribute in a business process
+
+//Після успішного розгортання регламенту із використанням атрибуту `ext:autoGenerate` для колонок таблиць БД, система генеруватиме зрозумілий унікальний номер для документів/актів за фактом виконання відповідних бізнес-процесів згідно зі встановленою маскою. Далі цей номер зберігатиметься у базі даних реєстру і може використовуватися, наприклад, для формування аналітичної звітності тощо.
+After deploying the regulations using the `ext:autoGenerate` attribute for the database table columns, the system generates a unique and user-friendly number for each document according to the defined template once a relevant business process is executed. This number is then stored in the registry database and can be used when generating analytical reports and so on.
+
+[TIP]
+====
+//Розглянемо приклад виконання бізнес-процесу генерації номера у Кабінеті посадової особи.
+Let's consider an example of running a business process to generate a number in the officer portal.
+====
+
+//. Увійдіть до Кабінету посадової особи.
+. Sign in to the officer portal.
+//. Відкрийте розділ _Доступні послуги_.
+. Open the *All services* section.
+//. Запустіть відповідний бізнес-процес.
+. Start a corresponding business process.
++
+image:data-modeling/data/physical-model/bp-auto-generate-attribute/auto-generate-number-1.png[]
+//. Заповніть порожні поля відповідними значеннями та натисніть `Submit`.
+. Fill out the form and click *`Submit`*.
++
+image:data-modeling/data/physical-model/bp-auto-generate-attribute/auto-generate-number-2.png[]
+//. Підпишіть дані, внесені на попередній формі.
+. Sign the data you provided.
++
+image:data-modeling/data/physical-model/bp-auto-generate-attribute/auto-generate-number-3.png[]
+//. В результаті підписання задачі, система згенерує номер створеного акту та збереже його до бази даних реєстру.
+. Once you sign the data, the system will generate the number for the newly created document and save it to the registry database.
++
+//Номер створеного акту відповідає встановленій масці `AA-{dd-MM-yyyy}-{SEQ}` на рівні регламенту, у моделі даних.
+The number of the document matches the template defined in the data model at the regulations level: `AA-{dd-MM-yyyy}-{SEQ}`
++
+image:data-modeling/data/physical-model/bp-auto-generate-attribute/auto-generate-number-4.png[]
++
+//В нашому випадку згенеровано акт №4 з кодом АА від 14-09-2022.
+In our example, the system generated a certificate number 4 with an AA code dated 09-14-2022.
+//. Натисніть `Submit` для завершення процесу.
+. Click *`Submit`* to finish the process.
