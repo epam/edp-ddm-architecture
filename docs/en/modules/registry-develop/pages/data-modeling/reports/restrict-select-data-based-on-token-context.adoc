@@ -1,0 +1,85 @@
+:toc-title: On this page:
+:toc: auto
+:toclevels: 5
+:experimental:
+:sectnums:
+:sectnumlevels: 5
+:sectanchors:
+:sectlinks:
+:partnums:
+
+//= Обмеження вибірки даних на основі інформації з токена
+= Restricting data samples based on token information
+
+//== Загальний опис
+== Overview
+
+//Адміністратор регламенту може [.underline]#обмежувати вибірку даних# під час формування запитів (queries) в інтерфейсі Redash. Це можна зробити [.underline]#на основі контекстної інформації, отриманої із JWT-токена#.
+The regulations administrator can restrict the data sample when creating queries in Redash. This can be done based on the context information obtained from the JWT token.
+
+//[TIP]
+//Контекстна інформація -- [.underline]#атрибути користувача#, що передаються сервісом *Keycloak*.
+TIP: Context information refers to the user attributes transmitted by the *Keycloak* service.
+
+//Наприклад, атрибут `edrpou` може вказувати на приналежність користувача до певної установи (школи, банку, компанії тощо).
+For example, the `edrpou` attribute can indicate the user's affiliation with a certain institution (such as a school, bank, or company).
+
+//Адміністратор звітності може написати запит, який видаватиме з усієї вибірки [.underline]#лише ті дані, які містять заданий атрибут#. Наприклад, якщо необхідно сформувати звіт за паралелями, або класами саме тієї школи, яку представляє посадовець/посадовці із таким атрибутом.
+A report administrator can write a query limiting the data sample to records containing the given attribute value. For example, this way you can restrict the report to the classes of the school that a specific official represents.
+
+//TODO: ua-specific example of edrpou being part of keycloak
+[NOTE]
+====
+//Аутентифікація у сервісі Redash відбувається через сервіс управління ідентифікацією та доступом Keycloak за протоколом SOAP у форматі XML. При цьому під час аутентифікації, з Keycloak до Redash у токені передаються всі атрибути користувача, включно з атрибутом `edrpou`.
+Authentication in the Redash service works through the Keycloak identity and access management service using the SOAP protocol in XML format. During authentication, all user attributes, including the `edrpou` attribute, are transferred from Keycloak to Redash via the token.
+
+//Атрибути стають доступними для читання у сервісі Redash за допомогою плейсхолдерів у форматі `[[<attributeName>]]`.
+//Наприклад, `edrpou =` +++<code>'[[edrpou]]'</code>+++.
+Attributes become readable in Redash using placeholders in the following format: `[[<attributeName>]]`.
+
+For example, `edrpou =` +++<code>'[[edrpou]]'</code>+++.
+====
+
+//== Формування запита в Redash
+== Creating a query in Redash
+
+[NOTE]
+====
+//Щоб обмежити вибірку, наприклад, за атрибутом `edrpou`, необхідно знати код ЄДРПОУ користувача. Він має бути вказаний як атрибут `edrpou` у сервісі Keycloak.
+To limit the selection by the `edrpou` attribute, you need to know the user's EDRPOU code. It must be specified as the `edrpou` attribute in the Keycloak service.
+
+image::data-modeling/reports/restrict-select-token-redash/keycloak-edrpou-attr.png[]
+====
+
+Create a new query: ::
+//. В інтерфейсі адміністратора Redash (`redash-admin`) відкрийте секцію [.underline]#Запити# та натисніть `Новий Запит`.
+. Sign in to the Redash admin interface (`redash-admin`).
+. Open the *Queries* section and click *`New query`*.
++
+image:registry-develop:study-project/task-6/task-6-2-1-redash.png[]
++
+//. Напишіть запит для вибірки даних із відповідної таблиці-представлення.
+. Write a query to retrieve data from a corresponding view table.
++
+.Querying the registry.report_laboratory_v table
+====
+[source,sql]
+----
+SELECT * FROM registry.report_laboratory_v
+WHERE edrpou = '[[edrpou]]'
+----
+====
++
+//. Натисніть кнопку `Виконати`.
+. Click the *`Execute`* button.
++
+//В результаті ви отримаєте дані лише за вказаним атрибутом.
+As a result, the system returns data that matches the attribute you specified.
++
+image::data-modeling/reports/restrict-select-token-redash/restrict-select-token-redash-1.png[]
+
+[TIP]
+====
+//Більш детальну інформацію що формування аналітичної звітності в Redash ви можете отримати на сторінці xref:study-project/study-tasks/task-6-registry-reports-modeling.adoc[]
+For details on creating analytical reports in Redash, see xref:study-project/study-tasks/task-6-registry-reports-modeling.adoc[].
+====
