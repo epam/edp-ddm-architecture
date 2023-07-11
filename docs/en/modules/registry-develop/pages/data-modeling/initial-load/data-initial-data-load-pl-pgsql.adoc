@@ -1,0 +1,200 @@
+:toc-title: On this page:
+:toc: auto
+:toclevels: 5
+:experimental:
+:sectnums:
+:sectnumlevels: 5
+:sectanchors:
+:sectlinks:
+:partnums:
+
+//= Опис процедури PL/pgSQL для первинного завантаження даних реєстру
+= PL/pgSQL procedure for initial loading of registry data
+
+//Для первинного завантаження даних використовується БД-процедура https://www.postgresql.org/docs/9.6/plpgsql.html[PL/pgSQL].
+A https://www.postgresql.org/docs/9.6/plpgsql.html[PL/pgSQL] database procedure is used for initial data loading.
+
+//CAUTION: Перед виконанням процедури первинного завантаження даних, переконайтеся, що виконано передумови, описані в секції xref:data-modeling/initial-load/data-initial-data-load-prep.adoc[Підготовка даних до міграції].
+CAUTION: Before you start the initial data loading, ensure all the prerequisite steps described in xref:data-modeling/initial-load/data-initial-data-load-prep.adoc[] are performed.
+
+//== Специфікація PL/pgSQL процедури для БД Платформи
+== PL/pgSQL procedure specification for the Platform database
+
+[source, sql]
+----
+CREATE OR REPLACE PROCEDURE p_load_table_from_csv(
+p_table_name text
+, p_file_name text
+, p_table_columns text[]
+, p_target_table_columns text[] DEFAULT NULL::text[]
+);
+----
+
+//=== Опис параметрів
+=== Parameters description
+
+//* `p_table_name` - назва цільової таблиці;
+* `p_table_name`: Target table name.
+//* `p_file_name` - повний шлях до файлу з даними для завантаження у форматі CSV;
+* `p_file_name`: Full path to the CSV data file.
+//* `p_table_columns` - масив назв полів у файлі даних (перший рядок CSV-файлу);
+* `p_table_columns`: An array of field names in the data file (first row in a CSV file).
+//* `p_target_table_columns` - масив полів цільової таблиці (відсутній, якщо перелік полів збігається із полями в CSV-файлі).
+* `p_target_table_columns`: An array of target table fields. Empty if the field list matches the fields in the CSV file.
+
+//**Значення елементів параметру `p_target_table_columns` може набувати різних форматів**:
+The elements of the `p_target_table_columns` parameter can be provided in different formats: ::
+
+//* `<col_name>` -- поле в цільовій таблиці отримує значення відповідного (за назвою) поля в CSV-файлі;
+* `<col_name>`: The field in the target table receives the value from the corresponding field (with the same name) in the CSV file.
+//* `<col_name>::<some_calculation_based_on_source_cols>` -- поле отримує значення -- результат виразу
+* `<col_name>::<some_calculation_based_on_source_cols>`: The field in the target table receives the value that is the result of the expression.
++
+//TIP: Детальніше -- див. підрозділ xref:complex-case-1[Cкладний сценарій 1] у прикладах виклику.
+TIP: For details, jump to the xref:complex-case-1[Complex scenario 1] call example.
++
+//* `<col_name>::ref(lookup_col:<lookup_col_name>, ref_table:<ref_table_name>, ref_col:<ref_col_name>, ref_id:<ref_id_col_name>)` -- для даного формату "під капотом" виконується наступний SQL-запит, що реалізовує пошук `id` по таблиці довідника:
+* `<col_name>::ref(lookup_col:<lookup_col_name>, ref_table:<ref_table_name>, ref_col:<ref_col_name>, ref_id:<ref_id_col_name>)`: For this format, the system runs the following SQL query, which searches the directory table by `id`:
++
+[source, sql]
+----
+SELECT <ref_id> INTO <col_name> FROM <ref_table> WHERE <ref_col> = <lookup_col>;
+----
++
+//Такий запит застосовується у випадку, коли поле містить зовнішній ключ (_англ. -- foreign key_) посилання на довідник, а значення для завантаження у CSV-файлі представлене не ідентифікатором, а описовим полем, проте значення цього поля мають бути унікальними.
+A request like this is used when the field contains a foreign key reference to the directory, and the value in the CSV file is represented not by an identifier but by a descriptive field, but the values of this field must be unique.
++
+//TIP: Детальніше -- див. підрозділ xref:complex-case-2[Cкладний сценарій 2] у прикладах виклику.
+TIP: For details, jump to xref:complex-case-2[Complex scenario 2] call example.
++
+//* `<col_name>::ref_array(lookup_col:<lookup_col_name>, ref_table:<ref_table_name>, ref_col:<ref_col_name>, ref_id:<ref_id_col_name>, delim:<delimeter_character>)` -- цей формат відмінний від попереднього лише тим, що поле `<lookup_col_name>` у CSV-файлі містить масив описових значень. В результаті повертатиметься масив відповідних `id`.
+* `<col_name>::ref_array(lookup_col:<lookup_col_name>, ref_table:<ref_table_name>, ref_col:<ref_col_name>, ref_id:<ref_id_col_name>, delim:<delimeter_character>)`: This format differs from the previous one only in that the `<lookup_col_name>` field in the CSV file contains an array of descriptive values. As a result, an array of matching `ids` will be returned.
+
+//== Приклади виклику процедури
+== Procedure call examples
+
+[#simple-case]
+=== Simple scenario
+
+[source, sql]
+----
+CALL p_load_table_from_csv('research',
+'D:\PostgreSQL\csv\uuid\01-Typy_doslidgen_uuid.csv', array
+['uuid','research_type'], array['research_type']);
+----
+
+[#complex-case-1]
+=== Complex scenario 1
+
+[source, sql]
+----
+CALL p_load_table_from_csv('koatuu','${dataLoadPath}03-KOATUU_simple.csv'
+, array['code','category','name']
+, array['code','category','name'
+,'level1::substring(code,1,2)||''00000000'''
+,'level2::substring(code,1,5)||''00000'''
+,'type::CASE WHEN code ~ ''[0-9]{2}0{8}'' AND code !~ ''(80|85)0{8}'' THEN ''О''
+            WHEN code ~ ''[0-9]{2}2[0-9]{2}0{5}'' AND code !~ ''[0-9]{2}20{7}'' THEN ''Р''
+            WHEN coalesce(category, ''Р'') != ''Р''
+            OR code IN (SELECT DISTINCT substring(code,1,5)||''00000'' FROM koatuu_csv k2 WHERE category = ''Р'') AND category IS NULL
+            OR code ~ ''(80|85)0{8}'' THEN ''НП''
+            ELSE NULL END']
+);
+----
+
+[#complex-case-2]
+=== Complex scenario 2
+
+[source, sql]
+----
+CALL p_load_table_from_csv('staff','D:\PostgreSQL\csv\staff.csv'
+
+,array['uuid','laboratory','staff_status','researches','full_name','hygienist_flag','full_time_flag','salary','fixed_term_contract_flag','contract_end_date','specialization_date','specialization_end_date','dismissal_flag','dismissal_date']
+  ,array['laboratory_id::ref(lookup_col:laboratory,ref_table:laboratory,ref_col:name,ref_id:laboratory_id)'
+        ,'staff_status_id::ref(lookup_col:staff_status,ref_table:staff_status,ref_col:name,ref_id:staff_status_id)'
+        ,'researches::ref_array(lookup_col:researches,ref_table:research,ref_col:research_type,ref_id:research_id,delim:#)'
+        ,'full_name','hygienist_flag','full_time_flag','salary','fixed_term_contract_flag','contract_end_date','specialization_date','specialization_end_date','dismissal_flag','dismissal_date']
+     );
+----
+
+//== Завантаження даних до БД
+== Loading data into the database
+
+//Для завантаження даних в БД використовуємо стандартну функціональність liquibase.
+To load data into the database, use the standard Liquibase functionality.
+
+//=== Приклад XML-шаблону для завантаження даних
+=== An example of an XML template for loading data
+
+[source, xml]
+----
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xmlns:ext="http://www.liquibase.org/xml/ns/dbchangelog-ext"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.2.xsd
+        http://www.liquibase.org/xml/ns/dbchangelog-ext xsd/dbchangelog-ext.xsd">
+
+    <property  name="dataLoadPath"  value="D:\PostgreSQL\csv\"/>
+
+    <changeSet author="registry owner" id="load data to dictionaries">
+        <sql dbms="postgresql" endDelimiter=";" splitStatements="true" stripComments="true">
+            CALL p_load_table_from_csv('research','${dataLoadPath}01-Typy doslidgen.csv', array['code','research_type'], array['research_type']);
+            CALL p_load_table_from_csv('refusal_reason','${dataLoadPath}02-Prichiny vidmov.csv', array['code','document_type','name','constant_code'], array['document_type','name','constant_code']);
+            CALL p_load_table_from_csv('kopfg','${dataLoadPath}05-kopfg.csv', array['code','name']);
+            CALL p_load_table_from_csv('solution_type','${dataLoadPath}06-Typy rishen.csv', array['id','name','constant_code'], array['name','constant_code']);
+            CALL p_load_table_from_csv('factor','${dataLoadPath}14-Himichni_factory_OBRV.csv', array['code','name','col3','col4'], array['name','factor_type::''Хімічний: ОБРВ''']);
+            CALL p_load_table_from_csv('factor','${dataLoadPath}15-Himichni factory dovilni.csv', array['code','name'], array['name','factor_type::''Хімічний: довільні''']);
+        </sql>
+  </changeSet>
+
+</databaseChangeLog>
+----
+
+//TIP: За детальною інформацією щодо створення фізичної моделі даних реєстру за допомогою інструмента Liquibase зверніться до розділу **"Створення фізичної моделі даних реєстру"** цього документа.
+//TODO: No link here?
+TIP: For details on creating a physical data model of the registry using the Liquibase tool, see the xref:registry-develop:data-modeling/data/physical-model/overview.adoc[] section.
+
+[#initial-load-csv-requirements]
+//== Вимоги до файлів для автоматичного завантаження до БД
+== File requirements for automatic uploads to the database
+
+//Файли, що використовуватимуться для завантаження даних до БД, повинні мати чітку структуру.
+The files used to upload data into the database must have a clear structure.
+
+//Вимоги до файлів для автоматичного завантаження в БД:
+File requirements for automatic uploads to the database:
+
+//* тільки СSV-формат;
+* The file format must be CSV.
+//* назва файлу -- латиницею;
+* The file name must contain only Latin letters.
+//* кодування -- UTF8;
+* Files must use UTF8 encoding.
+//* перший рядок містить назви полів;
+* The first row must contain field names.
+//* починаючи із другого рядка містяться значення полів (структура відповідає назвам полів із першого рядка);
+* Starting from the second row, the file must contain field values. Their structure must match the field names in the first row.
+//* значення полів одного рядка файлу повністю визначають значення полів, необхідних для створення запису в базі даних;
+* One row in the file must contain the values necessary to create a record in the database.
+//* розділювач значень полів: `,` (кома) або `;` (крапка з комою);
+* Values are separated by commas or semicolons.
+//* відсутність значення (`NULL`) передається відсутнім значенням, наприклад, `...значення 1[red]##,,##значення 3...`, тобто відсутнє значення пропускається між двома комами, а не позначається пробілом);
+* The absence of a value (`NULL`) is conveyed by a missing value, not a space. For example:
++
+`...value 1,,value 3...`
+//* наявність унікальності за одним бізнес-полем (наприклад, поле `Назва`) -- для довідників;
+* The file must contain at least one unique business field (for example, `Name`) for directories.
+//* для позначення масивів описових значень використовуються фігурні дужки `{`, `}`.
+* Use curly brackets `{` `}` to denote arrays of descriptive values.
+
+//== Рекомендації для завантаження великої кількості даних
+== Recommendations for loading large amounts of data
+
+//Для завантаження великої кількості даних (понад 1 млн рядків) рекомендується тимчасова зміна конфігурації БД -- у файлі з налаштуваннями PostgreSQL `postgresql.conf` встановити наступні значення для часу очікування підключень між реплікою та основною (master) БД:
+If you need to load a large amount of data (over 1 million rows), we recommend temporarily changing the database configuration. Set the following values for the connection waiting time between the replica and the main database in the `postgresql.conf` file:
+
+----
+wal_sender_timeout = 900s
+wal_receiver_timeout = 900s
+----
