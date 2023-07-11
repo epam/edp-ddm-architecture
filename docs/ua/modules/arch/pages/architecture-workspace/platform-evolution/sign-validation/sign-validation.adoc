@@ -251,3 +251,61 @@ camunda -> camunda: декодування даних Base64
 camunda --> sign: byte[] дані
 <-- sign: отримання результату
 ----
+
+== Приклади моделювання
+
+=== Приклад моделювання БП з ASiC файлом в якості вхідного параметра
+
+image:architecture-workspace/platform-evolution/sign-validation/submission_form.png[]
+
+.Приклад скриптової задачі
+[source, groovy]
+----
+def formData = submission('start_event').formData
+def file = formData.prop('signed_data').value()
+
+if (!validate_signature(file)) {
+    println "Invalid signature"
+}
+
+
+def info = get_sign_info(file)
+if (info.subjDRFOCode == null) {
+    println "DRFO should be present"
+}
+
+def fileContent = get_content(file)
+
+set_variable('fileContent', fileContent)
+----
+
+=== Приклад моделювання БП з отриманням контента та підпису із зовнішнього API
+
+image:architecture-workspace/platform-evolution/sign-validation/external_system.png[]
+
+.Приклад відповіді сторонньої системи
+[source, json]
+----
+{
+    "data": "dGVzdCBkYXRh",
+    "signature": "ZGF0YSBzaWduYXR1cmU="
+}
+----
+
+.Приклад скриптової задачі
+[source, groovy]
+----
+def data = external_system_response.prop('data').value()
+def signature = external_system_response.prop('signature').value()
+if (!validate_signature(data, signature)) {
+    println "Invalid signature"
+}
+
+
+def info = get_sign_info(data, signature)
+if (info.subjDRFOCode == null) {
+    println "DRFO should be present"
+}
+
+set_variable('fileContent', data)
+----
