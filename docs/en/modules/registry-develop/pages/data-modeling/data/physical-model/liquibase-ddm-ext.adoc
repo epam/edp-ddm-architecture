@@ -1,0 +1,1815 @@
+:toc-title: On this page:
+:toc: auto
+:toclevels: 5
+:experimental:
+:sectnums:
+:sectnumlevels: 5
+:sectanchors:
+:sectlinks:
+:partnums:
+
+//= Перелік розширених тегів Liquibase
+= A list of extended Liquibase tags
+//Розширення функціональності Liquibase через зовнішній модуль Liquibase DDM Extension
+
+//WARNING: Для опису моделі даних реєстру використовуйте кодування `*UTF-8*`.
+WARNING: Use *UTF-8* encoding to describe the registry data model.
+
+//== Загальний опис
+== Overview
+
+//Модель даних реєстру описується декларативно за допомогою XML-шаблонів, які обробляє інструмент Liquibase та генерує на SQL-структури.
+The registry data model is defined declaratively using XML templates that the Liquibase tool processes and generates SQL structures.
+
+//Через складні вимоги до архітектури Платформи, використання стандартної функціональності Liquibase не покриває всі потреби при роботі зі структурами даних.
+Due to the Platform's architecture complexity, standard Liquibase functionality only covers some of the needs when working with data structures.
+
+//Функціональність Liquibase розширено платформним модулем `**liquibase-ddm-ext**`, який забезпечує роботу з додатковими _кастомними тегами_ (в термінології Liquibase -- _**change types**_) XML-шаблону Liquibase, що покривають наступні категорії:
+The Platform's *`liquibase-ddm-ext`* module extends Liquibase's functionality and provides additional _custom tags_ for the Liquibase XML templates. In Liquibase terminology, these tags are called *Change Types*. Custom tags cover the following categories:
+
+//- xref:#createTable[створення таблиць з підтримкою історичності даних];
+* xref:#createTable[Creating tables with data history support]
+//- xref:#createDomain [створення/видалення користувацьких даних (Domain)];
+* xref:#createDomain [Creating and deleting user data (domain)]
+//- xref:#ENUM[створення/видалення користувацьких типів даних (Type)];
+* xref:#ENUM[Creating and deleting user data types]
+//- xref:#createSimpleSearchCondition[створення/видалення простого критерію пошуку (Simple Search Condition)];
+* xref:#createSimpleSearchCondition[Creating and deleting simple search conditions]
+//- xref:#createSearchCondition[створення/видалення критерію пошуку (Search Condition)];
+* xref:#createSearchCondition[Creating and deleting search conditions]
+//- xref:#createMany2Many[створення типу зв'язку "багато до багатьох" (many-to-many)];
+* xref:#createMany2Many[Creating many-to-many relationship type]
+//- xref:#createAnalyticsView[створення аналітичного представлення на репліці (Analytics View)];
+* xref:#createAnalyticsView[Creating an analytics view for a replica]
+//- xref:#createCompositeEntity[збереження декількох сутностей в рамках однієї транзакції (Composite Entity)];
+* xref:#createCompositeEntity[Storing multiple entities within a single transaction (composite entity)]
+//- xref:#partialUpdate[генерація ендпоінтів для зміни окремих частин сутності (partial Update)];
+* xref:#partialUpdate[Generating endpoints for modifying separate parts of an entity (partial update)]
+//- xref:#grantAll[надання/видалення прав ролі ена всі аналітичні представлення (grantAll/revokeAll)].
+//TODO: ua typo (ена -> на)
+* xref:#grantAll[Granting and revoking rights to all analytics views (grantAll/revokeAll)]
+
+//TIP: Для прикладу, повний перелік розширених тегів з їх параметрами зберігається в xsd-схемі за https://nexus.apps.envone.dev.registry.eua.gov.ua/nexus/repository/extensions/com/epam/digital/data/platform/liquibase-ext-schema/1.5.0-SNAPSHOT.74/liquibase-ext-schema-1.5.0-SNAPSHOT.74.xsd[посиланням].
+//TODO: Is this link ua-specific?
+TIP: A complete list of advanced tags and their parameters is stored in this https://nexus.apps.envone.dev.registry.eua.gov.ua/nexus/repository/extensions/com/epam/digital/data/platform/liquibase-ext-schema/1.5.0-SNAPSHOT.74/liquibase-ext-schema-1.5.0-SNAPSHOT.74.xsd[XSD schema].
+
+[#table-management]
+== Table management
+
+//.Файли створення таблиць структурі регламенту реєстру
+//TODO: ua typo (_в_ структурі)
+.Files for creating tables in the structure of the registry regulations
+[plantuml, create-tables-regulation-structure, svg]
+----
+@startsalt
+{
+{T
++ <&folder> registry-regulations
+++ <&folder> bpmn
+++ <&folder> dmn
+++ <&folder> <b>data-model</b>
++++ <&file> <b>createTables.xml</b>
+++ ...
+}
+}
+@endsalt
+----
+
+[#createTable]
+=== Creating tables
+
+//Тег *`createTable`* використовується для створення нової таблиці в базі даних.
+The *`createTable`* tag creates a table in the database.
+
+//Також для тегу *`createTable`* необхідно використовувати атрибут *`ext:historyFlag`* зі значенням *`true`*. Це розширений атрибут, який використовується для відстеження історії змін.
+When using the `createTable` tag, you must also use the `ext:historyFlag` attribute and set it to `true`. This extended attribute is used to track the history of changes.
+
+//._Приклад XML-схеми_
+._XML schema example_
+[%collapsible]
+====
+[source, XML]
+----
+<createTable tableName="test" ext:historyFlag="true">
+    <column name="role_id" type="BIGINT">
+        <constraints nullable="false" primaryKey="true" primaryKeyName="pk_pd_subject_role"/>
+    </column>
+    <column name="role_name" type="TEXT">
+        <constraints nullable="false"/>
+    </column>
+</createTable>
+----
+====
+
+[WARNING]
+====
+//В рамках процесу верифікації регламенту, атрибут `*historyFlag*` зі значенням `*true*` _вимагатиметься для всіх тегів_ `*createTable*`.
+Each `createTable` tag is required to have a `historyFlag` attribute with a `true` value as part of the regulations verification.
+
+//Тому при створенні таблиці необхідно вказувати відповідне значення `historyFlag="true"`. Таким чином буде додатково згенерована історична таблиця, і для кожної з таблиць буде згенеровано свій специфічний набір службових полів.
+Therefore, the `historyFlag="true"` attribute is required when creating a table. This way, the system generates a historical table and a set of service fields for each table.
+====
+
+//TIP: За детальною інформацією щодо створення таблиць зверніться до статті xref:data-modeling/data/physical-model/liquibase-changes-management-sys-ext.adoc#create-table-hst[Схема моделювання таблиць та функція підтримки історичності].
+TIP: For details on creating tables, see xref:data-modeling/data/physical-model/liquibase-changes-management-sys-ext.adoc#create-table-hst[].
+
+[#create-table-attributes]
+//==== Атрибути створення таблиць та доступні значення
+==== Table creation attributes and possible values
+
+[#bulk-load]
+//===== Атрибут bulkLoad та доступні значення
+===== bulkLoad attribute
+
+//Атрибут *`bulkLoad`* дозволяє швидко завантажувати дані до таблиць із файлів або масивом.
+The *`bulkLoad`* attribute lets you quickly load data into tables from files or arrays.
+
+//Атрибут приймає наступні значення: ::
+Possible values: ::
+
+//* *`true`* -- якщо значення *`bulkLoad`* встановлено як *`true`*, це дозволяє виконувати масове завантаження даних до таблиці з файлів (наприклад, `CSV`) або масивів (`LIST`). Це забезпечує оптимальну продуктивність та ефективність при роботі з великими наборами даних.
+* *`true`*: Enable bulk data loading into the table from files (for example, CSV) or arrays (`LIST`). This ensures optimal performance and efficiency when working with large datasets.
+//* *`false`* -- якщо значення *`bulkLoad`* встановлено як *`false`*, масове завантаження даних до таблиці з файлів або масивів буде відключено. У цьому випадку, дані будуть імпортовані до таблиці за допомогою окремих операцій вставки (`INSERT`), що може бути менш ефективним при роботі з великими об'ємами даних.
+* *`false`*: Disable bulk data loading into the table from files or arrays. In this case, data is imported into the table using separate `INSERT` operations, which can be less efficient when working with large volumes of data.
+
+//._Приклад створення таблиці із bulkLoad="true"_
+._Example of creating a table with bulkLoad="true"_
+[%collapsible]
+====
+[source,xml]
+----
+<changeSet author="..." id="initial creation">
+	<ext:createTable name="example_bulk" bulkLoad="true">
+		<column name="id" type="UUID" defaultValueComputed="uuid_generate_v4()">
+			<constraints nullable="false" primaryKey="true" primaryKeyName="pk_example_bulk_id"/>
+		</column>
+		<column name="first_name" type="text"/>
+            ...
+            ...
+
+	</ext:createTable>
+</changeSet>
+----
+====
+
+[#read-mode]
+//===== Атрибут readMode та доступні значення
+===== readMode attribute
+
+//Атрибут *`readMode`* дозволяє контролювати поведінку читання даних із таблиць бази даних реєстру. Він визначає, як система читає дані з таблиці: _синхронно_ або _асинхронно_. Залежно від вимог до продуктивності, ви можете встановити відповідне значення для цього атрибута.
+The *`readMode`* attribute lets you control the read behavior for the registry's database tables. It determines how the system should read data from the table: _synchronously_ or _asynchronously_. Set the read behavior depending on your performance requirements.
+
+//Атрибут приймає наступні значення: ::
+Possible values: ::
+
+//* *`sync`* -- синхронний режим. У синхронному режимі читання даних, процес читання відбувається послідовно (читання даних виконується на рівні `registry-rest-api`). Запит на читання блокується до тих пір, поки дані не будуть повернуті від сервера бази даних. Це означає, що виконання додатка зупиняється на час отримання результатів запита. Синхронний режим може бути корисним у випадках, коли важливо забезпечити послідовність операцій.
+* *`sync`*: Set synchronous read mode. In this mode, the system reads data in a sequence (data is read at the `registry-rest-api` level). The read request is blocked until the database server returns data. This means the application is paused while waiting for the query results. The synchronous mode can be useful in cases where it is important to ensure the sequence of operations.
+//* *`async`* -- асинхронний режим. В асинхронному режимі читання даних, запит на читання відправляється серверу бази даних, але не блокує виконання додатка (читання даних виконується шляхом `rest-api > registry-kafka-api > rest-api`). Замість цього, додаток продовжує виконувати наступні дії, а результати читання обробляються коли вони стануть доступними. Асинхронний режим дозволяє збільшити продуктивність додатка, оскільки він не чекає завершення операцій читання. Це може бути корисним у випадках, коли необхідно одночасно обробляти велику кількість запитів або коли час відгуку сервера бази даних є непередбачуваним.
+* *`async`*: Set asynchronous read mode. In this mode, the read request sent to the database server does not block the application from running (data is read via `rest-api` > `registry-kafka-api` > `rest-api`). Instead, the application continues working, and the reading results are processed when available. The asynchronous mode increases the application's performance because it does not wait until the reading operations are completed. This can be useful in cases where it is necessary to process a large number of requests simultaneously or when the response time of the database server is unpredictable.
+
+//._Приклад створення таблиці із readMode="sync"_
+._Example of creating a table with readMode="sync"_
+[%collapsible]
+====
+[source,xml]
+----
+<changeSet>
+	<ext:createTable name="example_read_mode" readMode="sync">
+		<column name="id" type="UUID" defaultValueComputed="uuid_generate_v4()">
+			<constraints nullable="false" primaryKey="true" primaryKeyName="pk_example_read_mode_id"/>
+		</column>
+		<column name="first_name" type="text"/>
+            ...
+            ...
+
+	</ext:createTable>
+</changeSet>
+----
+====
+
+[#ext-auto-generate]
+//===== Атрибут ext:autoGenerate та доступні значення
+===== ext:autoGenerate attribute
+
+//Атрибут *`ext:autoGenerate`* є нестандартним атрибутом розширення Liquibase, який використовується для автоматичної генерації значень для стовпця під час вставки записів у таблицю. Використовується у тегу *`<column>`*.
+The *`ext:autoGenerate`* attribute is a custom Liquibase extension attribute that automatically generates column values when inserting records into a table. It is used in the *`<column>`* tag.
+
+//Дозволяє згенерувати унікальний та зрозумілий для користувача номер для сутності, створеної у реєстрі (документа/акту). Номер формується під час збереження сутності та є унікальним у рамках окремого реєстру.
+Use this attribute to generate a unique and user-friendly number for an entity created in the registry (such as a document or certificate). The number is generated when the entity is saved and is unique within the registry instance.
+
+._XML schema_
+[%collapsible]
+====
+[source,xml]
+----
+<createTable ...>
+...
+    <column name="column_name" ext:autoGenerate="AA-{dd-MM-yyyy}-{SEQ}">
+    </column>
+...
+</createTable>
+----
+
+//У цьому конкретному випадку, атрибут `*ext:autoGenerate*` встановлює шаблон значення для стовпця *`column_name`* у форматі *`AA-{dd-MM-yyyy}-{SEQ}`*.
+In this example, the `ext:autoGenerate` attribute defines a template for the *`column_name`* column values using the following format: *`AA-{dd-MM-yyyy}-{SEQ}`*
+
+//Значення, що будуть автоматично генеруватися, матимуть вигляд `AA-день-місяць-рік-послідовність`.
+The system will automatically generate values that will look like this: `AA-day-month-year-sequence`.
+
+//Тут "АА" -- код документа, "день", "місяць" та "рік" -- це дата у форматі *`dd-MM-yyyy`*, а "послідовність" -- це унікальний порядковий номер запису, що додається.
+Here "AA" is the document code, "day," "month," and "year" define the date in the *`dd-MM-yyyy`* format, and "sequence" contains a unique record number.
+====
+
+[TIP]
+====
+//Детальний опис функціональності ви можете переглянути за посиланням:
+//* xref:data-modeling/data/physical-model/auto-generate-number.adoc[]
+For details, see xref:data-modeling/data/physical-model/auto-generate-number.adoc[].
+====
+
+[#alter-table-api]
+//=== Зміна налаштувань поведінки API на рівні структури створення таблиць
+=== Changing API behavior at the level of the table creation structure
+
+//Розробники регламенту мають змогу змінювати налаштування поведінки API на рівні структури створення таблиць.
+Regulations developers can modify API behavior settings at the level of the table creation structure.
+
+//Для цього імплементовано тег *`ext:alterTableApi`*, який є нестандартним тегом розширення Liquibase. За допомогою цього тегу можна змінювати деякі атрибути таблиці, які не впливають на структуру даних, але впливають на генерацію коду API.
+For this, you can use *`ext:alterTableApi`*, a custom Liquibase extension tag. This tag enables you to modify specific table attributes that do not affect the data structure but influence the API code generation.
+
+//Наприклад, у відповідному контексті, *`ext:alterTableApi`* може дозволити змінювати атрибути, такі як *`bulkLoad`* або *`readMode`*, що регулюють можливість завантаження даних до таблиці з файлів або масивом та режим читання даних (синхронний або асинхронний), відповідно.
+For example, `ext:alterTableApi` can allow editing attributes such as `bulkLoad` or `readMode` that control the ability to load data into the table from files or arrays and the data read mode (synchronous or asynchronous), respectively.
+
+[TIP]
+====
+//Див. детальніше про *`bulkLoad`* та *readMode* у відповідних розділах:
+For details on `bulkLoad` and `readMode`, jump to:
+
+* xref:#bulk-load[]
+* xref:#read-mode[]
+====
+
+//Цей тег допомагає розробникам і моделювальникам регламентів керувати налаштуваннями поведінки API _для таблиць після їх створення, без зміни структури даних_.
+This tag helps regulations developers and modelers control API behavior settings _for tables after they are created without changing the data structure_.
+
+//Тег використовує розширення *`ext:attribute`*, яке приймає ключ (*`name`*) та значення (*`value`*) атрибута, для якого необхідно змінити поведінку.
+The tag uses the *`ext:attribute`* extension, which accepts the key (*`name`*) and the value (*`value`*) of the attribute for which the behavior needs to be changed.
+
+[NOTE]
+====
+//* Обов'язковим є вказання назви таблиці (`name`) та хоча б одного з 2-х атрибутів (`bulkLoad` або `readMode`). Атрибути та їх значення зберігаються у таблиці *`ddm_liquibase_metadata`*.
+* Specifying the table's `name` and at least one of the two attributes (`bulkLoad` or `readMode`) is mandatory. Attributes and their values are stored in the `ddm_liquibase_metadata` table.
+//* За відсутності атрибутів `bulkLoad` або `readMode` у тегу `ext:alterTableApi`, значення у таблиці метаданих `ddm_liquibase_metadata` залишається незмінним та не впливає на поведінку системи.
+* If both the `bulkLoad` and `readMode` attributes are absent in the `ext:alterTableApi` tag, the values in the `ddm_liquibase_metadata` metadata table remain unchanged, and system behavior is unaffected.
+====
+
+//._XML-схема використання тегу ext:alterTableApi_
+._XML schema of using the ext:alterTableApi tag_
+[%collapsible]
+====
+[source,xml]
+----
+<changeSet author="..." id="change api behavior">
+	<ext:alterTableApi table="example_bulk_1">
+		<ext:attribute name="bulkLoad" value="true"/>
+		<ext:attribute name="readMode" value="sync"/>
+	</ext:alterTableApi>
+	<ext:alterTableApi table="example_bulk_2">
+		<ext:attribute name="bulkLoad" value="false"/>
+	</ext:alterTableApi>
+</changeSet>
+----
+====
+
+[WARNING]
+====
+[%collapsible]
+//.Використовуйте тег *`ext:alterTableApi`* у новому changeSet, після відпрацьованого changeSet для створення відповідної таблиці.
+.Use the *`ext:alterTableApi`* tag in a new changeSet after executing a changeSet to create the table.
+=====
+//* Вже створені структури даних можуть лише розширюватись.
+* Existing data structures can only be extended.
+//* Теги в регламенті, які вже було опрацьовано, не можуть бути змінені.
+* Tags in the regulations that have already been processed cannot be changed.
+//* Усі зміни є ідемпотентними, означає, що якщо ви виконаєте один і той же changeSet кілька разів, стан бази даних залишиться незмінним після першого виконання.
+* All changes are idempotent, meaning that if you execute the same changeSet multiple times, the database state will remain the same after the first execution.
+=====
+====
+
+//._Розширена XML-схема. Розгортання таблиць з одними значеннями атрибутів та подальша зміна цих значень із використанням тегу ext:alterTableApi_
+._Extended XML schema. Deploying tables with certain attribute values and subsequently changing these values using the ext:alterTableApi tag_
+[%collapsible]
+====
+[source,xml]
+----
+<databaseChangeLog>
+	<changeSet author="..." id="initial creation">
+		<ext:createTable name="example_bulk" bulkLoad="false">
+			<column name="id" type="UUID" defaultValueComputed="uuid_generate_v4()">
+				<constraints nullable="false" primaryKey="true" primaryKeyName="pk_example_bulk_id"/>
+			</column>
+			<column name="first_name" type="text"/>
+            ...
+            ...
+
+		</ext:createTable>
+		<ext:createTable name="example_read_mode" readMode="sync">
+			<column name="id" type="UUID" defaultValueComputed="uuid_generate_v4()">
+				<constraints nullable="false" primaryKey="true" primaryKeyName="pk_example_read_mode_id"/>
+			</column>
+			<column name="first_name" type="text"/>
+            ...
+            ...
+
+		</ext:createTable>
+	</changeSet>
+	<changeSet author="..." id="change api behavior">
+		<ext:alterTableApi table="example_bulk">
+			<ext:attribute name="bulkLoad" value="true"/>
+			<ext:attribute name="readMode" value="sync"/>
+		</ext:alterTableApi>
+		<ext:alterTableApi table="example_bulk">
+			<ext:attribute name="bulkLoad" value="true"/>
+		</ext:alterTableApi>
+	</changeSet>
+</databaseChangeLog>
+
+----
+====
+
+[#create-search-conditions]
+//== Керування критеріями пошуку (Search Conditions)
+== Managing search conditions
+
+//Модель даних реєстру будується у регламенті за допомогою XML-тегів, серед яких є `*<createSearchCondition>*` для створення критеріїв пошуку -- *Search Conditions* або скорочено *SC*. Наприклад: `*<ext:createSearchCondition name="search_condition_test">*`.
+You build the registry data model in the regulations using XML tags. One of these tags, `*<createSearchCondition>*`, creates search conditions, or *SC* for short. For example: `*<ext:createSearchCondition name="search_condition_test">*`.
+
+//.Критерії пошуку у структурі регламенту реєстру
+.Search conditions in the structure of the registry regulations
+[plantuml, registry-sc-regulation-structure, svg]
+----
+@startsalt
+{
+{T
++ <&folder> registry-regulations
+++ <&folder> bpmn
+++ <&folder> dmn
+++ <&folder> <b>data-model</b>
++++ <&file> <b>searchConditions.xml</b>
+++ ...
+}
+}
+@endsalt
+----
+
+//Кожен критерій містить інформацію про таблицю, що буде використовуватися для пошуку, а також параметри пошуку, такі як тип пошуку та колонка, по якій він здійснюється тощо.
+Each condition contains information about search parameters such as the table and the column to search, which type of search to use, and so on.
+
+//Liquibase обробляє XML-модель та створює таблиці-представлення (`*VIEW*`) у базі даних, які є зведеними таблицями та містять інформацію, отриману з інших таблиць. До назви такої таблиці в БД додається префікс `*_v*`. Наприклад, *`search_condition_test_v`*.
+Liquibase processes the XML model and creates view tables, virtual tables that contain information from one or more real tables within the database. View tables have a *_v* prefix added to their name--for example, `search_condition_test_v`.
+
+//При розгортанні моделі даних реєстру, для кожного критерію пошуку створюється REST API-ендпоінт з аналогічною назвою, але в іншій конвенції (dash-case), наприклад *`search-condition-test`*.
+When the registry data model is deployed, the system creates a REST API endpoint for each search condition using the table name without the prefix but with a dash-case convention--for example, `search-condition-test`.
+
+//При виконанні запита до API-ресурсу `*/search-condition-test*`, дані зі зведеної таблиці `*search_condition_test_v*` повертаються у відповідь.
+When you make a request to the `/search-condition-test` API resource, the response returns data from the `search_condition_test_v` view table.
+
+//Приклад запита до API SC може виглядати так: ::
+Example of calling the SC API: ::
++
+[source,http]
+----
+https://<server-name>-<namespace>/search-condition-test?offset=0&limit=10.
+----
+
+[#createSimpleSearchCondition]
+//=== Тег створення простого критерію пошуку
+=== Tag for creating a simple search criteria
+
+Change type name: `<createSimpleSearchCondition>` ::
+
+//Цей тег надає можливість створити простий критерій пошуку, а саме створити для однієї таблиці відбиток даних (view) та індекс за вказаним полем пошуку.
+The *`createSimpleSearchCondition`* tag creates a simple search condition, including a view for one table and an index for the specified search field.
+
+._XML schema example_
+[%collapsible]
+====
+[source, XML]
+----
+<changeSet author="registry owner" id="searchConditionSimpleTest">
+    <comment>CREATE simple test search condition</comment>
+    <ext:createSimpleSearchCondition name="search_condition_simple_test" indexing="true" limit="all">
+        <ext:table name="search_condition_simple_test" alias="c" searchType="equal" searchColumn="person_full_name"/>
+    </ext:createSimpleSearchCondition>
+</changeSet>
+----
+====
+
+//WARNING: Якщо вказати створення індексу без вказання поля пошуку, то буде згенерована помилка.
+WARNING: If you create an index without specifying the search field, the system will return an error.
+
+//TIP: За детальною інформацією щодо створення простого критерію пошуку зверніться до секції xref:data-modeling/data/physical-model/liquibase-changes-management-sys-ext.adoc#create-sc-simple[XML-шаблон дизайну простого критерію пошуку (Сценарій 1)] відповідного документа.
+TIP: For details on creating a simple search condition, see the xref:data-modeling/data/physical-model/liquibase-changes-management-sys-ext.adoc#create-sc-simple[XML template for a simple search condition (scenario 1)] section.
+
+[#createSearchCondition]
+//=== Тег створення критерію пошуку
+=== Tag for creating a search condition
+
+Change type name: `<createSearchCondition>` ::
+
+//Цей тег надає можливість створити критерій пошуку, який створює відбиток даних (`view`) за декількома таблицями та зв'язками між ними.
+The *`createSearchCondition`* tag creates a search condition, including a view for several tables and their relationships.
+
+[CAUTION]
+====
+//Тег може також створювати індекси для кожного поля пошуку. Для цього використовуйте додатковий атрибут `indexing` зі значенням `true` в рамках тегу `<createSearchCondition>` відповідно до наступної схеми:
+This tag can also create indexes for each search field. Set the additional `indexing` attribute to `true` within the `<createSearchCondition>` tag, as shown in the following example:
+
+[source,xml]
+----
+<xsd:attribute name="indexing" type="xsd:boolean" use="optional"/>
+----
+====
+
+._XML schema example_
+[%collapsible]
+====
+[source, XML]
+----
+<ext:createSearchCondition name="search_condition" limit="1" indexing="true">
+    <ext:table name="table_one" alias="to">
+        <ext:column name="name" alias="to_name" searchType="equal"/>
+        <ext:column name="type"/>
+        <ext:function name="count" alias="cnt" columnName="uuid"/>
+    </ext:table>
+    <ext:table name="table_two" alias="tt">
+        <ext:column name="name" alias="tt_name"/>
+        <ext:column name="code"/>
+    </ext:table>
+    <ext:join type="left">
+        <ext:left alias="to">
+             <ext:column name="name"/>
+     </ext:left>
+        <ext:right alias="tt">
+            <ext:column name="name"/>
+        </ext:right>
+    </ext:join>
+    <ext:where>
+        <ext:condition tableAlias="to" columnName="type"  operator="eq" value="'char'">
+            <ext:condition logicOperator="or" tableAlias="to"
+columnName="type" operator="eq" value="'text'"/>
+        </ext:condition>
+        <ext:condition logicOperator="and" tableAlias="tt" columnName="code" operator="similar" value="'{80}'"/>
+    </ext:where>
+ </ext:createSearchCondition>
+----
+====
+
+[WARNING]
+====
+//* Якщо вказати створення індексу без вказання поля пошуку, то буде згенерована помилка.
+* If you create an index without specifying the search field, the system will return an error.
+//* Перший тег `<ext:condition>` в умові `<ext:where>` не повинен містити атрибуту `logicOperator`, всі інші теги `<ext:condition>` — повинні.
+* The first `<ext:condition>` tag in the `<ext:where>` condition must not contain the `logicOperator` attribute. All other `<ext:condition>` tags must contain it.
+//* Перший тег `<ext:condition>`, як і всі інші, в умові `<ext:join>` повинен містити атрибут `logicOperator`.
+* The first `<ext:condition>` tag in the `<ext:join>` condition must contain the `logicOperator` attribute, the same as other tags.
+//* Атрибут `logicOperator` приймає значення _and_ і _or_.
+* Possible values of the `logicOperator` attribute are _and_ and _or_.
+//* Якщо тег `<ext:condition>` вкладений в інший, то вони обгортаються дужками.
+* If the `<ext:condition>` tag is nested, you must wrap it in parentheses.
+====
+
+[TIP]
+====
+//За детальною інформацією щодо сценаріїв використання критеріїв пошуку зверніться до наступних секцій відповідного документа:
+For details on different scenarios of using search conditions, see the following sections:
+
+* xref:data-modeling/data/physical-model/liquibase-changes-management-sys-ext.adoc#create-sc-uc2[XML template for a search condition (scenario 2)];
+* xref:data-modeling/data/physical-model/liquibase-changes-management-sys-ext.adoc#create-sc-uc3[XML template for a search condition (scenario 3)];
+* xref:data-modeling/data/physical-model/liquibase-changes-management-sys-ext.adoc#create-sc-uc4[XML template for a search condition (scenario 4)];
+
+====
+
+[#ext-where-operator-values]
+//==== Оператор <ext:where> та доступні значення
+==== <ext:where> operator
+
+//Оператор `<ext:where>` приймає наступні значення: ::
+Possible values: ::
++
+|===
+|Value|Description|Symbol (Unicode)|Comment
+
+|`eq`
+|**eq**uals
+|=
+|
+
+|`ne`
+|**n**ot **e**qual
+|<>
+|
+
+|`gt`
+|**g**reater **t**han
+|>
+|
+
+|`ge`
+|**g**reater than or **e**qual to
+|>=
+|
+
+|`lt`
+|**l**ess **t**han
+|<
+|
+
+|`le`
+|**l**ess than or **e**qual to
+|<=
+|
+
+|`in`
+|
+|
+|
+
+|`notIn`
+|
+|
+|
+
+|`isNull`
+|is null
+|
+//|Якщо значення (value) = `true`, то перевірка колонки _is null_; якщо значення (value) = `false`, то перевірка колонки _is not null_.
+|If value = `true`, then the column check is _is null_; if value = `false`, then the column check is _is not null_.
+
+|`similar`
+|similar
+|~
+|
+|===
+
+//* Value - якщо потрібно передати текстове значення, то потрібно це значення обгорнути в одинарні лапки;
+* To specify a text value, wrap it in single quotes.
+//* `<ext:function>` — дозволяє використовувати агрегатні функції (`min()`, `max()`, `avg()`, `count()`, `sum()`), при цьому поля таблиці, які використовуються в цих функціях, вилучаються з виводу (`SELECT`). Всі інші поля включаються в групування (`GROUP BY`).
+* With `<ext:function>`, you can use aggregate functions: `min()`, `max()`, `avg()`, `count()`, `sum()`. The fields used in these functions are removed from the output (`SELECT`). All other table fields are included in grouping (`GROUP BY`).
+
+[#sc-attribute-values]
+//==== Атрибути критеріїв пошуку та доступні значення
+==== Search conditions attributes and possible values
+
+[search-type-attribute-values]
+//===== Атрибут searchType та доступні значення
+===== searchType attribute
+
+//Атрибут `*searchType*` в елементі `*<ext:column>*` вказує на тип операції, яку необхідно виконати для певної колонки при пошуку в таблиці.
+The `*searchType*` attribute in the `*<ext:column>*` element indicates the type of operation to perform for a specific column when searching the table.
+
+//_Атрибут приймає наступні значення:_
+_Possible values:_
+
+`*equal*`::
+
+//повертає значення, що мають точну відповідність (дорівнюють) заданим.
+Returns values that exactly match the one you specified.
++
+.XML schema
+====
+[source, xml]
+----
+<ext:createSearchCondition name="search_condition">
+        <ext:table name="table_one">
+            <ext:column name="name" alias="to_name" searchType="equal"/>
+            <ext:column name="type"/>
+            <ext:function name="count" alias="cnt" columnName="uuid"/>
+        </ext:table>
+</ext:createSearchCondition>
+----
+====
+
+`*startsWith*`::
+
+//повертає значення зі вказаним префіксом, тобто значення, які "починаються із" заданої умови.
+Returns values with the prefix you specified--that is, values that "start with" the given condition.
++
+.XML schema example
+====
+[source, xml]
+----
+<ext:createSearchCondition name="pd_consent_subject_name_startswith">
+    <ext:table name="pd_processing_consent_subject">
+        <ext:column name="consent_id" fetchType="entity" />
+        <ext:column name="scan_copy" />
+        <ext:column name="legal_entity_name" sorting="asc" searchType="startsWith" />
+        <ext:column name="consent_subject_id"/>
+    </ext:table>
+</ext:createSearchCondition>
+----
+====
+
+`*contains*`::
+
+//повертає значення, які мають збіги із вказаним значенням умови у будь-якому місці рядка (на початку, в середині, в кінці тощо).
+Returns values that match the value you specified anywhere in the string (beginning, middle, or end).
++
+.XML schema
+====
+[source, xml]
+----
+<ext:createSearchCondition name="SearchCondition" limit="1">
+    <ext:table name="table_two" alias="tt">
+        <ext:column name="name" alias="tt_name"/>
+        <ext:column name="code" searchType="contains"/>
+        <ext:function name="sum" alias="sm" columnName="code"/>
+    </ext:table>
+</ext:createSearchCondition>
+----
+====
+
+`*in*`::
+
+//повертає значення, що мають точну відповідність (дорівнюють) заданим значенням у масиві. Подібний до `equal`, але множинний.
+Returns values that exactly match the values you specified in an array. Similar to `equal` but works with multiple values.
++
+.XML schema
+====
+[source, xml]
+----
+<ext:createSearchCondition name="findInAge">
+    <ext:table name="user">
+        <ext:column name="firstName" returning="true"/>
+        <ext:column name="lastName" returning="true"/>
+        <ext:column name="age" searchType="in"/>
+    </ext:table>
+</ext:createSearchCondition>
+----
+====
+//.HTTP-запит із використанням оператора in
++
+.An HTTP request using the "in" operator
+====
+[source,http]
+----
+https://..../findInAge?age=18,21,42
+----
+====
+
+`*notIn*`::
+
+//повертає значення, що не мають відповідність (не дорівнюють) заданим значенням у масиві. Він є протилежним до значення `in` атрибута `searchType`.
+Returns values that do not match the values you specified in an array. The opposite of the `in` search type.
++
+.XML schema
+====
+[source, xml]
+----
+<ext:createSearchCondition name="findNotInAge">
+	<ext:table name="user">
+		<ext:column name="firstName" returning="true"/>
+		<ext:column name="lastName" returning="true"/>
+		<ext:column name="age" searchType="notIn"/>
+	</ext:table>
+</ext:createSearchCondition>
+----
+====
+//.HTTP-запит із використанням оператора notIn
++
+.An HTTP request using the "notIn" operator
+====
+[source,http]
+----
+https://..../findNotInAge?age=18,21,42
+----
+====
+
+`*between*` ::
+
+//повертає значення, що мають приналежність до заданого діапазону значень (в межах "з"-"до").
+Returns values that belong to the range you specified (from/to).
++
+.XML schema
+====
+[source, xml]
+----
+<ext:createSearchCondition name="findBetweenAge">
+    <ext:table name="user">
+        <ext:column name="firstName" returning="true"/>
+        <ext:column name="lastName" returning="true"/>
+        <ext:column name="age" searchType="between"/>
+    </ext:table>
+</ext:createSearchCondition>
+----
+====
+//.HTTP-запит із використанням оператора between
++
+.An HTTP request using the "between" operator
+====
+[source,http]
+----
+https://..../findBetweenAge?ageFrom=18&ageTo=42
+----
+====
+
+[limit-attribute-values]
+//===== Атрибут limit та доступні значення
+===== limit attribute
+
+//Атрибут `*limit*` визначає максимальну кількість результатів (рядків), які повертаються до API за пошуковою умовою.
+The `*limit*` attribute specifies the maximum number of results (rows) to return in an API response for a search condition.
+
+Possible values: ::
+
+//* `*limit="all"*` -- повертає усі результати за умовою пошуку;
+* `*limit="all"*`: Returns all results for a search condition.
+//* `*limit="10"*` (тобто конкретні числа як String) -- повертає обмежену кількість результатів за умовою пошуку.
+* `*limit="10"*` (any number provided as string): Returns a limited number of results for a search condition.
+
++
+//NOTE: Якщо не вказати атрибут, повертатимуться усі записи за умовою.
+NOTE: If this attribute is not specified, all results are returned.
+
+//Наприклад, якщо атрибут *limit* у тегу `*<ext:createSimpleSearchCondition>*` має значення *`10`*, це означає, що максимальна кількість результатів, які повертатимуться до API за пошуковою умовою, становитиме `*10*`.
+For example, if the *limit* attribute in the `*<ext:createSimpleSearchCondition>*` tag has a value of *10*, the maximum number of results that the API for the search condition will return will be 10.
+
+//.Простий критерій пошуку із використанням атрибута limit
+.A simple search condition using the "limit" attribute
+====
+[source,xml]
+----
+<changeSet author="registry owner" id="searchConditionSimpleTest">
+    <comment>CREATE simple test search condition</comment>
+    <ext:createSimpleSearchCondition name="search_condition_simple_test" indexing="true" limit="10">
+        <ext:table name="search_condition_simple_test" alias="c" searchType="equal" searchColumn="person_full_name"/>
+    </ext:createSimpleSearchCondition>
+</changeSet>
+----
+====
+
+//Іншими словами, якщо у таблиці `*search_condition_simple_test*` більше 10 записів, які відповідають критеріям пошуку, що визначені у тегу `*<ext:createSimpleSearchCondition>*`, а атрибут `*limit*` має значення `*10*`, то пошукова умова поверне лише перші 10 рядків.
+In other words, if the `*search_condition_simple_test*` table has more than 10 records that meet the search criteria defined in the `*<ext:createSimpleSearchCondition>*` tag, and the `*limit*` attribute is set to `*10*`, the search condition will return only the first 10 rows.
+
+[indexing-attribute-values]
+//===== Атрибут indexing та доступні значення
+===== indexing attribute
+
+//Атрибут `*indexing*` дозволяє автоматично створювати індекси на колонки, по яких відбувається пошук.
+The `*indexing*` attribute automatically creates indexes for the columns that are searched.
+
+Possible values: ::
+
+//* *`indexing="true"`* -- створює індекс;
+* *`indexing="true"`*: Create an index.
+//* *`indexing="false"`* -- не створює індекс.
+* *`indexing="false"`*: Don't create an index.
++
+//NOTE: Можна не вказувати цей атрибут взагалі, якщо не потрібно створювати індекси. *`indexing="false"`* вказується, коли необхідно явно зазначити це на схемі моделі даних.
+NOTE: You can omit this attribute if you don't need to create indexes. Use *`indexing="false"`* when it is necessary to state this in the data model schema explicitly.
+
+//.Простий критерій пошуку із використанням атрибута indexing
+.A simple search condition using the "indexing" attribute
+====
+[source,xml]
+----
+<changeSet author="registry owner" id="searchConditionSimpleTest">
+    <comment>CREATE simple test search condition</comment>
+    <ext:createSimpleSearchCondition name="search_condition_simple_test" indexing="true" limit="10">
+        <ext:table name="search_condition_simple_test" alias="c" searchType="equal" searchColumn="person_full_name"/>
+    </ext:createSimpleSearchCondition>
+</changeSet>
+----
+====
+
+//Атрибут `*indexing="true"*` у тегу `*<ext:createSimpleSearchCondition>*` вказує на те, що створення індексу для вказаної колонки (`*person_full_name*`) має бути увімкнено.
+The `*indexing="true"*` attribute in the `*<ext:createSimpleSearchCondition>*` tag indicates that indexing for the specified column (`*person_full_name*`) must be enabled.
+
+//У такому випадку, якщо атрибут `*indexing*` встановлений як `*true*`, то буде створено індекс для колонки `*person_full_name*`. Індекс дозволяє прискорити пошук даних в таблиці, зменшити час виконання запитів і зробити їх більш ефективними.
+In this example, an index will be created for the `*person_full_name*` column since `*indexing*` is set to `*true*`. The index speeds up the search, reduces the time it takes to process the queries, and makes them more efficient.
+
+
+[returning-attribute-values]
+//===== Атрибут returning та доступні значення
+===== returning attribute
+
+//Атрибут `*returning*` вказує, чи повинно значення повертатися у відповіді до API.
+The `*returning*` attribute indicates whether to return a value in an API response.
+
+Possible values: ::
+
+//* *`returning="true"`* -- повертає значення;
+* *`returning="true"`*: Return the value.
+//* *`returning="false"`* -- не повертає значення.
+* *`returning="false"`*: Don't return the value.
+
+//.Критерій пошуку з атрибутом returning
+.Search condition using the "returning" attribute
+====
+[source,xml]
+----
+<changeSet author="registry owner" id="searchCondition test">
+	<comment>CREATE test search condition</comment>
+	<ext:createSearchCondition name="searchConditionTest" indexing="true">
+		<ext:table name="consent_data_person" alias="c">
+			<ext:column name="person_full_name" searchType="equal" returning="true" type="text"/>
+			<ext:column name="person_pass_number" returning="true" type="varchar"/>
+			<ext:column name="consent_date" returning="true"/>
+		</ext:table>
+		<ext:table name="consent_subject" alias="cs">
+			<ext:column name="legal_entity_name" alias="srch_legal_entity_name" returning="true"/>
+			<ext:column name="edrpou" alias="srch_edrpou" returning="true"/>
+		</ext:table>
+		<ext:join type="inner">
+			<ext:left alias="c">
+				<ext:column name="consent_id"/>
+			</ext:left>
+			<ext:right alias="cs">
+				<ext:column name="consent_id"/>
+			</ext:right>
+		</ext:join>
+	</ext:createSearchCondition>
+</changeSet>
+----
+====
+//TODO: ua-specific edrpou field is mentioned in the example
+//Атрибут `*returning*` в елементі `*<ext:column>*` вказує на те, що значення відповідної колонки повинні повертатися у вихідному наборі даних запита. Якщо атрибут `*returning*` встановлено як `*true*`, значення відповідної колонки будуть включені до результату запита.
+If the `*returning*` attribute in the `*<ext:column>*` element is set to `*true*`, the values of the corresponding column will be included in the query result.
+
+//У цьому випадку, якщо атрибут `*returning*` встановлено як `*true*`, то для колонок `*person_full_name*`, `*person_pass_number*` та `*consent_date*` з таблиці `*consent_data_person*`, а також для колонок `*legal_entity_name*` та `*edrpou*` з таблиці `*consent_subject*` значення будуть включені до результату запита.
+In this example, the values of `*person_full_name*`, `*person_pass_number*`, and `*consent_date*` columns from the `*consent_data_person*` table and the `*legal_entity_name*` and `*edrpou*` columns from the `*consent_subject*` table will be included in the query result since `*returning*` is set to `*true*`.
+
+//NOTE: За замовчування `*returning="true"*`. Якщо ви хочете виключити із результату значення певних колонок, вкажіть *`returning="false"`*.
+NOTE: By default, `*returning*` is set to `*true*`. If you want to exclude the values of specific columns from the response, set *`returning="false"`*.
+
+[#pagination-attribute-values]
+[pagination-attribute-values]
+//===== Атрибут pagination та доступні значення
+===== pagination attribute
+
+//NOTE: Доступ для запитів від зовнішніх систем надається згідно з наявною реалізацією, додаванням тегу *`<exposeSearchCondition>`* (_див. детальніше у розділі xref:#exposeSearchCondition[]_).
+NOTE: Allowing external systems to run requests works by adding the *`<exposeSearchCondition>`* tag (for details, jump to xref:#exposeSearchCondition[]).
+
+//_Атрибут *`pagination`* приймає наступні значення:_
+_The *`pagination`* attribute can have the following values:_
+
+offset ::
+//повертає певну кількість записів, враховуючи пагінацію на основі зміщення. При запиті до API кількість записів регулюється параметром *`limit`*.
+Returns a specified number of records, considering offset-based pagination. In an API request, the number of records is determined by the *`limit`* parameter.
++
+//NOTE: За замовчуванням пагінація увімкнена і налаштована як `*pagination="offset"*`.
+NOTE: By default, pagination is enabled and set as `*pagination="offset"*`.
++
+[TIP]
+====
+//Як працює `*offset*` та *`limit`*? ::
+How do offset and limit work? ::
++
+//Наприклад, таблиця містить 100 записів.
+Consider a table with 100 records.
++
+//Ви хочете отримати відразу не усі 100, а перші 10 (з 1 по 10) -- тоді передаєте до API `offset=0` (або не вказуєте взагалі), `limit=10`.
+To get just the first 10 records (from 1 to 10), set your API request to `offset=0` (or omit it) and `limit=10`.
++
+//Тепер, якщо потрібно отримати наступні 10 записів (з 11 по 20), то встановлюємо `offset=10`, `limit=10`. Якщо ж потрібно отримати записи з 11 по 30, то встановлюємо `offset=10`, `limit=20` тощо.
+To get the next 10 records (from 11 to 20), set `offset=10` and `limit=10`. If you need to get the records from 11 to 30, set `offset=10` and `limit=20`, and so on.
++
+//Таким чином, відбувається зміщення на 1 десяток від значення, яке ви передаєте у запиті.
+This way, the records in a request are offset by 10s.
+====
+//.Створення пошукового запита з атрибутом pagination="offset" у моделі даних реєстру
++
+.Creating a search condition in the registry data model using the pagination="offset" attribute
+====
+
+[source,xml]
+----
+<changeSet author="registry owner" id="create SC get_requests_by_search_param_offset">
+    <ext:createSearchCondition name="get_requests_by_search_param_offset" pagination="offset">
+        <ext:table name="request_by_search_param">
+            <ext:column name="request_by_search_param_id"/>
+            <ext:column name="name"/>
+            <ext:column name="search_param"/>
+        </ext:table>
+    </ext:createSearchCondition>
+</changeSet>
+----
+
+//Цей Search Condition створює умову пошуку із назвою `*get_requests_by_search_param_offset*` і дозволяє виконувати пошук запитів із таблиці `*request_by_search_param*` за допомогою параметра *`search_param`* з пагінацією на основі зміщення (атрибут *`pagination="offset"`*).
+This example creates a search condition called `*get_requests_by_search_param_offset*` and allows querying the `*request_by_search_param*` table using the `search_param` parameter with offset-based pagination (the `pagination="offset"` attribute).
+====
+//.HTTP-запит до ресурсу із query-параметрами offset та limit
++
+.An HTTP request using query "offset" and "limit" parameters
+====
+[source,http]
+----
+https://registry-rest-api-mdtu-ddm-edp-cicd-platform-demo.apps.cicd2.mdtu-ddm.projects.epam.com/get-requests-by-search-param-offset?offset=0&limit=10
+----
+====
++
+.API response
+====
+[source,json]
+----
+[
+  {
+    "searchParam": "string",
+    "requestBySearchParamId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "name": "string"
+  }
+]
+----
+====
++
+._Example of OpenAPI specification_
+[%collapsible]
+====
+swagger::{attachmentsdir}/data-model/sc/pagination/swagger-offset.yml[]
+====
+
+page ::
+//повертає інформацію про поточну сторінку, кількість елементів на сторінці, загальну кількість елементів та загальну кількість сторінок.
+Returns information about the current page, the number of items on the page, the total number of items, and the total number of pages.
++
+//NOTE: За замовчуванням пагінація увімкнена і налаштована як `*pagination="offset"*`.
+NOTE: By default, pagination is enabled and set as `*pagination="offset"*`.
+//.Створення пошукового запита з атрибутом pagination="page"
++
+.Creating a search condition using the pagination="page" attribute
+====
+
+[source,xml]
+----
+<changeSet author="registry owner" id="create SC get_requests_by_search_param_page">
+    <ext:createSearchCondition name="get_requests_by_search_param_page" pagination="page">
+        <ext:table name="request_by_search_param">
+            <ext:column name="request_by_search_param_id"/>
+            <ext:column name="name"/>
+            <ext:column name="search_param"/>
+        </ext:table>
+    </ext:createSearchCondition>
+</changeSet>
+----
+
+//Цей Search Condition створює умову пошуку з назвою `*get_requests_by_search_param_page*`, яка дозволяє виконувати пошук запитів з таблиці `*request_by_search_param*` за допомогою параметра `*search_param*` з пагінацією на основі сторінок (атрибут `*pagination="page"*`).
+This example creates a search condition called `*get_requests_by_search_param_page*` and allows querying the `*request_by_search_param*` table using the `search_param` parameter with page-based pagination (the `pagination="page"` attribute).
+====
+//.HTTP-запит до ресурсу із query-параметрами pageSize та pageNo
++
+.An HTTP request using query "pageSize" and "pageNo" parameters
+====
+[source,http]
+----
+https://registry-rest-api-mdtu-ddm-edp-cicd-platform-demo.apps.cicd2.mdtu-ddm.projects.epam.com/get-requests-by-search-param-page?pageSize=10&pageNo=0
+----
+
+//Query-параметри запита: ::
+Request query parameters: ::
+//* `*pageSize*` -- бажана кількість елементів на сторінці. За замовчуванням `10`.
+* `*pageSize*`: The number of elements on the page. `10` by default.
+//* `*pageNo*` -- бажаний номер сторінки. За замовчуванням `0`.
+* `*pageNo*`: The page number. `0` by default.
+====
++
+.API response
+====
+[source,json]
+----
+{
+  "content": [
+    {
+      "searchParam": "string",
+      "name": "string",
+      "requestBySearchParamId": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+    }
+  ],
+  "totalElements": 0,
+  "totalPages": 0,
+  "pageNo": 0,
+  "pageSize": 10
+}
+----
+
+//API повертає наступні атрибути у відповіді: ::
+API returns the following attributes: ::
+
+//* `*content*` -- масив елементів, що підпадають під вказані критерії пошуку.
+* `*content*`: An array of elements that match the search criteria.
+//* `*totalElements*` -- загальна кількість елементів за запитом.
+* `*totalElements*`: The total number of elements requested.
+//* `*totalPages*` -- загальна кількість сторінок за запитом.
+* `*totalPages*`: The total number of pages requested.
+//* `*pageSize*` -- кількість елементів на сторінці.
+* `*pageSize*`: The number of elements on the page.
+//* *`pageNo`* -- номер сторінки що повертається.
+* *`pageNo`*: The page number being returned.
+====
++
+._An example of OpenAPI specification_
+[%collapsible]
+====
+swagger::{attachmentsdir}/data-model/sc/pagination/swagger-page.yml[]
+====
+
+none ::
+//атрибут дозволяє вимкнути пагінацію при пошукових запитах до API.
+This attribute allows disabling pagination for API queries.
++
+//NOTE: За замовчуванням пагінація увімкнена і налаштована як `*pagination="offset"*`.
+NOTE: By default, pagination is enabled and set as `*pagination="offset"*`.
+//.Створення пошукового запита з атрибутом pagination="none"
++
+.Creating a search condition using the pagination="none" attribute
+====
+
+//TODO: In ua version, the example contains pagination="page" from the previous example. Also, I changed the name of the SC from get_requests_by_search_param_page to get_requests_by_search_param_nopage
+[source,xml]
+----
+<changeSet author="registry owner" id="create SC get_requests_by_search_param_nopage">
+    <ext:createSearchCondition name="get_requests_by_search_param_nopage" pagination="none">
+        <ext:table name="request_by_search_param">
+            <ext:column name="request_by_search_param_id"/>
+            <ext:column name="name"/>
+            <ext:column name="search_param"/>
+        </ext:table>
+    </ext:createSearchCondition>
+</changeSet>
+----
+
+//Цей Search Condition створює умову пошуку з назвою `*get_requests_by_search_param_page*`, яка дозволяє виконувати пошук запитів з таблиці `*request_by_search_param*` за допомогою параметра `*search_param*` без пагінації (атрибут `*pagination="none"*`)
+This example creates a search condition called `*get_requests_by_search_param_nopage*` and allows querying the `*request_by_search_param*` table using the `search_param` parameter without pagination (the `pagination="none"` attribute).
+====
+
+//==== Використання операції JOIN з умовами AND та OR
+==== Using the JOIN operation with AND and OR conditions
+
+//Операція `*<ext:join>*` дозволяє поєднувати таблиці за певними умовами. Використовується при створенні критеріїв пошуку всередині тегу `*<ext:createSearchCondition>*` для отримання необхідних даних у зведених таблицях.
+The `*<ext:join>*` operation enables joining tables using different conditions. It is used when creating search conditions inside the `*<ext:createSearchCondition>*` tag to get the necessary data in roll-up tables.
+
+//Є 3 основні типи поєднання таблиць за допомогою JOIN: ::
+There are three main join types: ::
+
+//* *INNER JOIN* -- Перетин даних двох таблиць. Наприклад, *`<ext:join type="inner">`*.
+* *INNER JOIN*: An intersection of data from two tables. For example, *`<ext:join type="inner">`*.
+//* *LEFT JOIN* -- вивід даних з першої таблиці (зліва) та приєднання даних другої таблиці (справа), де це можливо. Наприклад, *`<ext:join type="left">`*.
+* *LEFT JOIN*: Extracts data from the first table (left) and joins data from the second table (right) where possible. For example, *`<ext:join type="left">`*.
+//* *RIGHT JOIN* -- протилежний до LEFT JOIN. Наприклад, *`<ext:join type="right">`*.
+* *RIGHT JOIN*: The opposite of LEFT JOIN. For example, *`<ext:join type="right">`*.
+
+//Операцію `*<ext:join>*` можна використовувати із додатковими умовами `*and*` та `*or*`, які визначаються в рамках тегу `*<ext:condition>*` як значення атрибута `*logicOperator*`.
+You can use the `*<ext:join>*` operation with additional `AND` and `OR` operators, which you can define within the `*<ext:condition>*` tag as the value of the `*logicOperator*` attribute.
+
+//.Використання inner join в рамках критерію пошуку
+.Using inner join in a search condition
+====
+[source,xml]
+----
+<ext:createSearchCondition name="get_regions_or_citi_regions">
+	<ext:table name="katottg" alias="k">
+		<ext:column name="katottg_id" />
+		<ext:column name="name" alias="name_region" searchType="startsWith" />
+		<ext:column name="category" />
+	</ext:table>
+	<ext:table name="katottg_category" alias="cat">
+		<ext:column name="name" alias="name_category" />
+		<ext:column name="code" />
+	</ext:table>
+	<ext:join type="inner">
+		<ext:left alias="k">
+			<ext:column name="category" />
+		</ext:left>
+		<ext:right alias="cat">
+			<ext:column name="code" />
+		</ext:right>
+	</ext:join>
+</ext:createSearchCondition>
+----
+====
+
+//.Використання inner join з умовою AND в рамках критерію пошуку
+.Using inner join with an AND operator in a search condition
+====
+[source,xml]
+----
+<ext:createSearchCondition name="get_regions_or_citi_regions">
+	<ext:table name="katottg" alias="k">
+		<ext:column name="katottg_id" />
+		<ext:column name="name" alias="name_region" searchType="startsWith" />
+		<ext:column name="category" />
+	</ext:table>
+	<ext:table name="katottg_category" alias="cat">
+		<ext:column name="name" alias="name_category" />
+		<ext:column name="code" />
+	</ext:table>
+	<ext:join type="inner">
+		<ext:left alias="k">
+			<ext:column name="category" />
+		</ext:left>
+		<ext:right alias="cat">
+			<ext:column name="code" />
+		</ext:right>
+		<ext:condition logicOperator="and" columnName="k.category" operator="eq"  value="'K'"/>
+	</ext:join>
+</ext:createSearchCondition>
+----
+====
+
+//.Використання inner join з умовою OR в рамках критерію пошуку
+.Using inner join with an OR operator in a search condition
+====
+[source,xml]
+----
+<ext:createSearchCondition name="get_regions_or_citi_regions">
+	<ext:table name="katottg" alias="k">
+		<ext:column name="katottg_id" />
+		<ext:column name="name" alias="name_region" searchType="startsWith" />
+		<ext:column name="category" />
+	</ext:table>
+	<ext:table name="katottg_category" alias="cat">
+		<ext:column name="name" alias="name_category" />
+		<ext:column name="code" />
+	</ext:table>
+	<ext:join type="inner">
+		<ext:left alias="k">
+			<ext:column name="category" />
+		</ext:left>
+		<ext:right alias="cat">
+			<ext:column name="code" />
+		</ext:right>
+		<ext:condition logicOperator="or" columnName="k.category" operator="eq"  value="cat.code">
+			<ext:condition logicOperator="and" columnName="k.category" operator="ne"  value="'K'"/>
+			<ext:condition logicOperator="and" columnName="k.level" operator="eq"  value="'1'"/>
+                </ext:condition>
+	</ext:join>
+</ext:createSearchCondition>
+----
+====
+
+[TIP]
+====
+//Більше про використання JOIN та додаткові умови дивіться на сторінці xref:data-modeling/data/physical-model/join-and-or-usage.adoc[].
+To learn more about using JOIN and additional operators, see xref:data-modeling/data/physical-model/join-and-or-usage.adoc[].
+====
+
+[#dropSearchCondition]
+//=== Тег видалення критерію пошуку
+=== Tag for deleting a search condition
+
+Change type name: `<dropSearchCondition>` ::
+
+//Цей тег надає можливість видалити критерій пошуку.
+The *`dropSearchCondition`* tag deletes a search condition.
+
+._XML schema example_
+[%collapsible]
+====
+[source, XML]
+----
+<ext:dropSearchCondition name="search_condition"/>
+----
+====
+
+[TIP]
+====
+//За детальною інформацією щодо сценарію використання видалення критерію пошуку у секцій xref:data-modeling/data/physical-model/liquibase-changes-management-sys-ext.adoc#delete-sc[XML-шаблон видалення критерію пошуку]. відповідного документа.
+For details, see the following section: xref:data-modeling/data/physical-model/liquibase-changes-management-sys-ext.adoc#delete-sc[XML template for deleting a search condition].
+====
+
+[#exposeSearchCondition]
+//=== Тег визначення точок інтеграції з іншими реєстрами, зовнішніми системами та ШБО "Трембіта"
+=== Tag for setting integration points with other registries and external systems
+
+Change type name: `<exposeSearchCondition>` ::
+
+//Цей тег надає можливість визначити точки інтеграції з іншими реєстрами, зовнішніми системами та ШБО "Trembita".
+The *`exposeSearchCondition`* tag enables you to set integration points with other registries and external systems.
+
+//TODO: Following XML example contains trembita attribute, perhaps should be deleted
+._XML schema example_
+[%collapsible]
+====
+[source, XML]
+----
+<ext:exposeSearchCondition name="viewForDrop" platform="true" externalSystem="true" trembita="false"/>
+----
+====
+
+//Тег приймає 4 атрибути: ::
+The exposeSearchCondition tag accepts the following attributes: ::
+
+//* `name` -- назва критерію пошуку (search condition);
+* *name*: Search condition name.
+//* *`platform`* -- для надання доступу до представлень та REST API реєстру для іншого реєстру на Платформі;
+* *platform*: A flag that provides access to the registry's views and REST API for another registry on the Platform.
+//* *`externalSystem`* -- для надання доступу до представлень та REST API реєстру для зовнішньої системи;
+* *externalSystem*: A flag that provides access to the registry's views and REST API for an external system.
+//TODO: Omitting ua-specific mention of Trembita
+//* *`trembita`* -- Надання доступу до представлень реєстру для сервісів-учасників СЕВ ДЕІР через інтерфейс ШБО "Трембіта" за протоколом SOAP.
+
+//== Керування користувацькими типами даних
+== Managing custom data types
+
+[#ENUM]
+//=== Тег створення перелічувального типу даних (ENUM)
+=== Tag for creating an enumerated data type (ENUM)
+
+Change type name: `<createType> <ext:asEnum>` ::
+
+//Цей тег надає можливість створити перелічувальний тип даних (ENUM).
+This tag creates an enumerated data type (ENUM).
+
+//TODO: Example contains translation attribute with Ukrainian values.
+._XML schema example_
+[%collapsible]
+====
+[source, XML]
+----
+<ext:createType name="type_gender">
+    <ext:asEnum>
+        <ext:label translation="Жіноча">FEMALE</ext:label>
+        <ext:label translation="Чоловіча">MALE</ext:label>
+    </ext:asEnum>
+</ext:createType>
+----
+====
+
+[#Composite]
+//=== Тег створення композитного типу даних (Composite)
+=== Tag for creating a composite data type
+
+Change type name: `<createType> <ext:composite>` ::
+
+//Цей тег надає можливість створити композитний тип даних (Composite).
+This tag creates a composite data type.
+
+._XML schema example_
+[%collapsible]
+====
+[source, XML]
+----
+<ext:createType name="field_access_type">
+    <ext:composite>
+        <ext:column name="masked_value" type="TEXT" collation="uk_UA.utf8"/>
+        <ext:column name="opened" type="BOOLEAN"/>
+         <ext:column name="private" type="BOOLEAN"/>
+        <ext:column name="confidential" type="BOOLEAN"/>
+        <ext:column name="secret" type="BOOLEAN"/>
+        <ext:column name="service" type="BOOLEAN"/>
+    </ext:composite>
+ </ext:createType>
+----
+====
+
+//TIP: За детальною інформацією щодо створення типу даних `ENUM` та `Composite` зверніться до секції xref:data-modeling/data/physical-model/liquibase-changes-management-sys-ext.adoc#create-type-enum-composite[Схема створення типів даних ENUM та Composite] відповідного документа.
+TIP: For details, see the following section: xref:data-modeling/data/physical-model/liquibase-changes-management-sys-ext.adoc#create-type-enum-composite[Schema for creating enumerated and composite data types].
+
+[#dropType]
+//=== Тег видалення типу даних
+=== Tag for deleting a data type
+
+Change type name: `<dropType>` ::
+
+//Цей тег надає можливість видалити тип даних.
+The *`dropType`* tag deletes a data type.
+
+._XML schema example_
+[%collapsible]
+====
+[source, XML]
+----
+<ext:dropType name=" type_gender"/>
+----
+====
+
+[#createDomain]
+//=== Тег створення користувацького типу даних з перевіркою на певні умови
+=== A tag for creating a custom data type with optional constraints
+
+Change type name: `<createDomain>` ::
+
+//Цей тег надає можливість створити користувацький тип даних з перевіркою на певні умови.
+The *`createDomain`* tag creates a custom data type with optional constraints.
+
+._XML schema example_
+[%collapsible]
+====
+[source, XML]
+----
+<ext:createDomain name="dn_passport_num"
+dataType="CHAR(8)">
+    <ext:constraint implementation="NOT NULL"/>
+    <ext:constraint name="passport_number_chk"
+implementation="CHECK (VALUE ~ '^[АВЕІКМНОРСТХ]{2}[0-9]{6}$)"/>
+</ext:createDomain>
+----
+====
+
+//TIP: За детальною інформацією щодо створення типу даних `Domain` зверніться до секції xref:data-modeling/data/physical-model/liquibase-changes-management-sys-ext.adoc#create-type-domain[Схема створення типу даних Domain] відповідного документа.
+TIP: For details, see the following section: xref:data-modeling/data/physical-model/liquibase-changes-management-sys-ext.adoc#create-type-domain[Schema for creating a domain data type].
+
+//=== Тег видалення користувацького типу даних
+=== Tag for deleting custom data types
+
+[#dropDomain]
+Change type name: `<dropDomain>` ::
+
+//Цей тег надає можливість видалити користувацький тип даних.
+The *`dropDomain`* tag deletes a custom data type.
+
+._XML schema example_
+[%collapsible]
+====
+[source, XML]
+----
+<ext:dropDomain name=" dn_passport_num"/>
+----
+====
+
+[#createMany2Many]
+//== Створення типу зв'язку "Багато до багатьох"
+== Creating a many-to-many relationship type
+
+Change type name: `<createMany2Many>` ::
+
+//Цей тег надає можливість створити особливий тип зв'язку "Багато до багатьох", що виконує наступні функції:
+The *`createMany2Many`* tag creates a many-to-many relationship type that performs the following functions:
+//- створює відбиток даних (view), розгортаючи масив у рядки;
+//- створює індекс.
+* Creates a data view by unwrapping an array into rows.
+* Creates an index.
+
+._XML schema example_
+[%collapsible]
+====
+[source, XML]
+----
+<ext:createMany2Many
+    mainTableName="table1"
+    mainTableKeyField="column_id"
+    referenceTableName="table2"
+    referenceKeysArray="columns"/>
+----
+//_де “columns” має тип "UUID[ ]" -"Масив ідентифікаторів"_
+//TODO: Please double-check this paragraph:
+Where "columns" has the following type: "UUID[ ]" -"Array of identifiers"
+====
+
+//TIP: За детальною інформацією щодо створення зв'язків між таблицями зверніться до розділу xref:data-modeling/data/physical-model/liquibase-changes-management-sys-ext.adoc#create-many2many[Схема моделювання зв'язків між сутностями в БД] відповідного документа.
+TIP: For details on creating relationships between the tables, see the following section: xref:data-modeling/data/physical-model/liquibase-changes-management-sys-ext.adoc#create-many2many[Schema for modeling relationships between database entities].
+
+[#createCompositeEntity]
+//== Збереження декількох сутностей в рамках однієї транзакції
+== Saving multiple entities within a single transaction
+
+Change type name: `<createCompositeEntity>` ::
+
+//Цей тег надає можливість зберегти декілька сутностей в рамках однієї транзакції.
+The *`createCompositeEntity`* tag enables you to save multiple entities within a single transaction.
+
+._XML schema example_
+[%collapsible]
+====
+[source, XML]
+----
+<ext:createCompositeEntity name="nested_tables">
+    <ext:nestedEntity table="table_one">
+        <ext:link column="two_column_id" entity="table_two"/>
+    </ext:nestedEntity>
+    <ext:nestedEntity name="tableTwo" table="table_two">
+         <ext:link column="three_column_id" entity="table_three"/>
+     </ext:nestedEntity>
+     <ext:nestedEntity name="tableThree" table="table_three"/>
+</ext:createCompositeEntity>
+----
+====
+
+[#partialUpdate]
+//== Генерація ендпоінтів для часткового оновлення сутності в БД
+== Generating endpoints for partial updates of database entities
+
+Change type name: `<partialUpdate>` ::
+
+//Цей тег надає можливість генерувати ендпоінти для зміни окремих частин сутності.
+The *`partialUpdate`* tag generates endpoints for updating separate parts of an entity.
+
+._XML schema example_
+[%collapsible]
+====
+[source, XML]
+----
+<partialUpdate table="table_name">
+    <column>column_name1</column>
+    <column>column_name2</column>
+    <column>column_name3</column>
+</partialUpdate>
+----
+====
+
+[#create-analytical-views]
+//== Керування аналітичними представленнями
+== Managing analytics views
+
+[#createAnalyticsView]
+//=== Тег створення аналітичного представлення
+=== Tag for creating an analytics view
+
+Change type name: `<createAnalyticsView>` ::
+
+//Цей тег надає можливість створити аналітичні представлення на репліці.
+The *`createAnalyticsView`* tag creates analytics views on a replica.
+
+._XML schema example_
+[%collapsible]
+====
+[source, XML]
+----
+<ext:createAnalyticsView name="report_table_name">
+    <ext:table name="table_name">
+        <ext:column name="column1"/>
+         <ext:column name=" column2"/>
+    </ext:table>
+</ext:createAnalyticsView>
+----
+====
+
+[#dropAnalyticsView]
+//=== Тег видалення аналітичного представлення
+=== Tag for deleting an analytics view
+
+Change type name: `<dropAnalyticsView>` ::
+
+//Цей тег надає можливість видалити аналітичні представлення на репліці.
+The *`dropAnalyticsView`* tag deletes analytics views on a replica.
+
+._XML schema example_
+[%collapsible]
+====
+[source, XML]
+----
+<ext:dropAnalyticsView name="report_table_name"/>
+----
+====
+
+[#createAnalyticsIndex]
+//=== Тег створення індексу
+=== Tag for creating an index
+
+Change type name: `<createAnalyticsIndex>` ::
+
+//Цей тег надає можливість створити індекс _лише_ на репліці.
+The *`createAnalyticsIndex`* tag creates an index _only_ on a replica.
+
+._XML schema example_
+[%collapsible]
+====
+[source, XML]
+----
+<ext:createAnalyticsIndex tableName="table" indexName="idx_table__column">
+    <column name="column"/>
+</ext:createAnalyticsIndex>
+----
+====
+
+//== Керування правами доступу до аналітичних даних
+== Managing access rights to analytical data
+
+//TIP: За детальною інформацією щодо прав доступу до аналітичних даних зверніться до розділу xref:registry-develop:data-modeling/reports/data-analytical-data-access-rights.adoc[Права доступу до аналітичних даних] відповідного документа.
+TIP: For details, see xref:registry-develop:data-modeling/reports/data-analytical-data-access-rights.adoc[].
+
+//=== Тег надання доступу до всіх аналітичних представлень
+=== Tag for granting access to all analytics views
+
+[#grantAll]
+Change type name: `<grantAll>` ::
+
+//Цей тег надає можливість доступу до всіх аналітичних представлень для певної ролі.
+The *`grantAll`* tag grants access to all analytics views for a specific role.
+
+._XML schema example_
+[%collapsible]
+====
+[source, XML]
+----
+<ext:grantAll>
+    <ext:role name="analytics_officer"/>
+</ext:grantAll>
+----
+====
+
+[#revokeAll]
+//=== Тег видалення доступу до всіх аналітичних представлень
+=== Tag for revoking access to all analytics views
+
+Change type name: `<revokeAll>` ::
+
+//Цей тег надає можливість видаляти права доступу до всіх аналітичних представлень для певної ролі.
+The *`revokeAll`* tag revokes access to all analytics views for a specific role.
+
+._XML schema example_
+[%collapsible]
+====
+[source, XML]
+----
+<ext:revokeAll>
+    <ext:role name="analytics_officer"/>
+</ext:revokeAll>
+
+----
+====
+
+[#grant]
+//=== Тег надання доступу до окремого аналітичного представлення
+=== Tag for granting access to an individual analytics view
+
+Change type name: `<grant>` ::
+
+//Цей тег надає можливість доступу до окремого аналітичного представлення для певної ролі.
+The *`grant`* tag grants access to an individual analytics view for a specific role.
+
+._XML schema example_
+[%collapsible]
+====
+[source, XML]
+----
+<ext:grant>
+	<ext:role name="analytics_officer">
+		<ext:view name="report_pd_processing_consent"/>
+	</ext:role>
+	<ext:role name="analytics_officer">
+		<ext:view name="report_pd_processing_consent"/>
+	</ext:role>
+</ext:grant>
+----
+====
+
+[#revoke]
+//=== Тег видалення доступу до окремого аналітичного представлення
+=== Tag for revoking access to an individual analytics view
+
+Change type name: `<revoke>` ::
+
+//Цей тег надає можливість видаляти права доступу до окремого аналітичного представлення для певної ролі.
+The *`revoke`* tag revokes access to an individual analytics view for a specific role.
+
+._XML schema example_
+[%collapsible]
+====
+[source, XML]
+----
+<ext:revoke>
+	<ext:role name="analytics_officer">
+		<ext:view name="report_pd_processing_consent"/>
+	</ext:role>
+</ext:revoke>
+----
+====
+
+//== Використання вкладених структур в таблицях БД реєстру за вказаним параметром
+== Using nested structures in registry database tables by a specified parameter
+
+//=== Тег використання вкладених структур
+=== Tag for using nested structures
+
+Change type name: `<tableReadParameters>` ::
+
+//Цей тег надає можливість моделювати вкладені структури в таблицях БД реєстру за вказаним параметром.
+The *`tableReadParameters`* tag enables you to model nested structures in registry database tables by a specified parameter.
+
+[NOTE]
+====
+//Для використання у критеріях пошуку (search conditions) додано атрибут `fetchType`. Його зазначають для колонки, що містить масив даних.
+You can specify the `fetchType` attribute for a column containing a data array to use it in search conditions.
+
+//Застосовується для двох типів зв'язку:
+It applies to two types of relationships:
+
+//* Колонок, в яких визначено тип зв`яку "Багато до багатьох" (Many2Many);
+//* Колонок, в яких є зовнішній ключ (foreign key) до іншої таблиці.
+* Columns with a Many2Many relationship type.
+* Columns with a foreign key to another table.
+
+//Атрибут `fetchType` приймає наступні значення:
+The `fetchType` attribute can have the following values:
+
+//* `id` -- отримати ідентифікатори (поведінка за замовчуванням);
+//* `entity` -- отримати інформацію з таблиці, до якої налаштовано посилання.
+* *`id`*: Fetch identifiers (default value).
+* *`entity`*: Fetch information from a referenced table.
+====
+
+._XML schema example with a "tableReadParameters" tag_
+[%collapsible]
+====
+[source, XML]
+----
+<ext:tableReadParameters table="person_type_vpo">
+    <ext:column name="consents" fetchType="entity"/>
+</ext:tableReadParameters>
+----
+====
+
+._XML schema example with a "fetchType" attribute_
+[%collapsible]
+====
+[source, XML]
+----
+<ext:createSearchCondition name="vpo_person_equals_id_with_fetch_type_person">
+    <ext:table name="vpo_person_many_types">
+        <ext:column name="consent_id" fetchType="entity" />
+        <ext:column name="scan_copy" />
+        <ext:column name="legal_entity_name" sorting="asc" searchType="startsWith" />
+        <ext:column name="consent_subject_id"/>
+    </ext:table>
+</ext:createSearchCondition>
+----
+====
+
+//.Використання тегу <tableReadParameters> та атрибуту _fetchType_ при моделюванні даних
+.Using the "tableReadParameters" tag and "fetchType" attribute when modeling data
+====
+//* `Таблиця 1` має зв'язок many2many з `Таблицею 2`.
+* *Table 1* has a Many2Many relationship with *Table 2*.
+//* `Таблиця 1` має колонку з масивом id (зовнішні ключі до `Таблиці 2`).
+* *Table 1* has a column with an array of IDs (foreign keys to *Table 2*).
+//* Відповідь при запиті до ресурсу з `Таблиці 1` повинна мати у полі з посиланнями до `Таблиці 2` інформацію, відповідну до записів з `Таблиці 2`.
+* When a resource from *Table 1* is requested, *Table 1* fields referencing *Table 2* must have values corresponding to *Table 2* records in the response.
+
+.Table 1
+[source,json]
+----
+{
+   "vpoId":"57152fa5-742c-4b1e-bd53-acc36524cc2d",
+   "vpoLastName":"Holmes",
+   "vpoFirstName":"Jared",
+   "vpoSecondName":"Oliver",
+   "personTypes":[
+      "2d89ffea-118c-4be9-9fa0-c3007991c811",
+      "0d756563-d6a4-46fe-a0c8-ddf4a935ec35"
+   ]
+}
+----
+
+.Table 2
+[source,json]
+----
+[
+   {
+      "constantCode":"1100",
+      "name":"Large family",
+      "personTypeVpoId":"2d89ffea-118c-4be9-9fa0-c3007991c811"
+   },
+   {
+      "constantCode":"1200",
+      "name":"Kids",
+      "personTypeVpoId":"0d756563-d6a4-46fe-a0c8-ddf4a935ec35"
+   }
+]
+----
+
+//TODO: Examples contain ua-specific term VPO
+.An example of creating a `vpo_person_type_contains_name` search condition
+[source,xml]
+----
+<changeSet author="registry owner" id="create SC vpo_person_equals_id_person_with_fetch_many_types">
+    <ext:createSearchCondition name="vpo_person_equals_id_person_with_fetch_many_types">
+        <ext:table name="vpo_person_many_types">
+            <ext:column name="vpo_person_many_id" searchType="equal"/>
+            <ext:column name="vpo_first_name" />
+            <ext:column name="vpo_last_name"/>
+            <ext:column name="vpo_second_name"/>
+            <ext:column name="person_types" fetchType="entity"/>
+        </ext:table>
+    </ext:createSearchCondition>
+</changeSet>
+----
+
+.An example of creating a table using fetchType
+[source,xml]
+----
+<changeSet id="table t_person_table_many2many_fetch_id" author="registry owner">
+    <createTable tableName="t_person_table_many2many_fetch_id" ext:isObject="true" ext:historyFlag="true" remarks="VPO">
+        <column name="id"  type="UUID" defaultValueComputed="uuid_generate_v4()" remarks="VPO identifier">
+            <constraints nullable="false" primaryKey="true" primaryKeyName="pk_t_person_table_many2many_fetch_id"/>
+        </column>
+        <column name="name" type="TEXT" remarks="name">
+            <constraints nullable="false"/>
+        </column>
+        <column name="person_types" type="UUID[]" remarks="IDs array"/>
+    </createTable>
+    <ext:createMany2Many mainTableName="t_person_table_many2many_fetch_id"
+                         mainTableKeyField="id"
+                         referenceTableName="person_type_vpo"
+                         referenceKeysArray="person_types"/>
+    <ext:tableReadParameters table="t_person_table_many2many_fetch_id">
+        <ext:column name="person_types" fetchType="entity"/>
+    </ext:tableReadParameters>
+</changeSet>
+----
+
+//.Приклад результат виконання запита за замовчуванням (search conditions або resource)
+.An example of a default response (search conditions or resource)
+[source,json]
+----
+{
+   "vpoId":"57152fa5-742c-4b1e-bd53-acc36524cc2d",
+   "vpoLastName":"Holmes",
+   "vpoFirstName":"Jared",
+   "vpoSecondName":"Oliver",
+   "personTypes":[
+      "2d89ffea-118c-4be9-9fa0-c3007991c811",
+      "0d756563-d6a4-46fe-a0c8-ddf4a935ec35"
+   ]
+}
+----
+
+//.Приклад результат виконання запита з атрибутом fetchType (search conditions або resource)
+.An example of executing a request with "fetchType" attribute (search conditions or resource)
+[source,json]
+----
+{
+   "vpoId":"57152fa5-742c-4b1e-bd53-acc36524cc2d",
+   "vpoLastName":"Holmes",
+   "vpoFirstName":"Jared",
+   "vpoSecondName":"Oliver",
+   "personTypes":[
+      {
+         "id":"2d89ffea-118c-4be9-9fa0-c3007991c811",
+         "constantCode":"1100",
+         "name":"Large family"
+      },
+      {
+         "id":"0d756563-d6a4-46fe-a0c8-ddf4a935ec35",
+         "constantCode":"1200",
+         "name":"Kids"
+      }
+   ]
+}
+----
+====
+
+//== Керування процесом перевірки коду (Code review pipeline)
+== Managing the code review process
+
+//У моделі даних можна налаштовувати атрибути, які дозволяють виключати окремі набори змін (changeSets) або цілі файли із процесу розгортання у пайплайні Code Review. Це дозволяє прискорити процес проходження code-review при роботі з моделлю даних реєстру в рамках версій-кандидатів у Кабінеті адміністратора регламентів (_детальніше про особливості роботи з моделлю даних в рамках версій-кандидатів -- див. на сторінці xref:registry-admin/admin-portal/registry-modeling/tables/tables-data-structures.adoc[]_).
+You can configure attributes in the data model to exclude individual change sets or entire files from the deployment process of the Code Review pipeline. This helps accelerate the code review process when working with the registry data model in scope of version candidates in the regulations administrator's portal. For details on working with the data model in scope of version candidates, see xref:registry-admin/admin-portal/registry-modeling/tables/tables-data-structures.adoc[].
+
+[TIP]
+====
+//*Code Review pipeline* -- це процес перевірки коду, який забезпечує, що розроблюваний код відповідає вимогам якості та стандартам кодування.
+The *Code Review pipeline* is a process to ensure the code meets quality requirements and coding standards.
+
+//Основним Code Review пайплайном у регламенті вашого реєстру є `*MASTER-Code-review-registry-regulations*`. Знайти його можна за посиланням: +
+//https://admin-tools-<службова-назва-реєстру>.apps.envone.dev.registry.eua.gov.ua/cicd/job/registry-regulations/job/MASTER-Code-review-registry-regulations/.
+The main Code Review pipeline in your registry regulations is `*MASTER-Code-review-registry-regulations*`. You can find it using the following link:
+
+//TODO: ua-specific link
+https://admin-tools-<registry-service-name>.apps.envone.dev.registry.eua.gov.ua/cicd/job/registry-regulations/job/MASTER-Code-review-registry-regulations/.
+
+//При роботі із моделлю даних реєстру в рамках версій-кандидатів, Code review пайплайн додатково розгортає тимчасову репліку бази даних реєстру. Відповідний крок показаний на зображенні нижче.
+When working with the registry's data model in scope of version candidates, the Code Review pipeline additionally deploys a temporary replica of the registry database. The corresponding step is shown in the image below.
+
+.An overview of the MASTER-Code-review-registry-regulations pipeline
+image::data-modeling/data/physical-model/code-review/data-model-code-review-01.png[]
+
+====
+
+[configure]
+//=== Опис налаштування у моделі даних
+=== Configuring the data model
+
+//Виключити зміни із Code review пайплайну можна за допомогою атрибута `*context="!code-review"*` двома способами:
+You can exclude changes from the Code Review pipeline using the `*context="!code-review"*` attribute in two ways:
+
+//. Виключити конкретний набір змін (changeSet). Для цього необхідно додати атрибут `*context="!code-review"*` на рівні тегу `*<changeSet>*`.
+. Exclude a specific change set. To do this, add the `*context="!code-review"*` attribute at the `*<changeSet>*` tag level.
++
+.Excluding a specific changeSet from the Code Review pipeline
+image::data-modeling/data/physical-model/code-review/data-model-code-review-1.png[image,width=468,height=56]
++
+//. Виключити цілий файл зі змінами. Для цього необхідно додати атрибут `*context="!code-review"*` на рівні тегу `*<include>*`.
+. Exclude an entire file with changes. To do this, add the `*context="!code-review"*` attribute at the `*<include>*` tag level.
++
+.Excluding a file from the Code Review pipeline
+image::data-modeling/data/physical-model/code-review/data-model-code-review-2.png[image,width=468,height=202]
+
+[NOTE]
+====
+//Якщо у тегу вже існує атрибут `*context*`, зокрема `*context="pub"*`, то значення `*!code-review*` необхідно додати до цього атрибута через оператор `*and*`. Наприклад:
+If the tag already contains the `*context*` attribute (for instance, `*context="pub"*`), the `*!code-review*` value should be added to the attribute using the `*and*` operator. For example:
+
+[source,xml]
+----
+context="pub and !code-review"
+----
+====
+
+
+[WARNING]
+====
+//Якщо додати *`!code-review`* до changeSet, який вже був розгорнутий, то у першому Code review пайплайні цей changeSet все одно виконається. Однак, після того, як застосувати цей changeSet ще раз, але вже з *`context="!code-review"`*, він буде пропущений у наступних Code review пайплайнах.
+If you add *`!code-review`* to a changeSet that has already been deployed, this changeSet will still be executed during the first Code Review pipeline. However, after applying the changeSet one more time with *`context="!code-review"`*, it will be skipped in subsequent Code Review pipelines.
+
+//Проте, якщо додати *`!code-review`* до абсолютно нового changeSet, то цей changeSet буде ігнорований не лише у першому Code review пайплайні, а й в усіх наступних.
+If you add *`!code-review`* to an entirely new changeSet, this changeSet will be ignored during the first Code Review pipeline and all subsequent ones.
+====
