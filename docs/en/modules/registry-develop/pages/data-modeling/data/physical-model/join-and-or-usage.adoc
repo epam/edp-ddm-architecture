@@ -1,0 +1,498 @@
+:toc-title: On this page:
+:toc: auto
+:toclevels: 5
+:experimental:
+:sectnums:
+:sectnumlevels: 5
+:sectanchors:
+:sectlinks:
+:partnums:
+
+//= Сценарії поєднання таблиць за допомогою JOIN із додатковими умовами AND та OR
+= Scenarios of combining tables using JOIN with additional AND and OR conditions
+
+//== Загальний опис
+== Overview
+
+//Операція `*<ext:join>*` дозволяє поєднувати таблиці за певними умовами. Використовується при створенні критеріїв пошуку всередині тегу `*<ext:createSearchCondition>*` для отримання необхідних даних у зведених таблицях.
+The `*<ext:join>*` operation enables joining tables using different conditions. It is used when creating search conditions inside the `*<ext:createSearchCondition>*` tag to get the necessary data in roll-up tables.
+
+//Є 3 основні типи поєднання таблиць за допомогою JOIN: ::
+There are three main join types: ::
+
+//* *INNER JOIN* -- Перетин даних двох таблиць. Наприклад, *`<ext:join type="inner">`*.
+* *INNER JOIN*: An intersection of data from two tables. For example, *`<ext:join type="inner">`*.
+//* *LEFT JOIN* -- вивід даних з першої таблиці (зліва) та приєднання даних другої таблиці (справа), де це можливо. Наприклад, *`<ext:join type="left">`*.
+* *LEFT JOIN*: Extracts data from the first table (left) and joins data from the second table (right) where possible. For example, *`<ext:join type="left">`*.
+//* *RIGHT JOIN* -- протилежний до LEFT JOIN. Наприклад, *`<ext:join type="right">`*.
+* *RIGHT JOIN*: The opposite of LEFT JOIN. For example, *`<ext:join type="right">`*.
+
+//Операцію `*<ext:join>*` можна використовувати із додатковими умовами `*and*` та `*or*`, які визначаються в рамках тегу `*<ext:condition>*` як значення атрибута `*logicOperator*`.
+You can use the `*<ext:join>*` operation with additional `AND` and `OR` operators, which you can define within the `*<ext:condition>*` tag as the value of the `*logicOperator*` attribute.
+
+//== Приклади використання
+== Usage examples
+
+//Розглянемо приклади використання умови `JOIN` у критеріях пошуку та додаткові умови `AND` та `OR` в рамках рольової моделі та її окремого випадку із застосуванням довідників кодифікатора КАТОТТГ.
+Let's consider several examples of using `JOIN` in search conditions with additional `AND` and `OR` operators in the context of the role model and the KATOTTG territorial units codifier.
+
+=== Prerequisites
+
+//Створіть дві таблиці для використання у критеріях пошуку та поєднання за допомогою `JOIN`.
+Create two tables to join and use in search conditions.
+
+//. `<createTable tableName="katottg">` -- таблиця, що містить коди КАТОТТГ.
+. `<createTable tableName="katottg">` creates a table with KATOTTG codes.
++
+.Example of the "katottg" table
+[%collapsible%]
+====
+[source,xml]
+----
+<changeSet id="table katottg" author="registry_owner">
+    <createTable tableName="katottg" ext:historyFlag="true" remarks="katottg">
+        <column name="katottg_id"  type="UUID" defaultValueComputed="uuid_generate_v4()"
+                remarks="katottg ID">
+            <constraints nullable="false" primaryKey="true" primaryKeyName="pk_katottg_id"/>
+        </column>
+
+        <column name="code" type="TEXT" remarks="Code">
+            <constraints nullable="true"/>
+        </column>
+        <column name="name" type="TEXT" remarks="Name">
+            <constraints nullable="true"/>
+        </column>
+        <column name="category" type="TEXT" remarks="Category">
+            <constraints nullable="true"/>
+        </column>
+        <column name="level" type="INT">
+            <constraints nullable="false"/>
+        </column>
+        <column name="katottg_parent_id" type="UUID">
+            <constraints nullable="true"
+                         foreignKeyName="fk_katottg_parent"
+                         referencedTableName="katottg"
+                         referencedColumnNames="katottg_id"/>
+        </column>
+    </createTable>
+    <addUniqueConstraint tableName="katottg" columnNames="code"/>
+</changeSet>
+----
+====
+//. `<createTable tableName="katottg_category"` -- таблиця, що містить категорії кодів КАТОТТГ.
+. `<createTable tableName="katottg_category"` creates a table with KATOTTG code categories.
++
+.Example of the "katottg_category" table
+[%collapsible%]
+====
+[source,xml]
+----
+<changeSet id="table katottg_category" author="registry_owner">
+    <createTable tableName="katottg_category" ext:historyFlag="true" remarks="katottg_category">
+        <column name="katottg_category_id"  type="UUID" defaultValueComputed="uuid_generate_v4()"
+                remarks="ID">
+            <constraints nullable="false" primaryKey="true" primaryKeyName="pk_katottg_category_id"/>
+        </column>
+        <column name="code" type="TEXT" remarks="Code">
+            <constraints nullable="false"/>
+        </column>
+        <column name="name" type="TEXT" remarks="Name">
+            <constraints nullable="true"/>
+        </column>
+    </createTable>
+    <addUniqueConstraint tableName="katottg_category" columnNames="code"/>
+</changeSet>
+----
+====
+
+=== Scenarios
+
+//Створимо критерій пошуку `get_regions_or_city_regions`. На основі цього критерію пошуку буде створено ендпоінт у фабриці даних, який зможе повертати список усіх областей України, а також міста зі спеціальним статусом, їх коди КАТОТТГ, а також категорію коду КАТОТТГ, при виконанні певних умов запита, а саме:
+Let's create a search condition called `get_regions_or_city_regions`. This search condition creates an endpoint in the data factory, which can return a list of regions, cities with a special status, their KATOTTG codes, and KATOTTG code categories using the following conditions:
+
+//* Об'єднати таблиці за допомогою `JOIN` та додатковою умовою `AND`:
+* Joining tables using `JOIN` with an `AND` condition:
++
+[source,xml]
+----
+<ext:condition logicOperator="and" columnName="k.category" operator="eq"  value="'K'"/>
+----
++
+//* Об'єднати таблиці за допомогою `JOIN` та додатковою умовою `OR`:
+* Joining tables using `JOIN` with an `OR` condition:
++
+[source,xml]
+----
+<ext:condition logicOperator="or" columnName="k.category" operator="eq"  value="cat.code">
+	<ext:condition logicOperator="and" columnName="k.category" operator="ne"  value="'K'"/>
+	<ext:condition logicOperator="and" columnName="k.level" operator="eq"  value="'1'"/>
+</ext:condition>
+----
+
+//Залежно від умови, яку ви зазначаєте у запиті, формується й відповідний результат. Тобто формується вибірка з певної кількості записів, об'єднаних в одній зведеній таблиці.
+The result depends on the condition you specify in the request. A data sample is formed from several records joined in a roll-up table.
+
+//==== Використання INNER JOIN без додаткових умов
+==== Using INNER JOIN without additional conditions
+
+//TODO: I'm changing citi to city in the examples below
+.XML schema. Using INNER JOIN without additional conditions
+====
+[source,xml]
+----
+<ext:createSearchCondition name="get_regions_or_city_regions">
+	<ext:table name="katottg" alias="k">
+		<ext:column name="katottg_id" />
+		<ext:column name="name" alias="name_region" searchType="startsWith" />
+		<ext:column name="category" />
+	</ext:table>
+	<ext:table name="katottg_category" alias="cat">
+		<ext:column name="name" alias="name_category" />
+		<ext:column name="code" />
+	</ext:table>
+	<ext:join type="inner">
+		<ext:left alias="k">
+			<ext:column name="category" />
+		</ext:left>
+		<ext:right alias="cat">
+			<ext:column name="code" />
+		</ext:right>
+	</ext:join>
+</ext:createSearchCondition>
+----
+====
+
+//На виході Liquibase генерує наступний SQL-запит: ::
+At the output, Liquibase generates the following SQL query: ::
++
+.SQL query. Using INNER JOIN without additional conditions
+====
+[source,sql]
+----
+CREATE
+OR REPLACE VIEW registry.get_regions_or_city_regions_v AS
+SELECT
+  k.katottg_id,
+  k.name AS name_region,
+  cat.name AS name_category,
+  cat.code
+FROM
+  katottg k
+  JOIN katottg_category cat
+  ON k.category = cat.code
+
+----
+====
+
+//==== Використання INNER JOIN із додатковою умовою AND
+==== Using INNER JOIN with an AND condition
+
+.XML schema. Using INNER JOIN with an AND condition
+====
+[source,xml]
+----
+<ext:createSearchCondition name="get_regions_or_city_regions">
+	<ext:table name="katottg" alias="k">
+		<ext:column name="katottg_id" />
+		<ext:column name="name" alias="name_region" searchType="startsWith" />
+		<ext:column name="category" />
+	</ext:table>
+	<ext:table name="katottg_category" alias="cat">
+		<ext:column name="name" alias="name_category" />
+		<ext:column name="code" />
+	</ext:table>
+	<ext:join type="inner">
+		<ext:left alias="k">
+			<ext:column name="category" />
+		</ext:left>
+		<ext:right alias="cat">
+			<ext:column name="code" />
+		</ext:right>
+		<ext:condition logicOperator="and" columnName="k.category" operator="eq"  value="'K'"/>
+	</ext:join>
+</ext:createSearchCondition>
+----
+====
+
+//На виході Liquibase генерує наступний SQL-запит: ::
+At the output, Liquibase generates the following SQL query: ::
++
+.SQL query. Using INNER JOIN with an AND condition
+====
+[source,sql]
+----
+CREATE
+OR REPLACE VIEW registry.get_regions_or_city_regions_v AS
+SELECT
+  k.katottg_id,
+  k.name AS name_region,
+  cat.name AS name_category,
+  cat.code
+FROM
+  katottg k
+  JOIN katottg_category cat
+  ON k.category = cat.code
+  AND k.category = 'K' :: text;
+----
+====
+
+//Результат виконання запита буде таким: ::
+The result of the request is as follows: ::
+
+//Якщо об'єднати таблиці за допомогою `JOIN` із додатковою умовою `AND`, то ви отримаєте вибірку лише з 2-х записів:
+When joining the tables using `JOIN` with an `AND` condition, you will get a sample of 2 records:
++
+//.Результат запита за умовами JOIN + AND
+.Request result when using JOIN + AND condition
+image::data-modeling/data/physical-model/join-and-or-usage/join-and-or-usage-1.png[]
+
+//==== Використання INNER JOIN із додатковою умовою OR
+==== Using INNER JOIN with an OR condition
+
+.Using INNER JOIN with an OR condition
+====
+[source,xml]
+----
+<ext:createSearchCondition name="get_regions_or_city_regions">
+	<ext:table name="katottg" alias="k">
+		<ext:column name="katottg_id" />
+		<ext:column name="name" alias="name_region" searchType="startsWith" />
+		<ext:column name="category" />
+	</ext:table>
+	<ext:table name="katottg_category" alias="cat">
+		<ext:column name="name" alias="name_category" />
+		<ext:column name="code" />
+	</ext:table>
+	<ext:join type="inner">
+		<ext:left alias="k">
+			<ext:column name="category" />
+		</ext:left>
+		<ext:right alias="cat">
+			<ext:column name="code" />
+		</ext:right>
+		<ext:condition logicOperator="or" columnName="k.category" operator="eq"  value="cat.code">
+			<ext:condition logicOperator="and" columnName="k.category" operator="ne"  value="'K'"/>
+			<ext:condition logicOperator="and" columnName="k.level" operator="eq"  value="'1'"/>
+                </ext:condition>
+	</ext:join>
+</ext:createSearchCondition>
+----
+====
+
+At the output, Liquibase generates the following SQL query: ::
++
+.SQL query. Using INNER JOIN with an OR condition
+====
+[source,sql]
+----
+CREATE
+OR REPLACE VIEW registry.get_regions_or_city_regions_v AS
+SELECT
+  k.katottg_id,
+  k.name AS name_region,
+  cat.name AS name_category,
+  cat.code
+FROM
+  katottg k
+  JOIN katottg_category cat
+  ON k.category = cat.code
+  OR k.category = cat.code AND k.category <> 'K'::text AND k.level = 1;
+----
+====
+
+//Результат виконання запита буде таким: ::
+The result of the request is as follows: ::
+
+//Якщо об'єднати таблиці за допомогою `JOIN` із додатковою умовою `OR`, то ви отримаєте вибірку з 25 записів:
+When joining the tables using `JOIN` with an `OR` condition, you will get a sample of 25 records:
++
+//.Результат запита за умовами JOIN + OR
+.Request result when using JOIN + OR condition
+image::data-modeling/data/physical-model/join-and-or-usage/join-and-or-usage-2.png[]
+
+//==== Використання INNER JOIN із додатковими умовами AND та OR
+==== Using INNER JOIN with AND and OR conditions
+
+.XML schema. Using INNER JOIN with AND and OR conditions
+====
+[source,xml]
+----
+<ext:createSearchCondition name="get_regions_or_city_regions">
+	<ext:table name="katottg" alias="k">
+		<ext:column name="katottg_id" />
+		<ext:column name="name" alias="name_region" searchType="startsWith" />
+		<ext:column name="category" />
+	</ext:table>
+	<ext:table name="katottg_category" alias="cat">
+		<ext:column name="name" alias="name_category" />
+		<ext:column name="code" />
+	</ext:table>
+	<ext:join type="inner">
+		<ext:left alias="k">
+			<ext:column name="category" />
+		</ext:left>
+		<ext:right alias="cat">
+			<ext:column name="code" />
+		</ext:right>
+		<ext:condition logicOperator="and" columnName="k.category" operator="eq"  value="'K'"/>
+        <ext:condition logicOperator="or" columnName="k.category" operator="eq"  value="cat.code">
+			<ext:condition logicOperator="and" columnName="k.category" operator="ne"  value="'K'"/>
+			<ext:condition logicOperator="and" columnName="k.level" operator="eq"  value="'1'"/>
+        </ext:condition>
+	</ext:join>
+</ext:createSearchCondition>
+----
+====
+
+At the output, Liquibase generates the following SQL query: ::
++
+.SQL query. Using INNER JOIN with AND and OR conditions
+====
+[source,sql]
+----
+CREATE
+OR REPLACE VIEW registry.get_regions_or_city_regions_v AS
+SELECT
+  k.katottg_id,
+  k.name AS name_region,
+  cat.name AS name_category,
+  cat.code
+FROM
+  katottg k
+  JOIN katottg_category cat
+  ON k.category = cat.code
+  AND k.category = 'K' :: text
+  OR k.category = cat.code AND k.category <> 'K'::text AND k.level = 1;
+----
+====
+
+The result of the request is as follows: ::
+
+//Якщо об'єднати таблиці за допомогою `JOIN` із додатковими умовами `AND` та `OR`, то ви отримаєте вибірку з 27 записів:
+When joining the tables using `JOIN` with `AND` and `OR` conditions, you will get a sample of 27 records:
++
+//.Результат запита за умовами JOIN + AND + OR
+.Request result when using JOIN + AND + OR conditions
+image::data-modeling/data/physical-model/join-and-or-usage/join-and-or-usage-3.png[]
+
+//== Інші приклади використання
+== Other usage examples
+
+//Функціональне розширення liquibase дозволяє додавати довільні умови до основних умов *`<ext:join>`*.
+You can add custom conditions to the primary *`<ext:join>`* conditions using Liquibase's functional extension.
+
+//=== Використання LEFT JOIN з однією додатковою умовою OR
+=== Using LEFT JOIN with a single additional OR condition
+
+//Наприклад, для операції поєднання двох таблиць *`cities`* та *`katottg_dictionary`*, за умови що *`katottg`* дорівнює _або_ *`level4`* _або_ *`add_level`*, в *`<ext:join>`* використовуються *`<ext:left>`* та *`<ext:right>`* для визначення основної умови -- *`katottg=level4`*, та *`<ext:condition>`* для визначення додаткової умови -- *`katottg=add_level`* та методу логічного поєднання умов -- *`OR`*.
+For example, to join two tables, *`cities`* and *`katottg_dictionary`*, on the condition that *`katottg`* equals either `level4` or `add_level`, you would use the following conditions combined with an `OR` operator:
+
+* *`<ext:left>`* and *`<ext:right>`* in *`<ext:join>`* to define the main condition, *`katottg=level4`*
+* *`<ext:condition>`* to define the additional condition, *`katottg=add_level`*
+
+//.XML-схема поєднання таблиць cities та katottg_dictionary з однією додатковою умовою OR
+.XML schema of joining the "cities" and "katottg_dictionary" tables using a single additional OR condition
+====
+[source,xml]
+----
+<changeSet author="registry owner" id="or join">
+    <ext:createSearchCondition name="cities_4_or_5_level">
+        <ext:table name="cities" alias="ci">
+            <ext:column name="city_id" />
+            <ext:column name="name" searchType="startsWith" />
+            <ext:column name="katottg" searchType="equal" />
+        </ext:table>
+        <ext:table name="katottg_dictionary" alias="kd">
+            <ext:column name="name" alias="name_dict" />
+        </ext:table>
+        <ext:join type="left">
+            <ext:left alias="ci">
+                <ext:column name="katottg" />
+            </ext:left>
+            <ext:right alias="kd">
+                <ext:column name="level4" />
+            </ext:right>
+            <ext:condition logicOperator="or" columnName="ci.katottg" operator="eq" value="kd.add_level" />
+        </ext:join>
+    </ext:createSearchCondition>
+</changeSet>
+----
+====
+
+At the output, Liquibase generates the following SQL query: ::
++
+.SQL query. Using LEFT JOIN with an OR condition
+====
+[source,sql]
+----
+SELECT ci.city_id, ci.name, ci.katottg, kd.name AS name_dict
+  FROM cities AS ci LEFT JOIN katottg_dictionary AS kd
+    ON (ci.katottg = kd.level4) or (ci.katottg = kd.add_level);
+----
+====
+
+//=== Використання LEFT JOIN з декількома додатковими умовами AND та OR
+=== Using LEFT JOIN with several additional AND and OR conditions
+
+//Також за допомогою *`<ext:condition>`* можна моделювати складніші умови поєднання таблиць.
+You can use *`<ext:condition>`* to model more complex conditions of joining tables.
+
+//Наприклад, для тих самих таблиць *`cities`* та *`katottg_dictionary`*, якщо умова з'єднання -- *`katottg`* дорівнює *`level4`*, коли *`category`* не дорівнює *`'B'`*, _або_ *`katottg`* дорівнює *`add_level`*, коли *`category`* дорівнює *`'B'`*, то схема критерію пошуку виглядатиме наступним чином:
+For example, to join the same two tables, *`cities`* and *`katottg_dictionary`*, on the condition that *`katottg`* equals `level4` when *`category`* does not equal `'B'`, or *`katottg`* equals `add_level` when *`category`* equals `'B'`, you would use the following search condition:
+
+//.XML-схема поєднання таблиць cities та katottg_dictionary з декількома додатковими умовами AND та OR
+.XML schema of joining the "cities" and "katottg_dictionary" tables using several additional AND and OR conditions
+====
+[source,xml]
+----
+<changeSet author="registry owner" id="or join by category">
+    <ext:createSearchCondition name="cities_4_or_5_level_by_category">
+        <ext:table name="cities" alias="ci">
+            <ext:column name="city_id" />
+            <ext:column name="name" searchType="startsWith" />
+            <ext:column name="katottg" searchType="equal" />
+        </ext:table>
+        <ext:table name="katottg_dictionary" alias="kd">
+            <ext:column name="name" alias="name_dict" />
+        </ext:table>
+        <ext:join type="left">
+            <ext:left alias="ci">
+                <ext:column name="katottg" />
+            </ext:left>
+            <ext:right alias="kd">
+                <ext:column name="level4" />
+            </ext:right>
+            <ext:condition logicOperator="and" columnName="kd.category" operator="ne" value="'B'">
+                <ext:condition logicOperator="or" columnName="ci.katottg" operator="eq" value="kd.add_level" />
+                <ext:condition logicOperator="and" columnName="kd.category" operator="eq" value="'B'"/>
+            </ext:condition>
+        </ext:join>
+    </ext:createSearchCondition>
+</changeSet>
+----
+====
+
+At the output, Liquibase generates the following SQL query: ::
++
+.SQL query. Using LEFT JOIN with several additional AND and OR conditions
+====
+[source,sql]
+----
+SELECT ci.city_id, ci.name, ci.katottg, kd.name AS name_dict
+  FROM cities AS ci LEFT JOIN katottg_dictionary AS kd
+    ON (ci.katottg = kd.level4) and (kd.category = 'B')
+       or ((ci.katottg = kd.add_level) and (kd.category <> 'B'));
+----
+====
+
+[NOTE]
+====
+//Зверніть увагу, що вкладені умови `<ext:condition>` у коді групуються дужками *`()`*.
+Note that the nested conditions in `<ext:condition>` are grouped by parentheses inside the code.
+
+//Для цього прикладу групування не є обов'язковим: без дужок код виконається так само як і з дужками, оскільки умови `AND` мають вище положення за пріоритетом, ніж `OR`, і будуть визначені першими.
+For this example, grouping is optional: without the parentheses, the code will work the same as with the parentheses because the `AND` conditions have a higher priority than `OR` and will be resolved first.
+
+//Зверніть увагу на цю особливість для можливого використання за інших умов.
+Keep this in mind for other potential use cases.
+====
