@@ -2,7 +2,9 @@
 
 == Загальний опис
 
-В бізнес-процесах є необхідність мати можливість перевіряти цілісність даних включаючи файлів отриманих з інших джерел за допомогою перевірки КЕП.
+
+При інтеграції зі сторонніми системами на рівні бізнес-процесів є необхідність роботи з підписаними файлами які завантажуються або передаються в бізнес процес цими системами.
+А саме, є необхідність впевнитись в цілісності цих файлів шляхом перевірки КЕП накладеного на ці файли. Отримати інформацію про підписанта для подальшої обробки або внесення в реєстри. Також є необхідність перегляду вмісту файлів-контейнерів.
 
 == Функціональні сценарії
 
@@ -19,30 +21,121 @@
 
 * Дані опрацьовуються в скрипт-задачах бізнес-процесу.
 * Отримання даних з сторонніх джерел поза межами цього дизайну.
-* Валідація даних за окремим підписом здійснюється за допомогою існуючих механізмів
 * Байтові дані між системами передаються закодованими за допомогою Base64
+* Формат за замовченням  використовується CAdES-X-Long.
+* Імплементація алгоритмів по роботі з підписами відбувається за допомогою `ІІТ`-бібліотеки
 
-== REST API
+== Глосарій та акроніми
 
-=== Специфікація REST-методу
+*Контейнер* - тип результуючого файлу. Розрізняються такі контейнери XAdES (xml), PAdES (pdf), CAdES (p7s),  ASiC (asic). Найбільш сучасним і рекомендованим  є контейнер типу ASiC. +
+*ASiC* - особливістю даного контейнеру є те що він побудований як архів для зберігання файлів і єдиний з перелічених дозволяє зберігати декілька файлів в різних форматах. +
+*Формат* - алгоритм який застосовується для підписання даних (XAdES-B-LT/CAdES-X-Long/CAdES-BASE/PAdES-B-LT) рекомендованим форматом є CAdES-X-Long+
+*Тип підпису* - розрізняється два типи підпису відокремлений (detached) та enveloped (вбудований). +
 
-_POST /api/eseal/asic-verify_
+[NOTE]
+Терміни файл і дані в даному дизайні взаємозамінні.
 
-.Структура тіла запиту
-|===
-|Json Path|Тип|Опис
 
-|*$.data*
-|String
-|Дані закодовані в формат Base64
+== Приклади моделювання
 
-|===
+=== Приклад моделювання БП з ASiC контейнером в якості вхідного параметра який містить декілька файлів
 
-.Приклад тіла запиту
+image:architecture-workspace/platform-evolution/sign-validation/submission_form.png[]
+
+.Приклад скриптової задачі
+[source, groovy]
+----
+def formData = submission('start_event').formData
+def file = formData.prop('signed_data').value()
+
+
+if (!validate(file, SignFormat.ASiC)) {
+    println "Invalid signature"
+}
+
+
+def allSignInfo = get_sign_info(file, SignFormat.ASiC).getAllSignInfo()
+for (signInfo in allSignInfo) {
+    if (signInfo.subjDRFOCode == null) {
+        println "DRFO should be present"
+    }
+}
+
+def allFiles = get_content(file, SignFormat.ASiC).getAllContent()
+for (singleFile in allFiles) {
+    set_variable(singleFile.getReference(), singleFile.getReferenceData())
+}
+
+----
+
+=== Приклад моделювання БП з отриманням p7s контейнера з вбудованим підписом як частина даних із зовнішнього API
+
+image:architecture-workspace/platform-evolution/sign-validation/external_system.png[]
+
+.Приклад відповіді сторонньої системи
 [source, json]
 ----
 {
-  "data": "dGVzdCBkYXRh"
+    "name": "Ololow",
+    "day-of-birth": "01/01/01",
+    "request": "dGVzdCBkYXRh",
+    "request_received": "20/02/14"
+}
+----
+
+.Приклад скриптової задачі
+[source, groovy]
+----
+def data = external_system_response.prop('data').value()
+def request = external_system_response.prop('request').value()
+if (!validate(request, SignFormat.PKCS7)) {
+    println "Invalid signature"
+}
+
+
+def info = get_sign_info(request, SignFormat.PKCS7).getSignInfo()
+if (info.subjDRFOCode == null) {
+    println "DRFO should be present"
+}
+
+originRequestDate = get_content(request, SignFormat.PKCS7).getContent().getData()
+set_variable('fileContent', originRequestDate)
+----
+
+
+
+== validate(<string|data>, <enum|format>)
+
+=== JUEL функція
+|===
+|Назва параметру |Опис |Тип |Тип даних
+
+|data
+|Дані які включають в себе підпис в форматі Base64
+|Вхідний
+|String
+
+|format
+|Перелік доступних для використання типів файлів
+|Вхідний
+|Enum (ASiC/CAdES)
+
+|isValid
+|Результат валідації
+|Вихідний
+|boolean
+|===
+
+=== REST API
+
+_POST /api/signature/validate_
+
+.Приклад тіла запиту
+[source,json]
+----
+{
+  "data": "dGVzdCBkYXRh",
+  "container": "CAdES/ASiC/XdES/..."
 }
 ----
 
@@ -53,102 +146,121 @@ _POST /api/eseal/asic-verify_
 |*$.isValid*
 |boolean
 |Результат перевірки даних
-|*$.errorCode*
+|*$.error.code*
 |String
 |Відповідний код статусу
-|*$.errorMessage*
+|*$.error.message*
 |String
 |Деталі та опис помилки
-|===
-
-
-_POST /api/eseal/asic-sign-info_
-
-.Структура тіла запиту
-|===
-|Json Path|Тип|Опис
-
-|*$.data*
+|*$.error.localizedMessage*
 |String
-|Дані закодовані в формат Base64
-
+|Локалізовані деталі та опис помилки
 |===
 
-.Приклад тіла запиту
-[source, json]
+=== Низькорівневий дизайн
+
+Для валідації підписів ASiC контейнерів відбувається отримання кількості підписантів за допомогою `EndUser::ASiCGetSignsCount(base64Data)`, а далі перевіряється валідність кожного `EndUser::ASiCVerify(index, base64Data)`
+
+Для CAdES використовується `EndUser::VerifyInternal(base64Data)`
+
+
+== get_sign_info(<string|data>, <enum|dataFormat>)
+
+=== JUEL функція
+|===
+|Назва параметру |Опис |Тип |Тип даних
+
+|data
+|Дані які включають в себе підпис в форматі Base64
+|Вхідний
+|String
+
+|format
+|Перелік доступних для використання типів файлів
+|Вхідний
+|Enum (ASiC/CAdES)
+
+|signInfo
+|Деталі про підпис
+|Вихідний
+|SignatureInfo
+|===
+
+
+.Структури для отримання контенту в БП
+[plantuml]
 ----
-{
-  "data": "dGVzdCBkYXRh"
+class SignatureInfo {
+- List<SignDetails> data
++ Content getSignInfo()
++ List<SignDetails> getAllSignInfo()
 }
-----
 
-.Структура тіла відповіді
+----
+.Структура SignDetails
 |===
 |Json Path|Тип|Опис
 
-|*$.signInfo.issuer*
+|*issuer*
 |String
 |
-|*$.signInfo.issuerCN*
+|*issuerCN*
 |String
 |
-|*$.signInfo.serial*
+|*serial*
 |String
 |
-|*$.signInfo.subject*
+|*subject*
 |String
 |
-|*$.signInfo.subjCN*
+|*subjCN*
 |String
 |
-|*$.signInfo.subjOrg*
+|*subjOrg*
 |String
 |
-|*$.signInfo.subjOrgUnit*
+|*subjOrgUnit*
 |String
 |
-|*$.signInfo.subjTitle*
+|*subjTitle*
 |String
 |
-|*$.signInfo.subjState*
+|*subjState*
 |String
 |
-|*$.signInfo.subjLocality*
+|*subjLocality*
 |String
 |Локаль підписанта
-|*$.signInfo.subjFullName*
+|*subjFullName*
 |String
 |ПІБ підписанта
-|*$.signInfo.subjAddress*
+|*subjAddress*
 |String
 |Адреса підписанта
-|*$.signInfo.subjPhone*
+|*subjPhone*
 |String
 |Телефон підписанта
-|*$.signInfo.subjDNS*
+|*subjDNS*
 |String
 |
-|*$.signInfo.subjEDRPOUCode*
+|*subjEDRPOUCode*
 |String
 |ЄДРПОУ підписанта
-|*$.signInfo.subjDRFOCode*
+|*subjDRFOCode*
 |String
 |ДРФО підписанта
-|*$.errorCode*
-|String
-|Відповідний код статусу
-|*$.errorMessage*
-|String
-|Деталі та опис помилки
 |===
 
-_POST /api/eseal/asic-data_
+=== REST API
+
+_POST /api/signature/info_
 
 .Приклад тіла запиту
-[source, json]
+[source,json]
 ----
 {
-  "data": "dGVzdCBkYXRh"
+  "data": "dGVzdCBkYXRh",
+  "container": "CAdES/ASiC/XdES/..."
 }
 ----
 
@@ -156,156 +268,122 @@ _POST /api/eseal/asic-data_
 |===
 |Json Path|Тип|Опис
 
-|*$.data*
-|String
-|Дані закодовані в формат Base64
-|*$.errorCode*
+|*$.info[]*
+|array[SignatureInfo]
+|Масив даних що містить в себе деталі про кожен підпис
+|*$.error.code*
 |String
 |Відповідний код статусу
-|*$.errorMessage*
+|*$.error.message*
 |String
 |Деталі та опис помилки
+|*$.error.localizedMessage*
+|String
+|Локалізований опис
 |===
 
+=== Низькорівневий дизайн
 
-Валідація та отримання деталей про підпис відбувається за допомогою `ІІТ`-бібліотеки, розглядаються два сценарії в залежності від формату даних.
-Коли дані і підпис існують окремо та коли дані і підпис в архіві (формат ASiC).
+Для даних у форматі ASiC передбачено можливість накладання декількох підписів, тому при отриманні інформації про підпис, повертається масив з деталями про кожен накладений на дані підпис.
 
-Для валідації даних за допомогою окремо існуючих підписів використовується існуючї інтеграції з сервісом цифрових підписів `/api/eseal/verify`
+.Приклад логіки валідації ASiC
+[source, java]
+----
+IntStream.rangeClosed(0, endUser.ASiCGetSignsCount(data))
+                .mapToObj(index -> endUser.ASiCVerify(index, data))
+                .collect(Collectors.toList());
+----
 
-Для операцій з даними в ASiC-форматі використовується метод `EndUser:ASiCVerify` і відповідні методи обʼєкту `EndUserSignInfo` для отримання інформації про підписанта і валідації даних `EndUserSignInfo:GetOwnerInfo` та для отримання контенту в форматі `Base64` який був підписаний `EndUserSignInfo:GetDataString`
+Для даних в форматі CAdES використовується `EndUser::VerifyInternal(base64Data)` та повертається деталі з об'єкту `EndUserSignInfo` як єдиний елемент в масиві.
 
-== JUEL функції
+== get_content(<string|data>, <enum|dataFormat>)
 
-=== get_sign_info(<string|data>)
+=== JUEL функція
 
+|===
+|Назва параметру |Опис |Тип |Тип даних
+
+|data
+|Дані які включають в себе підпис в форматі Base64
+|Вхідний
+|String
+
+|format
+|Перелік доступних для використання типів файлів
+|Вхідний
+|Enum (ASiC/CAdES)
+
+|response
+|Обʼєкт з даними
+|Вихідний
+|SignData
+|===
+
+.Структури для отримання контенту в БП
 [plantuml]
 ----
-participant "get_sign_details(<string|data>)" as sign
-participant "Camunda Execution Context" as camunda
-participant "Digital Signature Ops service" as dso
--> sign: виклик функції
-sign -> camunda: відправка закодованих даних\nу форматі Base64
-camunda -> dso: /api/eseal/asic-verify-details
-return відповідь сервісу
-camunda --> sign: SignInfo
-<-- sign: отримання результату
-----
-
-=== get_sign_info(<string|data>, <string|signature>)
-
-[plantuml]
-----
-participant "get_sign_info(<string|data>, <string|signature>)" as sign
-participant "Camunda Execution Context" as camunda
-participant "Digital Signature Ops service" as dso
--> sign: виклик функції
-sign -> camunda: відправка закодованих даних\nі підпису у форматі Base64
-camunda -> dso: /api/eseal/verify
-return відповідь сервісу
-camunda --> sign: SignInfo
-<-- sign: отримання результату
-----
-
-=== validate_signature(<string|data>)
-[plantuml]
-----
-participant "validate_signature(<string|data>)" as sign
-participant "Camunda Execution Context" as camunda
-participant "Digital Signature Ops service" as dso
--> sign: виклик функції
-sign -> camunda: відправка закодованих даних\nу форматі Base64
-camunda -> dso: /api/eseal/asic-verify
-return відповідь сервісу
-camunda -> camunda: опрацювання відповіді
-camunda --> sign: boolean
-<-- sign: отримання результату
-----
-
-=== validate_signature(<string|data>, <string|signature>)
-[plantuml]
-----
-participant "validate_signature(<string|data>, <string|signature>)" as sign
-participant "Camunda Execution Context" as camunda
-participant "Digital Signature Ops service" as dso
--> sign: виклик функції
-sign -> camunda: відправка закодованих даних\nі підпису у форматі Base64
-camunda -> dso: /api/eseal/verify
-return відповідь сервісу
-camunda -> camunda: опрацювання відповіді
-camunda --> sign: boolean
-<-- sign: отримання результату
-----
-
-=== get_content(<string|data>)
-[plantuml]
-----
-participant "get_content(<string|data>)" as sign
-participant "Camunda Execution Context" as camunda
-participant "Digital Signature Ops service" as dso
--> sign: виклик функції
-sign -> camunda: відправка закодованих даних\nу форматі Base64
-camunda -> dso: /api/eseal/asic-data
-return відповідь сервісу
-camunda -> camunda: декодування даних Base64
-camunda --> sign: byte[] дані
-<-- sign: отримання результату
-----
-
-== Приклади моделювання
-
-=== Приклад моделювання БП з ASiC контейнером в якості вхідного параметра
-
-image:architecture-workspace/platform-evolution/sign-validation/submission_form.png[]
-
-.Приклад скриптової задачі
-[source, groovy]
-----
-def formData = submission('start_event').formData
-def file = formData.prop('signed_data').value()
-
-if (!validate_signature(file)) {
-    println "Invalid signature"
+class SignData {
+- List<Content> data
++ Content getContent()
++ List<Content> getAllContent()
 }
 
-
-def info = get_sign_info(file)
-if (info.subjDRFOCode == null) {
-    println "DRFO should be present"
+class Content {
+- String data
+- String name
++ String getName()
++ String getData() //Base64 string
 }
-
-def fileContent = get_content(file)
-
-set_variable('fileContent', fileContent)
 ----
 
-=== Приклад моделювання БП з отриманням контента та підпису із зовнішнього API
+=== REST API
 
-image:architecture-workspace/platform-evolution/sign-validation/external_system.png[]
+_POST /api/esignature/content_
 
-.Приклад відповіді сторонньої системи
-[source, json]
+.Приклад тіла запиту
+[source,json]
 ----
 {
-    "data": "dGVzdCBkYXRh",
-    "signature": "ZGF0YSBzaWduYXR1cmU="
+  "data": "dGVzdCBkYXRh",
+  "container": "CAdES/ASiC/XdES/..."
 }
 ----
 
-.Приклад скриптової задачі
-[source, groovy]
-----
-def data = external_system_response.prop('data').value()
-def signature = external_system_response.prop('signature').value()
-if (!validate_signature(data, signature)) {
-    println "Invalid signature"
-}
+.Структура тіла відповіді
+|===
+|Json Path|Тип|Опис
+
+|*$.content[]*
+|array[Content]
+|Вміст контейнеру
+|*$.error.code*
+|String
+|Відповідний код статусу
+|*$.error.message*
+|String
+|Деталі та опис помилки
+|*$.error.localizedMessage*
+|String
+|Локалізовані деталі та опис помилки
+|===
+
+=== Низькорівневий дизайн
+
+Для ASiC контейнеру отримання переліку всіх файлів в контенйері відбувається за допомогою `EndUser::ASiCGetSignReferences` для кожного індексу, а отримання контенту за допомогою `EndUser::ASiCGetReference`
+
+Для CAdES контейнерів дані є частина вихідного параметру `EndUser::VerifyInternal(base64Data)`
 
 
-def info = get_sign_info(data, signature)
-if (info.subjDRFOCode == null) {
-    println "DRFO should be present"
-}
+== Високорівневий план розробки
 
-set_variable('fileContent', data)
-----
+== Технічні експертизи
+
+* BE (java)
+
+== План розробки
+
+* Оновлення бібліотеки ІІТ
+* Розширення DSO відповідними точками інтеграції
+* Додавання JUEL-функцій
+* Додавання утілітарної функції для кодування і декодування Base64
+* Розробка референтних прикладів
