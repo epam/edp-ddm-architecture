@@ -1,0 +1,243 @@
+= Управління типом логічного оператора в критеріях пошуку
+
+== Загальний опис
+У цій статті буде розглянута реалізація можливості моделювальника керувати яким логічним оператором, OR чи AND, будуть об'єднуватись параметри пошуку та в якому порядку вони будуть визначатися.
+
+== Актори та ролі користувачів
+* Розробник регламенту
+
+== Загальні принципи та положення
+
+* Поведінка і контракт існуючих критеріїв пошуку не змінюється. 
+* Зберігається зворотня сумісність конфігурації критеріїв пошуку.    
+
+== Функціональні сценарії
+
+* Налаштування критеріїв пошуку
+* Генерація сервісів критеріїв пошуку
+
+== Поточна реалізація
+
+В критеріях пошуку є можливість задавати поля, по яким буде відбуватися пошук, за допомогою атрибута `searchType` тегу `ext:column`.
+
+Наприклад, для критерію пошуку визначеного наступним чином
+
+[source, xml]
+----
+ <changeSet author="registry owner" id="create SC">
+    <ext:createSearchCondition name="dictionary">
+        <ext:table name="dict" alias="d">
+            <ext:column name="name" searchType="startsWith" />
+            <ext:column name="live" searchType="equal" />
+            <ext:column name="id" searchType="equal" />
+            <ext:column name="description"/>
+        </ext:table>
+    </ext:createSearchCondition>
+</changeSet>
+---- 
+
+при визові, за умови що передані всі параметри, буде сформовано наступний рядок пошуку який об'єднає всі параметри оператором `AND`
+
+[source, sql]
+----
+name like '$1%' AND live = $2 AND id = $3
+---- 
+
+За контрактом API критеріїв пошуку, параметри пошуку є необов'язковими, тому якщо параметр не переданий він не потрапляє до рядка пошуку. Наприклад, якщо не переданий параметр `id`, то рядок пошуку сформується без нього 
+
+[source, sql]
+----
+name like '$1%' AND live = $2
+---- 
+
+В будь якому разі всі параметри об'єднуються оператором `AND`, та моделювальник регламенту не має можливості це змінити.
+
+== Цільовий дизайн
+
+=== Схема та модуль розширення тегів Liquibase
+
+В схемі розширених тегів до дозволених дочірніх елементів тегу `ext:table` з типом `tableSearchConditionType` (той що використовується для саме таблиць, а не однойменний тег що використовується в CTE і має інший тип) додається елемент `ext:logicOperator` нового типу `tableLogicOperatorType`. Він має один обов'язковий атрибут `type` - тип логічного оператору `or` чи `and`, та може вміщувати елементи `ext:column` та `ext:logicOperator` тобто сам себе.
+
+.Зміни схеми розширених тегів Liquibase
+[source, xml]
+----
+<xsd:complexType name="tableLogicOperatorType">
+    <xsd:sequence>
+        <xsd:choice minOccurs="1" maxOccurs="unbounded">
+            <xsd:element name="column" type="columnSearchConditionType" maxOccurs="unbounded"/>
+            <xsd:element name="logicOperator" type="tableLogicOperatorType" maxOccurs="unbounded"/>
+        </xsd:choice>
+    </xsd:sequence>		
+    <xsd:attribute name="type" type="logicOperatorType" use="required"/>
+</xsd:complexType>
+....
+<xsd:complexType name="tableSearchConditionType">
+    <xsd:sequence>
+        <xsd:choice minOccurs="1" maxOccurs="unbounded">
+            <xsd:element name="column" type="columnSearchConditionType" maxOccurs="unbounded"/>
+            <xsd:element name="function" type="functionType" maxOccurs="unbounded"/>
+            <xsd:element name="logicOperator" type="tableLogicOperatorType" maxOccurs="unbounded"/>
+        </xsd:choice>
+    </xsd:sequence>
+    <xsd:attribute name="name" type="xsd:string" use="required"/>
+    <xsd:attribute name="alias" type="xsd:string" use="optional"/>
+</xsd:complexType>
+
+----
+
+В модуль розширення тегів Liquibase додається можливість запису всіє, необхідної для генерації сервісу, інформації про теги `ext:logicOperator` в таблицю метаданих `ddm_liquibase_metadata`, при обробці тегу _createSearchCondition_. 
+
+Розміщення тегів `ext:column` без атрибуту `searchType` всередині тегу `ext:logicOperator` не забороняється. Вони повинні оброблятися так само як і кореневі теги `ext:column` що не мають атрибуту `searchType`.
+
+=== Сервіс генератор
+
+Тег `ext:logicOperator` керує тим, умови по яким колонкам беруться в дужки та який оператор використовується для поєднання цих умов у дужках. Тобто відкриття тегу еквівалентно відкриттю дужки та закриття тегу закриттю дужки в результуючему запиті до БД, а атрибут `type` вказує на те який логічний оператор використовувати. 
+
+При реалізації алгоритму потрібно мати на увазі наступні правила:
+
+* Умови пошуку першого рівня `ext:table` об'єднуються оператором `and`, так само як і до змін.
+* Між різними таблицями умови пошуку об'єднуються оператором `and`.
+* Якщо при виклику не передано умови для жодної з колонок що знаходяться всередині елементу `ext:logicOperator` то він не обробляється.
+
+Наприклад при визові наступного критерію пошуку
+[source, xml]
+----
+<changeSet author="registry owner" id="create SC registration_equal_laboratory_id_solution">
+    <ext:createSearchCondition name="registration_equal_laboratory_id_solution">
+        <ext:table name="registration" alias="r">
+            <ext:column name="registration_id" />
+            <ext:column name="registration_no" searchType="equal"/>
+            <ext:logicOperator type="or">
+                <ext:column name="created_date" />
+                <ext:column name="solution_date" searchType="equal" />
+                <ext:column name="laboratory_id" searchType="equal" />
+                <ext:logicOperator type="and">
+                    <ext:column name="name" searchType="equal" />
+                    <ext:column name="surname" searchType="equal" />
+                </ext:logicOperator>
+            </ext:logicOperator>
+        </ext:table>
+        <ext:table name="solution_type" alias="s">
+            <ext:logicOperator type="or">
+                <ext:column name="name" alias="solution_name" searchType="equal" />
+                <ext:column name="constant_code" alias="solution_code" searchType="equal" />
+            </ext:logicOperator>
+        </ext:table>
+        <ext:join type="inner">
+            <ext:left alias="r">
+                <ext:column name="solution_type_id" />
+            </ext:left>
+            <ext:right alias="s">
+                <ext:column name="solution_type_id" />
+            </ext:right>
+        </ext:join>
+    </ext:createSearchCondition>
+</changeSet>
+----
+
+повинен генеруватись такий рядок пошуку, за умови що передані всі параметри:
+
+
+[source, sql]
+----
+                        -- <ext:table name="registration" alias="r">
+                        --     <ext:column name="registration_id" />
+registration_no=$0      --     <ext:column name="registration_no" searchType="equal"/>
+AND
+(                       --     <ext:logicOperator type="or">
+                        --         <ext:column name="created_date" />
+    solution_date=$1    --         <ext:column name="solution_date" searchType="equal" />
+    OR
+    laboratory_id=$2    --         <ext:column name="laboratory_id" searchType="equal" />
+    OR
+    (                   --         <ext:logicOperator type="and">
+        firstname=$3    --             <ext:column name="firstname" searchType="equal" />
+        AND    
+        surname=$4      --             <ext:column name="surname" searchType="equal" />
+    )                   --         </ext:logicOperator>
+)                       --     </ext:logicOperator>
+                        -- </ext:table>
+AND
+                        -- <ext:table name="solution_type" alias="s">
+(                       --     <ext:logicOperator type="or">
+    name=$5             --         <ext:column name="name" alias="solution_name" searchType="equal" />
+    OR
+    constant_code=$6    --         <ext:column name="constant_code" alias="solution_code" searchType="equal" />
+)                       --     </ext:logicOperator>
+                        -- </ext:table>
+----
+
+
+=== Компоненти системи та їх призначення в рамках дизайну рішення
+У даному розділі наведено перелік компонент системи, які задіяні або потребують змін/створення в рамках реалізації функціональних вимог згідно з технічним дизайном рішення.
+
+|===
+|Компонент|Службова назва|Призначення / Суть змін
+
+|Сервіс Генератор
+|service-generation-utility 
+|Генерація Java-проектів для сервісів
+
+|Схема розширених тегів Liquibase
+|liquibase-ext-schema
+|Валідація схеми 
+
+|Модуль розширення тегів Liquibase
+|liquibase-ddm-ext
+|Обробка розширених тегів на етапі розгортання регламенту
+
+|===
+
+== Моделювання регламенту реєстру
+=== Моделювання критеріїв пошуку
+Адміністратору регламенту надається можливість керувати яким логічним оператором, OR чи AND, будуть об'єднуватись параметри пошуку та в якому порядку вони будуть визначатися.
+
+.Структура регламенту реєстру
+[plantuml, registry-sc-regulation-structure, svg]
+----
+@startsalt
+{
+{T
++ <&folder> registry-regulation
+++ <&folder> bpmn
+++ <&folder> dmn
+++ <&folder> <b>data-model</b>
++++ <&file> <b>searchConditions.xml</b>
+++ ...
+}
+}
+@endsalt
+----
+
+.Приклад конфігурації 
+[source, xml]
+----
+ <changeSet author="registry owner" id="create or/and SC">
+    <ext:createSearchCondition name="dictionary">
+        <ext:table name="dict" alias="d">
+            <ext:logicOperator type="or">
+                <ext:logicOperator type="and">
+                    <ext:column name="name" searchType="startsWith" />
+                    <ext:column name="live" searchType="equal" />
+                </ext:logicOperator>
+                <ext:column name="id" searchType="equal" />
+            </ext:logicOperator>
+            <ext:column name="description"/>
+        </ext:table>
+    </ext:createSearchCondition>
+</changeSet>
+----
+ 
+
+=== Валідація регламенту реєстру
+В рамках реалізації рішення, буде розширена xml схема розширених тегів liquibase по якій проходить валідація.  
+
+== Високорівневий план розробки
+=== Технічні експертизи
+* _BE_
+
+=== План розробки
+* Розширення схеми розширених тегів Liquibase.
+* Розширення модуля розширення тегів Liquibase.
+* Розширення сервіс генератору.
+* Розробка інструкцій для розробника регламенту та референтних прикладів.
