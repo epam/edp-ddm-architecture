@@ -1,98 +1,120 @@
-= Підсистема розгортання регламенту реєстру
-
-[NOTE]
---
-Сторінка технічної документації у процесі розробки...
---
+= [DRAFT] Підсистема розгортання регламенту реєстру
 
 == Загальний опис
 
-Підсистема, призначенням якої є відслідковування змін до регламенту реєстру та автоматичне їх застосування до операційної зони реєстру.
+Підсистема, призначенням якої є перевірка змін в xref:architecture/registry/administrative/regulation-management/registry-regulation/registry-regulation.adoc[_цифровому регламенті реєстру_] та їх розгортання відносно підсистем
+xref:architecture/registry/operational/overview.adoc[_операційної зони реєстру_].
 
 == Функції підсистеми
 
-* Відслідковування змін до регламенту реєстру
+* Відстеження змін до регламенту реєстру
 * Валідація цілісності регламенту реєстру
-* Застосування змін до моделі даних реєстру
-* Розгортання змін до API доступу до даних реєстру
+* Розгортання тимчасових баз даних для версій кандидатів
+* Застосування змін до схеми бази даних реєстру
+* Генерація коду сервісів доступу до даних реєстру
+* Розгортання сервісів доступу до даних реєстру
 * Розгортання змін до бізнес-процесів та UI-форм
-* Розгортання змін до користувачів та ролей реєстру
-* Застосування змін до прав доступу до бізнес-процесів та даних реєстру
+* Створення ролей користувачів реєстру
+* Налаштування прав доступу до бізнес-процесів
 * Застосування змін до налаштувань зовнішніх інтеграцій та між-реєстрової взаємодії
 * Розгортання змін до шаблонів витягів та звітів
-* Розгортання змін до повідомлень користувачів
+* Розгортання змін до шаблонів повідомлень користувачів
 * Застосування змін до налаштувань та кастомізацій реєстру
+* Зберігання артефактів сервісів доступу до даних реєстру
+* Приведення підсистем операційної зони реєстру до стану за замовчуванням (очищення регламенту)
+* Налаштування правил симуляції зовнішніх інтеграцій
+* Налаштування підсистеми управління геоданими
+
+== Технічний дизайн підсистеми
+
+.Компонентна діаграма підсистеми публікації регламенту
+image::architecture/registry/administrative/regulation-publication/registry-publication-design.drawio.svg[]
+
+* _(1)_ - Сніппети - частини запитів у веб-інтерфейсі моделювання звітів і підсистемі звітності, що можуть бути перевикористані. Детальніше https://redash.io/help/user-guide/querying/query-snippets[за посиланням]
 
 == Складові підсистеми
 
 |===
-|Назва компоненти|Представлення в реєстрі|Тип додатка|Походження|Призначення
+|Назва компоненти|Представлення в реєстрі|Походження|Репозиторій|Призначення
 
 |_Сервіс розгортання регламенту_
-|`jenkins`
-|helm
+a|
+* `jenkins`
+* `jenkins-operator`
 |3rd-party
+a|
+* https://gerrit-mdtu-ddm-edp-cicd.apps.cicd2.mdtu-ddm.projects.epam.com/admin/repos/mdtu-ddm/devops/operators/jenkins-operator[gerrit:/mdtu-ddm/devops/operators/jenkins-operator]
+* https://github.com/jenkinsci/jenkins[github:/jenkinsci/jenkins]
 |Програмний комплекс, що забезпечує автоматизацію в життєвому циклі розгортання регламенту Реєстру
 
-|_Сховище артефактів реєстру_
-|`nexus`
-|helm
-|3rd-party
-|Збереження згенерованих в реєстрі артефактів
+|_Пайплайни розгортання реглменту_
+a|
+* `registry-regulations-publications-pipelines`
+* `registry-regulations-publication-stages` (DEPRECATED)
+|origin
+a|
+* https://gerrit-mdtu-ddm-edp-cicd.apps.cicd2.mdtu-ddm.projects.epam.com/admin/repos/mdtu-ddm/devops/registry-regulations-publications/registry-regulations-publication-pipelines[gerrit:/mdtu-ddm/devops/registry-regulations-publications/registry-regulations-publication-pipelines]
+* https://gerrit-mdtu-ddm-edp-cicd.apps.cicd2.mdtu-ddm.projects.epam.com/admin/repos/mdtu-ddm/devops/registry-regulations-publications/registry-regulations-publication-stages[gerrit:/mdtu-ddm/devops/registry-regulations-publications/registry-regulations-publication-stages]
+| Groovy пайплайни для виконання різноманітних кроків підсистеми розгортання регламенту. Побудовано на базі
+https://epam.github.io/edp-install/user-guide/pipeline-framework/[EDP Pipeline Framework]
 
 |_Агент розгортання регламенту_
 |`dataplatform-jenkins-agent`
-|image
 |origin
-|Виконання команд для розгортання регламенту реєстру
+|https://gerrit-mdtu-ddm-edp-cicd.apps.cicd2.mdtu-ddm.projects.epam.com/admin/repos/mdtu-ddm/data-architecture/devops-application/dataplatform-jenkins-agent[gerrit:/mdtu-ddm/data-architecture/devops-application/dataplatform-jenkins-agent]
+|Jenkins агент, який використовується для запуску пайплайнів підсистеми розгортання регламенту і містить всі необхідні
+залежності для цього. Детальніше з концепцією Jenkins агентів можна ознайомитись https://www.jenkins.io/doc/book/using/using-agents[в офіційній документації]
 
-|_Сервіс експорту шаблонів звітів_
-|`report-exporter-deployment`
-|backend
-|origin
-|Додаток який дозволяє експортувати змодельовані звіти у вигляді архівів для подальшої публікації
-
-|_Утиліта публікації шаблонів нотифікацій_
-|`notification-template-publisher`
-|backend
-|origin
-|-
-
-|_Утиліта публікації аналітичних звітів та витягів_
-|`report-publisher`
-|backend
-|origin
-|-
-
-|_Утиліта завантаження геошарів_
-|`geoserver-publisher`
-|backend
-|origin
-|-
-
-|_Утиліта управління доступом до БП_
-|`camunda-auth-cli`
-|backend
-|origin
-|-
-
-|_Утиліта генерації сервісів доступу до даних реєстру_
-|`service-generation-utility`
-|backend
-|origin
-|-
+|_Сховище артефактів реєстру_
+|`nexus`
+|3rd-party
+a|
+* https://gerrit-mdtu-ddm-edp-cicd.apps.cicd2.mdtu-ddm.projects.epam.com/admin/repos/mdtu-ddm/data-architecture/devops-application/nexus[gerrit:/mdtu-ddm/data-architecture/devops-application/nexus]
+* https://github.com/sonatype/nexus-public[github:/sonatype/nexus-public]
+|Збереження згенерованих в підсистемі артефактів
 
 |_Утиліта валідації регламенту_
 |`registry-regulations-validator-cli`
-|backend
 |origin
-|-
+| https://gerrit-mdtu-ddm-edp-cicd.apps.cicd2.mdtu-ddm.projects.epam.com/admin/repos/mdtu-ddm/low-code-platform/platform/backend/utilities/registry-regulations-validator-cli[gerrit:/mdtu-ddm/low-code-platform/platform/backend/utilities/registry-regulations-validator-cli]
+|_Command line interface (CLI)_ для валідації складників регламенту на етапі перевірки потенційних змін
 
-|_Jenkins оператор_
-|`jenkins-operator`
-|helm
-|epam-origin
-|Допоміжне програмне забезпечення, яке виконує функції розгортання, налаштування та відновлення програмного комплексу Jenkins, як
-компонента підсистеми.
+|_Утиліта генерації сервісів доступу до даних реєстру_
+|`service-generation-utility`
+|origin
+| https://gerrit-mdtu-ddm-edp-cicd.apps.cicd2.mdtu-ddm.projects.epam.com/admin/repos/mdtu-ddm/data-architecture/libraries/service-generation-utility[gerrit:/mdtu-ddm/data-architecture/libraries/service-generation-utility]
+|_CLI_ для генерації коду сервісів доступу до даних реєстру на основі опису _Liqubase_ скриптів
+
+|_Утиліта публікації аналітичних звітів та витягів_
+|`report-publisher`
+|origin
+| https://gerrit-mdtu-ddm-edp-cicd.apps.cicd2.mdtu-ddm.projects.epam.com/admin/repos/mdtu-ddm/data-architecture/libraries/report-publisher[gerrit:/mdtu-ddm/data-architecture/libraries/report-publisher]
+|_CLI_ для публікації аналітичних звітів та витягів у відповідні підсистеми
+
+|_Утиліта управління доступом до БП_
+|`camunda-auth-cli`
+|origin
+| https://gerrit-mdtu-ddm-edp-cicd.apps.cicd2.mdtu-ddm.projects.epam.com/admin/repos/mdtu-ddm/low-code-platform/platform/backend/utilities/camunda-auth-cli[gerrit:/mdtu-ddm/low-code-platform/platform/backend/utilities/camunda-auth-cli]
+|_CLI_ для налаштування прав доступу до БП для відповідних ролей користувачів
+
+|_Утиліта публікації шаблонів нотифікацій_
+|`notification-template-publisher`
+|origin
+| https://gerrit-mdtu-ddm-edp-cicd.apps.cicd2.mdtu-ddm.projects.epam.com/admin/repos/mdtu-ddm/data-architecture/libraries/notification-template-publisher[gerrit:/mdtu-ddm/data-architecture/libraries/notification-template-publisher]
+|_CLI_ для публікації шаблонів нотифікацій у відповідну підсистему
+
+|_Утиліта завантаження геошарів_
+|`geoserver-publisher`
+|origin
+| https://gerrit-mdtu-ddm-edp-cicd.apps.cicd2.mdtu-ddm.projects.epam.com/admin/repos/mdtu-ddm/data-architecture/libraries/geoserver-publisher[gerrit:/mdtu-ddm/data-architecture/libraries/geoserver-publisher]
+|_CLI_ для налаштування підсистеми управління геоданими
 
 |===
+
+== Технологічний стек
+
+_тубідансун_
+
+== Атрибути якості підсистеми
+
+_тубідансун_
