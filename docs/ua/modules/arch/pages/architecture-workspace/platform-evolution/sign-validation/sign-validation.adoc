@@ -53,13 +53,7 @@ image:architecture-workspace/platform-evolution/sign-validation/submission_form.
 def formData = submission('start_event').formData
 def file = formData.prop('signed_data').value()
 
-
-if (!validate(file, SignFormat.ASiC)) {
-    println "Invalid signature"
-}
-
-
-def allSignInfo = get_sign_info(file, SignFormat.ASiC).getAllSignInfo()
+def allSignInfo = signature_details(file, SignFormat.ASiC).getAllSignInfo()
 for (signInfo in allSignInfo) {
     if (signInfo.subjDRFOCode == null) {
         println "DRFO should be present"
@@ -91,27 +85,29 @@ image:architecture-workspace/platform-evolution/sign-validation/external_system.
 .Приклад скриптової задачі
 [source, groovy]
 ----
-def data = external_system_response.prop('data').value()
-def request = external_system_response.prop('request').value()
-if (!validate(request, SignFormat.PKCS7)) {
-    println "Invalid signature"
-}
 
+def containerType = validationResult.prop('container').value()
 
-def info = get_sign_info(request, SignFormat.PKCS7).getSignInfo()
+def info = signature_details(request, containerType).getSignInfo()
+
 if (info.subjDRFOCode == null) {
     println "DRFO should be present"
 }
 
-originRequestDate = get_content(request, SignFormat.PKCS7).getContent().getData()
+originRequestDate = signature_content(request, containerType).getContent().getData()
+
+def requestBytes = Base64.decode(originRequestDate)
+
+save_digital_document(requestBytes, 'request.pdf')
+
 set_variable('fileContent', originRequestDate)
 ----
 
 
 
-== validate(<string|data>, <enum|format>)
+== Делегат для валідації
 
-=== JUEL функція
+=== Параметри делегату
 |===
 |Назва параметру |Опис |Тип |Тип даних
 
@@ -120,15 +116,15 @@ set_variable('fileContent', originRequestDate)
 |Вхідний
 |String
 
-|format
+|container
 |Перелік доступних для використання типів файлів
 |Вхідний
 |Enum (ASiC/CAdES)
 
-|isValid
+|result
 |Результат валідації
 |Вихідний
-|boolean
+|ValidatioResult
 |===
 
 === REST API
@@ -148,9 +144,12 @@ _POST /api/signature/validate_
 |===
 |Json Path|Тип|Опис
 
-|*$.isValid*
+|*$result.isValid*
 |boolean
 |Результат перевірки даних
+|*$result.container*
+|String
+|Тип контейнеру
 |*$.error.code*
 |String
 |Відповідний код статусу
@@ -169,7 +168,7 @@ _POST /api/signature/validate_
 Для CAdES використовується `EndUser::VerifyInternal(base64Data)`
 
 
-== get_sign_info(<string|data>, <enum|dataFormat>)
+== signature_details(<string|data>, <enum|dataFormat>)
 
 === JUEL функція
 |===
@@ -180,7 +179,7 @@ _POST /api/signature/validate_
 |Вхідний
 |String
 
-|format
+|container
 |Перелік доступних для використання типів файлів
 |Вхідний
 |Enum (ASiC/CAdES)
@@ -301,7 +300,7 @@ IntStream.rangeClosed(0, endUser.ASiCGetSignsCount(data))
 
 Для даних в форматі CAdES використовується `EndUser::VerifyInternal(base64Data)` та повертається деталі з об'єкту `EndUserSignInfo` як єдиний елемент в масиві.
 
-== get_content(<string|data>, <enum|dataFormat>)
+== signature_content((<string|data>, <enum|dataFormat>)
 
 === JUEL функція
 
@@ -313,7 +312,7 @@ IntStream.rangeClosed(0, endUser.ASiCGetSignsCount(data))
 |Вхідний
 |String
 
-|format
+|container
 |Перелік доступних для використання типів файлів
 |Вхідний
 |Enum (ASiC/CAdES)
@@ -401,6 +400,7 @@ https://iit.com.ua/download/EUSignCP-Java-20230629.zip
 
 * Оновлення бібліотеки ІІТ
 * Розширення DSO відповідними точками інтеграції
+* Створення делегату для валідації
 * Додавання JUEL-функцій
 * Додавання утілітарної функції для кодування і декодування Base64
 * Розробка референтних прикладів
