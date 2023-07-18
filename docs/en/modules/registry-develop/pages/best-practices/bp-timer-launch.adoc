@@ -1,0 +1,381 @@
+:toc-title: On this page:
+:toc: auto
+:toclevels: 5
+:experimental:
+:sectnums:
+:sectnumlevels: 5
+:sectanchors:
+:sectlinks:
+:partnums:
+
+//= Запуск бізнес-процесу за таймером
+= Launching a business process by schedule
+//TODO: I prefer the "by schedule" option of translation than "Lauching a business process by timer. Please advise which one you find more accurate.
+
+//== Загальний опис
+== General overview
+
+//Ця сторінка демонструє приклад реалізації та запуску бізнес-процесу, який автоматично активується відповідно до графіка, використовуючи Camunda BPM. Процес самостійно ініціюється у визначений час та виконує задачі відповідно до встановленої послідовності.
+This page demonstrates an example of implementing and launching a business process that is automatically activated according to a schedule using Camunda BPM. The process initiates itself at a specified time and performs tasks according to a defined sequence.
+
+//Було створено референтний бізнес-процес, який має на меті допомогти розробникам та моделювальникам регламентів краще розуміти та ефективно використовувати таймери в Camunda BPM.
+A reference business process has been created to help regulations developers and modelers to better understand and effectively use schedulers in Camunda BPM.
+//TODO: I used the word "scheduler" instead of "timer" above to keep consistency with the title.
+
+//== Референтний приклад
+== Reference example
+
+//TIP: Приклад _.bpmn_-моделі процесу ви можете знайти за назвою _automatic-external-system-data-saving.bpmn_ у регламенті демо-реєстру *_consent-data_* за посиланням:
+TIP: You can find an example _.bpmn_ process model under the name _automatic-external-system-data-saving.bpmn_ in the demo registry *_consent-data_* by following this link:
+https://admin-tools-consent-data.apps.envone.dev.registry.eua.gov.ua/gerrit.
+
+//=== Короткий огляд компонентів процесу та їх призначення
+=== Brief overview of process components and their purpose
+
+//. Стартова подія з таймером (Start event) -- запускає бізнес-процес у встановлений час, щоденно з понеділка по п'ятницю о 8:00.
+. Start Event with the timer -- initiates the business process at a set time, daily from Monday to Friday at 8:00.
+//. Скрипт -- отримує дані зі зовнішньої системи та формує об'єкт для подальшого збереження.
+. Script -- retrieves data from an external system and creates an object for further storage.
+//. Підписання даних системним ключем -- гарантує, що дані, отримані від зовнішньої системи є автентичними та цілісними.
+. Data signing with system key -- ensures that the data received from the external system is authentic and intact.
+//. Створення сутності у БД -- зберігає отримані дані в базі даних.
+. Entity creation in the database -- stores the received data in the database.
+//. Встановлення статусу бізнес-процесу -- відображає успішне завершення бізнес-процесу.
+. Setting the status of the business process -- indicates the successful completion of the business process.
+//. Кінцева подія (End event) -- позначає завершення бізнес-процесу.
+. End Event -- marks the end of the business process.
+
+//=== Моделювання
+=== Modeling
+
+//. Увійдіть до [.underline]#Кабінету адміністратора регламентів#.
+. Log in to the [.underline]#Regulations administrator portal#.
++
+//. Відкрийте розділ [.underline]#Моделі процесів#.
+. Open the [.underline]#Process models# section.
+
+. Створіть новий процес, вкажіть бізнес- та службову назву та перейдіть до вкладки [.underline]#Конструктор#.
+//. Create a new process, specify the business and system names, and go to the [.underline]#Constructor# tab.
++
+image:best-practices/bp-timer-launch/bp-timer-launch-1.png[]
++
+//. Змоделюйте пул для бізнес-процесу.
+. Model a pool for the business process.
++
+image:best-practices/bp-timer-launch/bp-timer-launch-2.png[]
++
+//. Створіть стартову подію (*Start event*) та виконайте наступні налаштування:
+. Create a *Start event* starting event and perform the following settings:
+.
++
+//* Введіть назву задачі. Наприклад, `Старт`.
+* Enter the task name, for example, `Start`.
+//* У розділі *Timer* встановіть розклад, за яким буде запускатися та виконуватися бізнес-процес.
+* In the *Timer* section, set the schedule for starting and executing the business process.
++
+//** У полі *`Type`* (`Timer Definition Type`) вкажіть тип таймера -- *`Cycle`*.
+** In the *`Type`* field (`Timer Definition Type`), specify the timer type - *`Cycle`*.
++
+[TIP]
+====
+//Опція *`Cycle`* дозволяє налаштувати повторювані процеси або події на основі певного інтервалу часу. Циклічний таймер може бути встановлений на рівні стартової, проміжної події або граничної події, що пов'язані з виконавцем завдань.
+The *`Cycle`* option allows you to configure recurring processes or events based on a specific time interval. A cyclic timer can be set at the level of a start event, intermediate event, or boundary event associated with a task performer.
+
+//Детальніше про типи таймерів -- див. на сторінці
+For more details on timer types, refer to
+xref:bp-modeling/bp/bpmn/events/timer-event.adoc[].
+====
++
+//** У полі *`Value`* вкажіть розклад у певному форматі для запуску процесу. Наприклад, *`0 8 * * MON-FRI`*.
+** In the *`Value`* field, specify the schedule in a specific format for process execution. For example, *`0 8 * * MON-FRI`*.
++
+[TIP]
+====
+//Ви можете налаштувати циклічний таймер, використовуючи стандартний формат *`ISO 8601`* для інтервалів повторень або `*cron*`-вираз.
+You can configure a cyclic timer using the standard *`ISO 8601`* format for repeat intervals or a `*cron*` expression.
+
+//Приклади значень для формату ISO 8601: ::
+Examples of values for the ISO 8601 format: ::
++
+//* `R5/PT10S` -- кожні 10 секунд, до 5 разів.
+* `R5/PT10S` -- every 10 seconds, up to 5 times.
+//* `R/P1D` -- щодня, нескінченно.
+* `R/P1D` -- daily, indefinitely.
+
+//Приклади значень для формату cron: ::
+Examples of values for the cron format: ::
++
+* `0 8 * * MON-FRI`:
++
+//0: хвилини (точно в 0 хвилин)
+//8: години (ранку, 8:00)
+//*: день місяця (будь-який день місяця)
+//*: місяць (будь-який місяць)
+//MON-FRI: день тижня (понеділок - п'ятниця)
+----
+0: minutes (exactly at 0 minutes)
+8: hours (8:00 in the morning)
+*: day of the month (any day of the month)
+*: month (any month)
+MON-FRI: day of the week (Monday - Friday)
+----
+
+//Таким чином, цей `cron`-вираз означає, що процес буде запускатися щодня з понеділка по п'ятницю о 8:00 ранку.
+Thus, the above `cron` expression means that the process will be triggered every day from Monday to Friday at 8:00 in the morning.
+
+* `0 0 9-17 * * MON-FRI`:
+
+//Цей `cron`-вираз означає, що процес буде запускатися кожну годину з 9 до 17 години за UTC з понеділка по п'ятницю.
+This `cron` expression means that the process will be triggered every hour from 9 to 17 UTC time from Monday to Friday.
+
+====
++
+//* Вкажіть ініціатора процесу як *`initiator`*.
+* Specify the process initiator as *`initiator`*.
+
+
++
+[TIP]
+====
+[%collapsible]
+.Що таке ініціатор?
+.What is an initiator?
+=====
+//*`"Start initiator = initiator"`* вказує на те, що значення ініціатора (тобто особи чи системи, яка розпочала процес) буде встановлено як *`initiator`*.
+The phrase "*`Start initiator = initiator`*" indicates that the value of the initiator (i.e., the person or system that initiated the process) will be set as the initiator.
+
+//У контексті бізнес-процесів, ініціатор -- це той, хто починає процес або відповідає за його запуск. Зазвичай, ініціатор -- це користувач, який викликає дію, або система, яка автоматично розпочинає процес.
+In the context of business processes, the initiator is the person who starts the process or is responsible for its initiation. Typically, the initiator is a user who triggers an action or a system that automatically initiates the process.
+
+У цьому випадку, `initiator` може бути використаний для ідентифікації особи чи системи, що стартували процес, у подальших етапах бізнес-процесу або для контролю доступу до ресурсів.
+In this case, the term `initiator` can be used to identify the person or system that initiated the process in subsequent stages of the business process or for access control to resources.
+=====
+====
+
++
+image:best-practices/bp-timer-launch/bp-timer-launch-3.png[]
+
++
+//. Створіть скрипт-задачу та використайте скрипт для отримання та обробки даних. Для цього відкрийте візуальний редактор коду (_детальніше про редактор коду -- на сторінці
+. Create a script task and use the script to retrieve and process data. To do this, open the visual code editor (_for more information about the code editor, refer to
+xref:registry-admin/admin-portal/registry-modeling/process-models/components/edit-groovy-scripts.adoc[]_). +
+//У нашому прикладі дані отримуємо з іншої системи.
+In our example, we retrieve data from another system.
++
+image:best-practices/bp-timer-launch/bp-timer-launch-4.png[]
+
++
+._Скрипт для отримання та обробки даних_
+._Script for data retrieval and processing_
+[%collapsible]
+====
+[source,groovy]
+----
+import java.text.SimpleDateFormat;
+import java.util.Date;
+
+SimpleDateFormat date = new SimpleDateFormat("dd_MM_yyyy")
+String url = 'https://wallpapercave.com/wp/wp2601438.jpg'
+String fileName = 'file_'.concat(date.format(new Date())).concat('.jpeg')
+def documentMetadata = save_digital_document_from_url(url, fileName)
+
+def payload = [:]
+def listFileObj = []
+payload.name = fileName
+def fileObj = [:]
+fileObj.id = documentMetadata.id
+fileObj.checksum = documentMetadata.checksum
+listFileObj << fileObj
+
+payload.image = listFileObj
+set_variable('payload', S(payload, 'application/json'))
+----
+
+//Скрипт отримує дані із зовнішньої системи, створює об'єкт *`payload`* з отриманими даними та зберігає його як змінну процесу для подальшого використання у наступних етапах бізнес-процесу, а саме:
+The script retrieves data from an external system, creates a *`payload`* object with the obtained data, and stores it as a process variable for further use in subsequent stages of the business process, namely:
+
+//. Імпортує класи `java.text.SimpleDateFormat` та `java.util.Date` для роботи з датами:
+. Imports the `java.text.SimpleDateFormat` and `java.util.Date` classes for working with dates:
++
+[source,groovy]
+----
+import java.text.SimpleDateFormat;
+import java.util.Date;
+----
++
+//. Створює новий об'єкт SimpleDateFormat з форматом "dd_MM_yyyy" для форматування дати:
+. Creates a new `SimpleDateFormat` object with the format "`dd_MM_yyyy`" for date formatting:
++
+[source,groovy]
+----
+SimpleDateFormat date = new SimpleDateFormat("dd_MM_yyyy");
+----
++
+//. Визначає URL-адресу зображення для завантаження:
+. Defines the image URL for downloading:
+
++
+[source,groovy]
+----
+String url = 'https://wallpapercave.com/wp/wp2601438.jpg';
+----
++
+//. Генерує ім'я файлу на основі поточної дати, додаючи префікс `'file_'` та розширення `'.jpeg'`:
+. Generates a file name based on the current date, adding the prefix '`file_`' and the extension _.jpeg_:
+
++
+[source,groovy]
+----
+String fileName = 'file_'.concat(date.format(new Date())).concat('.jpeg');
+----
++
+//. Викликає функцію *`save_digital_document_from_url(url, fileName)`* для збереження цифрового документа (зображення) із заданою URL-адресою та іменем файлу:
+. Calls the function *`save_digital_document_from_url(url, fileName)`* to save the digital document (image) with the specified URL and file name:
+
++
+[source,groovy]
+----
+def documentMetadata = save_digital_document_from_url(url, fileName);
+----
++
+//. Створює порожній словник payload та список `listFileObj` для побудови JSON-структури даних:
+. Creates an empty payload dictionary and a list `listFileObj` for constructing the JSON data structure:
+
++
+[source,groovy]
+----
+def payload = [:];
+def listFileObj = [];
+----
++
+//. Присвоює згенероване ім'я файлу полю name словника *`payload`*:
+. Assigns the generated file name to the name field of the *`payload`* dictionary:
+
++
+[source,groovy]
+----
+payload.name = fileName;
+----
++
+//. Створює новий порожній словник `fileObj`:
+. Creates a new empty dictionary `fileObj`:
+
++
+[source,groovy]
+----
+def fileObj = [:];
+----
++
+//. Присвоює *`id`* та *`checksum`* з метаданих документа відповідним полям словника `fileObj`:
+. Assigns the *`id`* and *`checksum`* from the document metadata to the respective fields of the fileObj dictionary:
+
++
+[source,groovy]
+----
+fileObj.id = documentMetadata.id;
+fileObj.checksum = documentMetadata.checksum;
+----
++
+//. Додає `fileObj` до списку `listFileObj`:
+. Adds `fileObj` to the list `listFileObj`:
+
++
+[source,groovy]
+----
+listFileObj << fileObj;
+----
++
+//. Присвоює список `listFileObj` полю `image` словника `payload`:
+. Assigns the list `listFileObj` to the image field of the `payload` dictionary:
+
++
+[source,groovy]
+----
+payload.image = listFileObj;
+----
++
+//. Встановлює змінну '`payload`' зі значенням словника `payload`, перетвореного на JSON-рядок, для використання у подальших кроках бізнес-процесу:
+. Sets the variable '`payload`' with the value of the payload dictionary converted to a JSON string for use in subsequent steps of the business process.
+
++
+[source,groovy]
+----
+set_variable('payload', S(payload, 'application/json'));
+----
+====
++
+//. Змоделюйте сервісну задачу (Service Task) для підпису даних системним ключем.
+. Model a Service Task for data signing with a system key.
++
+//Налаштування: ::
+Settings: ::
+
+//* Використовуйте делегат *System signature by DSO service* із каталогу шаблонів для накладання системного підпису.
+* Use the delegate *System signature by DSO service* from the template catalog for applying the system signature.
+//* Вхідні дані передайте як змінну *`${payload}`* у відповідному полі.
+* Pass the input data as the variable `${payload}` in the corresponding field.
+//* Передайте токен користувача. Ви можете це зробити через JUEL-функцію *`system_user()`* та метод *`accessToken`*. Наприклад, `${system_user().accessToken`. Його надалі можна використовувати в інтеграційних конекторах для інтеграції від імені користувача.
+* Pass the user token. You can do this using the JUEL function *`system_user()`* and the *`accessToken`* method. For example, `${system_user().accessToken`}. It can be further used in integration connectors for integration on behalf of the user.
++
+//Ви можете також використати токен ініціатора процесу. Наприклад, `${initiator().accessToken`.
+You can also use the process initiator's token. For example, `${initiator().accessToken}`.
++
+//TIP: Детальніше див. на сторінці
+TIP: For more details, refer to
+xref:bp-modeling/bp/modeling-facilitation/modelling-with-juel-functions.adoc[].
+//* Відповідь запишіть у змінну. Наприклад, `*system_signature_key*`.
+* Save the response in a variable. For example, *`system_signature_key`*.
+
++
+image:best-practices/bp-timer-launch/bp-timer-launch-5.png[]
+
++
+//. Збережіть дані до БД. Створіть новий запис у базі даних, зберігши значення об'єкта *`entityLocation`* до відповідної колонки.
+. Save data to the database. Create a new record in the database, storing the value of the *`entityLocation`* object in the respective column.
++
+//* Використовуйте делегат *Create entity in data factory*, щоб створити сутність у базі даних.
+* Use the *Create entity in data factory* delegate to create an entity in the database.
++
+[TIP]
+====
+//Альтернативно ви можете використовувати загальний інтеграційний конектор *Connect to data factory*. Детальніше про інтеграційні розширення до бізнес-процесів див. на сторінці
+Alternatively, you can use the general integration connector *Connect to data factory*. For more information about integration extensions for business processes, refer to
+xref:bp-modeling/bp/element-templates/bp-element-templates-installation-configuration.adoc[].
+====
++
+//* Вкажіть ресурс/API-ендпоінт. Наприклад, *`test-entity`*, що відповідає назві таблиці, яку ви визначили при створенні моделі даних реєстру -- *`test_entity`*.
+* Specify the resource/API endpoint. For example, *`test-entity`*, which corresponds to the table name you defined when creating the data model registry -- *`test_entity`*.
++
+//* Вхідні дані передайте як змінну *`${payload}`* у відповідному полі.
+* Pass the input data as the *`${payload}`* variable in the corresponding field.
+//* Передайте токен користувача. Ви можете це зробити через JUEL-функцію *`system_user()`* та метод *`accessToken`*. Наприклад, `${system_user().accessToken`.
+* Pass the user token. You can do this using the JUEL function *`system_user()`* and the *`accessToken`* method. For example, *`${system_user().accessToken}`*.
+//* Вкажіть *`X-Digital-Signature source`* -- джерело системного підпису. Наприклад, *`${system_signature_key}`*.
+* Specify the *`X-Digital-Signature source`* -- the source of the system signature. For example, *`${system_signature_key}`*.
+//* Вкажіть *`X-Digital-Signature-Derived source`* -- ключ Ceph-документа, який містить інформацію про підписані дані. Наприклад, *`${system_signature_key}`*.
+* Specify the *`X-Digital-Signature-Derived source`* -- the Ceph document key that contains information about the signed data. For example, *`${system_signature_key}`*.
+//* Запишіть відповідь до змінної результату, наприклад, `response`.
+* Save the response to a result variable, for example, `response`.
+
++
+image:best-practices/bp-timer-launch/bp-timer-launch-6.png[]
+
++
+//. Встановіть статус бізнес-процесу, що відображатиме успішне завершення бізнес-процесу. Для цього створіть сервісну задачу (*Service Task*) і застосуйте делегат *Define business process status*.
+. Set the status of the business process to reflect a successful completion of the business process. To do this, create a Service Task and apply the *Define business process status* delegate.
++
+//. Завершіть процес за допомогою *End Event*.
+. Finish the process using the *End Event*.
++
+//. Застосуйте внесені зміни до майстер-гілки, щоб опублікувати процес у регламенті.
+. Apply the made changes to the master branch to publish the process in the schedule.
++
+//TIP: Див. детальніше -- на сторінці
+TIP: For more details, see
+xref:registry-admin/admin-portal/version-control/overview-new-change-request.adoc[].
+
+//== Використання у Кабінеті користувача
+== Use within the User portal
+
+//Бізнес-процес, який було змодельовано та опубліковано в регламенті, стає доступним у Кабінеті посадової особи за посиланням `https://officer-portal-<назва-реєстру>.apps.<назва-кластера>.dev.registry.eua.gov.ua`. Цей процес можна знайти у розділі [.underline]#Доступні послуги > Референтні бізнес-процеси#. Він буде запускатися та виконуватися відповідно до встановленого графіку.
+The business process that has been modeled and published in the schedule becomes accessible in the Officer Portal via the link _https://officer-portal-<registry-name>.apps.<cluster-name>.dev.registry.eua.gov.ua_. This process can be found in the [.underline]#Available Services > Reference business processes# section. It will be launched and executed according to the established schedule.
