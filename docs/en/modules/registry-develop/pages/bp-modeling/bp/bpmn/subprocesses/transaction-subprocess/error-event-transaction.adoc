@@ -1,0 +1,172 @@
+= Подія «Помилка» у транзакційному підпроцесі
+= Error event in a transaction subprocess
+:toc-title: On this page:
+:toc: auto
+:toclevels: 5
+:experimental:
+:sectnums:
+:sectnumlevels: 5
+:sectanchors:
+:sectlinks:
+:partnums:
+
+//== Загальний опис
+== Overview
+
+//При моделюванні транзакційних підпроцесів, якщо підпроцес закінчується подією «Помилка» (Error Event), то транзакція завершується помилкою.
+When modelling transaction subprocesses, if the subprocess ends with an Error Event, then the transaction results in an error.
+//Така помилка не обробляється в межах підпроцесу, і транзакція переривається без будь-якої компенсації. Батьківський бізнес-процес продовжується із проміжною подією «Помилка» (Error Boundary Interrupting Intermediate Event) на межі транзакційного підпроцесу.
+Such an error is not processed within the subprocess, and the transaction cuts without any compensation. The parent process countinues with an Error Boundary Interrupting Intermediate Event on the boundary of the transaction process.
+
+//В рамках моделювання застосовують 2 типи подій «Помилка»: ::
+Within the modelling 2 types of Error Event are used: ::
+
+//* xref:#error-end-event-transaction[Кінцева подія «Помилка» (*Error End Event*)] -- подія, що моделюється при завершенні транзакційного підпроцесу помилкою. Коли досягається подія «Помилка», всі активні потоки процесу припиняються, й помилка має бути перехоплена граничною подією «Помилка».
+* xref:#error-end-event-transaction[*Error End Event*] -- an event that is modeled when a transaction process ends with an error. When an *Error End Event* appears, all active flows of the process end, and the error is caught by *Error Boundary Interrupting Intermediate Event*.
+//* xref:#error-boundary-interrupting-event[Гранична переривальна подія помилки (*Error Boundary Interrupting Intermediate Event*)] -- подія, що моделюється на межі підпроцесу транзакції як перехоплювальна проміжна подія «Помилка». Така подія ініціюється, коли транзакція закінчується елементом *Error End Event*.
+* xref:#error-boundary-interrupting-event[*Error Boundary Interrupting Intermediate Event*] -- an event that is modelled on the boundary of a transaction subprocess as a catch Error event. Such an event is initiated when a transaction ends with the *Error End Event* element.
+
+//== Моделювання та налаштування події «Помилка» при роботі із транзакційним підпроцесом
+== Modelling and configuring Error Event when working with transaction subprocess
+
+[#error-end-event-transaction]
+//=== Моделювання та налаштування кінцевої події «Помилка»
+=== Modelling and Configuring Error End Event
+
+//Для моделювання та налаштування кінцевої події «Помилка», необхідно виконати наступні кроки:
+To model and configure an *Error End Event*, take the following steps:
+
+//. Змоделюйте батьківський бізнес-процес.
+. Model Parent business process.
+//. Змоделюйте транзакційний підпроцес із використанням необхідних активностей.
+. Model transaction subprocess with all necessary activities.
+//. У транзакційному підпроцесі додайте подію завершення для альтернативного потоку послідовності.
+. In the transaction subprocess, add an end event for the alternative sequence flow.
++
+image:bp-modeling/bp/subprocesses/transaction/error-event/error3_1.png[]
++
+image:bp-modeling/bp/subprocesses/transaction/error-event/error3_2.png[]
++
+image:bp-modeling/bp/subprocesses/transaction/error-event/error3_3.png[]
+
+//. Виділіть подію завершення в альтернативній гілці підпроцесу, натисніть _іконку ключа_ та оберіть у налаштуваннях значення *Error End Event*.
+. Select the end event in the alternative branch of subprocess, click the _key icon_, and select *Error End Event* in the configuration.
++
+image:bp-modeling/bp/subprocesses/transaction/error-event/error3_4.png[]
++
+image:bp-modeling/bp/subprocesses/transaction/error-event/error3_5.png[]
+
+//. На панелі налаштувань справа відкрийте вкладку *General* та сконфігуруйте елемент:
+. On the right panel, open the *General* folder and configure the element:
+//* У полі `Id` вкажіть робочий ідентифікатор елемента, або залиште значення за замовчуванням.
+* In the `Id` field, enter element ID, or leave the default value.
+//* У полі `Name` вкажіть робочу назву елемента. Наприклад, `credit card is NOT valid`).
+* In the `Name` field, enter element name. For example, `credit card is NOT valid`
+//. Розгорніть блок *Details*. Для цього натисніть позначку плюса (`+`).
+. Expand the *Details* block by clicking the plus icon (`+`).
++
+image:bp-modeling/bp/subprocesses/transaction/error-event/error3_6.png[]
+//* У полі `Name` вкажіть назву помилки, що зберігається до бази даних. Наприклад, `cardNotValid`.
+* In the `Name` field, enter error name for the database. For example, `cardNotValid`.
+//* У полі `Code`, за потреби, вкажіть змінну коду помилки. Наприклад, `InvalidCreditCard`.
+* In the `Code` field, optionally, enter the variable of error code. For example, `InvalidCreditCard`.
+//* У полі `Global Error referenced` оберіть посилання до елемента помилки. Наприклад, `cardNotValid (code= InvalidCreditCard)`.
+* In the `Global Error referenced` field, select the link to error element. For example, `cardNotValid (code= InvalidCreditCard)`.
++
+[IMPORTANT]
+====
+//У цьому полі значення встановлюється автоматично та відповідає вказаному назві помилки у полі `Name`.
+The value in this field is set automaticallu, and corresponds with the `Name` field error name value.
+
+//Якщо вказано також змінну коду помилки, то у полі `Global Error referenced` буде автоматично встановлено значення із прив'язкою до цього коду (поле `Code`).
+If the error code variable is also set, then the value will be set automatically in the `Global Error referenced` field, linked to the `Code` field.
+====
+
+//* За потреби, у полі `Message` вкажіть дані помилки, що передається до бази даних.
+* Optionally, enter error data for the database in the `Message` field.
++
+image:bp-modeling/bp/subprocesses/transaction/error-event/error3_7.png[]
+
+[#error-boundary-interrupting-event]
+//=== Моделювання та налаштування граничної переривальної події «Помилка»
+=== Modelling and configuring Error Boundary Interrupting Intermediate Event
+
+//Продовжіть моделювання транзакційного підпроцесу:
+Continue the modelling of transaction subprocess:
+
+//. На межі транзакційного підпроцесу додайте проміжну подію для альтернативного потоку послідовності. Для цього на панелі зліва оберіть елемент *Create Intermediate/Boundary Event* та розташуйте його на межі контейнера із транзакційним підпроцесом.
+. On the transaction subprocess boundary, add an intermediate event for the alternative sequence flow. To do that, on the left panel select *Create Intermediate/Boundary Event* element and place it on the boundary of transaction subprocess container.
++
+image:bp-modeling/bp/subprocesses/transaction/error-event/error3_8.png[]
++
+image:bp-modeling/bp/subprocesses/transaction/error-event/error3_9.png[]
+//. Виділіть граничну подію, змодельовану на межі підпроцесу, натисніть _іконку ключа_ та оберіть у налаштуваннях значення *Error Boundary Event*.
+. Select the boundary event modelled on subprocess boundary, click the _key icon_ and select *Error Boundary Event* in the configuration.
++
+image:bp-modeling/bp/subprocesses/transaction/error-event/error3_10.png[]
++
+image:bp-modeling/bp/subprocesses/transaction/error-event/error3_11.png[]
+//. На панелі налаштувань справа відкрийте вкладку *General* та налаштуйте елемент:
+. On the right panel, open the *General* folder, and configure the element:
+
+//* У полі `Id` вкажіть робочий ідентифікатор елемента, або залиште значення за замовчуванням.
+* In the `Id` field, enter element ID, or leave the default value.
+//* У полі `Name` вкажіть робочу назву елемента. Наприклад, `Error charge credit card`.
+* In the `Name` field, enter element name. For example, `Error charge credit card`
+//* Розгорніть блок *Details*. Для цього натисніть позначку плюса (`+`).
+* Expand the *Details* block by clicking the plus icon (`+`).
++
+image:bp-modeling/bp/subprocesses/transaction/error-event/error3_12.png[]
+//* Якщо помилку ініціює елемент *Error End Event*, то необхідно у полі `Global Error referenced` обрати посилання до елемента помилки, який перехоплюється (наприклад, такого, що змодельовано та налаштовано у транзакційному підпроцесі). При цьому значення полів `Name` та `Code` заповнюються автоматично.
+* If the error is initiated by *Error End Event* element, select a link to the caught error element in the `Global Error referenced` field. `Name` and `Code` fields will be filled automatically.
++
+//CAUTION: Вказане значення поля `Global Error referenced` має бути ідентичним для пов'язаних елементів: відправника та перехоплювального елемента помилки.
+CAUTION: The value in `Global Error referenced` must be identical for all linked elements: error send and catch elements.
++
+image:bp-modeling/bp/subprocesses/transaction/error-event/error3_13.png[]
+//* Якщо подія «Помилка» ініціюється помилкою, що передбачена бізнес-логікою при виконанні задачі бізнес-процесу, то необхідно:
+* If the Error Event is initiated by a business logic error during the execution of a business process, perform the following:
+
+//** у полі `Code Variable` вказати константу або JUEL-функцію, яка містить код помилки;
+** in the `Code Varuable` field, define the constant or JUEL-function that contains error code;
+//** у полі `Message Variable` вказати константу або JUEL-функцію, яка містить дані помилки.
+** in the `Message Variable` field, define the constant or JUEL-function that contains error data.
++
+[IMPORTANT]
+====
+//Ініціювати подію «Помилка» можна або за допомогою генерації події «Помилка» у визначеному процесі, або з коду делегування (`Delegation Code`).
+You can initiate Error Event by generating an Error Event in a defined process, or via `Delegation Code'.
+//Інша можливість визначити помилку -- встановити тип (назву класу) будь-якого винятку Java як коду помилки.
+Another way to define an error is to set a type of any Java exception as an error code.
+====
++
+image:bp-modeling/bp/subprocesses/transaction/error-event/error3_15.png[]
++
+[IMPORTANT]
+====
+//Помилка виключення виникає, коли у транзакційному процесі є необроблена помилка (наприклад, неправильний номер рахунку), яка не дозволяє продовжити підпроцеси дебетових та кредитних операцій. Діяльність підпроцесу припиняється без компенсації.
+Connection error happens when a transaction process has an unprocessed error (for example, an invalid receipt number) that doesn't allow the debit and credit operation subprocesses to continue. In this case, a subprocess ends without compensation.
+
+//Інформація бази даних відновлюється до початкового стану (rollback), і процес продовжується за допомогою проміжної події «Помилка» (*Credit error*).
+The database performs a rollback, and the process continues via *Credit Error* event.
+
+//Обробка винятку здійснюється за допомогою проміжної події «Помилка». Потік події скасування виконується як:
+Exception processing is performed via via *Credit Error* event. Cancel event flow goes as follows:
+
+//* Спроба здійснити дебет з рахунку клієнта, але сервер не відповідає. Інтерфейс генерує результат помилки, і запускається подія *Error Boundary Event*.
+* Attempt to perform debit from client account, but the server doesn't respond. The UI generates error result, and *Error Boundary Event* starts.
+//* Переказ коштів здійснюється за телефоном (*Perform phone transfer*).
+* The process continues with *Perform phone transfer*.
+====
+
+//. Завершіть моделювання батьківського бізнес-процесу та всіх альтернативних виходів із транзакційного підпроцесу.
+//TODO - check this list for improper numbering
+. Complete the modelling of parent process and all alternative sequences of the transaction process.
++
+image:bp-modeling/bp/subprocesses/transaction/error-event/error3_16.png[]
+
+
+
+
+
+

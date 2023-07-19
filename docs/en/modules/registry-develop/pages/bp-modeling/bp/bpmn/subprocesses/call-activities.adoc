@@ -1,0 +1,410 @@
+:toc-title: On this page:
+:toc: auto
+:toclevels: 5
+:experimental:
+:sectnums:
+:sectnumlevels: 5
+:sectanchors:
+:sectlinks:
+:partnums:
+
+//= Глобальний підпроцес (Call Activity)
+= Call activity
+
+//== Загальний опис
+== Overview
+
+//*Call Activity* (або підпроцес, який можна використовувати повторно) -- це стандартний елемент BPMN-моделювання, що підтримує Camunda Engine, який дозволяє викликати інший процес як частину поточного процесу. Він подібний до xref:bp-modeling/bp/bpmn/subprocesses/embedded-subprocess.adoc[вбудованого підпроцесу], але є зовнішнім, тобто змодельованим в рамках окремого пулу бізнес-процесу, і може використовуватися неодноразово та декількома різними батьківськимиfootnote:[_Батьківський_ або _основний_ процес (*Parent process*) -- процес, що ініціює запуск підпроцесу. Відносно батьківського процесу підпроцес є *Child*-процесом (*Child process*).] бізнес-процесами.
+*Call Activity* -- is a standard BPMN-modelling element supported by Camunda Engine. It allows you to call another process as part of the currently running process. *Call Activity* is similarl to xref:bp-modeling/bp/bpmn/subprocesses/embedded-subprocess.adoc[embedded subprocess], but is external, meaning it's modelled within a separate business process pool, and can be used multiple times by different Parentfootnote:[*Parent Process* is a process that initiates subprocess start. A subprocess is a *Child Process* to a *Parent Process*.] business processes.
+
+image:bp-modeling/bp/subprocesses/call-activities/bp-call-activity-01.png[]
+
+[NOTE]
+====
+//У Camunda BPMN виклики глобального, тобто зовнішнього підпроцесу, можуть виконуватися між процесами, що змодельовані в окремих файлах _.bpmn_, або ж в рамках одного файлу _.bpmn_. Таким чином один незалежний бізнес-процес може запускати інший і навпаки.
+In Camunda BPMN the calling of global (external) subprocess can be executed between processes modelled in separate _.bpmn_ files, or within a single _.bpmn_ file. This way an independent business process can start another one, and vice versa,
+
+//Платформа реєстрів наразі підтримує лише один тип -- виклик глобального підпроцесу з основного (батьківського) процесу. З глобального підпроцесу можна також виконати виклик Call Activity -- підпроцес 2-го рівня (_див. xref:#restrictions[]_).
+The registry platform currently supports only one type -- calling a global subprocess from a Parent process. From a global subprocess you can execute the Call Activity -- a subprocess of the 2nd level (_see ref:#restrictions[]_).
+
+//.Приклад. Виклик між процесами, змодельованими в окремих файлах BPMN
+.Example. Calling between processes, modelled in separate BPMN files
+image:bp-modeling/bp/subprocesses/call-activities/call-activity-separate-bpmn.png[]
+
+//.Приклад. Виклик підпроцесу із основного процесу в рамках одного файлу BPMN
+.Example. Calling between processes, modelled in one BPMN file.
+image:bp-modeling/bp/subprocesses/call-activities/call-activity-same-bpmn.png[]
+
+====
+
+//Коли елемент Call Activity вводиться в дію, створюється новий екземпляр процесу, на який він посилається. Новий екземпляр процесу активується під час події none startfootnote:[*None events* є невизначеними подіями, які також називаються «порожніми».]. Процес може мати стартові події інших типів, але вони ігноруються.
+When Call Activity element is brought into action, a new instance is created for the process the element is linked to. The new instance is activated during none startfootnote:[*None events* are undefined events, also called "empty".] event. The process can have start events of other types, but they are ignored.
+
+[NOTE]
+====
+//Коли створений екземпляр процесу завершується, дія виклику припиняється, і продовжується виконання вихідного потоку послідовності.
+When the created instance is ended, the call action is stopped, and the sequence flow continues.
+
+//Іншими словами як тільки виконано виклик Call Activity, процес, що ініціював виклик (основний процес), чекає на завершення глобального підпроцесу, і тільки після цього продовжується.
+In other words, when Call Activity is executed, the process that initiated the call awaits the end of the global subprocess, and continues after that.
+====
+
+//== Типи розширень шаблонів елементів Call Activity
+== Types of Call Activity element template extensions
+
+//Для спрощення моделювання бізнес-процесів в рамках Платформи реєстрів, імплементовано декілька типів розширень (делегатів), що налаштовуються за допомогою розроблених шаблонів елементів для виклику зовнішніх процесів (Call Activity):
+To simplify business process modelling within the registry Platform, a number of extension (delegate) types that are configured using the developed Call Activity element templates, were implemented:
+
+//. xref:bp-modeling/bp/element-templates/bp-element-templates-installation-configuration.adoc#bp-element-temp-call-activity-call-activity[*Call Activity*] -- загальний шаблон для виклику глобального (зовнішнього) підпроцесу.
+. xref:bp-modeling/bp/element-templates/bp-element-templates-installation-configuration.adoc#bp-element-temp-call-activity-call-activity[*Call Activity*] -- general template for global subprocess call.
+//. xref:bp-modeling/bp/element-templates/bp-element-templates-installation-configuration.adoc#element-temp-check-excerpt-status[*Check excerpt status*] -- специфікований шаблон для виклику підпроцесу перевірки статусу витягу.
+. xref:bp-modeling/bp/element-templates/bp-element-templates-installation-configuration.adoc#element-temp-check-excerpt-status[*Check excerpt status*] -- specialized template for the calling of check excerpt status subprocess.
+
+//CAUTION: Варто розрізняти Call Activity як стандартний BPMN-елемент і Call Activity як розширення цього самого елемента, що налаштовується за допомогою розробленого шаблону _callActivity.json_, призначеного для виклику глобального (зовнішнього) підпроцесу.
+CAUTION: We differentiate Call Activity as a BPMN element and Call Activity as this element's extension that is configured using the _callActivity.json_ developed template, used to call the global subprocess.
+
+[#element-temp-call-activity]
+//== Моделювання бізнес-процесів із застосуванням розширень Call Activity
+== Modelling business processes using Call Activity extensions
+
+//Розглянемо застосування BPMN-елемента Call Activity із використанням розробленого шаблону-розширення _callActivity.json_ для виклику глобальних підпроцесів на прикладі бізнес-процесів оформлення онлайн-замовлення (_далі -- основний або батьківський процес_) та підтвердження цього замовлення (_далі -- підпроцес_).
+Let's look at the application of Call Activity BPMN-element using _callActivity.json_ developed template-extension to call global subprocesses on the example of online order processing business processes (_further in the text -- main or parent process_) and confirmation of the order (_further in the text -- subprocess_).
+
+image:bp-modeling/bp/subprocesses/call-activities/bp-call-activity-1.png[]
+
+[TIP]
+====
+//На етапі моделювання необхідно створити 2 пули бізнес-процесів та зберегти їх в рамках одного файлу _.bpmn_.
+On the modelling stage it is required to create 2 business process pools and save them within one _.bpmn_ file.
+====
+
+//=== Етапи моделювання процесів
+=== Process modelling stages
+
+//Для того, щоб змоделювати 2 процеси (у нашому випадку -- це основний процес та глобальний підпроцес) із застосуванням Call Activity, необхідно пройти наступні етапи:
+To model 2 processes (the parent process and the global subprocess in our case) using Call Activity, we need to go through the following stages:
+
+. xref:#create-pool-bp-1[].
+. xref:#bp-start-event[].
+. xref:#bp-user-form-insert-data-online-order[].
+. xref:#bp-call-activity[].
+. xref:#create-pool-bp-2[].
+* xref:#bp-start-event-called-process[].
+* xref:#bp-user-form-approval-decision[].
+* xref:#bp-script-task[].
+* xref:#bp-end-event-called-process[].
+. xref:#bp-user-form-order-payment[].
+. xref:#bp-end-event-caller-process[].
+
+[#create-pool-bp-1]
+//=== Створення пулу для основного бізнес-процесу
+=== Creating parent process pool
+
+//Найперше, _змоделюйте пул для основного бізнес-процесу_. Для цього виконайте кроки, подані нижче:
+_To model a pool for the parent process_, take the following steps:
+
+//NOTE: Моделювання діаграми бізнес-процесу має відбуватися в рамках елемента *Create Pool/Participant*.
+NOTE: Parent process pool modelling must be performed within the *Create Pool/Participant* element.
+
+//. Відкрийте додаток *Camunda Modeler* та створіть нову діаграму BPMN. Для цього у лівому верхньому куті натисніть меню *File* -> *New File* -> *BPMN Diagram*.
+. Open *Camunda Modeler* and create a new BPMN diagram by clicking *File* menu -> *New File* -> *BPMN Diagram*.
++
+image:registry-develop:bp-modeling/bp/modeling-instruction/bp-1.png[]
+//. На панелі інструментів зліва знайдіть елемент *Create pool/Participant* та перетягніть його до панелі моделювання.
+. On the left panel, find *Create pool/Participant* and drag it onto the modelling canvas.
++
+image:registry-develop:bp-modeling/bp/modeling-instruction/bp-2.png[]
+//. Заповніть наступні поля відповідними значеннями:
+. Fill in the fields with the corresponding values:
+
+//* У полі `Participant Name` введіть назву пулу, що відображатиметься у моделері -- `Оформлення замовлення на сайті`.
+* In the `Participant Name` field, enter the name for the pool -- `Creating an order on the website`.
+//* У полі `Process id` введіть ідентифікатор бізнес-процесу -- `create-order`.
+* In the `Process id` enter business process ID -- `create-order`.
+//* У полі `Process Name` вкажіть бізнес-назву процесу -- `Оформлення замовлення на сайті`.
+* In the `Process Name` field enter process name -- `Creating an order on the website`.
+
++
+image:bp-modeling/bp/subprocesses/call-activities/bp-call-activity-2.png[]
+
+[#bp-start-event]
+//=== Моделювання стартової події основного процесу
+=== Modelling start event of the parent process
+
+//_Створіть початкову подію_. Для цього виконайте наступні кроки:
+_To model a start event_, take the following steps:
+
+//. На панелі інструментів, зліва, знайдіть елемент (коло) *CreateStartEvent* та перетягніть його до панелі моделювання.
+. On the left panel, find the *CreateStartEvent* and drag it onto the modelling canvas.
+//. На панелі налаштувань справа заповніть наступні параметри відповідними значеннями:
+. On the right panel, fill in the following parameters with the corresponding values:
+//* У полі `Name` введіть назву початкової події -- `Кошик`;
+* In the `Name` field, enter the name for the start event -- `Cart`;
+//* У полі `Initiator` введіть `initiator`.
+* In the `Initiator` field, enter `initiator`.
+
++
+//TIP: `initiator` -- спеціальна змінна, що встановлюється для користувача, який розпочав процес.
+TIP: `initiator` -- is a special variable set for the user who started the process.
++
+image:bp-modeling/bp/subprocesses/call-activities/bp-call-activity-3.png[]
+
+[#bp-user-form-insert-data-online-order]
+//=== Моделювання користувацької задачі внесення даних онлайн-замовлення
+=== Modelling the user task for entering online order data
+
+//Далі _створіть користувацьку задачу, призначену для введення даних користувачем_. Для цього виконайте наступні кроки:
+_To create a user task for data entering, take the following steps:_
+
+//. Створіть нову задачу, вкажіть її тип, натиснувши іконку ключа та обравши з меню пункт *User Task* (Користувацька задача).
+. Create a new task, define its type by clicking the key icon and selecting *User Task* from the menu.
+//. На панелі налаштувань справа натисніть `Open Catalog`, оберіть шаблон *User Form* (Користувацька форма) та натисніть `Apply` для підтвердження.
+. On the right panel, click `Open Catalog`, select *User Form* template, and click `Apply` to confirm.
+//. На панелі налаштувань справа заповніть наступні поля:
+. On the right panel, fill in the following fields:
+
+//* У полі `Id` вкажіть ідентифікатор задачі -- `user-form-1`.
+* In the `Id` field, set task ID -- `user-form-1`.
++
+//TIP: ID задачі призначається автоматично, за замовчуванням. Введіть значення вручну, якщо це необхідно.
+TIP: Task ID is automatically set by default. Enter it manually if required.
+
+//* У полі `Name` вкажіть назву задачі -- `Форма введення даних онлайн-замовлення`.
+* In the `Name` field, enter task name -- `Order data form`.
+//* У полі `Form key` введіть ключ форми, що відповідатиме службовій назві форми для внесення даних -- `add-order-bp-add-order-test`.
+* In the `Form key` field, enter form key that will correspond with the form service name -- `add-order-bp-add-order-test`.
+//* У полі `Assignee` вкажіть змінну, що використовується для зберігання користувача, який запустив екземпляр процесу, -- `${initiator}`.
+* In the `Assignee` field, enter the variable of the user who initiated the process instance -- `${initiator}`.
+
++
+image:bp-modeling/bp/subprocesses/call-activities/bp-call-activity-4.png[]
+
+[#bp-call-activity]
+//=== Моделювання Call Activity для виклику зовнішнього підпроцесу
+=== Modelling Call Activity to call external subprocess
+
+//На цьому етапі необхідно _змоделювати *Call Activity* (виклик глобального підпроцесу із зовнішнього пулу)_. Для цього виконайте кроки, подані нижче:
+_To model Call Activity, take the following steps:_
+
+//TIP: Приклад налаштування делегата Call Activity наведено за xref:bp-modeling/bp/element-templates/bp-element-templates-installation-configuration.adoc#bp-element-temp-call-activity-call-activity[посиланням].
+TIP: You can find an example of Call Activity delegate configuration xref:bp-modeling/bp/element-templates/bp-element-templates-installation-configuration.adoc#bp-element-temp-call-activity-call-activity[here].
+
+//. Створіть елемент *Call Activity*.
+. Create *Call Activity* element.
+//. Виконайте подальші налаштування:
+. Perform the following configurations:
+
+//* У полі `Name` вкажіть назву елемента -- `Рішення щодо підтвердження замовлення`.
+* In the `Name` field, enter element name -- `Decision on order confirmation`.
+//* У полі `Called Element` вкажіть ідентифікатор глобального xref:#create-pool-bp-2[підпроцесу, що викликатиметься], -- `order-confirm`.
+* In the `Called Element` field, set the ID of the global xref:#create-pool-bp-2[subprocess to be called] -- `order-confirm`.
+//* У полі `Input data` вкажіть вхідні дані, які необхідно передати бізнес-процесу, що викликається. Параметри мають передаватися у вигляді пар _ключ-значення_ (тут -- `${submission('user-form-1').formData}`).
+* In the `Input data` field, set the input data to be sent to the called business process. The parameters must be transferred in the form of _key-value_ pairs (here -- `${submission('user-form-1').formData}`).
+
++
+//TIP: За деталями щодо використання функції `submission()` у бізнес-процесах перейдіть на сторінку xref:registry-develop:bp-modeling/bp/modeling-facilitation/modelling-with-juel-functions.adoc[].
+TIP: You can find more detauls on using the `submission()` function on the following page: xref:registry-develop:bp-modeling/bp/modeling-facilitation/modelling-with-juel-functions.adoc[].
+
+//* У полі `Output variable name` вкажіть назву змінної, до якої необхідно записати дані (payload), отримані в результаті виконання підпроцесу, що викликається (тут -- `callActivityOutput`).
+* In the `Output variable name` set the payload-carrying variable name (here -- `callActivityOutput`).
+
++
+image:bp-modeling/bp/subprocesses/call-activities/bp-call-activity-5.png[]
+
+//NOTE: Таким чином поточна конфігурація запускає xref:#create-pool-bp-2[глобальний підпроцес] із основного пулу. Основний процес не може завершитися, доки виконується глобальний підпроцес.
+NOTE: This way the current configuration starts xref:#create-pool-bp-2[a global subprocess] from the main pool. The main process can't end while the global subprocess is running.
+
+[#create-pool-bp-2]
+//=== Створення пулу для глобального підпроцесу
+=== Creating a pool for the global subprocess
+
+//На прикладі xref:#create-pool-bp-1[], _змоделюйте пул для глобального підпроцесу_.
+_Model a pool for the global subprocess_ as shown in the example xref:#create-pool-bp-1[].
+
+//. На панелі інструментів зліва знайдіть елемент *Create pool/Participant* та перетягніть його до панелі моделювання.
+. On the left panel, find the *Create pool/Participant* element and drag it to the modelling canvas.
++
+image:registry-develop:bp-modeling/bp/modeling-instruction/bp-2.png[]
+
+//. Заповніть наступні поля відповідними значеннями:
+. Fill in the following fields with the corresponding values:
+
+//* У полі `Participant Name` введіть назву пулу, що відображатиметься у моделері -- `Рішення щодо підтвердження замовлення`.
+* In the `Participant Name` field, enter the name of the pool displayed in the modeller -- `Decision on order confirmation`.
+//* У полі `Process id` введіть ідентифікатор бізнес-процесу -- `order-confirm`.
+* In the `Process id` field, enter business process ID -- `order-confirm`.
+//* У полі `Process Name` вкажіть бізнес-назву процесу -- `Рішення щодо підтвердження замовлення`.
+* In the `Process Name` field, enter business process name -- `Decision on order confirmation`.
+
++
+image:bp-modeling/bp/subprocesses/call-activities/bp-call-activity-6.png[]
+
+[#bp-start-event-called-process]
+//=== Моделювання стартової події глобального підпроцесу
+=== Modelling start event for the global subprocess
+
+//На прикладі xref:#bp-start-event[], _створіть стартову подію підпроцесу_.
+_Model a start event for the global subprocess_ as shown in the example xref:#bp-start-event[].
+
+//Для цього виконайте наступні кроки:
+To do that, take the following steps:
+
+//. На панелі інструментів, зліва, знайдіть елемент (коло) *CreateStartEvent* та перетягніть його до панелі моделювання.
+. On the left panel, find the *CreateStartEvent* element and drag it to the modelling canvas.
+//. На панелі налаштувань справа заповніть наступні параметри відповідними значеннями:
+. On the right panel, fill in the following parameters with the corresponding values:
+//* У полі `Name` введіть назву початкової події -- `Отримання даних замовлення`.
+* In the `Name` field, enter the name of the start event -- `Receiving order data`.
+//* У полі `Initiator` введіть `initiator`.
+* In the `Initiator` field, enter `initiator`.
+
++
+//TIP: `initiator` -- спеціальна змінна, що встановлюється для користувача, який розпочав процес.
+TIP: `initiator` -- is a special variable set for the user who started the process.
+
++
+image:bp-modeling/bp/subprocesses/call-activities/bp-call-activity-7.png[]
+
+[#bp-user-form-approval-decision]
+//=== Моделювання користувацької задачі "Рішення про погодження онлайн-замовлення"
+=== Modelling the "Decision for order confirmation" user task
+
+//На прикладі xref:#bp-user-form-insert-data-online-order[], _створіть задачу "Рішення про погодження онлайн-замовлення"_. Для цього виконайте кроки, подані нижче:
+_Create the "Decision for order confirmation" user task_ based on the example xref:#bp-user-form-insert-data-online-order[], by taking the following steps:
+
+//. Створіть нову задачу, вкажіть її тип, натиснувши іконку ключа та обравши з меню пункт *User Task* (Користувацька задача).
+. Create a new task, define its type by clicking the key icon and selecting *User Task* from the menu.
+//. На панелі налаштувань справа натисніть `Open Catalog`, оберіть шаблон *User Form* (Користувацька форма) та натисніть `Apply` для підтвердження.
+. On the right panel, click `Open Catalog`, select *User Form* template, and click `Apply` to confirm.
+//. На панелі налаштувань справа заповніть наступні поля:
+. On the right panel, fill in the following fields:
+//* У полі `Id` вкажіть ідентифікатор задачі -- `user-form-2`.
+* In the `Id` field, enter task ID -- `user-form-2`.
++
+//TIP: ID задачі призначається автоматично, за замовчуванням. Введіть значення вручну, якщо це необхідно.
+TIP: Task ID is automatically set by default. Enter it manually if required.
+
+//* У полі `Name` вкажіть назву задачі -- `Рішення про погодження онлайн-замовлення`.
+* In the `Name` field, enter task name -- `Decision for order confirmation`.
+//* У полі `Form key` введіть ключ форми, що відповідатиме службовій назві форми для внесення даних -- `add-order-bp-order-confirm-test`.
+* In the `Form key` field, enter form key that will correspond with the form service name -- `add-order-bp-order-confirm-test`.
+//* У полі `Assignee` вкажіть змінну, що використовується для зберігання користувача, який запустив екземпляр процесу, -- `${initiator}`.
+*  In the `Assignee` field, enter the variable of the user who initiated the process instance -- `${initiator}`.
++
+image:bp-modeling/bp/subprocesses/call-activities/bp-call-activity-8.png[]
+
+[#bp-script-task]
+//=== Моделювання задачі скриптування для підготовки даних до виведення
+=== Modelling the script task to prepare the data for output
+
+//На цьому етапі необхідно _створити задачу скриптування для обробки даних та підготовки їх до виведення_.
+_Create a script task for data processing and preparation for output_.
+
+[TIP]
+====
+//Задача має на меті за допомогою groovy-скрипту із виконанням функції `submission()` взяти дані, введені користувачем на формі, обробити їх, сформувати вивід у форматі JSON та записати його до змінної `callActivityOutput`, зазначеної у полі `Output variable name` при моделюванні xref:#bp-call-activity[Call Activity] основного процесу.
+The task purpose is to take the data that the user filled in the form, using groovy-script with `submission()` function, form an output in JSON format, and write it into `callActivityOutput` variable, defined in `Output variable name` field when modelling xref:#bp-call-activity[Call Activity] of the main process.
+====
+
+//. Створіть нову задачу, вкажіть її тип, натиснувши іконку ключа та обравши з меню пункт *Script Task* (Задача скриптування).
+. Create a new task, define its type by clicking the key icon and selecting *Script Task* from the menu.
+//. На панелі налаштувань справа заповніть наступні поля:
+. On the right panel, fill in the following fields:
+
+//* У полі `Name` вкажіть назву задачі -- `Підготовка даних до виведення`.
+* In the `Name` field, enter task name -- `Preparing data for output`
+//* У полі `Script Format` вкажіть формат скрипту -- `groovy`.
+* In the `Script Format` field, enter script format -- `groovy`.
+//* У полі `Script Type` вкажіть тип скрипту -- `Inline Script`.
+* In the `Script Type` field, enter script type -- `Inline Script`.
+//* У полі `Script` введіть безпосередньо groovy-скрипт:
+* In the `Script` field, enter the groovy-script:
++
+[source,groovy]
+----
+var data = submission('user-form-2').formData
+execution.removeVariable('outputPayload')
+set_transient_variable('outputPayload', S(data, 'application/json'))
+----
+
++
+image:bp-modeling/bp/subprocesses/call-activities/bp-call-activity-9.png[]
+
+[#bp-end-event-called-process]
+//=== Моделювання події завершення глобального підпроцесу
+=== Modelling global subprocess end event
+
+//На цьому етапі необхідно _створити подію, яка завершуватиме глобальний підпроцес_.
+
+//. Створіть подію завершення бізнес-процесу.
+. Create a business process end event.
+//. На панелі налаштувань справа для параметра `Name` вкажіть значення `Замовлення підтвержено`.
+. On the right panel, set the `Name` parameter to `Order confirmed`.
+
++
+image:bp-modeling/bp/subprocesses/call-activities/bp-call-activity-10.png[]
+
+//TIP: Дані, отримані в результаті виконання глобального підпроцесу "Рішення щодо підтвердження замовлення", записуються до змінної `callActivityOutput`, зазначеної у полі `Output variable name` при моделюванні xref:#bp-call-activity[Call Activity] основного процесу, і можуть бути використані на xref:#bp-user-form-order-payment[формі для оплати замовлення] у основному процесі. Після цього продовжується виконання основного процесу.
+TIP: The data received as a result of the "Decision for order confirmation" global subprocess execution are written into the `callActivityOutput` variable, defined in the `Output variable name` field when modelling xref:#bp-call-activity[Call Activity] of the main process, and can be used on the xref:#bp-user-form-order-payment[order payment form] in the main process. After that, the main process execution continues.
+
+[#bp-user-form-order-payment]
+// === Моделювання користувацької задачі для оплати онлайн-замовлення
+=== Modelling the user task for order payment
+
+// На прикладі xref:#bp-user-form-insert-data-online-order[] _створіть користувацьку задачу, призначену для оплати замовлення користувачем_. Для цього виконайте наступні кроки:
+_Create the user task for order payment_ based on the example xref:#bp-user-form-insert-data-online-order[], by taking the following steps:
+
+//. Створіть нову задачу, вкажіть її тип, натиснувши іконку ключа та обравши з меню пункт *User Task* (Користувацька задача).
+. Create a new task, define its type by clicking the key icon and selecting *User Task* from the menu.
+//. На панелі налаштувань справа натисніть `Open Catalog`, оберіть шаблон *User Form* (Користувацька форма) та натисніть `Apply` для підтвердження.
+. On the right panel, click `Open Catalog`, select *User Form* template, and click `Apply` to confirm.
+//. На панелі налаштувань справа заповніть наступні поля:
+. On the right panel, fill in the following fields:
+
+//* У полі `Name` вкажіть назву задачі -- `Оплата онлайн-замовлення`.
+* In the `Name` field, enter task name -- `Order payment`.
+//* У полі `Form key` введіть ключ форми, що відповідатиме службовій назві форми для внесення даних -- `add-order-bp-view-order-test`.
+* In the `Form key` field, enter form key that will correspond with the form service name -- `add-order-bp-view-order-test`.
+//* У полі `Assignee` вкажіть змінну, що використовується для зберігання користувача, який запустив екземпляр процесу, -- `${initiator}`.
+* In the `Assignee` field, enter the variable of the user who initiated the process instance -- `${initiator}`.
+
++
+image:bp-modeling/bp/subprocesses/call-activities/bp-call-activity-11.png[]
+
+[#bp-end-event-caller-process]
+//=== Моделювання події завершення основного процесу
+=== Modelling main process end event
+
+//На цьому етапі необхідно _створити подію, яка завершуватиме основний процес_.
+
+//. Створіть подію завершення бізнес-процесу.
+. Create the business process end event.
+//. На панелі налаштувань справа для параметра `Name` вкажіть значення `Замовлення сплачено`.
+. On the right panel, fill in `Name` parameter with `Order paid`.
+
++
+image:bp-modeling/bp/subprocesses/call-activities/bp-call-activity-12.png[]
+
+[#restrictions]
+//== Обмеження рівнів вкладеності при викликах підпроцесів за допомогою Call Activity
+== Restricting nesting levels when calling subprocesses with Call Activity
+
+//Існують певні обмеження на Платформі щодо кількості рівнів вкладеності бізнес-процесів при викликах глобальних підпроцесів за допомогою делегата Call Activity.
+The Platform has certain restrictions on how many nesting levels are allowed for business processes during the calling of global subprocesses with Call Activity.
+
+[CAUTION]
+====
+//Для правильної роботи функціональності виклику глобальних процесів із застосуванням делегата Call Activity, використовуйте не більше 3-х рівнів вкладеності бізнес-процесів, тобто основний процес, глобальний підпроцес 1-го рівня та глобальний підпроцес 2-го рівня.
+For proper calling of global subprocesses with Call Activity functionality operation, use no more than 3 nesting levels for bysiness processes. This means: main process, global subprocess of the 1st level, and global subprocess of the 2nd level.
+====
+
+//== Відображення бізнес-процесів у Кабінетах користувачів
+== Displaying business processes in user Portals
+
+//Користувачі Кабінетів посадової особи та отримувача послуг на сторінках [.underline]#Мої послуги# та [.underline]#Мої задачі#, під час виконання підпроцесів, як викликаних, так і вбудованих, бачитимуть лише назви батьківських бізнес-процесів найвищого рівня.
+Users of Officer and Citizen Portals will see only the names of parent business processes of the highest level on [.underline]#My services# and [.underline]#My tasks# pages during the execution of called or in-built subprocesses.
+
+//Тобто, якщо бізнес-процес А викликав підпроцес Б, а підпроцес Б викликав підпроцес В, користувач бачитиме у Кабінеті _лише_ назву бізнес-процесу А під час виконання задач підпроцесів Б та В.
+If business process `A` called subprocess `B`, and subprocess `B` called subprocess `C`, the user will _only see business process A name_ in the Portal.
+
+
