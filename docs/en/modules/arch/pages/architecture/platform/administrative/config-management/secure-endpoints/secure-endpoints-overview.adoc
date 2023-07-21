@@ -1,0 +1,85 @@
+//== Функціональні можливості
+== Functional capacity
+
+//З метою забезпечення безпечного доступу до наступних компонент кластера OpenShift 4.x:
+The purpose is to provide secure access to the following components of OpenShift 4.x cluster:
+
+//- Платформні;
+//- Реєстрові;
+//- Інфраструктурні.
+- Platform components;
+- Registry components;
+- Infrastructure components.
++
+//NOTE: Більш детально ознайомитись з кожною категорією можна xref:architecture/platform/operational/user-management/ddm-auth.adoc[тут].
+NOTE: You can learn more about each category xref:architecture/platform/operational/user-management/ddm-auth.adoc[here].
+
+//Платформа реалізує функціонал блокування доступу до кожного маршруту (route) на рівні HAProxy наступним чином:
+The Platform realizes access blocking functionality for every route on HAProxy level, the following way:
+
+//==== Реєстрові
+==== Registry components
+
+//. При створенні реєстру Адміністратором, у нього є можливість задати IP-адреси з яких буде дозволений доступ до реєстрових компонентів. Інтерфейс адміністрування платформи додає внесені IP-адреси до файлу `values.yaml` в реєстрову конфігурацію в форматі:
+. While creating a registry, an Administrator can set IP-addresses that will have access to the registry components. Platform administration UI adds the listed IP-addresses to `values.yaml` file into the registry configuration, in the following format:
+[source, yaml]
+global:
+  whiteListIP:
+    adminRoutes: "192.168.1.64/26 172.16.0.192/27"
+    officerPortal: "192.168.1.240/29"
+    citizenPortal: "0.0.0.0/0"
+
++
+//який, надалі використовується Helm-чартами компонент для розгортання реєстру з анотаціями у відповідних роутах:
+that is further used by components Helm-charts to deploy the registry with annotations in corresponding routes:
+
++
+[source, yaml]
+metadata:
+  annotations:
+    haproxy.router.openshift.io/ip_whitelist: 192.168.1.64/26 172.16.0.192/27
+
++
+//Адміністратор має можливість задавати список IP-адрес окремо для кабінету чиновника, кабінету громадянина та окремо для адміністративних компонентів.
+The administrator can set the IP-address lists separately for the Officer Portal, Citizen Portal, and administration components.
+
++
+[WARNING]
+//Кожен компонент має містити публічну IP-адресу кластера. Keycloak, у свою чергу, має містити всі CIDR з інших операційних зон або доступний всім, якщо кабінет громадянина не має обмежень.
+Each component must include the public IP-address of the cluster. Keycloak must include all the CIDR from other operational zones, or be generally accessible, if the Citizen Portal has no restrictions.
+
++
+//Інтерфейс додавання має наступний вигляд:
+The adding interface looks like this:
++
+image::architecture/platform/administrative/config-management/secure-endpoints/creating-reg.png[adding-route-registry-ui,float="center",align="center"]
+//процес ввведення IP-адреси:
+IP-address entering process:
++
+
+image::architecture/platform/administrative/config-management/secure-endpoints/adding.png[]
+//інтерфейс відображення та редагування списку IP-адрес реєстру має наступний вигляд:
+registry IP address list display and editing interface looks like this:
++
+
+image::architecture/platform/administrative/config-management/secure-endpoints/reg-info.png[editing-route-registry-ui,float="center",align="center"]
+//. При редагуванні вже наявного реєстру в адміністратора також є можливість задати або видалити IP-адреси з яких буде дозволений доступ до реєстрових компонентів. Інтерфейс адміністрування платформи оновлює внесені IP-адреси в файлі `values.yaml` в конфігураційному репозиторії реєстру, який надалі використовується Helm-чартом для розгортання реєстру. Інтерфейс додавання має такий самий вигляд як і при створенні реєстру.
+. During the editing of an existing registry, the administrator can add or delete IP-addresses with allowed access to registry components. Platform Administration UI updates the added IP-addresses in the `values.yaml`, in the registry configuration repository, which is then used by Helm-chart to deploy the registry. The adding interface looks the same as the one in the registry creation process.
+
+//==== Платформні, інфраструктурні та інші роути
+==== Platform components, infrastructure components, and other routes
+
+//. У розділі "Керування кластером" в адміністратора є можливість задати CIDR для обмеження зовнішнього доступу для платформних та інфраструктурних компонентів. Інтерфейс адміністрування платформи створює запит на зміну (MR) в файлі `values.yaml` та після затвердження адміністратором `cluster-mgmt` пайплайн виконує оновлення та додавання необхідних анотацій.
+. In the "Cluster management" section, the administrator can set CIDR to restrict external access for platform and infrastructure components. The Administration UI creates a merge request for the `values.yaml` file, and after administrator approval, the `cluster-mgmt` pipeline performs the update and adding of required annotations.
+//. У всі інші роути, які не керуються Helm-чартами, анотації додаються/змінюються за допомогою `annotate-routes` стейджу в `cluster-mgmt` пайплайні. Приклад `values.yaml`:
+. To add/change annotations in other routes that aren't managed by Helm-charts, the `annotate-routes` stage of `cluster-mgmt` pipeline is used. `values.yaml` example:
++
+[source, yaml]
+global:
+  whiteListIP:
+    adminRoutes: "192.168.1.64/26 172.16.0.192/27"
++
+
+[WARNING]
+//CIDR внесені адміністратором для реєстру повинні також бути додані для платформних компонентів автоматично.
+The CIDR set by the administrator for the registry must also be added for platform components automatically.
