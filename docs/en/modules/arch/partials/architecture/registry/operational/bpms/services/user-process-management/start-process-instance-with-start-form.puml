@@ -1,0 +1,42 @@
+@startuml
+participant "Web Клієнт" as client  order 10
+participant "Сервіс управління бізнес-процесами" as service  order 20
+participant "Cервіс виконання бізнес-процесів" as bpms order 30
+participant "Сховище Ceph" as ceph order 40
+skinparam responseMessageBelowArrow true
+
+title Ініціювання бізнес-процесу
+  client -> service: Ініціювати бізнес-процес за вказаним \nідентифікатором даними стартової форми
+  activate service
+  service -> bpms: Отримати бізнес-процес за вказаним ідентифікатором
+  activate bpms
+  alt Бізнес-процес не знайдено
+    service <-- bpms: Бізнес-процес не знайдено 404
+    client <-- service: Бізнес-процес не знайдено 404
+  end
+  service <-- bpms: Бізнес-процес, 200 OK
+  deactivate bpms
+
+  group Зберегти дані форми у Ceph
+    service -> service: Згенерувати Ceph ключ
+    note left
+      Формат:
+      //lowcode_<processDefinitionKey>_start_form_<generatedUuid>//
+    end note
+    service -> ceph : Зберегти дані стартової форми по визначеному ключу
+    activate ceph
+    service <-- ceph: Дані збережено, 200 ОК
+    deactivate ceph
+  end group
+  service -> bpms: Ініціювати бізнес-процес
+  note left
+    Ініціювати бізнес-процес з додатковою змінною
+    бізнес-процесу з ім'ям //start_form_ceph_key//
+    та значенням - **//згенерований ceph ключ стартової форми//**
+  end note
+  activate bpms
+  bpms -> service: Ініційований бізнес-процес, 200 OK
+  deactivate bpms
+  service -> client: Ініційований бізнес-процес
+  deactivate service
+@enduml
