@@ -1,0 +1,55 @@
+@startuml
+participant "Web клієнт" as client order 1
+participant "Модуль роботи з формами" as formModule order 2
+participant "Модуль роботи з файлами" as fileModule order 3
+participant "Файловий сервіс" as fileService order 4
+
+skinparam responseMessageBelowArrow true
+
+title Оновлення форми регламенту у вказаній версії
+
+client -> formModule: оновити форму
+activate formModule
+
+  formModule -> fileModule: отримати файловий\nсервіс для вказаної версії
+  activate fileModule
+    create fileService
+    fileModule -> fileService: ініціалізувати
+    alt вказана версія не існує
+      fileModule <-- fileService: помилка ініціалізації
+      formModule <-- fileModule: помилка ініціалізації\nфайлового сервісу
+      client <-- formModule: помилка зі статусом\n404 Not Found
+    end
+    fileModule <-- fileService
+    return файловий сервіс
+  deactivate fileModule
+
+  formModule -> formModule: провалідувати інпут форми
+  alt форма не валідна
+  client <-- formModule: помилка зі статусом\n422 Unprocessable entity
+  end
+
+  formModule -> formModule: визначити дати створення\nта останнього оновлення
+  note right
+  Зчитує дати з існуючого контенту форми.
+  Якщо форма не існує визначає дати створення
+  та останнього оновлення як поточну дату та час.
+  Якщо форма існує але в контенті форми дати не
+  наявні, то зчитує дати з **//git log//** файлу форми
+  end note
+
+  formModule -> formModule: додати дати створення та\nостаннього оновлення до контенту
+  note right
+    Дата створення - **//$.created//**
+    Дата останнього оновлення - **//$.modified//**
+  end note
+
+  formModule -> fileService: записати новий контент до файлу форми
+  activate fileService
+  return
+  deactivate fileService
+
+  client <-- formModule: контент форми з датами\nстворення та останнього\nоновлення
+
+deactivate formModule
+@enduml
