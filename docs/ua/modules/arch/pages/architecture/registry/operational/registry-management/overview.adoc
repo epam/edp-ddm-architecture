@@ -1,9 +1,5 @@
+//:imagesdir: ../../../../../images
 = Підсистема управління даними реєстру
-
-[NOTE]
---
-Сторінка технічної документації у процесі розробки...
---
 
 == Загальний опис
 
@@ -13,11 +9,15 @@
 
 * Створення, читання, зміна та видалення записів реєстру.
 * Пошук даних за параметрами.
-* Реалізація рольвого доступу до данних (`RBAC`).
+* Реалізація рольового доступу до даних (`RBAC`).
 * Ведення історичності змін.
 * Збереження інформації про походження даних.
-* Збереження повʼязаних файлів реєстру.
+* Збереження пов'язаних файлів реєстру.
 * Збереження підписаних запитів в якості підстав для зміни даних реєстру.
+
+== Технічний дизайн підсистеми
+
+image::architecture/registry/operational/registry-management/registry-management-overview.drawio.svg[float="center",align="center"]
 
 == Складові підсистеми
 
@@ -27,37 +27,79 @@
 |_Сервіс синхронного управління даними реєстру_
 |`registry-rest-api-deployment`
 |origin
-|-
-|-
+.2+|https://github.com/epam/edp-ddm-service-generation-utility
+|Обробляє синхронні REST API запити на читання та запис даних реєстру.
 
 |_Сервіс асинхронного управління даними реєстру_
 |`registry-kafka-api-deployment`
 |origin
-|-
-|-
+|Обробляє асинхронні запити на читання та запис даних реєстру.
 
 |xref:arch:architecture/registry/operational/registry-management/registry-db.adoc#[__Операційна БД реєстру__]
 |`registry`
 |origin
-|-
-|-
+|https://github.com/epam/edp-ddm-registry-postgres
+|База даних що містить службові таблиці сервісів і всі таблиці реєстру змодельовані адміністратором регламенту. Вона також фіксує історію змін даних та перевіряє права згідно з RBAC.
 
 |xref:arch:architecture/registry/operational/registry-management/ceph-storage.adoc#_file_ceph_bucket[__Операційне сховище цифрових документів реєстру__]
 |`ceph:file-ceph-bucket`
 |origin
 |-
-|-
+|Зберігання цифрових документів реєстру
 
-|xref:arch:architecture/registry/operational/registry-management/ceph-storage.adoc#_datafactory_ceph_bucket[__Сховище підписаних документів__]
+|xref:arch:architecture/registry/operational/registry-management/ceph-storage.adoc#_datafactory_ceph_bucket[__Сховище вхідних даних__]
 |`ceph:datafactory-ceph-bucket`
 |origin
 |-
-|-
+|Зберігання підписаних даних при внесенні в реєстр
 
-|xref:arch:architecture/registry/operational/registry-management/ceph-storage.adoc#_response_ceph_bucket[__Сховище підписаних документів__]
-|`response-ceph-bucket`
+|xref:arch:architecture/registry/operational/registry-management/ceph-storage.adoc#_response_ceph_bucket[__Сховище вихідних даних__]
+|`ceph:response-ceph-bucket`
 |origin
 |-
-|-
+|Тимчасове зберігання даних для передачі в рамках міжсервісної взаємодії
 
 |===
+
+== Технологічний стек
+
+При проектуванні та розробці підсистеми, були використані наступні технології:
+
+* xref:arch:architecture/platform-technologies.adoc#java[Java]
+* xref:arch:architecture/platform-technologies.adoc#spring[Spring]
+* xref:arch:architecture/platform-technologies.adoc#spring-boot[Spring Boot]
+* xref:arch:architecture/platform-technologies.adoc#spring-cloud[Spring Cloud]
+
+== Атрибути якості підсистеми
+
+=== _Scalability_
+
+_Підсистема управління даними реєстру_ підтримує як горизонтальне, так і вертикальне масштабування.
+
+
+[TIP]
+--
+Детальніше з масштабуванням підсистем можна ознайомитись у відповідних розділах:
+
+* xref:architecture/container-platform/container-platform.adoc[]
+--
+
+=== _Observability_
+
+_Підсистема управління даними реєстру_ підтримує журналювання та збір метрик продуктивності для подальшого аналізу через веб-інтерфейси відповідних підсистем Платформи.
+
+[TIP]
+--
+Детальніше з дизайном підсистем можна ознайомитись у відповідних розділах:
+
+* xref:arch:architecture/platform/operational/logging/overview.adoc[]
+* xref:arch:architecture/platform/operational/monitoring/overview.adoc[]
+--
+
+=== _Auditability_
+
+_Підсистема управління даними реєстру_ фіксує значимі технічні та бізнес події, пов'язані з експлуатацією системи кінцевими користувачами використовуючи xref:arch:architecture/registry/operational/audit/overview.adoc[підсистему журналювання подій аудиту].
+
+=== _Security_
+
+В _Підсистемі управління даними реєстру_ всі запити до сервісів які безпосередньо здійснюють операції над даними реєстру вимагають автентифікацію. Сервіси підсистеми доступні лише у внутрішній мережі реєстру.
