@@ -1,0 +1,197 @@
+//= Опис та структура Інсталятора
+= Description and structure of the Installer
+
+//== Визначення
+== Definitions
+//Інсталятор:: набір програмних засобів для розгортання Платформи
+Installer:: a set of software tools for deploying the Platform
+
+//Для розгортання Платформи управління реєстрами застосовується Інсталятор, який постачається у вигляді zip архіву
+To deploy the Registry Management Platform, the Installer is used, which is delivered in the form of a zip archive
+
+//Структура Інсталятору:
+Structure of the Installer:
+[plantuml, structure, svg]
+----
+@startuml
+
+package "Installer" as installer {
+    package "images" as images {
+        [external docker images]
+        [registry docker images]
+    }
+    package "nexus" as nexus {
+        [liquibase-ext-schema]
+    }
+    package "repositories" as repositories {
+        package "control-plane" as control-plane {
+            [codebase-operator]
+            [control-plane-console]
+            [control-plane-gerrit]
+            [control-plane-installer]
+            [control-plane-jenkins]
+            [ddm-architecture]
+            [infrastructure-jenkins-agent]
+            [keycloak-operator]
+        }
+        package "infra" as infra {
+            [backup-management]
+            [catalog-source]
+            [control-plane-nexus]
+            [external-integration-mock]
+            [keycloak]
+            [logging]
+            [monitoring]
+            [service-mesh]
+            [storage]
+            [user-management]
+        }
+        package "registry" as registry {
+            [digital-signature-ops]
+            [hashicorp-vault]
+            [keycloak-operator]
+        }
+    }
+    package "terraform" as terraform {
+        [minio]
+        [vault]
+    }
+    [control-plane-installer.img] as installer_image
+    [docker_load.sh] as docker_load
+    [functions.sh] as functions
+    [install.sh] as install
+}
+
+
+@enduml
+----
+
+
+//== Діаграма послідовності розгортання платформи
+== Platform deployment sequence diagram
+[plantuml, install_flow, svg]
+----
+@startuml
+
+actor "Platform administrator" as devops order 10
+participant "Installation server" as jumpbox  order 30
+participant "Installer container" as docker_load  order 35
+participant "Installer" as install.sh  order 40
+participant "Openshift cluster" as openshift  order 45
+participant "Vault" as vault  order 50
+participant "Minio" as minio  order 55
+
+autonumber
+
+title Platform deployment sequence diagram
+
+group Preparing the Installer for deployment
+devops -> jumpbox: Downloading the Installer archive
+devops -> jumpbox: Downloading certificates digital-signature-ops
+devops -> jumpbox: Server readiness check (prerequisites)
+devops -> docker_load: Authentication in Openshift
+devops -> docker_load: Setting parameters (env)
+devops -> docker_load: Launching the Installer (install.sh -i)
+end
+
+group Deployment of the Platform
+install.sh -> install.sh: Checking input parameters
+install.sh -> openshift: Enable encryption ETCD
+install.sh -> openshift: Deployment of basic cluster-mgmt resources\n(catalog-sources, storage, keycloak-operator-crd, logging, service-mesh)
+install.sh -> openshift: Deployment nexus (control-plane-nexus)
+install.sh -> vault: Deployment Vault
+install.sh -> minio: Deployment Minio
+install.sh -> openshift: Downloading docker images in nexus (control-plane-nexus)
+install.sh -> openshift: Deployment of user-management and downloading digital-signature-ops certificates
+install.sh -> openshift: Deployment Control Plane
+install.sh -> openshift: Downloading xsd in nexus (control-plane-nexus)
+install.sh -> openshift: Downloading access parameters in Minio
+devops -> jumpbox: Checking the log and saving the Control Plane access parameters in a safe place
+end
+
+@enduml
+----
+
+//== Діаграма послідовності оновлення платформи
+== Platform upgrade sequence diagram
+[plantuml, update_flow, svg]
+----
+@startuml
+
+actor "Platform Administrator" as devops order 10
+participant "Installation Server" as jumpbox  order 30
+participant "Installer Container" as docker_load  order 35
+participant "Installer" as install.sh  order 40
+participant "Openshift cluster" as openshift  order 45
+participant "Vault" as vault  order 50
+participant "Minio" as minio  order 55
+
+autonumber
+
+title Platform deployment sequence diagram
+
+group Preparing the Installer for deployment
+devops -> jumpbox: Downloading the Installer archive
+devops -> jumpbox: Downloading certificates digital-signature-ops
+devops -> jumpbox: Server readiness check (prerequisites)
+devops -> docker_load: Authentication in Openshift
+devops -> docker_load: Setting parameters (env)
+devops -> docker_load: Launching the Installer (install.sh -u)
+end
+
+group Deployment of the Platform
+install.sh -> install.sh: Checking input parameters
+install.sh -> vault: Status update Vault
+install.sh -> minio: Status update Minio
+install.sh -> openshift: Downloading docker images in nexus (control-plane-nexus)
+install.sh -> openshift: Deployment of Control Plane
+install.sh -> openshift: Downloading xsd in nexus (control-plane-nexus)
+install.sh -> openshift: Downloading access parameters in Minio
+devops -> jumpbox: Checking the log and the correctness of the update
+end
+
+@enduml
+
+----
+////
+== Опис модулів Інсталятора (functions.sh)
+
+INIT-CHECK:: перевірка необхідних параметрів та наявності сертифікатів digital-signature-ops (тільки для початкового розгортання)
+ENCRYPTION-ETCD:: налаштування шифрування ETCD та затвердження сертифікатів Openshift
+INSTALL-CLUSTER-MGMT:: розгортання базових компонент cluster-mgmt
+* catalog-source
+* storage
+* keycloak-operator-crd (підкомпонент control-plane-installer)
+* logging
+* service-mesh
+
+INSTALL-NEXUS:: розгортання control-plane-nexus (сховище докер образів та xsd)
+VAULT-INSTALL:: розгортання центрального Vault
+MINIO-INSTALL:: розгортання центрального Minio
+INIT-NEXUS:: завантаження докер образів
+INSTALL-ADDITIONAL-COMPONENTS:: завантаження digital-signature-ops сертифікатів та розгортання user-management
+INSTALL-CONTROL-PLANE:: розгортання компонент Control Plane
+NEXUS-RESOURCE-UPLOAD:: завантаження nexus ресурсів (xsd)
+BACKUP-CREDENTIALS:: параметрів доступу в Minio
+USAGE:: допоміжний модуль для виводу інформації про використання install.sh
+////
+== Description of Installer modules (functions.sh)
+
+INIT-CHECK:: checking the necessary parameters and availability of certificates digital-signature-ops (for initial deployment only)
+ENCRYPTION-ETCD:: setting up ETCD encryption and validating Openshift certificates
+INSTALL-CLUSTER-MGMT:: deployment of basic components cluster-mgmt
+* catalog-source
+* storage
+* keycloak-operator-crd (subcomponent control-plane-installer)
+* logging
+* service-mesh
+
+INSTALL-NEXUS:: deployment of control-plane-nexus (docker image repository and xsd)
+VAULT-INSTALL:: deployment of central Vault
+MINIO-INSTALL:: deployment of central Minio
+INIT-NEXUS:: loading docker images
+INSTALL-ADDITIONAL-COMPONENTS:: downloading of digital-signature-ops certificates and deployment of user-management
+INSTALL-CONTROL-PLANE:: deployment of Control Plane components
+NEXUS-RESOURCE-UPLOAD:: downloading of nexus resources (xsd)
+BACKUP-CREDENTIALS:: access parameters in Minio
+USAGE:: auxiliary module for displaying usage information install.sh
