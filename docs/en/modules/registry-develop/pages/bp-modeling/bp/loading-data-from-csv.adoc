@@ -1,0 +1,359 @@
+:toc-title: On this page:
+:toc: auto
+:toclevels: 5
+:experimental:
+:sectnums:
+:sectnumlevels: 5
+:sectanchors:
+:sectlinks:
+:partnums:
+
+= Modeling the business process for loading data from a CSV file as an array into a database
+//= Моделювання бізнес-процесу для завантаження даних з CSV-файлу масивом у БД
+
+////
+Користувач має можливість на формі за допомогою компоненту File завантажити csv-файл (кодування UTF-8).
+
+Для того, щоб дані могли бути збережені, повинен бути завантажений лише один файл. Роздільник - ";"
+
+Користувач завантажує файл, відбувається його валідація на формі (формат *.csv, */csv)
+
+Якщо завантажено файл непідтримуваного формату, виводиться нотифікація на формі з описом помилки про невідповідність формату, який підтримується
+
+Після натискання кнопки "Далі", користувач переходить на підписуючу задачу і проходить сценарії, описані в п. 2 і п.3 сторі https://jiraeu.epam.com/browse/MDTUDDM-17916
+
+Якщо дані з файлу не можуть бути збережені до дата-фабрики через невідповідність обмеженням в базі даних, збереження всього масиву даних не відбувається. Користувач повертається на підписуючу задачу, де у верхній частині форми справа відображається помилка "Структура завантажених даних не віповідає структурі таблиці в базі даних. Будь ласка, перевірте внесені записи"
+
+Якщо масив даних не може бути збережений до дата-фабрики через перевищення ліміту часу (помилка 408), користувач:
+повертається на підписуючу задачу
+в правому верхньому куті бачить повідомлення з помилкою "Вибачте, щось пішло не так. Будь ласка, спробуйте ще раз"
+
+
+В разі, якщо хоча б один з записів не може бути збережний до бази даних, жоден із записів файлу не зберігається до бази даних
+
+
+Процес моделювання форм та БП для збереження даних описано в інструкції, де увага моделювальника звертається на те, що обов'язково потрібно на формі для завантаження файлу змоделювати підказку для заповнення файлу (наприклад, з компонентом Content), на яку додати описання вимог:
+до файлу:
+завантажити за один раз можна тільки один файл
+формат (CSV)
+кодування - UTF-8
+максимально можлива кількість записів -50
+до даних в файлі:
+роздільник даних в файлі - ";"
+формат полів в файлі відповідає полям в базі даних
+якщо завантажуються дані до довідника, то файлі обов'язково повинен містити унікальний ключ відповідного формату до кожного запису
+додати приклад заповненого файлу з вказанням коректних назв полів
+////
+
+The possibility of loading data as an array to a database allows you to create business processes that the registry users can use for adding a data array as a single file, for example, filling the registry directories or loading additional data.
+//Можливість завантаження даних масивом до БД дозволяє створювати бізнес-процеси, завдяки яким користувачі реєстру можуть вносити масив даних одним файлом, наприклад, наповнення довідників реєстру або дозавантаження даних.
+
+In order to model a business process with the possibility of importing data from a CSV file as an array into a database, perform the following actions.
+//Для того, щоб змоделювати бізнес-процес з можливістю імпорту даних з CSV-файлу масивом у БД виконайте наступні дії.
+
+[TIP]
+====
+Use out-of-the-box link:{attachmentsdir}/bp-modeling/bp/loading_data_from_csv/Process_saveArrayFromCsvFile.bpmn[BPMN diagram of the test business process] and the link:{attachmentsdir}/bp-modeling/bp/loading_data_from_csv/add-diplom-data-csv-file.json[Download diploma data (csv file)] and link:{attachmentsdir}/bp-modeling/bp/loading_data_from_csv/sign-diplom-data-csv-file.json[Sign diploma data (csv file)] forms to see more context for further use.
+//Скористайтеся готовою link:{attachmentsdir}/bp-modeling/bp/loading_data_from_csv/Process_saveArrayFromCsvFile.bpmn[BPMN-схемою тестового бізнес-процесу] та формами link:{attachmentsdir}/bp-modeling/bp/loading_data_from_csv/add-diplom-data-csv-file.json[Завантаження даних про дипломи (csv file)] і link:{attachmentsdir}/bp-modeling/bp/loading_data_from_csv/sign-diplom-data-csv-file.json[Підпис даних про дипломи (csv file)], щоб побачити більше контексту для подальшого використання.
+====
+
+== Business process modeling
+//== Моделювання бізнес-процесу
+
+Model the business process according to the instructions in the xref:registry-develop:bp-modeling/bp/bp-modeling-instruction.adoc[link].
+//Змоделюйте бізнес-процес згідно з інструкцією за xref:registry-develop:bp-modeling/bp/bp-modeling-instruction.adoc[посиланням].
+
+
+[NOTE]
+====
+Prerequisites: ::
+//Передумови: ::
+Before modeling the process and configuring the `Batch creation of entities in data factory v2` delegate, make sure that the _/element-templates_ folder of the *Camunda Modeler* application contains the `dataFactoryConnectorBatchCreateDelegateV2.json` file.
+//Перед моделюванням процесу та налаштуванням делегата `Batch creation of entities in data factory v2`, переконайтеся, що папка _/element-templates_ застосунку *Camunda Modeler* містить файл `dataFactoryConnectorBatchCreateDelegateV2.json`.
+
+Otherwise, use the delegate download instructions available at the xref:registry-develop:bp-modeling/bp/element-templates/bp-element-templates-installation-configuration.adoc#element-temp-install-windows[link].
+//В іншому випадку скористайтеся інструкцією для завантаження делегата, що доступна за xref:registry-develop:bp-modeling/bp/element-templates/bp-element-templates-installation-configuration.adoc#element-temp-install-windows[посиланням].
+====
+
+[IMPORTANT]
+====
+Using the `Batch creation of entities in data factory v2` delegate is possible only for tables that have the `ext:bulkLoad="true"` attribute inside the `<createTable>` tag.
+//Використання делегата `Batch creation of entities in data factory v2` можливо лише для таблиць, що мають атрибут `ext:bulkLoad="true"` в середині тегу `<createTable>`.
+====
+
+. Create the user task using a form that contains the corresponding file component for loading.
+//. Створіть користувацьку задачу з використанням форми, яка містить відповідний компонент для завантаження файлу.
++
+--
+* Enter the task name in the `Name` field.
+//* у полі `Name` вкажіть назву задачі;
+* In the `Form key` field, enter the service name of the form.
+//* у полі `Form key` вкажіть службову назву форми;
+* In the `Assignee` field, enter `${initiator}` -- the user who initiated the execution of this business process.
+//* у полі `Assignee` вкажіть `${initiator}` - користувач, який ініціював виконання цього бізнес-процесу.
+--
+
++
+image:registry-develop:bp-modeling/bp/loading_data_from_csv/loading_data_from_csv-01.png[]
+
+. Create the user task using the form for data signing.
+//. Створіть користувацьку задачу з використанням форми для підписання даних.
++
+--
+* Enter the task name in the `Name` field.
+//* у полі `Name` вкажіть назву задачі;
+* In the `Form key` field, enter the service name of the form for data signing.
+//* у полі `Form key` вкажіть службову назву форми для підписання даних;
+* In the `Assignee` field, enter `${initiator}` -- the user who initiated the execution of this business process.
+//* у полі `Assignee` вкажіть `${initiator}` - користувач, який ініціював виконання цього бізнес-процесу;
+* in the `Form data pre-population`  field, enter the `${submission('addCsvFileActivity').formData}`  variable.
+//* у полі `Form data pre-population` вкажіть змінну `${submission('addCsvFileActivity').formData}`.
+--
++
+image:registry-develop:bp-modeling/bp/loading_data_from_csv/loading_data_from_csv-02.png[]
+
+. Create the script task to prepare the data for writing.
+//. Створіть задачу скриптування для підготовки даних до запису.
++
+--
+* Enter the task name in the `Name` field.
+//* у полі `Name` вкажіть назву задачі;
+* In the `Script Format` field, select `groovy`.
+//* у полі `Script Format` оберіть `groovy`;
+* In the `Script Type` field, select `InlineScript`.
+//* у полі `Script Type` оберіть `InlineScript`;
+* In the `Script` field, enter the script itself, for example, in our case:
+//* у полі `Script` вкажіть сам скрипт, наприклад, у нашому випадку:
++
+----
+set_transient_variable('payload', submission('signCsvFileActivity').formData.prop('csvFile').elements().first())
+----
+--
++
+image:registry-develop:bp-modeling/bp/loading_data_from_csv/loading_data_from_csv-03.png[]
+
+. Create the service task for data saving.
+//. Створіть сервісну задачу для збереження даних.
++
+--
+* Click `Open Catalog` and select `Batch creation of entities in data factory v2` delegate, then click `Apply`.
+//* натисніть `Open Catalog` та оберіть делегат `Batch creation of entities in data factory v2`, після чого натисніть `Apply`;
++
+image:registry-develop:bp-modeling/bp/loading_data_from_csv/loading_data_from_csv-05.png[]
+
+* Enter the task name in the `Name` field.
+//* у полі `Name` вкажіть назву задачі;
+* In the `Resource` field, enter the resource -- the name of the endpoint for the table, where the data will be stored.
+//* У полі `Resource` вкажіть ресурс, назву ендпоінту для таблиці, куди зберігатимуться дані;
+* In the `Upload type` field, select `CSV`.
+//* у полі `Upload type` оберіть `CSV`;
+* In the `Payload` field, enter data you want to create -- `${payload}`.
+//* у полі `Payload` введіть дані для створення - `${payload}`;
+* in the `X-Access-Token` field, enter the user's system access token under which the operation is performed, for example: `${completer('signCsvFileActivity').accessToken}`.
+//* у полі `X-Access-Token` зазначте токен доступу користувача до системи, під яким виконується операція, наприклад: `${completer('signCsvFileActivity').accessToken}`;
+* In the `X-Digital-Signature source` field, enter the source of the digital signature, for example: `${sign_submission('signCsvFileActivity').signatureDocumentId}`.
+//* у полі `X-Digital-Signature source` вкажіть джерело цифрового підпису, наприклад: `${sign_submission('signCsvFileActivity').signatureDocumentId}`;
+* In the `Result variable` field, enter any name for the output parameter (by default, `response`).
+//* у полі `Result variable` вкажіть будь-яке ім'я для вихідного параметра (за замовчуванням -- `response`).
+--
++
+image:registry-develop:bp-modeling/bp/loading_data_from_csv/loading_data_from_csv-04.png[]
+
+== Form modeling
+//== Моделювання форм
+
+Model the forms according to the instructions in the xref:registry-develop:bp-modeling/forms/registry-admin-modelling-forms.adoc[link].
+//Змоделюйте форми згідно з інструкцією за xref:registry-develop:bp-modeling/forms/registry-admin-modelling-forms.adoc[посиланням].
+
+[#save-data-csv-content]
+=== Data upload form
+//=== Форма для завантаження даних
+
+. Enter `Form's business name` and `Form's service name`.
+//. Вкажіть `Бізнес-назву форми` та `Службову назву форми`.
++
+image:registry-develop:bp-modeling/bp/loading_data_from_csv/loading_data_from_csv-06.png[]
+
+. Go to the `Builder` tab. Select the `Updated` section. Select the `Content` component and drag it to the modeling panel.
+//. Перейдіть на вкладку `Конструктор`. Оберіть розділ `Оновлені`. Виберіть компонент `Content` та перетягніть його до панелі моделювання.
++
+image:registry-develop:bp-modeling/bp/loading_data_from_csv/loading_data_from_csv-07.png[]
++
+[NOTE]
+====
+In the form for file uploading, we recommend to model a prompt for filling out the file (for example, using the Content component)  where it is necessary to describe the requirements for the uploaded file.
+//Рекомендуємо обов'язково на формі для завантаження файлу змоделювати підказку для заповнення файлу (наприклад, з компонентом Content), на якій вказати описання вимог до файлу, що завантажується.
+====
+
+. Add a description of the requirements to the file and click `Save`.
+//. Додайте опис вимог до файлу та натисніть `Save`.
++
+image:registry-develop:bp-modeling/bp/loading_data_from_csv/loading_data_from_csv-08.png[]
++
+[NOTE]
+====
+The following restrictions for the file are currently in place:
+//На цей час запроваджено наступні обмеження для файлу:
+
+* It is possible to download only one file at a time.
+//* можливо завантажити за один раз тільки один файл;
+* The file format is CSV only.
+//* формат файлу лише CSV;
+* Encoding is UTF-8.
+//* кодування -- UTF-8;
+* The maximum number of entries is 50.
+//* максимальна кількість записів -- 50.
+* The maximum file size is 100 MB.
+//* максимальний розмір файлу -- 100 MB.
+This is the limit for data processing for saving or editing (general input limit).
+//Це ліміт на обробку даних для збереження, або зміни (загальний input-ліміт).
+
+Requirements for the data in the file:
+//Вимоги до даних у файлі:
+
+* Data separator in the file is `";"` (semicolon).
+//* роздільник даних у файлі -- `";"` (крапка з комою);
+* The format of the fields in the file must comply with that of the fields in the database.
+//* формат полів у файлі повинен відповідати полям в базі даних;
+* If data is uploaded to the directory, then each record must contain a unique key in the corresponding format.
+//* якщо завантажуються дані до довідника, то кожен запис обов'язково повинен містити унікальний ключ відповідного формату.
+====
+
+. In the `Updated` section, select the `File` component and drag it to the modeling panel.
+//. В розділі `Оновлені` оберіть компонент `File` та перетягніть його до панелі моделювання.
++
+image:registry-develop:bp-modeling/bp/loading_data_from_csv/loading_data_from_csv-09.png[]
+
+. Enter the name of the component in the `Label` field.
+//. У полі `Label` вкажіть назву компонента.
++
+image:registry-develop:bp-modeling/bp/loading_data_from_csv/loading_data_from_csv-10.png[]
+
+. Go to the `File` tab. In the `File Pattern` field, enter the `*.csv` value. Below in the form, set the minimum and maximum permissible file size in the corresponding fields: `File Minimum Size` and `File Maximum Size` (maximum 1 MB).
+//. Перейдіть до вкладки `File`. У полі `File Pattern` вкажіть значення `*.csv`. Нижче на формі зазначте мінімальне та максимально допустиме значення розміру файлу у відповідних полях `File Minimum Size` та `File Maximum Size` (не більше 1 MB).
++
+image:registry-develop:bp-modeling/bp/loading_data_from_csv/loading_data_from_csv-11.png[]
+
+. Go to the Validation tab. Select the `Required` checkbox and enter the name of the table to which data in the `Resource for validation` field will be written.
+//. Перейдіть на вкладку Validation. Встановіть прапорець `Required` та вкажіть назву таблиці, до якої буде виконуватися запис даних у полі `Resource for validation`.
++
+image:registry-develop:bp-modeling/bp/loading_data_from_csv/loading_data_from_csv-12.png[]
+
+. Go to the `API` tab. In the `Property Name` field, enter `csvFile`. Click `Save` to save the changes.
+//. Перейдіть на вкладку `API`. У полі `Property Name` вкажіть `csvFile`. Натисніть `Save` для збереження змін.
++
+image:registry-develop:bp-modeling/bp/loading_data_from_csv/loading_data_from_csv-13.png[]
+
+. Add and configure the `Button` component.
+//. Додайте та налаштуйте компонент `Button`.
++
+image:registry-develop:bp-modeling/bp/loading_data_from_csv/loading_data_from_csv-16.png[]
+
+. In the top right-hand side of the page, click `Create form`.
+//. У правій верхній частині сторінки натисніть `Створити форму`.
++
+image:registry-develop:bp-modeling/bp/loading_data_from_csv/loading_data_from_csv-14.png[]
+
+=== Form for data signing
+//=== Форма для підписання даних
+
+. Enter `Form's business name` and `Form's service name`.
+//. Вкажіть `Бізнес-назву форми` та `Службову назву форми`.
++
+image:registry-develop:bp-modeling/bp/loading_data_from_csv/loading_data_from_csv-15.png[]
+
+. Go to the `Builder` tab. Select the `Updated` section. Select the `File` component and drag it to the modeling panel.
+//. Перейдіть на вкладку `Конструктор`. Оберіть розділ `Оновлені`. Виберіть компонент `File` та перетягніть його до панелі моделювання.
++
+image:registry-develop:bp-modeling/bp/loading_data_from_csv/loading_data_from_csv-17.png[]
+
+. Configure the component in the same way as in the previous section, except that the form must be view-only. To do this, in the `Display` tab, select the `Disabled` checkbox and change the name of the component.
+//. Налаштуйте компонент за аналогією попереднього розділу, за винятком того, що форма повинна бути доступна лише для перегляду. Для цього на вкладці `Display` встановіть прапорець `Disabled` та змініть назву компонента.
++
+image:registry-develop:bp-modeling/bp/loading_data_from_csv/loading_data_from_csv-18.png[]
+
+. Add and configure the `Button` component.
+//. Додайте та налаштуйте компонент `Button`.
++
+image:registry-develop:bp-modeling/bp/loading_data_from_csv/loading_data_from_csv-19.png[]
+
+. In the top right-hand side of the page, click `Create form`.
+//. У правій верхній частині сторінки натисніть `Створити форму`.
++
+image:registry-develop:bp-modeling/bp/loading_data_from_csv/loading_data_from_csv-20.png[]
+
+Apply the changes to the modeled forms. To do that, go to the `Version view` section and click the `Apply changes to master version` button.
+//Застосуйте зміни для змодельованих форм, для цього перейдіть до розділу `Огляд версії` та натисніть кнопку `Застосувати зміни до мастер-версії`.
+
+image:registry-develop:bp-modeling/bp/loading_data_from_csv/loading_data_from_csv-21.png[]
+
+== Example of a business process in the Officer Portal
+//== Приклад бізнес-процесу у Кабінеті посадової особи
+
+. Go to the corresponding service modeled in the Officer portal in the `Available services` menu.
+//. Перейдіть до відповідної послуги, що була змодельована, у Кабінеті посадової особи у меню `Доступні послуги`.
++
+image:registry-develop:bp-modeling/bp/loading_data_from_csv/loading_data_from_csv-22.png[]
+
+. Add a file that meets the requirements and click `Next`.
+//. Додайте файл, що відповідає встановленим вимогам та натисніть `Далі`.
++
+image:registry-develop:bp-modeling/bp/loading_data_from_csv/loading_data_from_csv-23.png[]
++
+
+[NOTE]
+====
+During upload, the pre-validation of the data in the CSV file is triggered immediately on the form.
+//Під час завантаження, спрацьовує попередня валідація даних у CSV-файлі одразу на формі.
+
+In the event of an error, the system warns the user about format inconsistency even before switching to the UI form for signing the QES data.
+//У випадку помилки, система попереджує користувача про невідповідність формату ще до переходу на UI-форму підписання даних КЕП.
+
+There are currently 3 types of CSV file validations when uploading data to the database: ::
+//Наразі є 3 типи перевірок CSV-файлу при завантаженні даних до БД: ::
++
+. Validation of the format (extension) and encoding.
+//. Перевірка формату (розширення) та кодування.
++
+* Format is `CSV`; encoding is `UTF-8`.
+//* Формат -- `CSV`, кодування -- `UTF-8`.
++
+image::registry-develop:bp-modeling/bp/loading_data_from_csv/loading_data_from_csv-27.png[]
+
+. Validation of the number of entries in a file.
+//. Перевірка кількості записів у файлі.
++
+* The maximum number of entries in a file is 50.
+//* Максимально допустима кількість записів у файлі -- 50.
++
+image::registry-develop:bp-modeling/bp/loading_data_from_csv/loading_data_from_csv-28.png[]
+
+. Validation of the uploaded data structure.
+//. Перевірка структури даних, що завантажуються.
++
+* The separator is a semicolon (`;`).
+//* Роздільник -- крапка з комою (`;`).
+* The column names in the file must match the column names in the database.
+//* Назви колонок у файлі мають збігатися із назвами колонок у БД.
+* The value format of the fields must match the format of the database.
+//* Формат значення полів має відповідати формату бази даних.
++
+image::registry-develop:bp-modeling/bp/loading_data_from_csv/loading_data_from_csv-29.png[]
+
+====
+
+. At the data signing phase, the pre-uploaded file is view-only. At the bottom of the page, fill in the key parameters and click `Read`.
+//. На етапі підписання даних попередньо завантажений файл доступний лише для перегляду. Внизу сторінки заповніть параметри ключа та натисніть `Зчитати`.
++
+image:registry-develop:bp-modeling/bp/loading_data_from_csv/loading_data_from_csv-24.png[]
+
+. To apply the digital signature, click `Sign`.
+//. Щоб накласти цифровий підпис натисніть `Підписати`.
++
+image:registry-develop:bp-modeling/bp/loading_data_from_csv/loading_data_from_csv-25.png[]
+
+. The executed business process for downloading data from the form as an array (csv file) is registered in the section `My services → `Provided services`.
+//. Виконаний бізнес-процес завантаження даних з форми масивом (csv file) фіксується у розділі `Мої послуги` → `Надані послуги`.
++
+image:registry-develop:bp-modeling/bp/loading_data_from_csv/loading_data_from_csv-26.png[]
+
