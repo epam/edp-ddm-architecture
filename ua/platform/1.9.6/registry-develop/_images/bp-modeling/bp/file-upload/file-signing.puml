@@ -1,0 +1,106 @@
+@startuml
+skinparam monochrome true
+
+actor "Користувач" as user
+participant "Клієнтський додаток\n кабінету користувача" as cabinet
+participant "Kong \nAPI Management" as kong
+participant "Сервіс управління \n задачами користувача" as user_task_mngmnt
+participant "Сервіс виконання бізнес-процесів" as bpms
+participant "Сервіс КЕП операцій" as dso
+participant "Об'єктне сховище Ceph \n(бакет: lowcode-form-data-storage)" as form_data_ceph
+participant "Дата Фабрика" as data_factory
+
+skinparam responseMessageBelowArrow false
+title Підпис даних форми з файловими вкладеннями через кабінет користувача
+
+user -> cabinet: Перехід до виконання задачі \nнакладання підпису на дані форми з файловими вкладеннями
+activate cabinet
+  cabinet -> cabinet: Підготовка UI-форми для відображення
+  cabinet --> user: Повернення управління
+deactivate cabinet
+
+user -> cabinet: Підтвердження виконання задачі підпису даних
+activate cabinet
+  cabinet -> cabinet: Клієнтська валідація даних форми
+  cabinet -> cabinet: Приведення значень полів типу "File" згідно контракту \nвзаємодії з серверним додатком
+  note left
+    {
+      "data": {
+        "<file_property_name>": [
+          {
+            "id": "{UUID}",
+            "checksum": "{SHA256-hash}"
+          }
+        ]
+      }
+    }
+  end note
+  cabinet -> cabinet: Генерація цифрового підпису "signature" на JSON-документ даних форми \nз SHA256-геш та UUID документів
+  cabinet -> kong: Підтвердження виконання задачі підпису: \nPOST "/{realm}/task/{id}/sign-form" \n* Ідентифікатор сесії Kong \n* Дані форми з SHA256-геш / UUID файлових вкладень\n* Цифровий підпис даних форми
+  activate kong
+    note left
+      {
+        "data": {
+          "<file_property_name>": [
+            {
+              "id": "{UUID}",
+              "checksum": "{SHA256-hash}"
+            }
+          ]
+        },
+        "signature": "${signature}"
+      }
+    end note
+    kong -> user_task_mngmnt: Підтвердження виконання задачі підпису: \nPOST "/{realm}/task/{id}/sign-form" \n* X-Access-Token \n* Дані форми з SHA256-геш / UUID файлових вкладень\n* Цифровий підпис даних форми
+    activate user_task_mngmnt
+      user_task_mngmnt -> user_task_mngmnt: Перевірка відповідності Assignee задачі\n поточному користувачу
+      user_task_mngmnt -> user_task_mngmnt: Встановлення X-Access-Token \nдля JSON-документа даних форми
+      user_task_mngmnt -> user_task_mngmnt: Підготовка даних до валідації цифрового підпису
+      user_task_mngmnt -> dso: Валідація цифрового підпису ("data", "signature")
+      dso -> user_task_mngmnt: Результат валідації
+
+      user_task_mngmnt -> user_task_mngmnt: Генерація ідентифікатора Ceph-документа \nдля збереження документа з підписом \n(processInstanceId, taskDefinitionKey)
+
+      user_task_mngmnt -> form_data_ceph: Збереження JSON-документа даних форми з підписом  \n* Назва документа \n* JSON-документ даних форми з підписом
+      note right
+        {
+          "data": {
+            "<file_property_name>": [
+              {
+                "id": "{UUID}",
+                "checksum": "{SHA256-hash}"
+              }
+            ]
+          },
+          "x-access-token": {X-Access-Token}
+          "signature": "{signature}"
+        }
+      end note
+      form_data_ceph --> user_task_mngmnt
+
+      user_task_mngmnt -> bpms: Підтвердження виконання задачі
+      activate bpms
+        bpms -> form_data_ceph: Отримання JSON-документа даних UI-форми \nза ідентифікатором задачі (processInstanceId, taskDefinitionKey)
+        form_data_ceph --> bpms: JSON документ з UUID документів
+        bpms -> bpms: Підготовка даних для формування запиту на збереження у Дата Фабрику
+        bpms -> data_factory: Збереження даних в реєстрі \n* X-Access-Token \n* X-Digital-Signature \n* X-Source-Business-Process-Instance-Id
+        note left
+          {
+            "data": {
+              "<file_property_name>": [
+                {
+                  "id": "{UUID}",
+                  "checksum": "{SHA256-hash}"
+                }
+              ]
+            }
+          }
+        end note
+        data_factory --> bpms: Результат виконання операції
+      return Повернення управління
+      user_task_mngmnt --> user: Повернення управління користувачу
+    deactivate
+  deactivate
+deactivate
+
+@enduml

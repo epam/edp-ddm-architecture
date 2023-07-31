@@ -1,0 +1,307 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:camunda="http://camunda.org/schema/1.0/bpmn" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:bioc="http://bpmn.io/schema/bpmn/biocolor/1.0" xmlns:color="http://www.omg.org/spec/BPMN/non-normative/color/1.0" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:modeler="http://camunda.org/schema/modeler/1.0" id="Definitions_0sgrtoy" targetNamespace="http://bpmn.io/schema/bpmn" exporter="Camunda Modeler" exporterVersion="4.12.0" modeler:executionPlatform="Camunda Platform" modeler:executionPlatformVersion="7.15.0">
+  <bpmn:collaboration id="Collaboration_0srieut">
+    <bpmn:participant id="Participant_1kqmz2d" name="Перегляд-редагування заявок відповідно до кодів KATOTTG" processRef="requestViewAccordingKatottg" />
+  </bpmn:collaboration>
+  <bpmn:process id="requestViewAccordingKatottg" name="Перегляд заявок згідно рольової моделі" isExecutable="false">
+    <bpmn:userTask id="addRequestDataForSearch" name="Внести дані для пошуку" camunda:modelerTemplate="formUserTaskTemplate" camunda:formKey="search-for-request" camunda:assignee="${initiator}">
+      <bpmn:extensionElements>
+        <camunda:inputOutput>
+          <camunda:inputParameter name="userTaskInputFormDataPrepopulate" />
+        </camunda:inputOutput>
+        <camunda:properties>
+          <camunda:property name="formVariables" value="" />
+        </camunda:properties>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_0cn700q</bpmn:incoming>
+      <bpmn:incoming>Flow_1t6fx71</bpmn:incoming>
+      <bpmn:outgoing>Flow_17qzh0p</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:serviceTask id="Activity_0ikl9fr" name="Формування помилки" camunda:modelerTemplate="userDataValidationErrorDelegate" camunda:delegateExpression="${userDataValidationErrorDelegate}">
+      <bpmn:extensionElements>
+        <camunda:inputOutput>
+          <camunda:inputParameter name="validationErrors">{"field": "name", "value": "${submission('addRequestDataForSearch').formData.prop('name').stringValue()}", "message": "Немає доступних заявок з такою назвою"}</camunda:inputParameter>
+        </camunda:inputOutput>
+      </bpmn:extensionElements>
+      <bpmn:incoming>isRequestAlreadyExistsFlow</bpmn:incoming>
+      <bpmn:outgoing>Flow_0cn700q</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:scriptTask id="Activity_1bm9kud" name="Порівняння кодів заявки та  посадової особи">
+      <bpmn:incoming>Flow_1fpadha</bpmn:incoming>
+      <bpmn:outgoing>Flow_0k9usas</bpmn:outgoing>
+    </bpmn:scriptTask>
+    <bpmn:exclusiveGateway id="Gateway_18xnjy1" name="Є повноваження на заявку?">
+      <bpmn:incoming>Flow_0k9usas</bpmn:incoming>
+      <bpmn:outgoing>Flow_13hmlpn</bpmn:outgoing>
+      <bpmn:outgoing>isRequestAlreadyExistsFlow</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:scriptTask id="Activity_0xd30su" name="Підготувати дані для відображення" scriptFormat="groovy">
+      <bpmn:incoming>Flow_13hmlpn</bpmn:incoming>
+      <bpmn:outgoing>Flow_127dra3</bpmn:outgoing>
+      <bpmn:script>def formData = [
+  'name': response.responseBody.prop('name'),
+'katottg': response.responseBody.prop('katottg')
+]
+
+set_transient_variable('formData', S(formData, 'application/json'))</bpmn:script>
+    </bpmn:scriptTask>
+    <bpmn:startEvent id="startEvent" name="Початок">
+      <bpmn:outgoing>Flow_1t6fx71</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:sequenceFlow id="Flow_1t6fx71" sourceRef="startEvent" targetRef="addRequestDataForSearch" />
+    <bpmn:sequenceFlow id="Flow_17qzh0p" sourceRef="addRequestDataForSearch" targetRef="searchForRequest" />
+    <bpmn:sequenceFlow id="Flow_1fpadha" sourceRef="searchForRequest" targetRef="Activity_1bm9kud" />
+    <bpmn:sequenceFlow id="Flow_0k9usas" sourceRef="Activity_1bm9kud" targetRef="Gateway_18xnjy1" />
+    <bpmn:sequenceFlow id="Flow_13hmlpn" name="Так" sourceRef="Gateway_18xnjy1" targetRef="Activity_0xd30su" />
+    <bpmn:sequenceFlow id="isRequestAlreadyExistsFlow" name="Ні" sourceRef="Gateway_18xnjy1" targetRef="Activity_0ikl9fr">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${!response.value.responseBody.elements().isEmpty()}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_0cn700q" sourceRef="Activity_0ikl9fr" targetRef="addRequestDataForSearch" />
+    <bpmn:sequenceFlow id="Flow_127dra3" sourceRef="Activity_0xd30su" targetRef="RequestDataEdit" />
+    <bpmn:sequenceFlow id="Flow_10ee1cp" sourceRef="RequestDataEdit" targetRef="RequestDataSignEdited" />
+    <bpmn:serviceTask id="searchForRequest" name="Пошук даних по заявці в Дата-фабриці" camunda:modelerTemplate="dataFactoryConnectorSearchDelegate" camunda:delegateExpression="${dataFactoryConnectorSearchDelegate}">
+      <bpmn:extensionElements>
+        <camunda:inputOutput>
+          <camunda:inputParameter name="resource">Request</camunda:inputParameter>
+          <camunda:inputParameter name="searchConditions">${submission('addRequestDataForSearch').formData.prop('name').value()}</camunda:inputParameter>
+          <camunda:inputParameter name="x_access_token">${completer('addRequestDataForSearch').accessToken}</camunda:inputParameter>
+          <camunda:outputParameter name="response">${ response }</camunda:outputParameter>
+        </camunda:inputOutput>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_17qzh0p</bpmn:incoming>
+      <bpmn:outgoing>Flow_1fpadha</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:userTask id="RequestDataSignEdited" name="Підписати змінені дані" camunda:modelerTemplate="officerSignTaskTemplate" camunda:formKey="request-data-sign-edited" camunda:assignee="${initiator}">
+      <bpmn:extensionElements>
+        <camunda:inputOutput>
+          <camunda:inputParameter name="userTaskInputFormDataPrepopulate">${sumbission('RequestDataView').formData}</camunda:inputParameter>
+        </camunda:inputOutput>
+        <camunda:properties>
+          <camunda:property name="formVariables" value="" />
+          <camunda:property name="eSign" value="true" />
+        </camunda:properties>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_10ee1cp</bpmn:incoming>
+      <bpmn:outgoing>Flow_0d3uswd</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:endEvent id="Event_0m1pc1l">
+      <bpmn:incoming>Flow_164n10d</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_1daf3t4" sourceRef="convertSignFormDataToDataFactoryFormatActivity" targetRef="Activity_1qbt4rp" />
+    <bpmn:sequenceFlow id="Flow_1btsvf2" sourceRef="Activity_1qbt4rp" targetRef="sendRequestToDataFactoryActivity" />
+    <bpmn:scriptTask id="convertSignFormDataToDataFactoryFormatActivity" name="Підготовка даних для запису (transient var)" scriptFormat="groovy">
+      <bpmn:incoming>Flow_0d3uswd</bpmn:incoming>
+      <bpmn:outgoing>Flow_1daf3t4</bpmn:outgoing>
+      <bpmn:script>def signedFormData = submission('signRequestDataFormActivity').formData
+        signedFormData.prop('name', signedFormData.prop('name').prop('code').value())
+
+        signedFormData.prop('katottg', signedFormData.prop('katottg').prop('katottg').value()) 
+        execution.removeVariable('dataPayload')
+        execution.setVariableLocalTransient('dataPayload', signedFormData)</bpmn:script>
+    </bpmn:scriptTask>
+    <bpmn:callActivity id="Activity_1qbt4rp" name="Підписати дані системним ключем" camunda:modelerTemplate="systemDigitalSignatureCallActivity" calledElement="system-signature-bp">
+      <bpmn:extensionElements>
+        <camunda:in sourceExpression="${dataPayload}" target="dataToSign" />
+        <camunda:out source="system_signature_ceph_key" target="system_signature_key" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_1daf3t4</bpmn:incoming>
+      <bpmn:outgoing>Flow_1btsvf2</bpmn:outgoing>
+    </bpmn:callActivity>
+    <bpmn:serviceTask id="sendRequestToDataFactoryActivity" name="Зберегти дані в Дата фабрику" camunda:modelerTemplate="dataFactoryConnectorCreateDelegate" camunda:delegateExpression="${dataFactoryConnectorCreateDelegate}">
+      <bpmn:extensionElements>
+        <camunda:inputOutput>
+          <camunda:inputParameter name="payload">${dataPayload}</camunda:inputParameter>
+          <camunda:inputParameter name="resource">request</camunda:inputParameter>
+          <camunda:inputParameter name="x_digital_signature_derived_ceph_key">${system_signature_key}</camunda:inputParameter>
+          <camunda:inputParameter name="x_access_token">${completer('RequestDataSignEdited').accessToken}</camunda:inputParameter>
+          <camunda:inputParameter name="x_digital_signature_ceph_key">${sign_submission('RequestDataSignEdited').signatureDocumentID}</camunda:inputParameter>
+          <camunda:outputParameter name="response">${ response }</camunda:outputParameter>
+        </camunda:inputOutput>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_1btsvf2</bpmn:incoming>
+      <bpmn:outgoing>Flow_164n10d</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:sequenceFlow id="Flow_0d3uswd" sourceRef="RequestDataSignEdited" targetRef="convertSignFormDataToDataFactoryFormatActivity" />
+    <bpmn:sequenceFlow id="Flow_164n10d" sourceRef="sendRequestToDataFactoryActivity" targetRef="Event_0m1pc1l" />
+    <bpmn:userTask id="RequestDataEdit" name="Змінити дані в заявці" camunda:modelerTemplate="formUserTaskTemplate" camunda:formKey="request-data-edit" camunda:assignee="${initiator}">
+      <bpmn:extensionElements>
+        <camunda:inputOutput>
+          <camunda:inputParameter name="userTaskInputFormDataPrepopulate">${response.value.responseBody}</camunda:inputParameter>
+        </camunda:inputOutput>
+        <camunda:properties>
+          <camunda:property name="formVariables" value="" />
+        </camunda:properties>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_127dra3</bpmn:incoming>
+      <bpmn:outgoing>Flow_10ee1cp</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:textAnnotation id="TextAnnotation_10iu96p">
+      <bpmn:text>name (заявка унікальна)</bpmn:text>
+    </bpmn:textAnnotation>
+    <bpmn:textAnnotation id="TextAnnotation_1l80f0e">
+      <bpmn:text>визначаємо коди ініціатора, у ініціатора може бути масив кодів, ми його відправляємо в дата-фабрику і отримуємо відповідь згідно правил на колонці КАТОТТГ</bpmn:text>
+    </bpmn:textAnnotation>
+    <bpmn:textAnnotation id="TextAnnotation_1u2nv1f">
+      <bpmn:text>з дата-фабрики повинна повертатись відповідь "заявка недоступна", або всі дані по заявці (якщо в масиві кодів користувача є код заявки)</bpmn:text>
+    </bpmn:textAnnotation>
+    <bpmn:association id="Association_1vn33ih" sourceRef="addRequestDataForSearch" targetRef="TextAnnotation_10iu96p" />
+    <bpmn:association id="Association_1qkkyta" sourceRef="Activity_1bm9kud" targetRef="TextAnnotation_1l80f0e" />
+    <bpmn:association id="Association_01k0i3j" sourceRef="Gateway_18xnjy1" targetRef="TextAnnotation_1u2nv1f" />
+    <bpmn:textAnnotation id="TextAnnotation_1ndxeqv">
+      <bpmn:text>Код заявки починається з коду чиновника</bpmn:text>
+    </bpmn:textAnnotation>
+    <bpmn:association id="Association_1y8yvvn" sourceRef="Gateway_18xnjy1" targetRef="TextAnnotation_1ndxeqv" />
+    <bpmn:textAnnotation id="TextAnnotation_1s6l1gk">
+      <bpmn:text>Partial Update</bpmn:text>
+    </bpmn:textAnnotation>
+    <bpmn:association id="Association_1v6tgf4" sourceRef="RequestDataEdit" targetRef="TextAnnotation_1s6l1gk" />
+  </bpmn:process>
+  <bpmn:message id="Message_1vgrzd9" />
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="Collaboration_0srieut">
+      <bpmndi:BPMNShape id="Participant_1kqmz2d_di" bpmnElement="Participant_1kqmz2d" isHorizontal="true" bioc:stroke="#000000" bioc:fill="#ffffff" color:background-color="#ffffff" color:border-color="#000000">
+        <dc:Bounds x="160" y="80" width="1940" height="530" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="TextAnnotation_10iu96p_di" bpmnElement="TextAnnotation_10iu96p">
+        <dc:Bounds x="270" y="200" width="120" height="41" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="TextAnnotation_1l80f0e_di" bpmnElement="TextAnnotation_1l80f0e">
+        <dc:Bounds x="655" y="470" width="269.99129983190875" height="67.36353077816493" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="TextAnnotation_1u2nv1f_di" bpmnElement="TextAnnotation_1u2nv1f">
+        <dc:Bounds x="1020" y="500" width="219.9912962874746" height="81.30081300813008" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="TextAnnotation_1ndxeqv_di" bpmnElement="TextAnnotation_1ndxeqv">
+        <dc:Bounds x="1025" y="190" width="169.99129274304045" height="39.48896631823461" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="TextAnnotation_1s6l1gk_di" bpmnElement="TextAnnotation_1s6l1gk">
+        <dc:Bounds x="1330" y="270" width="99.99999822778292" height="29.99419368517939" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Flow_1t6fx71_di" bpmnElement="Flow_1t6fx71">
+        <di:waypoint x="288" y="390" />
+        <di:waypoint x="380" y="390" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_17qzh0p_di" bpmnElement="Flow_17qzh0p">
+        <di:waypoint x="480" y="390" />
+        <di:waypoint x="550" y="390" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_1fpadha_di" bpmnElement="Flow_1fpadha">
+        <di:waypoint x="650" y="390" />
+        <di:waypoint x="740" y="390" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_0k9usas_di" bpmnElement="Flow_0k9usas">
+        <di:waypoint x="840" y="390" />
+        <di:waypoint x="945" y="390" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_13hmlpn_di" bpmnElement="Flow_13hmlpn">
+        <di:waypoint x="995" y="390" />
+        <di:waypoint x="1060" y="390" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1007" y="372" width="18" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_11gop5y_di" bpmnElement="isRequestAlreadyExistsFlow">
+        <di:waypoint x="970" y="365" />
+        <di:waypoint x="970" y="250" />
+        <di:waypoint x="640" y="250" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="954" y="310" width="11" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_0cn700q_di" bpmnElement="Flow_0cn700q">
+        <di:waypoint x="540" y="250" />
+        <di:waypoint x="430" y="250" />
+        <di:waypoint x="430" y="350" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_127dra3_di" bpmnElement="Flow_127dra3">
+        <di:waypoint x="1160" y="390" />
+        <di:waypoint x="1230" y="390" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_10ee1cp_di" bpmnElement="Flow_10ee1cp">
+        <di:waypoint x="1330" y="390" />
+        <di:waypoint x="1390" y="390" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_1daf3t4_di" bpmnElement="Flow_1daf3t4">
+        <di:waypoint x="1640" y="390" />
+        <di:waypoint x="1710" y="390" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_1btsvf2_di" bpmnElement="Flow_1btsvf2">
+        <di:waypoint x="1810" y="390" />
+        <di:waypoint x="1880" y="390" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_0d3uswd_di" bpmnElement="Flow_0d3uswd">
+        <di:waypoint x="1490" y="390" />
+        <di:waypoint x="1540" y="390" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_164n10d_di" bpmnElement="Flow_164n10d">
+        <di:waypoint x="1980" y="390" />
+        <di:waypoint x="2022" y="390" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="Activity_01taqfn_di" bpmnElement="addRequestDataForSearch">
+        <dc:Bounds x="380" y="350" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_171so72_di" bpmnElement="Activity_0ikl9fr" bioc:stroke="#000000" bioc:fill="#ffffff" color:background-color="#ffffff" color:border-color="#000000">
+        <dc:Bounds x="540" y="210" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_0y5ntx6_di" bpmnElement="Activity_1bm9kud" bioc:stroke="#000000" bioc:fill="#ffffff" color:background-color="#ffffff" color:border-color="#000000">
+        <dc:Bounds x="740" y="350" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_18xnjy1_di" bpmnElement="Gateway_18xnjy1" isMarkerVisible="true">
+        <dc:Bounds x="945" y="365" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="897" y="422" width="85" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_1vh5i9w_di" bpmnElement="Activity_0xd30su" bioc:stroke="#000000" bioc:fill="#ffffff" color:background-color="#ffffff" color:border-color="#000000">
+        <dc:Bounds x="1060" y="350" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_11dfud5_di" bpmnElement="startEvent">
+        <dc:Bounds x="252" y="372" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="249" y="415" width="43" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_08t18am_di" bpmnElement="searchForRequest">
+        <dc:Bounds x="550" y="350" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_06nl55a_di" bpmnElement="RequestDataSignEdited">
+        <dc:Bounds x="1390" y="350" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_0m1pc1l_di" bpmnElement="Event_0m1pc1l">
+        <dc:Bounds x="2022" y="372" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="convertSignFormDataToDataFactoryFormatActivity_di" bpmnElement="convertSignFormDataToDataFactoryFormatActivity" bioc:stroke="#000000" bioc:fill="#ffffff" color:background-color="#ffffff" color:border-color="#000000">
+        <dc:Bounds x="1540" y="350" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_1qbt4rp_di" bpmnElement="Activity_1qbt4rp" bioc:stroke="#000000" bioc:fill="#ffffff" color:background-color="#ffffff" color:border-color="#000000">
+        <dc:Bounds x="1710" y="350" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="sendRequestToDataFactoryActivity_di" bpmnElement="sendRequestToDataFactoryActivity">
+        <dc:Bounds x="1880" y="350" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_19hsct4_di" bpmnElement="RequestDataEdit" bioc:stroke="#000000" bioc:fill="#ffffff" color:background-color="#ffffff" color:border-color="#000000">
+        <dc:Bounds x="1230" y="350" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Association_1vn33ih_di" bpmnElement="Association_1vn33ih">
+        <di:waypoint x="405" y="350" />
+        <di:waypoint x="336" y="241" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Association_1qkkyta_di" bpmnElement="Association_1qkkyta">
+        <di:waypoint x="754" y="430" />
+        <di:waypoint x="718" y="470" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Association_01k0i3j_di" bpmnElement="Association_01k0i3j">
+        <di:waypoint x="981" y="404" />
+        <di:waypoint x="1058" y="500" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Association_1y8yvvn_di" bpmnElement="Association_1y8yvvn">
+        <di:waypoint x="979" y="374" />
+        <di:waypoint x="1061" y="229" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Association_1v6tgf4_di" bpmnElement="Association_1v6tgf4">
+        <di:waypoint x="1318" y="350" />
+        <di:waypoint x="1366" y="300" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>
