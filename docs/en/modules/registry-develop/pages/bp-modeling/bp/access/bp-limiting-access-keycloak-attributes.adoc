@@ -39,7 +39,7 @@ Each officer of a certain organization has such attributes in the Keycloak servi
 CAUTION: This is NOT the full name of a user, but a `username`. For example, `username1, username2` etc.
 //CAUTION: Мається на увазі НЕ повне ім'я користувача, а його `username`. Наприклад, `username1, username2` тощо.
 
-This list of names can be used later on in the *Candidate users* field when performing a custom task in a business process.
+This list of names can be used later on in the *Candidate users* field when performing a user task in a business process.
 //Цей список імен можна надалі застосовувати при виконанні користувацької задачі бізнес-процесу у полі *Candidate users*.
 
 *Candidate users* are the users authorized to perform the task. This parameter is required to control user access to specific tasks of a business process.
@@ -62,239 +62,348 @@ image:bp-modeling/bp/keycloak-attributes-access/bp-keycloak-attributes-access-1.
 We have a complex business process of transferring a student from one school to another. The student must first be excluded from the first school, and then enrolled at the second.
 //Маємо комплексний бізнес-процес переведення учня з однієї школи до іншої. Учня необхідно спочатку виключити із першої школи, а потім зарахувати до другої.
 
-З погляду архітектури безпеки, у сервісі Keycloak кожна організація (тут -- _заклад освіти_) має свій код ЄДРПОУ. Тому два бізнес-процеси у нашому прикладі є різними організаціями, кожна зі своїми працівниками й відповідним рівнем доступу в межах організації.
+From the point of the security architecture, each organization (herein _educational institution_) in the Keycloak service has its own EDRPOU code. Therefore, two business processes in our example are different organizations, each one having its own employees and corresponding level of access within the organization.
+//З погляду архітектури безпеки, у сервісі Keycloak кожна організація (тут -- _заклад освіти_) має свій код ЄДРПОУ. Тому два бізнес-процеси у нашому прикладі є різними організаціями, кожна зі своїми працівниками й відповідним рівнем доступу в межах організації.
 
-Ми маємо автоматично запустити бізнес-процес другої школи після закінчення першого процесу. Кінець бізнес-процесу у першій школі (_Школа 1_) запускає другий процес (_Школа 2_) xref:bp-modeling/bp/bpmn/events/message-event.adoc#message-end-event[подією "Повідомлення"].
+We have to launch automatically the business process of the second school after the first process finishes. The end of the business process in the first school (_School 1_) lanches the second process (_School 2_) xref:bp-modeling/bp/bpmn/events/message-event.adoc#message-end-event[by the "Notification" event].
+//Ми маємо автоматично запустити бізнес-процес другої школи після закінчення першого процесу. Кінець бізнес-процесу у першій школі (_Школа 1_) запускає другий процес (_Школа 2_) xref:bp-modeling/bp/bpmn/events/message-event.adoc#message-end-event[подією "Повідомлення"].
 
-У бізнес-процесі другої школи посадова особа має виконати задачу (User Task) із переведення учня, тобто необхідно призначити виконавця задачі у новій організації (школі). Для цього потрібно спочатку отримати список потенційних користувачів відповідної організації (виконавців) із сервісу Keycloak, а потім використати цей список, щоб надати доступ до виконання задачі користувачам у другому бізнес-процесі.
+In the business process of the second school, the officer must perform the task (User Task) of transferring the student, that is, it is necessary to appoint a performer of the task in the new organization (school). To do this, you need first to get a list of potential users in the relevant organization (performers) from the Keycloak service, and then use this list to grant task access to users in the second business process.
+//У бізнес-процесі другої школи посадова особа має виконати задачу (User Task) із переведення учня, тобто необхідно призначити виконавця задачі у новій організації (школі). Для цього потрібно спочатку отримати список потенційних користувачів відповідної організації (виконавців) із сервісу Keycloak, а потім використати цей список, щоб надати доступ до виконання задачі користувачам у другому бізнес-процесі.
 
-Тобто кожна посадова особа відповідної організації зможе бачити задачу у Кабінеті отримувача послуг і призначити себе виконавцем.
+That means that each officer in the relevant organization can see the task in the citizen portal and appoint himself/herself as the performer.
+//Тобто кожна посадова особа відповідної організації зможе бачити задачу у Кабінеті отримувача послуг і призначити себе виконавцем.
 
 [#create-pool-bp-1]
-=== Створення пулу для бізнес-процесу першої школи
+=== Creating a pool for the first school business process
+//=== Створення пулу для бізнес-процесу першої школи
 
-Найперше, _змоделюйте пул для бізнес-процесу першої школи_. Для цього виконайте кроки, подані нижче:
+First of all, _model the pool for the business process of the first school_. To do this, follow the steps below:
+//Найперше, _змоделюйте пул для бізнес-процесу першої школи_. Для цього виконайте кроки, подані нижче:
 
-NOTE: Моделювання діаграми бізнес-процесу має відбуватися в рамках елемента *Create Pool/Participant*.
+NOTE: Modeling of the business process diagram has to be made within the *Create Pool/Participant* element.
+//NOTE: Моделювання діаграми бізнес-процесу має відбуватися в рамках елемента *Create Pool/Participant*.
 
-. Відкрийте додаток *Camunda Modeler* та створіть нову діаграму BPMN. Для цього у лівому верхньому куті натисніть меню *File* -> *New File* -> *BPMN Diagram*.
+. Open the *Camunda Modeler* application and create a new BPMN diagram. To do this, click *File* -> *New File* -> *BPMN Diagram* in the upper left-hand side corner.
+//. Відкрийте додаток *Camunda Modeler* та створіть нову діаграму BPMN. Для цього у лівому верхньому куті натисніть меню *File* -> *New File* -> *BPMN Diagram*.
 +
 image:registry-develop:bp-modeling/bp/modeling-instruction/bp-1.png[]
 
-. На панелі інструментів зліва знайдіть елемент *Create pool/Participant* та перетягніть його до панелі моделювання.
+. In the toolbar on the left-hand side, find the *Create pool/Participant* item and drag it to the modeling panel.
+//. На панелі інструментів зліва знайдіть елемент *Create pool/Participant* та перетягніть його до панелі моделювання.
 +
 image:registry-develop:bp-modeling/bp/modeling-instruction/bp-2.png[]
 
-. Заповніть наступні поля відповідними значеннями:
+. Enter the corresponding values into the following fields:
+//. Заповніть наступні поля відповідними значеннями:
 
-* У полі `Participant Name` введіть назву пулу, що відображатиметься у моделері -- `Школа 1`.
-* У полі `Process id` введіть ідентифікатор бізнес-процесу -- `firstversa`.
-* У полі `Process Name` вкажіть бізнес-назву процесу за необхідності.
+* In the `Participant Name` field, enter the name of the pool to be displayed in the modeler -- `School 1`.
+//* У полі `Participant Name` введіть назву пулу, що відображатиметься у моделері -- `Школа 1`.
+* In the `Process id` field, enter the business process ID -- `firstversa`.
+//* У полі `Process id` введіть ідентифікатор бізнес-процесу -- `firstversa`.
+* In the `Process Name` field, enter the process business name, optional.
+//* У полі `Process Name` вкажіть бізнес-назву процесу за необхідності.
 
 +
 image:bp-modeling/bp/keycloak-attributes-access/bp-keycloak-attributes-access-1-1.png[]
 
 [#bp-1-start-event]
-==== Моделювання початкової події
+==== Modelling of the start event
+//==== Моделювання початкової події
 
-_Створіть початкову подію_. Для цього виконайте наступні кроки:
+_Create a start event_. To do this, follow the following steps:
+//_Створіть початкову подію_. Для цього виконайте наступні кроки:
 
-. На панелі інструментів, зліва, знайдіть елемент (коло) *CreateStartEvent* та перетягніть його до панелі моделювання.
-. На панелі налаштувань справа заповніть наступні параметри відповідними значеннями:
-* У полі `Name` введіть назву початкової події -- `Початок`;
-* У полі `Initiator` введіть `initiator`.
+. On the toolbar on the left-hand side, find the *CreateStartEvent* element (circle) and drag it to the modeling panel.
+//. На панелі інструментів, зліва, знайдіть елемент (коло) *CreateStartEvent* та перетягніть його до панелі моделювання.
+. In the settings panel on the right-hand side, enter the corresponding values for the following parameters:
+//. На панелі налаштувань справа заповніть наступні параметри відповідними значеннями:
+* In the `Name`  field, enter the name of the start event -- `Start`;
+//* У полі `Name` введіть назву початкової події -- `Початок`;
+* In the `Initiator` field, enter `initiator`.
+//* У полі `Initiator` введіть `initiator`.
 
 +
-TIP: `initiator` -- спеціальна змінна, що встановлюється для користувача, який розпочав процес.
+TIP: `initiator` is a special variable set for the user who initiated the process.
+//TIP: `initiator` -- спеціальна змінна, що встановлюється для користувача, який розпочав процес.
 
 +
 image:bp-modeling/bp/keycloak-attributes-access/bp-keycloak-attributes-access-2.png[]
 
-==== Моделювання користувацької задачі внесення даних
+==== Modeling of the user task for data entering
+//==== Моделювання користувацької задачі внесення даних
 
-Далі _створіть користувацьку задачу, призначену для введення даних користувачем_. Для цього виконайте наступні кроки:
+Next, _create a user task for entering data by a user_. To do this, follow these steps:
+//Далі _створіть користувацьку задачу, призначену для введення даних користувачем_. Для цього виконайте наступні кроки:
 
-. Створіть нову задачу, вкажіть її тип, натиснувши іконку ключа та обравши з меню пункт *User Task* (Користувацька задача).
+. Create a new task, enter its type by clicking the wrench icon and selecting *User Task* from the menu.
+//. Створіть нову задачу, вкажіть її тип, натиснувши іконку ключа та обравши з меню пункт *User Task* (Користувацька задача).
 
-. На панелі налаштувань справа натисніть `Open Catalog`, оберіть шаблон *User Form* (Користувацька форма) та натисніть `Apply` для підтвердження.
+. In the settings panel on the right-hand side, click `Open Catalog`, select the *User Form* template and click `Apply` to confirm.
+//. На панелі налаштувань справа натисніть `Open Catalog`, оберіть шаблон *User Form* (Користувацька форма) та натисніть `Apply` для підтвердження.
 
-. На панелі налаштувань сконфігуруйте наступні параметри:
+. In the settings panel, configure the following parameters:
+//. На панелі налаштувань сконфігуруйте наступні параметри:
 
-* У полі `Id` вкажіть ідентифікатор задачі -- `Zayava`.
+* In the `Id` field, enter the task identifier -- `Zayava`.
+//* У полі `Id` вкажіть ідентифікатор задачі -- `Zayava`.
 +
-TIP: ID задачі призначається автоматично, за замовчуванням. Введіть значення вручну, якщо це необхідно.
+TIP: Task ID is assigned automatically by default. Enter the value manually, if necessary.
+//TIP: ID задачі призначається автоматично, за замовчуванням. Введіть значення вручну, якщо це необхідно.
 
-* У полі `Name` вкажіть назву задачі -- `Внести дані про заяву`.
-* У полі `Form key` введіть ключ форми, що відповідатиме службовій назві форми для внесення даних -- `add-keyapp`.
-* У полі `Assignee` вкажіть змінну, що використовується для зберігання користувача, який запустив екземпляр процесу, -- `${initiator}`.
+* In the `Name` field, enter the name of the task -- `Enter application data`.
+//* У полі `Name` вкажіть назву задачі -- `Внести дані про заяву`.
+* In the `Form key` field, enter the form key that corresponds to the service name of the data entry form -- `add-keyapp`.
+//* У полі `Form key` введіть ключ форми, що відповідатиме службовій назві форми для внесення даних -- `add-keyapp`.
+* In the `Assignee` field, enter the variable used to store the user who launched the process instance -- `${initiator}`.
+//* У полі `Assignee` вкажіть змінну, що використовується для зберігання користувача, який запустив екземпляр процесу, -- `${initiator}`.
 
 +
-TIP: З погляду UI, після запуску бізнес-процесу, перед посадовою особою з'явиться форма для внесення даних про заяву. Дані будуть передані бізнес-процесу за параметром `Form key` і використані у наступній задачі процесу.
+TIP: On the UI, after launching the business process, the officer can see a form for entering application data. The data are passed to the business process via the `Form key` parameter and will be used in the next task of the process.
+//TIP: З погляду UI, після запуску бізнес-процесу, перед посадовою особою з'явиться форма для внесення даних про заяву. Дані будуть передані бізнес-процесу за параметром `Form key` і використані у наступній задачі процесу.
 
 +
 image:bp-modeling/bp/keycloak-attributes-access/bp-keycloak-attributes-access-3.png[]
 
-==== Моделювання користувацької задачі підпису даних КЕП
+==== Modeling of the user task to sign the data using QES
+//==== Моделювання користувацької задачі підпису даних КЕП
 
-Змоделюйте _користувацьку задачу (*User form*) для підпису даних про заяву за допомогою КЕП_ та пов'яжіть її з формою бізнес-процесу параметром `Form key`.
+Model a _user task (*User form*) for signing the application data using QES_ and link it to the business process form using the `Form key` parameter.
+//Змоделюйте _користувацьку задачу (*User form*) для підпису даних про заяву за допомогою КЕП_ та пов'яжіть її з формою бізнес-процесу параметром `Form key`.
 
-. У полі `Id` вкажіть ідентифікатор задачі -- `Sign`. Він є ключем визначення задачі (task definition key).
-. У полі `Name` введіть назву задачі. Наприклад, `Підписати дані про заяву`.
-. У полі `Form key` введіть ключ форми бізнес-процесу -- `add-zayavasign`.
-. У полі `Assignee` вкажіть змінну, що використовується для зберігання користувача, який запустив екземпляр процесу, -- `${initiator}`.
+. In the `Id` field, enter the task identifier -- `Sign`. It is a task definition key.
+//. У полі `Id` вкажіть ідентифікатор задачі -- `Sign`. Він є ключем визначення задачі (task definition key).
+. In the `Name` field, enter the task name. For example, `Sign the application data`.
+//. У полі `Name` введіть назву задачі. Наприклад, `Підписати дані про заяву`.
+. In the `Form key` field, enter the business process form key -- `add-zayavasign`.
+//. У полі `Form key` введіть ключ форми бізнес-процесу -- `add-zayavasign`.
+. In the `Assignee` field, enter the variable used to store the user who launched the process instance -- `${initiator}`.
+//. У полі `Assignee` вкажіть змінну, що використовується для зберігання користувача, який запустив екземпляр процесу, -- `${initiator}`.
 
 +
-TIP: З погляду UI, після внесення даних користувачем, з'явиться нова форма для підпису даних за допомогою КЕП. Дані будуть передані бізнес-процесу за параметром `Form key` і використані у наступній задачі процесу.
+TIP: On the UI, after data entering by the user, a new form appears for data signing using QES. The data are passed to the business process via the `Form key` parameter and will be used in the next task of the process.
+//TIP: З погляду UI, після внесення даних користувачем, з'явиться нова форма для підпису даних за допомогою КЕП. Дані будуть передані бізнес-процесу за параметром `Form key` і використані у наступній задачі процесу.
 
 +
 image:bp-modeling/bp/keycloak-attributes-access/bp-keycloak-attributes-access-4.png[]
 
-==== Моделювання користувацької задачі для пошуку посадової особи
+==== Modeling of a user task for searching an officer
+//==== Моделювання користувацької задачі для пошуку посадової особи
 
-Змоделюйте _користувацьку задачу (*User form*) для пошуку посадових осіб або конкретної посадової особи за атрибутами_ та пов'яжіть її з формою бізнес-процесу параметром `Form key`.
+Model a _user task (*User form*) to search for officers or for a specific officer by attributes_ and associate it with the business process form using the `Form key` parameter.
+//Змоделюйте _користувацьку задачу (*User form*) для пошуку посадових осіб або конкретної посадової особи за атрибутами_ та пов'яжіть її з формою бізнес-процесу параметром `Form key`.
 
-. У полі `Id` вкажіть ідентифікатор задачі -- `Search`. Він є ключем визначення задачі (task definition key).
-. У полі `Name` введіть назву задачі. Наприклад, `Виконати пошук посадової особи`.
-. У полі `Form key` введіть ключ форми бізнес-процесу -- `add-zayavasearch`.
-. У полі `Assignee` вкажіть змінну, що використовується для зберігання користувача, який запустив екземпляр процесу, -- `${initiator}`.
+. In the `Id` field, enter the task identifier -- `Search`. It is a task definition key.
+//. У полі `Id` вкажіть ідентифікатор задачі -- `Search`. Він є ключем визначення задачі (task definition key).
+. In the `Name` field, enter the name of the task. For example, `Search for an officer`.
+//. У полі `Name` введіть назву задачі. Наприклад, `Виконати пошук посадової особи`.
+. In the `Form key` field, enter the business process form key -- `add-zayavasearch`.
+//. У полі `Form key` введіть ключ форми бізнес-процесу -- `add-zayavasearch`.
+. In the `Assignee` field, enter the variable used to store the user who launched the process instance -- `${initiator}`.
+//. У полі `Assignee` вкажіть змінну, що використовується для зберігання користувача, який запустив екземпляр процесу, -- `${initiator}`.
 
 +
-TIP: З погляду UI, після підпису даних користувачем, з'явиться нова форма для пошуку посадових осіб/посадової особи за атрибутами. Тобто користувач має ввести значення атрибутів `edrpou` та `drfo` у відповідних полях форми. Дані будуть передані бізнес-процесу за параметром `Form key` і використані у наступній задачі процесу.
+TIP: On the UI, after the user signs the data, a new form appears for searching officers / an officer by attributes. That means, the user must enter the values of the `edrpou` and `drfo` attributes into the corresponding fields of the form. The data are passed to the business process via the `Form key' parameter and will be used in the next task of the process.
+//TIP: З погляду UI, після підпису даних користувачем, з'явиться нова форма для пошуку посадових осіб/посадової особи за атрибутами. Тобто користувач має ввести значення атрибутів `edrpou` та `drfo` у відповідних полях форми. Дані будуть передані бізнес-процесу за параметром `Form key` і використані у наступній задачі процесу.
 
 +
 image:bp-modeling/bp/keycloak-attributes-access/bp-keycloak-attributes-access-5.png[]
 
-==== Моделювання сервісної задачі для отримання списку користувачів за їх атрибутами
+==== Modeling a service task for getting a list of users by their attributes
+//==== Моделювання сервісної задачі для отримання списку користувачів за їх атрибутами
 
-Надалі дані використовуються у сервісній задачі "Отримати список користувачів за атрибутами".
+Later on, the data is used in the service task "Get a list of users by attributes".
+//Надалі дані використовуються у сервісній задачі "Отримати список користувачів за атрибутами".
 
-У задачі необхідно застосувати делегат для отримання списку користувачів за їх атрибутами (*Get users by attributes from keycloak*).
+In the task, you need to use a delegate to get a list of users by their attributes (*Get users by attributes from keycloak*).
+//У задачі необхідно застосувати делегат для отримання списку користувачів за їх атрибутами (*Get users by attributes from keycloak*).
 
-В результаті отримуємо список користувачів за їх атрибутами.
+As a result, you get a list of users by their attributes.
+//В результаті отримуємо список користувачів за їх атрибутами.
 
-. Змоделюйте нову задачу.
-. Визначте її тип, натиснувши іконку ключа та обравши з меню пункт *Service Task* (сервісна задача).
-. Перейдіть до панелі налаштувань справа та застосуйте делегат *Get users by attributes from keycloak*. Для цього оберіть відповідний шаблон із каталогу (`Open Catalog`).
+. Model a new task.
+//. Змоделюйте нову задачу.
+. Define its type by clicking the wrench icon and selecting *Service Task* from the menu.
+//. Визначте її тип, натиснувши іконку ключа та обравши з меню пункт *Service Task* (сервісна задача).
+. Go to the settings panel on the right-hand side and apply the *Get users by attributes from keycloak* delegate. To do this, select the corresponding template from the catalog (`Open Catalog').
+//. Перейдіть до панелі налаштувань справа та застосуйте делегат *Get users by attributes from keycloak*. Для цього оберіть відповідний шаблон із каталогу (`Open Catalog`).
 
-. Виконайте подальші налаштування:
+. Make further settings:
+//. Виконайте подальші налаштування:
 
-* У полі `Name` вкажіть назву задачі. Наприклад, `Отримати список користувачів за атрибутами`.
-* У полі `Edrpou attribute value` вкажіть значення атрибута `edrpou` -- `${submission('Search').formData.prop('edrpou').value()}`.
+* Enter the task name in the `Name` field. For example, `Get a list of users by attributes`.
+//* У полі `Name` вкажіть назву задачі. Наприклад, `Отримати список користувачів за атрибутами`.
+* In the `Edrpou attribute value` field, enter the value of the `edrpou` attribute -- `${submission('Search').formData.prop('edrpou').value()}`.
+//* У полі `Edrpou attribute value` вкажіть значення атрибута `edrpou` -- `${submission('Search').formData.prop('edrpou').value()}`.
 +
 [NOTE]
 ====
-Значення атрибута `edrpou` є обов'язковим для заповнення. Його можна передати як напряму (тобто ввести код ЄДРПОУ, наприклад, `11111111`), так і через функцію `submission()`, вказавши ID останньої користувацької задачі (тут -- `'Search'`).
+The value of the `edrpou` attribute is required. It can be submitted both directly (by entering the EDRPOU code, for example, `11111111`), and using the `submission()` function, specifying the ID of the last user task (herein `Search`).
+//Значення атрибута `edrpou` є обов'язковим для заповнення. Його можна передати як напряму (тобто ввести код ЄДРПОУ, наприклад, `11111111`), так і через функцію `submission()`, вказавши ID останньої користувацької задачі (тут -- `'Search'`).
 ====
 
-* У полі `Drfo attribute value` вкажіть значення атрибута `drfo` -- `${submission('Search').formData.prop('drfo').value()}`.
+* In the `Drfo attribute value` field, enter the value of the `drfo` attribute -- `${submission('Search').formData.prop('drfo').value()}`.
+//* У полі `Drfo attribute value` вкажіть значення атрибута `drfo` -- `${submission('Search').formData.prop('drfo').value()}`.
 +
 [NOTE]
 ====
-Значення атрибута `drfo` є опціональним. Його можна передати як напряму (тобто ввести код ДРФО, наприклад, `2222222222`), так і через функцію `submission()`, вказавши ID останньої користувацької задачі (тут -- `'Search'`).
+The value of the `drfo` attribute is optional. You can pass it both directly (by entering the DRFO code, for example, `2222222222`), and using the `submission()` function, by entering the ID of the last user task (herein `Search`).
+//Значення атрибута `drfo` є опціональним. Його можна передати як напряму (тобто ввести код ДРФО, наприклад, `2222222222`), так і через функцію `submission()`, вказавши ID останньої користувацької задачі (тут -- `'Search'`).
 ====
 
-* У полі `Result variable` вкажіть назву змінної, до якої необхідно зберегти відповідь -- `usersByAttributes`.
+* In the `Result variable` field, enter the name of the variable where you want to save the response -- `usersByAttributes`.
+//* У полі `Result variable` вкажіть назву змінної, до якої необхідно зберегти відповідь -- `usersByAttributes`.
 +
 [CAUTION]
 ====
-В результаті запита отримуємо список користувачів із Keycloak за їх атрибутами, який зберігатиметься у змінній `usersByAttributes`.
+As a result of the inquiry, you receive a list of users from Keycloak by their attributes. This list is stored in the `usersByAttributes` variable.
+//В результаті запита отримуємо список користувачів із Keycloak за їх атрибутами, який зберігатиметься у змінній `usersByAttributes`.
 
-* Якщо користувач передає лише значення параметра `edrpou`, то сервіс повертає список _усіх посадових осіб_ відповідної організації.
-* Якщо користувач передає значення параметрів `edrpou` та `drfo`, то сервіс повертає список з іменем _конкретної посадової особи_ відповідної організації.
+* If the user passes only the value of the `edrpou` parameter, the service returns a list of _all officers_ in the corresponding organization.
+//* Якщо користувач передає лише значення параметра `edrpou`, то сервіс повертає список _усіх посадових осіб_ відповідної організації.
+* If the user passes the values of the `edrpou` and `drfo` parameters, the service returns a list with a name of a _particular officier_ in the corresponding organization.
+//* Якщо користувач передає значення параметрів `edrpou` та `drfo`, то сервіс повертає список з іменем _конкретної посадової особи_ відповідної організації.
 ====
 +
 image:bp-modeling/bp/keycloak-attributes-access/bp-keycloak-attributes-access-6.png[]
 
-==== Моделювання кінцевої події "Повідомлення"
+==== Modeling the "Message" end event
+//==== Моделювання кінцевої події "Повідомлення"
 
-На цьому етапі необхідно передати отриманий список користувачів до іншого бізнес-процесу. Для цього використовується кінцева подія "Повідомлення". Тобто завершення одного процесу запускає інший процес через повідомлення, передаючи певні дані.
+At this stage, it is necessary to pass the received list of users to another business process. For this, the "Message" end event is used. That means that the termination of one process initiates another process by passing certain data in a message.
+//На цьому етапі необхідно передати отриманий список користувачів до іншого бізнес-процесу. Для цього використовується кінцева подія "Повідомлення". Тобто завершення одного процесу запускає інший процес через повідомлення, передаючи певні дані.
 
-Нам необхідно створити локальну змінну і передати в ній список користувачів, а також КЕП до іншого процесу.
+We need to create a local variable, and pass the list of users and QES to another process in it.
+//Нам необхідно створити локальну змінну і передати в ній список користувачів, а також КЕП до іншого процесу.
 
-. Змоделюйте кінцеву подію повідомлення.
+. Model the end message event.
+//. Змоделюйте кінцеву подію повідомлення.
 +
-TIP: Детальніше про події "Повідомлення" -- за xref:bp-modeling/bp/bpmn/events/message-event.adoc[посиланням].
-. Перейдіть до панелі налаштувань справа та сконфігуруйте параметри:
+TIP: To find out more about the "Message" event, read xref:bp-modeling/bp/bpmn/events/message-event.adoc[this information].
+//TIP: Детальніше про події "Повідомлення" -- за xref:bp-modeling/bp/bpmn/events/message-event.adoc[посиланням].
+. Go to the settings panel on the right-hand side and configure the options:
+//. Перейдіть до панелі налаштувань справа та сконфігуруйте параметри:
 
-* На вкладці `General` налаштуйте наступне:
+* In the `General` tab, configure the following settings:
+//* На вкладці `General` налаштуйте наступне:
 
-** У полі `Implementation` оберіть тип `Delegate Expression`.
-** У полі `Delegate Expression` введіть делегат для передачі повідомлення -- `${startProcessByMessageDelegate}`.
-** У полі `Global Message Name` введіть глобальне ім'я для встановлення зв'язку між подіями повідомлення -- `Startprocessmessage`.
-** У полі `Global Message referenced` оберіть `Startprocessmessage`. Значення заповнюється автоматично, відповідно до параметра `Global Message Name`.
+** In the `Implementation` field, select the `Delegate Expression` type.
+//** У полі `Implementation` оберіть тип `Delegate Expression`.
+** In the `Delegate Expression` field, enter the delegate to pass the message -- `${startProcessByMessageDelegate}`.
+//** У полі `Delegate Expression` введіть делегат для передачі повідомлення -- `${startProcessByMessageDelegate}`.
+** In the `Global Message Name` field, enter the global name for establishing communication between message events -- `Startprocessmessage`.
+//** У полі `Global Message Name` введіть глобальне ім'я для встановлення зв'язку між подіями повідомлення -- `Startprocessmessage`.
+** In the `Global Message referenced` field, select `Startprocessmessage`. The value is filled in automatically, according to the `Global Message Name` parameter.
+//** У полі `Global Message referenced` оберіть `Startprocessmessage`. Значення заповнюється автоматично, відповідно до параметра `Global Message Name`.
 +
-NOTE: Значення параметрів `Global Message Name` та `Global Message referenced` мають збігатися з відповідними значеннями події, що приймає повідомлення.
+NOTE: The values of the `Global Message Name` and `Global Message referenced` parameters must match the corresponding values of the message receiving event.
+//NOTE: Значення параметрів `Global Message Name` та `Global Message referenced` мають збігатися з відповідними значеннями події, що приймає повідомлення.
 +
 image:bp-modeling/bp/keycloak-attributes-access/bp-keycloak-attributes-access-7.png[]
 
-* На вкладці `Input/Output` налаштуйте локальну змінну як вхідний параметр:
+* In the `Input/Output` tab, configure a local variable as an input parameter:
+//* На вкладці `Input/Output` налаштуйте локальну змінну як вхідний параметр:
 
-** У полі `Local Variable Name` введіть назву локальної змінної -- `messagePayload`.
-** У полі `Variable Assignment Type` вкажіть тип передачі параметрів через змінну -- `Map` (ключ-значення).
-** Додайте записи для двох параметрів, натиснувши позначку плюса (`+`):
-*** Для першого запису, у полі `Key` вкажіть параметр `users` та його значення `${usersByAttributes}`.
+** In the `Local Variable Name` field, enter the name of the local variable -- `messagePayload`.
+//** У полі `Local Variable Name` введіть назву локальної змінної -- `messagePayload`.
+** In the `Variable Assignment Type' field, enter the type of parameter passing using a variable -- `Map' (key-value).
+//** У полі `Variable Assignment Type` вкажіть тип передачі параметрів через змінну -- `Map` (ключ-значення).
+** Add entries for two parameters by clicking the plus sign (`+`):
+//** Додайте записи для двох параметрів, натиснувши позначку плюса.
+*** For the first entry, enter  the `users` parameter and its value `${usersByAttributes}` in the `Key` field.
+//*** Для першого запису, у полі `Key` вкажіть параметр `users` та його значення `${usersByAttributes}`.
 +
-TIP: Користувач має передати назву змінної, до якої збережено масив користувачів, отриманий в рамках попередньої сервісної задачі.
-*** Для другого запису, у полі `Key` введіть параметр `task` та його значення `${submission('Sign').formData}`.
+TIP: The user must pass a name of the variable where the array of users, obtained in the previous service task, is stored.
+//TIP: Користувач має передати назву змінної, до якої збережено масив користувачів, отриманий в рамках попередньої сервісної задачі.
+*** For the second entry, enter the `task` parameter and its `${submission('Sign').formData}` value in the `Key` field.
+//*** Для другого запису, у полі `Key` введіть параметр `task` та його значення `${submission('Sign').formData}`.
 +
-TIP: Користувач має передати через функцію `submission()` КЕП, застосований в останній користувацькій задачі для підпису даних (тут -- `'Sign'`).
+TIP: The user must pass QES used in the last user task for data signing (herein, `Sign`) using the `submission()` function.
+//TIP: Користувач має передати через функцію `submission()` КЕП, застосований в останній користувацькій задачі для підпису даних (тут -- `'Sign'`).
 +
 image:bp-modeling/bp/keycloak-attributes-access/bp-keycloak-attributes-access-7-1.png[]
 
 [#create-pool-bp-2]
-=== Створення пулу для бізнес-процесу другої школи
+=== Creating a pool for the second school business process
+//=== Створення пулу для бізнес-процесу другої школи
 
-_Змоделюйте пул для бізнес-процесу другої школи_. Для цього виконайте кроки, подані нижче:
+Model the pool for the business process of the second school_. To do this, follow the steps below:
+//_Змоделюйте пул для бізнес-процесу другої школи_. Для цього виконайте кроки, подані нижче:
 
-NOTE: Моделювання діаграми бізнес-процесу має відбуватися в рамках елемента *Create Pool/Participant*.
+NOTE: Modeling of the business process diagram has to be made within the *Create Pool/Participant* element.
+//NOTE: Моделювання діаграми бізнес-процесу має відбуватися в рамках елемента *Create Pool/Participant*.
 
-. Відкрийте додаток *Camunda Modeler* та створіть нову діаграму BPMN. Для цього у лівому верхньому куті натисніть меню *File* -> *New File* -> *BPMN Diagram*.
+. Open the *Camunda Modeler* application and create a new BPMN diagram. To do this, click *File* -> *New File* -> *BPMN Diagram* in the upper left-hand side corner.
+//. Відкрийте додаток *Camunda Modeler* та створіть нову діаграму BPMN. Для цього у лівому верхньому куті натисніть меню *File* -> *New File* -> *BPMN Diagram*.
 +
 image:registry-develop:bp-modeling/bp/modeling-instruction/bp-1.png[]
 
-. На панелі інструментів зліва знайдіть елемент *Create pool/Participant* та перетягніть його до панелі моделювання.
+. In the toolbar on the left-hand side, find the *Create pool/Participant* item and drag it to the modeling panel.
+//. На панелі інструментів зліва знайдіть елемент *Create pool/Participant* та перетягніть його до панелі моделювання.
 +
 image:registry-develop:bp-modeling/bp/modeling-instruction/bp-2.png[]
 
-. Заповніть наступні поля відповідними значеннями:
+. Enter the corresponding values into the following fields:
+//. Заповніть наступні поля відповідними значеннями:
 
-* У полі `Participant Name` введіть назву пулу, що відображатиметься у моделері -- `Школа 2`.
-* У полі `Process id` введіть ідентифікатор бізнес-процесу -- `secondversa`.
-* У полі `Process Name` вкажіть бізнес-назву процесу за необхідності.
+* In the `Participant Name` field, enter the name of the pool to be displayed in the modeler -- `School 2`.
+//* У полі `Participant Name` введіть назву пулу, що відображатиметься у моделері -- `Школа 2`.
+* In the `Process id` field, enter the business process ID -- `secondversa`.
+//* У полі `Process id` введіть ідентифікатор бізнес-процесу -- `secondversa`.
+* In the `Process Name` field, enter the process business name, optional.
+//* У полі `Process Name` вкажіть бізнес-назву процесу за необхідності.
 
 image:bp-modeling/bp/keycloak-attributes-access/bp-keycloak-attributes-access-7-2.png[]
 
-==== Моделювання стартової події повідомлення
+==== Modelling of the message start event
+//==== Моделювання стартової події повідомлення
 
-На цьому етапі необхідно отримати список користувачів від бізнес-процесу першої школи. Для цього використовується початкова подія "Повідомлення".
+At this stage, it is necessary to get a list of users from the business process of the first school. This is done using the initial "Message" event.
+//На цьому етапі необхідно отримати список користувачів від бізнес-процесу першої школи. Для цього використовується початкова подія "Повідомлення".
 
-. Змоделюйте початкову подію повідомлення.
+. Model the start message event.
+//. Змоделюйте початкову подію повідомлення.
 +
-TIP: Детальніше про події "Повідомлення" -- за xref:bp-modeling/bp/bpmn/events/message-event.adoc[посиланням].
-. Перейдіть до панелі налаштувань справа та сконфігуруйте параметри:
+TIP: To find out more about the "Message" event, read xref:bp-modeling/bp/bpmn/events/message-event.adoc[this information].
+//TIP: Детальніше про події "Повідомлення" -- за xref:bp-modeling/bp/bpmn/events/message-event.adoc[посиланням].
+. Go to the settings panel on the right-hand side and configure the parameters:
+//. Перейдіть до панелі налаштувань справа та сконфігуруйте параметри:
 
-* У полі `Id` введіть ідентифікатор події -- `Two`.
-* У полі `Global Message Name` введіть глобальне ім'я для встановлення зв'язку між подіями повідомлення -- `Startprocessmessage`.
-* У полі `Global Message referenced` оберіть `Startprocessmessage`. Значення заповнюється автоматично, відповідно до параметра `Global Message Name`.
+* In the `Id` field, enter the event identifier -- `Two`.
+//* У полі `Id` введіть ідентифікатор події -- `Two`.
+* In the `Global Message Name` field, enter the global name for establishing communication between message events -- `Startprocessmessage`.
+//* У полі `Global Message Name` введіть глобальне ім'я для встановлення зв'язку між подіями повідомлення -- `Startprocessmessage`.
+* In the `Global Message referenced` field, select `Startprocessmessage`. The value is filled in automatically, according to the `Global Message Name` parameter.
+//* У полі `Global Message referenced` оберіть `Startprocessmessage`. Значення заповнюється автоматично, відповідно до параметра `Global Message Name`.
 +
-NOTE: Значення параметрів `Global Message Name` та `Global Message referenced` мають збігатися з відповідними значеннями події, що надсилає повідомлення.
+NOTE: The values of the `Global Message Name` and `Global Message referenced` parameters must match the corresponding values of the message sending event.
+//NOTE: Значення параметрів `Global Message Name` та `Global Message referenced` мають збігатися з відповідними значеннями події, що надсилає повідомлення.
 +
 image:bp-modeling/bp/keycloak-attributes-access/bp-keycloak-attributes-access-8.png[]
 
-==== Моделювання задачі скриптування для завантаження списку посадових осіб
+==== Modeling the scripting task for downloading a list of officers
+//==== Моделювання задачі скриптування для завантаження списку посадових осіб
 
-На цьому етапі необхідно на основі даних від бізнес-процесу першої школи створити скрипт, який конвертує список користувачів, отриманих із сервісу Keycloak, у рядок значень, розділених комою. Ці значення надалі можна буде використати для надання доступу до задачі із переведення учня у бізнес-процесі другої школи.
+At this stage, it is necessary to create a script based on the data from the business process of the first school. This script converts the list of users received from the Keycloak service into a string of comma-separated values. These values can be used later on for granting access to the student transfer task in the business process of the second school.
+//На цьому етапі необхідно на основі даних від бізнес-процесу першої школи створити скрипт, який конвертує список користувачів, отриманих із сервісу Keycloak, у рядок значень, розділених комою. Ці значення надалі можна буде використати для надання доступу до задачі із переведення учня у бізнес-процесі другої школи.
 
-. Створіть нову задачу, визначте її тип, натиснувши іконку ключа та обравши з меню пункт *Script Task* (Задача скриптування).
+. Create a new task, define its type by clicking the wrench icon and selecting *Script Task* from the menu.
+//. Створіть нову задачу, визначте її тип, натиснувши іконку ключа та обравши з меню пункт *Script Task* (Задача скриптування).
 
-. На панелі налаштувань справа заповніть наступні поля:
+. In the settings panel on the right-hand side, fill in the following fields:
+//. На панелі налаштувань справа заповніть наступні поля:
 
-* У полі `Name` вкажіть назву задачі -- `Завантажити список посадових осіб`.
-* У полі `Script Format` вкажіть формат скрипту -- `groovy`.
-* У полі `Script Type` вкажіть тип скрипту -- `Inline Script`.
-* У полі `Script` введіть безпосередньо groovy-скрипт:
+* In the `Name` field, enter the task name  -- `Download the list of officers`.
+//* У полі `Name` вкажіть назву задачі -- `Завантажити список посадових осіб`.
+* In the `Script Format` field, specify the script format -- `groovy`.
+//* У полі `Script Format` вкажіть формат скрипту -- `groovy`.
+* In the `Script Type` field, enter the script type -- `Inline Script`.
+//* У полі `Script Type` вкажіть тип скрипту -- `Inline Script`.
+* Enter the groovy script directly into the `Script` field:
+//* У полі `Script` введіть безпосередньо groovy-скрипт:
 +
 .Приклад. Groovy-скрипт, що конвертує об'єкт зі списком користувачів у рядок значень, розділених комами
+.Example. The groovy script to convert an object containing a list of users into a comma-separated string of values
 ====
 [source,groovy]
 ----
@@ -308,98 +417,131 @@ set_variable('users',users)
 ----
 ====
 
-. Результат виконання скрипту записується до змінної `'users'`.
+. The result of script execution is written to the `users` variable.
+//. Результат виконання скрипту записується до змінної `'users'`.
 +
 image:bp-modeling/bp/keycloak-attributes-access/bp-keycloak-attributes-access-9.png[]
 
-==== Моделювання користувацької задачі для перегляду даних про заяву
+==== Modeling a user task to view application data
+//==== Моделювання користувацької задачі для перегляду даних про заяву
 
-Змоделюйте _користувацьку задачу (*User form*) для перегляду даних про заяву_ та пов'яжіть її з формою бізнес-процесу параметром `Form key`.
+Model a _user task (*User form*) for viewing application data_ and connect it to the business process form using the `Form key` parameter.
+//Змоделюйте _користувацьку задачу (*User form*) для перегляду даних про заяву_ та пов'яжіть її з формою бізнес-процесу параметром `Form key`.
 
-. У полі `Name` введіть назву задачі. Наприклад, `Переглянути дані про заяву`.
-. У полі `Form key` введіть ключ форми бізнес-процесу -- `add-zayavaview`.
-. У полі `Candidate users` використайте змінну, яка зберігає отриманий список користувачів із Keycloak у вигляді рядка значень, розділених комами -- `${users}`.
+. In the `Name` field, enter the name of the task. For example, `View application data`.
+//. У полі `Name` введіть назву задачі. Наприклад, `Переглянути дані про заяву`.
+. In the `Form key` field, enter the business process form key -- `add-zayavaview`.
+//. У полі `Form key` введіть ключ форми бізнес-процесу -- `add-zayavaview`.
+. In the `Candidate users` field, use the variable that stores the received list of users from Keycloak as a comma-separated string of values -- `${users}`.
+//. У полі `Candidate users` використайте змінну, яка зберігає отриманий список користувачів із Keycloak у вигляді рядка значень, розділених комами -- `${users}`.
 +
 [NOTE]
 ====
-Список імен користувачів можна передати як напряму (наприклад, `username1, username2, username3, ...`), так і через змінну (тут -- `${users}`), в якій цей список зберігається.
+The list of usernames can be passed both directly (for example, `username1, username2, username3, ...`) and using a variable (herein, `${users}`) where this list is stored.
+//Список імен користувачів можна передати як напряму (наприклад, `username1, username2, username3, ...`), так і через змінну (тут -- `${users}`), в якій цей список зберігається.
 ====
 +
 image:bp-modeling/bp/keycloak-attributes-access/bp-keycloak-attributes-access-10.png[]
 
-Таким чином кожна посадова особа відповідної організації (_Школа 2_) матиме доступ до перегляду цієї задачі в особистому Кабінеті, а також зможе призначити себе виконавцем.
+In this case, each officer in the corresponding organization (_School 2_) has access to review this task in the personal portal, and will also be able to appoint himself/herself as a performer.
+//Таким чином кожна посадова особа відповідної організації (_Школа 2_) матиме доступ до перегляду цієї задачі в особистому Кабінеті, а також зможе призначити себе виконавцем.
 
-IMPORTANT: Посадова особа може НЕ мати доступу до бізнес-процесу, лише до конкретної задачі. Тобто такий користувач не зможе розпочати бізнес-процес, проте зможе виконати певну задачу в рамках такого процесу.
+IMPORTANT: An officer may NOT have access to a business process, but only to a specific task. That means that such a user is not able to start a business process, but is able to perform a certain task within such a process.
+//IMPORTANT: Посадова особа може НЕ мати доступу до бізнес-процесу, лише до конкретної задачі. Тобто такий користувач не зможе розпочати бізнес-процес, проте зможе виконати певну задачу в рамках такого процесу.
 
-==== Моделювання події завершення процесу
+==== Simulation of the process end event
+//==== Моделювання події завершення процесу
 
-Змоделюйте подію завершення процесу:
+Model the process end event:
+//Змоделюйте подію завершення процесу:
 
-* У полі `Name` введіть назву події -- `Завершення`.
+* In the `Name` field, enter the name of the event -- `End`.
+//* У полі `Name` введіть назву події -- `Завершення`.
 +
 image:bp-modeling/bp/keycloak-attributes-access/bp-keycloak-attributes-access-11.png[]
 
-== Налаштування доступу в Keycloak
+== Access settings in Keycloak
+//== Налаштування доступу в Keycloak
 
-Розглянемо, як саме виглядають користувачі та їх атрибути з погляду сервісу Keycloak.
+Let's see how users and their attributes look like from the perspective of the Keycloak service.
+//Розглянемо, як саме виглядають користувачі та їх атрибути з погляду сервісу Keycloak.
 
-Всі користувачі Платформи та реєстру, а також їх атрибути зберігаються у певних реалмахfootnote:[*Realm* - це концепція в https://www.keycloak.org/[Keycloak], яка відноситься до об’єкта,
-що керує набором користувачів, а також їхніми обліковими даними, ролями та групами.] Keycloak, відповідно до їхньої ролі.
+All users of the Platform and registry, as well as their attributes, are stored in specific Keycloak realmsfootnote:[*Realm* is a concept in https://www.keycloak.org/[Keycloak] that refers to an entity that manages a set of users and their credentials, roles, and groups.], according to their roles.
+//Всі користувачі Платформи та реєстру, а також їх атрибути зберігаються у певних реалмахfootnote:[*Realm* - це концепція в https://www.keycloak.org/[Keycloak], яка відноситься до об’єкта, що керує набором користувачів, а також їхніми обліковими даними, ролями та групами.] Keycloak, відповідно до їхньої ролі.
 
-Виділяють 4 основні реалми:
+There are 4 main realms:
+//Виділяють 4 основні реалми:
 
 * `-admin`
 * `-officer-portal`
 * `-citizen-portal`
 * `-external-system`.
 
-TIP: Детальніше про створення користувачів та надання їм прав доступу -- за xref:admin:user-management-auth/keycloak-create-users.adoc[посиланням].
+TIP: To find out more about creatnig users and granting them access rights, see xref:admin:user-management-auth/keycloak-create-users.adoc[this link].
+//TIP: Детальніше про створення користувачів та надання їм прав доступу -- за xref:admin:user-management-auth/keycloak-create-users.adoc[посиланням].
 
-CAUTION: Список користувачів за атрибутами необхідно отримати із реалму `-officer-portal`, адже доступ до задачі надається користувачам із роллю "Посадова особа".
+CAUTION: You have to get the list of users by their attributes from the `-officer-portal` realm, because access to a task is granted to users having the "Officer" role.
+//CAUTION: Список користувачів за атрибутами необхідно отримати із реалму `-officer-portal`, адже доступ до задачі надається користувачам із роллю "Посадова особа".
 
-. Увійдіть до реалму `-officer-portal`.
+. Enter the `-officer-portal` realm.
+//. Увійдіть до реалму `-officer-portal`.
 +
 image:bp-modeling/bp/keycloak-attributes-access/keycloak-attributes-access-1.png[]
 
-. На боковій панелі зліва, перейдіть до розділу *Users*. Натисніть `View all users` для відображення списку усіх користувачів в рамках цього реалму.
+. In the sidebar on the left-hand side, go to the *Users* section. Click `View all users` to display the list of all users in this realm.
+//. На боковій панелі зліва, перейдіть до розділу *Users*. Натисніть `View all users` для відображення списку усіх користувачів в рамках цього реалму.
 +
 image:bp-modeling/bp/keycloak-attributes-access/keycloak-attributes-access-2.png[]
 
-. Перейдіть до налаштувань певного користувача. Для цього натисніть його ID.
+. Go to the settings of a particular user. To do this, click the user ID.
+//. Перейдіть до налаштувань певного користувача. Для цього натисніть його ID.
 +
 image:bp-modeling/bp/keycloak-attributes-access/keycloak-attributes-access-3.png[]
 
-. На вкладці *Details* зверніть увагу на ім'я користувача, що повертається у списку до бізнес-процесу. Воно відповідає параметру `Username`.
+. In the *Details* tab, find the username returned in a list to the business process. It corresponds to the `Username` parameter.
+//. На вкладці *Details* зверніть увагу на ім'я користувача, що повертається у списку до бізнес-процесу. Воно відповідає параметру `Username`.
 image:bp-modeling/bp/keycloak-attributes-access/keycloak-attributes-access-4.png[]
 
-. Відкрийте вкладку *Attributes*.
+. Open the *Attributes* tab.
+//. Відкрийте вкладку *Attributes*.
 +
-Атрибути користувачів визначаються як пари ключів та їх значень у полях `Key` та `Value`.
+User attributes are defined as pairs of keys and their values in the `Key` and `Value` fields.
+//Атрибути користувачів визначаються як пари ключів та їх значень у полях `Key` та `Value`.
 +
 image:bp-modeling/bp/keycloak-attributes-access/keycloak-attributes-access-5.png[]
 
-Таким чином, ми бачимо, що користувач з іменем `auto-user-data` має налаштовані атрибути `edrpou` та `drfo`. Параметри мають значення кодів ЄДРПОУ та ДРФО -- `11111111` та `2222222222` відповідно. Атрибут `edrpou` визначає приналежність цього користувача до організації із кодом `11111111`. Атрибут `drfo` визначає ідентифікаційний номер цього користувача.
+So we can see that the user with the `auto-user-data` name has the `edrpou` and `drfo` attributes configured. The parameters have the values of the EDRPOU and DRFO codes -- `11111111` and `2222222222`, respectively. The `edrpou` attribute defines that this user belongs to the organization with the `11111111` code. The `drfo` attribute defines the identification number of this user.
+//Таким чином, ми бачимо, що користувач з іменем `auto-user-data` має налаштовані атрибути `edrpou` та `drfo`. Параметри мають значення кодів ЄДРПОУ та ДРФО -- `11111111` та `2222222222` відповідно. Атрибут `edrpou` визначає приналежність цього користувача до організації із кодом `11111111`. Атрибут `drfo` визначає ідентифікаційний номер цього користувача.
 
-NOTE: У Keycloak немає чіткого розподілу на організації. Такий розподіл встановлюється атрибутом `edrpou`. Тобто якщо певна організація має код ЄДРПОУ `11111111`, то кожна особа з атрибутом `"edrpou":"11111111"` належатиме до такої організації.
+NOTE: Keycloak does not have a clear distribution into organizations. Such distribution is set by the `edrpou` attribute. That means, if a certain organization has the EDRPOU code `11111111`, then every user with the attribute `"edrpou":"11111111"` belongs to that organization.
+//NOTE: У Keycloak немає чіткого розподілу на організації. Такий розподіл встановлюється атрибутом `edrpou`. Тобто якщо певна організація має код ЄДРПОУ `11111111`, то кожна особа з атрибутом `"edrpou":"11111111"` належатиме до такої організації.
 
-== Імплементація на рівні API
+== Implementation at API level
+//== Імплементація на рівні API
 
-Для функціонування делегата `${getUsersByAttributesFromKeycloak}`, на рівні Java API розроблено додатковий ендпоінт для отримання списку користувачів із сервісу Keycloak за атрибутами `edrpou` та `drfo`.
+For the functioning of the `${getUsersByAttributesFromKeycloak}` delegate, an additional endpoint has been developed at the Java API level to receive a list of users from the Keycloak service by `edrpou` and `drfo` attributes.
+//Для функціонування делегата `${getUsersByAttributesFromKeycloak}`, на рівні Java API розроблено додатковий ендпоінт для отримання списку користувачів із сервісу Keycloak за атрибутами `edrpou` та `drfo`.
 
-.Запит до ресурсу в Keycloak API
+.A request to the Keycloak API resource
+//.Запит до ресурсу в Keycloak API
 ====
 
-Ресурс: ::
+Resource: ::
+//Ресурс: ::
 +
 ----
 POST /realms/{realm}/users/search
 ----
 
-* `POST` -- HTTP-метод.
-* `{realm}` -- реалм у Keycloak. Наприклад, `-officer-portal`.
-* `/users/search` -- ресурс/ендпоінт.
+* `POST`: HTTP method.
+//* `POST` -- HTTP-метод.
+* `{realm}`: The realm in Keycloak. For example, `-officer-portal`.
+//* `{realm}` -- реалм у Keycloak. Наприклад, `-officer-portal`.
+* `/users/search`: The resource/endpoint.
+//* `/users/search` -- ресурс/ендпоінт.
 
-Тіло запита: ::
+Request body: ::
+//Тіло запита: ::
 +
 [source,json]
 ----
@@ -412,9 +554,11 @@ POST /realms/{realm}/users/search
 ----
 ====
 
-API повертає об'єкт зі списком користувачів за вказаними атрибутами.
+The API returns an object with a list of users based on the specified attributes.
+//API повертає об'єкт зі списком користувачів за вказаними атрибутами.
 
-.Приклад. Відповідь від Keycloak API
+.Example. Response from Keycloak API
+//.Приклад. Відповідь від Keycloak API
 ====
 [source,json]
 ----
