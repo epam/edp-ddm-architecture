@@ -1,0 +1,663 @@
+:toc-title: On this page:
+:toc: auto
+:toclevels: 5
+:experimental:
+:sectnums:
+:sectnumlevels: 5
+:sectanchors:
+:sectlinks:
+:partnums:
+
+
+//= Конфігурація Custom URL для сервісу управління користувачами та ролями Keycloak
+= Custom URL configuration for the Keycloak user and role management service
+
+//Надання можливості конфігурації DNS імен для сервісу управління користувачами та ролями Keycloak використовуючи інтерфейс
+//адмін-консолі.
+Providing the ability to configure DNS names for the Keycloak user and role management service using the interface
+admin console.
+
+//== Загальний опис
+== General description
+////
+xref:architecture/platform/administrative/config-management/custom-dns.adoc[Дизайн по конфігурації DNS імені]
+(окремого від імені OpenShift кластера) для Кабінету посадової особи та Кабінету отримувача послуг не враховував потребу
+в конфігурації також відповідного імені для сервісу управління користувачами та ролями (Keycloak) через адмін-консоль.
+
+Також, якщо кластер OpenShift створений повністю у приватній мережі, то перевірка сертифікатів на рівні підсистеми
+управління міжсервісною взаємодією та аутентифікація за допомогою Keycloak відбуваються не коректно з деякими
+компонентами реєстру.
+
+В цьому перехідному дизайні пропонується рішення для розв'язання цих проблем.
+////
+xref:architecture/platform/administrative/config-management/custom-dns.adoc[Design by DNS name configuration]
+(separate on behalf of the OpenShift cluster) for the Cabinet of the official and the Cabinet of the recipient of services did not take into account the need
+in the configuration, also the appropriate name for the user and role management service (Keycloak) through the admin console.
+
+Also, if the OpenShift cluster is created entirely in a private network, then certificate verification is performed at the subsystem level
+inter-service interaction management and Keycloak authentication are not working correctly with some
+registry components.
+
+This transitional design offers a solution to these problems.
+
+////
+=== Ролі користувачів
+* Технічний адміністратор реєстру
+* Технічний адміністратор Платформи
+////
+
+=== User roles
+* Technical registry administrator
+* Technical administrator of the Platform
+
+////
+== Функціональні сценарії
+* Конфігурація DNS-імен компонента Keycloak через адмін-консоль на рівні Платформи
+* Вибір DNS-імені для логіна в кабінети користувачів через адмін-консоль на рівні реєстру
+* Видалення доданих DNS-імен до Keycloak
+////
+== Functional scenarios
+* Configuration of DNS names of the Keycloak component through the admin console at the Platform level
+* Choosing a DNS name for logging into user accounts through the admin console at the registry level
+* Removal of DNS names added to Keycloak
+
+////
+== Загальні принципи та положення
+* Конфігурація наявних Keycloak DNS-імен задається технічним адміністратором Платформи
+* Разом з DNS-іменем, платформний адміністратор має також задати TLS-сертифікат в .pem форматі для домена
+* DNS-імена для реєстрових кабінетів користувачів конфігуруються реєстровим технічним адміністратором
+* Реєстровий адміністратор може вибрати домен для Keycloak з переліку доступних
+* Перелік доступних в системі доменів формується із заданих DNS-імен платформного Keycloak
+* В налаштуваннях кабінетів доступна можливість завантажити окремі TLS сертифікати в .pem форматі на кожний кабінет
+користувача
+* Адміністратор Платформи відповідальний за ротацію сертифікатів Keycloak та кабінетів користувачів
+* В системі має бути можливість редагувати встановлені раніше TLS-сертифікати та DNS-імена
+* Адмін-консоль має валідувати, що завантажений TLS сертифікат дійсно відповідає введеному домену, не є самопідписаним
+та строк його дії ще не минув.
+* Доступ до _HasiCorp Vault_ для читання сертифікатів відбувається тільки через окремого сервісного користувача
+* У випадку розгортання реєстру без порталу (чиновника або громадянина) відповідні UI елементи для налаштування DNS-імен
+не повинні показуватись.
+* Заданий URL для Keycloak та кабінетів не може бути більше ніж 63 символи та має валідуватись на коректність.
+////
+== General principles and provisions
+* The configuration of existing Keycloak DNS names is set by the technical administrator of the Platform
+* Along with the DNS name, the platform administrator must also specify the TLS certificate in .pem format for the domain
+* DNS names for user registry offices are configured by the registry technical administrator
+* The registered administrator can select a domain for Keycloak from the list of available ones
+* The list of domains available in the system is formed from the specified DNS names of the Keycloak platform
+* In the cabinet settings, it is possible to download separate TLS certificates in .pem format for each cabinet
+user
+* The Platform Administrator is responsible for the rotation of Keycloak certificates and user accounts
+* The system must be able to edit previously installed TLS certificates and DNS names
+* The admin console must validate that the downloaded TLS certificate really corresponds to the entered domain and is not self-signed
+and its validity period has not yet expired.
+* Access to _HasiCorp Vault_ for reading certificates is only through a separate service user
+* In the case of deployment of the registry without a portal (official or citizen), appropriate UI elements for configuring DNS names
+should not be shown.
+* The specified URL for Keycloak and cabinets cannot be more than 63 characters and must be validated for correctness.
+
+////
+== Дизайн існуючого рішення
+
+=== Keycloak DNS
+
+В поточній версії Платформи, конфігурація DNS імені Keycloak відбувається наступним чином:
+
+** Вручну додати в `values.yaml` реєстру наступне налаштування:
++
+[source,yaml]
+----
+keycloak:
+  customHost: keycloak.example.com
+----
+
+** Вручну налаштувати Keycloak Frontend URL у відповідному рілмі на нове DNS імʼя
+
+** Вручну створити OpenShift Route з доданим TLS сертифікатом
+
+** Вручну змінити Redash SAML URL
+////
+
+== Design of an existing solution
+
+=== Keycloak DNS
+In the current version of the Platform, the DNS configuration of the Keycloak name is as follows:
+
+** Manually add the following setting to `values.yaml` of the registry:
++
+[source,yaml]
+----
+keycloak:
+  customHost: keycloak.example.com
+----
+** Manually configure the Keycloak Frontend URL in the corresponding realm to the new DNS name
+
+** Manually create an OpenShift Route with an added TLS certificate
+
+** Manually change the Redash SAML URL
+
+////
+=== DNS-імена для адміністративних інтерфейсів користувачів
+xref:architecture/platform/administrative/config-management/custom-dns.adoc[Дизайн по конфігурації DNS імені для кабінетів користувачів]
+
+=== Недоліки поточної реалізації
+* Налаштування DNS-імені центрального компонента Keycloak відбувається з конфігурації реєстрів
+* Потребує багато ручних налаштувань (route, request auth, keycloak realm тощо)
+* Технічний адміністратор Платформи не контролює DNS налаштування платформного Keycloak
+* DNS-імена задаються на рівні компонента common-web-app, а не на рівні реєстрової конфігурації
+////
+
+=== DNS names for administrative user interfaces
+xref:architecture/platform/administrative/config-management/custom-dns.adoc[DNS name configuration design for user accounts]
+
+=== Disadvantages of the current implementation
+* Setting the DNS name of the central Keycloak component takes place from the registry configuration
+* Requires a lot of manual settings (route, request auth, keycloak realm, etc.)
+* The technical administrator of the Platform does not control the DNS settings of the Keycloak platform
+* DNS names are set at the common-web-app component level, not at the registry configuration level
+
+////
+== Технічний дизайн рішення
+
+Перед початком конфігурації кастомного DNS-імені для Keycloak на рівні реєстру, потрібно спочатку додати відповідний
+домен в налаштуваннях Платформи.
+
+При налаштованому Keycloak DNS-імені він повинен зʼявитись в dropdown елементі в налаштуваннях реєстру з пропозицією
+обрати DNS-імені для логіну в кабінети реєстру: кластерний за замовчуванням, чи один з кастомних.
+
+.Верхньорівнева діаграма взаємодії на рівні підсистем
+[plantuml, flow, svg]
+image::architecture/platform/administrative/control-plane/keycloak-dns/keycloak-url-subsystem-level.svg[keycloak-url-subsystem-level]
+
+Підсистема управління Платформою та реєстрами зберігає отримані TLS-сертифікати в підсистемі управління секретами та
+шифруванням та додає у `values.yaml` домен та шлях до TLS сертифіката відповідно прикладу:
+////
+
+== Technical solution design
+
+Before starting to configure a custom DNS name for Keycloak at the registry level, you must first add the appropriate one
+domain in the Platform settings.
+
+With the configured Keycloak DNS name, it should appear in the dropdown item in the registry settings with the offer
+choose DNS names for logging into registry offices: the default cluster or one of the custom ones.
+
+.High-level interaction diagram at the level of subsystems
+[plantuml, flow, svg]
+image::architecture/platform/administrative/control-plane/keycloak-dns/keycloak-url-subsystem-level.svg[keycloak-url-subsystem-level]
+
+The platform and registry management subsystem stores received TLS certificates in the secrets management subsystem and
+encryption and adds to `values.yaml` the domain and path to the TLS certificate according to the example:
+
+////
+.Приклад конфігурації на рівні values.yaml репозиторія cluster-mgmt.git
+[source,yaml]
+----
+keycloak:
+  customHosts:
+    - host: keycloak.example.com
+      certificatePath: registry-kv/....
+    - host: keycloak-login.instance.com
+      certificatePath: registry-kv/....
+----
+
+.Приклад конфігурації на рівні values.yaml реєстрового репозиторія
+[source,yaml]
+----
+portals:
+  officer:
+    customHost:
+       enabled: true
+       host: officer.example.com
+       certificatePath: registry-kv/....
+----
+////
+
+.An example of configuration at the values.yaml level of the cluster-mgmt.git repository
+[source, yaml]
+----
+keycloak:
+  customHosts:
+    - host: keycloak.example.com
+      certificatePath: registry-kv/....
+    - host: keycloak-login.instance.com
+      certificatePath: registry-kv/....
+----
+
+.An example of configuration at the values.yaml level of the registry repository
+[source, yaml]
+
+----
+portals:
+  officer:
+    customHost:
+       enabled: true
+       host: officer.example.com
+       certificatePath: registry-kv/....
+----
+////
+Платформні TLS сертифікати зберігаються у _HashiCorp Vault_ (*user-management:hashicorp-vault*) за шляхом, згенерованим згідно конвенції:
+[source]
+----
+registry-kv/cluster/domains/<domain-name>
+
+key:caCertificate value:<caValue>
+key:certificate value:<certificateValue>
+key:key value:<keyValue>
+----
+////
+Platform TLS certificates are stored in _HashiCorp Vault_ (*user-management:hashicorp-vault*) with a path generated by convention:
+[source]
+
+----
+registry-kv/cluster/domains/<domain-name>
+
+key:caCertificate value:<caValue>
+key:certificate value:<certificateValue>
+key:key value:<keyValue>
+----
+
+////
+Реєстрові TLS сертифікати зберігаються у _HashiCorp Vault_ (*user-management:hashicorp-vault*) за шляхом, згенерованим згідно конвенції:
+[source]
+----
+registry-kv/registry/<registry-name>/domains/<portal-name>/<domain-name>
+
+key:caCertificate value:<caValue>
+key:certificate value:<certificateValue>
+key:key value:<keyValue>
+----
+////
+
+Registered TLS certificates are stored in _HashiCorp Vault_ (*user-management:hashicorp-vault*) with a path generated according to the convention:
+[source]
+
+----
+registry-kv/registry/<registry-name>/domains/<portal-name>/<domain-name>
+
+key:caCertificate value:<caValue>
+key:certificate value:<certificateValue>
+key:key value:<keyValue>
+----
+
+////
+.Верхньорівнева діаграма взаємодії на рівні розгортання конфігурації
+[plantuml, flow, svg]
+image::architecture/platform/administrative/control-plane/keycloak-dns/keycloak-url-configuration-level.svg[keycloak-url-configuration-level]
+
+При заданому кастомному DNS-імені для Keycloak та для кабінетів у відповідному реєстрі має відбутися:
+////
+
+.High-level interaction diagram at the configuration deployment level
+[plantuml, flow, svg]
+image::architecture/platform/administrative/control-plane/keycloak-dns/keycloak-url-configuration-level.svg[keycloak-url-configuration-level]
+
+With a given custom DNS name for Keycloak and for cabinets in the corresponding registry, the following should happen:
+
+////
+** конфігурація Redash Viewer:
++
+.Приклад конфігурації змінних оточення Redash Viewer
+[source,bash]
+----
+REDASH_SAML_METADATA_URL # дефолтний Keycloak URL OpenShift кластера
+REDASH_SAML_REDIRECT_URL # зовнішнє (кастомне) Keycloak DNS-імʼя
+----
+////
+
+** configuration of Redash Viewer:
++
+.Redash Viewer environment variable configuration example
+[source,bash]
+----
+REDASH_SAML_METADATA_URL # the default Keycloak URL of the OpenShift cluster
+REDASH_SAML_REDIRECT_URL # external (custom) Keycloak DNS name
+----
+
+////
+** cтворитися додаткові istio request authentication до вже існуючих:
++
+.Приклад конфігурації Istio RequestAuthentication для компонентів реєстрів
+[source,bash]
+----
+jwtRules:
+    - forwardOriginalToken: true
+      fromHeaders:
+        - name: X-Access-Token
+      issuer: {{ template "issuer.officer" . }}    #зовнішнє (кастомне) Keycloak DNS-імʼя
+      jwksUri: {{ template "jwksUri.officer" . }}  #дефолтний Keycloak URL OpenShift кластера
+----
++
+NOTE: Необхідно налаштувати для registry-rest-api, excerpt-service-api та registry-regulation-management
+////
+
+** create additional istio request authentication to the already existing ones:
++
+.Istio RequestAuthentication Configuration Example for Registry Components
+[source,bash]
+----
+jwtRules:
+    - forwardOriginalToken: true
+      fromHeaders:
+        - name: X-Access-Token
+      issuer: {{ template "issuer.officer" . }}    #external (custom) Keycloak DNS name
+      jwksUri: {{ template "jwksUri.officer" . }}  #default Keycloak URL of the OpenShift cluster
+----
++
+NOTE: Must be configured for registry-rest-api, excerpt-service-api and registry-regulation-management
+
+////
+** конфігурація Keycloak Frontend URL:
++
+.Приклад конфігурації Keycloak Frontend URL через KeycloakRealm CR
+[source,yaml]
++
+----
+spec:
+  frontendUrl: #зовнішнє (кастомне) Keycloak DNS-імʼя
+----
+////
+
+** configuration of Keycloak Frontend URL:
++
+.Keycloak Frontend URL configuration example via KeycloakRealm CR
+[source,yaml]
++
+----
+spec:
+  frontendUrl: #external (custom) Keycloak DNS-імʼя
+----
+
+////
+** конфігурація Keycloak redash viewer client web URL:
++
+.Приклад конфігурації Redash client webURL
+[source,yaml]
++
+----
+spec:
+  webUrl: #зовнішнє (кастомне) Redash DNS-імʼя
+----
+////
+
+** configuration of Keycloak redash viewer client web URL:
++
+.Example configuration of Redash client webURL
+[source,yaml]
++
+----
+spec:
+  webUrl: #external (custom) Redash DNS name
+----
+
+////
+** конфігурація Kong OIDC plugin:
++
+.Приклад конфігурації Kong OIDC плагіна
+[source,yaml]
++
+----
+config:
+  issuers_allowed:        #зовнішнє (кастомне) Keycloak DNS-імʼя
+  discovery:              #дефолтний Keycloak URL OpenShift кластера
+  introspection_endpoint: #зовнішнє (кастомне) Keycloak DNS-імʼя
+----
+////
+
+** configuration of Kong OIDC plugin:
++
+.Example configuration of Kong OIDC plugin
+[source,yaml]
++
+----
+config:
+  issuers_allowed:        #external (custom) Keycloak DNS name
+  discovery:              #default Keycloak URL of the OpenShift cluster
+  introspection_endpoint: #external (custom) Keycloak DNS name
+----
+
+////
+** конфігурація Istio Gateway для кабінетів користувачів:
++
+.Приклад конфігурації Istio Gateway
+[source,yaml]
++
+----
+spec:
+  ....
+  servers:
+    - hosts:
+        ....
+        - #зовнішнє (кастомне) officer-portal DNS-імʼя
+----
+////
+
+** Istio Gateway configuration for user accounts:
++
+.Istio Gateway Configuration Example
+[source,yaml]
++
+----
+spec:
+  ....
+  servers:
+    - hosts:
+        ....
+        - #external (custom) officer-portal DNS-name
+----
+
+////
+** конфігурація Istio Virtual Service для кабінетів користувачів:
++
+.Приклад конфігурації Virtual Service
+[source,yaml]
++
+----
+spec:
+  gateways:
+    - gateway
+  hosts:
+    - #зовнішнє (кастомне) officer-portal DNS-імʼя
+----
+////
+
+** Istio Virtual Service configuration for user accounts:
++
+.Virtual Service configuration example
+[source,yaml]
++
+----
+spec:
+  gateways:
+    - gateway
+  hosts:
+    - #external (custom) officer-portal DNS-name
+----
+
+////
+=== Орієнтовні макети дизайну адмін-консолі
+
+.Макет налаштування DNS на рівні платформи
+[plantuml, flow, svg]
+image::architecture/platform/administrative/control-plane/keycloak-dns/dns-mockup-3.png[mockup-3]
+
+NOTE: Cluster Keycloak default DNS name вичитується адмін-консоллю зі специфікації Keycloak CR в _user-management_
+
+.Макет налаштування DNS на рівні платформи
+[plantuml, flow, svg]
+image::architecture/platform/administrative/control-plane/keycloak-dns/dns-mockup-4.png[mockup-4]
+
+.Макет налаштування DNS на рівні платформи
+[plantuml, flow, svg]
+image::architecture/platform/administrative/control-plane/keycloak-dns/dns-mockup-1.png[mockup-1]
+
+.Макет налаштування DNS на рівні реєстру
+[plantuml, flow, svg]
+image::architecture/platform/administrative/control-plane/keycloak-dns/dns-mockup-2.png[mockup-2]
+
+==== Сервісні користувачі для доступу в _HashiCorp Vault_:
+Кожний компонент, що отримує доступ до Vault повинен запускатись від окремого OpenShift сервіс акаунта.
+Сервісні користувачі створені в _HashiCorp Vault_ повинні бути типу https://developer.hashicorp.com/vault/docs/auth/kubernetes[Kubernetes Auth Method] та створюватись під час початкового налаштування _HashiCorp Vault_ через виконання `script-init` ConfigMap.
+|===
+|Компонент|Назва сервіс акаунта|Прив'язані Namespaces|Capabilities
+|Jenkins  | control-plane-jenkins |Registry namespace, user-management|["read"]
+
+|===
+////
+
+=== Approximate layouts of the design of the admin console
+
+.Platform level DNS configuration layout
+[plantuml, flow, svg]
+image::architecture/platform/administrative/control-plane/keycloak-dns/dns-mockup-3.png[mockup-3]
+
+NOTE: Cluster Keycloak default DNS name is read by the admin console from the Keycloak CR specification in _user-management_
+
+.Platform-level DNS configuration layout
+[plantuml, flow, svg]
+image::architecture/platform/administrative/control-plane/keycloak-dns/dns-mockup-4.png[mockup-4]
+
+.Platform level DNS configuration layout
+[plantuml, flow, svg]
+image::architecture/platform/administrative/control-plane/keycloak-dns/dns-mockup-1.png[mockup-1]
+
+.DNS configuration layout at the registry level
+[plantuml, flow, svg]
+image::architecture/platform/administrative/control-plane/keycloak-dns/dns-mockup-2.png[mockup-2]
+
+==== Service users to access _HashiCorp Vault_:
+Each component accessing the Vault must be run from a separate OpenShift service account.
+Service users created in _HashiCorp Vault_ must be of type https://developer.hashicorp.com/vault/docs/auth/kubernetes[Kubernetes Auth Method] and created during the initial setup of _HashiCorp Vault_ via the ConfigMap `script-init` execution.
+|===
+|Component|The name of the service account|Connected Namespaces|Capabilities
+|Jenkins  | control-plane-jenkins |Registry namespace, user-management|["read"]
+
+
+|===
+.Example Capability Policy _HashiCorp Vault_
+[source, json]
+----
+{
+      "policy": "path \"registry-kv/registry/<registry-name>/domains/\" \"{ capabilities = [ \"read\" ]}\""}
+}
+----
+////
+.Приклад привʼязки сервіс акаунта OpenShift в _HashiCorp Vault_
+[source, json]
+----
+{
+      "bound_service_account_names": ["control-plane-jenkins"],
+      "bound_service_account_namespaces": "ns",
+      "policies": ["policy-name"],
+      "ttl": "1h"
+}
+----
+
+=== Компоненти реєстру та їх призначення в рамках дизайну рішення
+|===
+|Компонент|Службова назва|Призначення / Суть змін| Статус
+|Веб-інтерфейс інтерфейс управління Платформою та реєстрами|control-plane-console|Зміни інтерфейсів та логіки по зберіганню сертифікатів в Vault|To Do
+|Розгортання платформи та реєстрів|edp-library-stages-fork|Зміна логіки по отриманню сертифікатів з Vault та розгортання Keycloak та реєстрів|To Do
+|Кабінети користувачів|common-web-app|Конфігурація Kong плагінів|Done
+|Сервіс перегляду звітів|redash-viewer|Конфігурація змінних оточення|To Do
+|Налаштування реєстру|registry-configuration|Налаштування Keycloak Frontend URL|To Do
+|Keycloak Оператор|keycloak-operator|Конфігурація Keycloak Frontend URL|To Do
+|HashiCorp Vault|vault|конфігурація полісі та сервісного користувача|To Do
+|===
+////
+
+.An example of linking the OpenShift account service to _HashiCorp Vault_
+[source, json]
+----
+{
+      "bound_service_account_names": ["control-plane-jenkins"],
+      "bound_service_account_namespaces": "ns",
+      "policies": ["policy-name"],
+      "ttl": "1h"
+}
+----
+
+=== Registry components and their purpose within the design of the solution
+|===
+|Component|Official title|Purpose / The essence of the changes| Status
+|The web interface is the interface for managing the Platform and registries|control-plane-console|Changes to interfaces and logic for storing certificates in Vault|To Do
+|Deployment of the platform and registries|edp-library-stages-fork|Changing the logic for obtaining certificates from the Vault and deploying Keycloak and registries|To Do
+|User portals|common-web-app|Configuration of Kong plugins|Done
+|Report viewing service|redash-viewer|Configuration of environment variables|To Do
+|Registry settings|registry-configuration|Settings of Keycloak Frontend URL|To Do
+|Keycloak Operator|keycloak-operator|Configuration of Keycloak Frontend URL|To Do
+|HashiCorp Vault|vault|policy and service user configuration|To Do
+|===
+
+////
+== План розробки
+=== Технічні експертизи
+* BE
+* DevOps
+
+=== План розробки
+* Додати функціонал по налаштуванню Realm Frontend Url Keycloak оператором
+* Змінити UI адмін-консолі відповідно https://www.figma.com/file/mWTVRcPrvFwsek4o4eJlFp/05-Admin-Console?node-id=1955%3A27154&t=81C0PkMZD9p5dlvH-0[макетам] та загальним положенням
+* Розробити функціонал по налаштуванню DNS-імен в пайплайнах та чартах компонентів реєстру
+
+== Міграція даних при оновленні реєстру
+
+* Вже налаштовані кастомні DNS-імена повинні залишитись при міграції.
+* Якщо DNS-імʼя для Keycloak вже було налаштоване, то pre-upgrade скрипт повинен перенести його до values.yaml та Vault
+* Враховуючи кількість ручних дій які були виконані на різних прод кластерах для налаштування доменів, неоднорідність та
+індивідуальність налаштувань після оновлення старі ресурси пропонується видалити самостійно адміністратору реєстра/платформи
+////
+
+== Development plan
+=== Technical examinations
+* BE
+* DevOps
+
+=== Development plan
+* Add functionality to configure the Realm Frontend Url Keycloak operator
+* Change admin console UI according to https://www.figma.com/file/mWTVRcPrvFwsek4o4eJlFp/05-Admin-Console?node-id=1955%3A27154&t=81C0PkMZD9p5dlvH-0[layouts] and general provisions
+* Develop functionality for configuring DNS names in pipelines and registry component charts
+
+== Data migration when updating the registry
+
+* Already configured custom DNS names should remain during migration.
+* If the DNS name for Keycloak was already configured, the pre-upgrade script should transfer it to values.yaml and Vault
+* Taking into account the number of manual actions that were performed on different prod clusters to configure domains, heterogeneity and
+the individuality of the settings after the update, the old resources are suggested to be deleted by the administrator of the registry/platform
+
+////
+== Безпека
+
+=== Бізнес Дані
+|===
+|Категорія Даних|Опис|Конфіденційність|Цілісність|Доступність
+|Технічні дані що містять відкриту інформацію | Налаштування системи, конфіги, параметри з не конфіденційними значеннями але зміна яких може негативно вплинути на атрибути системи |Відсутня|Висока|Висока
+|Технічні дані що містять службову інформацію | Налаштування системи, конфіги, параметри які являються службовою інформацію |Висока|Висока|Висока
+|Технічні дані що містять інформацію з обмеженим доступом | Налаштування системи, конфіги, параметри що містять інформацію з обмеженим доступом зміна яких може негативно вплинути на атрибути системи |Середня|Висока|Висока
+|===
+=== Спрощена модель загроз
+
+image::architecture/platform/administrative/control-plane/keycloak-dns/keycloak_url_TM.drawio.svg[]
+
+=== Механізми протидії ризикам безпеки та відповідність вимогам безпеки
+|===
+Усі ризики було усунено в архітектурному дизайні
+|===
+////
+
+== Security
+
+=== Business Data
+|===
+|Data category|Description|Privacy|Integrity|Accessibility
+|Technical data containing open information| System settings, configs, parameters with non-confidential values, but changing which can negatively affect system attributes|Absent|High|High
+|Technical data containing service information | System settings, configurations, parameters that are service information|High|High|High
+|Technical data containing restricted information | System settings, configs, parameters containing information with limited access, the change of which can negatively affect system attributes|Medium|High|High
+|===
+=== Simplified threat model
+
+image::architecture/platform/administrative/control-plane/keycloak-dns/keycloak_url_TM.drawio.svg[]
+
+=== Security risk mitigation mechanisms and security compliance
+|===
+All risks have been eliminated in the architectural design
+|===
