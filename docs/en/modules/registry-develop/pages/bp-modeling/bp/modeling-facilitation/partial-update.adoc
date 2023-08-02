@@ -1,0 +1,682 @@
+//= Часткове оновлення сутності у Фабриці даних
+= Partial entity update in Data Factory
+:toc-title: On this page:
+:toc: auto
+:toclevels: 5
+:experimental:
+:sectnums:
+:sectnumlevels: 5
+:sectanchors:
+:sectlinks:
+:partnums:
+
+//== Загальний опис
+== Overview
+
+//Для всіх таблиць у Фабриці даних, з якими взаємодіють сервіси, на Платформі використовується 4 основних HTTP-методи: `POST`, `GET`, `PUT` та `DELETE`.
+The Platform uses 4 main HTTP-methods for all the tables in Data Factory, which the services interact with: `POST`, `GET`, `PUT` and `DELETE`.
+
+//Для оновлення сутності у Фабриці даних використовується метод `PUT` та відповідний імплементований делегат *Update entity in data factory*.
+To update an entity in Data Factory, we use the `PUT` method and the corresponding Update entity in data factory* implemented delegate.
+
+//При використанні `PUT`, у тілі запита необхідно вказувати значення усіх полів таблиці, навіть тих, які оновлення не потребують. Така поведінка передбачена для методу `PUT` за замовчуванням.
+When using `PUT`, it is imperative to enter the values of all table fields in the request body, even those that don't require updating. This behavior is default for `PUT` method.
+
+//.Приклад
+.Example
+====
+//Наприклад, маємо таблицю, яка містить 5 полів: `Ім'я`, `Прізвище`, `По батькові`, `Дата народження`, `Місце роботи`. Нам потрібно оновити лише 1-ше поле (`Ім'я`) з 5-ти.
+For example, let's take a table with 5 fields: `First name`, `Last name`, `Middle name`, `Birth date`, `Work place`. We need to update only the first field, which is  `First name`.
+
+//При використанні метода `PUT`, необхідно буде встановити значення для кожного з 5-ти полів об'єкта.
+When using `PUT` method, we must set values for each of the five fields of the object.
+
+//Інакше всі незаповнені поля автозаповняться як `NULL`.
+Otherwise, all unfilled fields will autofill with `NULL`.
+====
+
+//Функціональність часткового оновлення сутності (`partialUpdate`) розв'язує цю проблему. Часткове оновлення на рівні API використовує HTTP-метод `PATCH`. Цей метод ігнорує всі незаповнені поля, не зазначені у тілі запита. Він опрацьовує лише ті параметри, які потребують оновлення.
+`partialUpdate` functionality solves this proble. Partial update uses `PATCH` HTTP-method on the API level. This method ignores all unfilled fields, not defined in request body. It only processes the parameters that require updating.
+
+//Відповідно на рівні API реалізовано окремий ендпоінт для роботи за методом `PATCH`, який дозволяє частково оновити сутність у базі даних (_див. xref:#api-implementation[]_).
+To work with the `PATCH` method on the API level there is a dedicated endpoint that allows for the partial database updates (_see xref:#api-implementation[]_).
+
+//Для взаємодії з API та можливості надсилати бізнес-дані до БД, на рівні бізнес-процесів розроблено типове розширення -- делегат `${dataFactoryConnectorPartialUpdateDelegate}`, для якого імплементовано однойменний шаблон *Update entity in data factory partially*, представлений у вигляді JSON-файлу _dataFactoryConnectorPartialUpdateDelegate.json_.
+On the business process level, a typical extension has been developed to interact with the API and allow for the sending of business data to the database -- the `${dataFactoryConnectorPartialUpdateDelegate}` delegate. The *Update entity in data factory partially* template was implemented for it, represented by _dataFactoryConnectorPartialUpdateDelegate.json_ JSON file.
+
+//Делегат потрібний для того, щоб оновлювати значення конкретних параметрів у таблиці БД.
+This delegate was developed to update certain parameter values in the database table.
+
+//== Використання та налаштування у бізнес-процесі
+== Usage and configuration in a business process
+
+//Розглянемо приклад моделювання бізнес-процесу із застосуванням делегата для часткового (вибіркового) оновлення параметрів сутності.
+Let's look at an example of business process modelling using the partial (selective) entity parameters update delegate.
+
+//Метою цього бізнес-процесу є створення сутності у Фабриці даних, подальший пошук створеної сутності за ID та оновлення лише певних параметрів цієї сутності, тобто її часткове оновлення.
+The puprose of this business process is the creation of an entity in Data Factory, search for this entity by ID, and updating of certain parameters in the entity, meaning its partial update.
+
+
+//=== Створення пулу для бізнес-процесу
+=== Creating a pool for the business process
+
+Найперше, необхідно змоделювати пул для бізнес-процесу. Для цього виконайте такі налаштування:
+To model a pool for the business process, take the following steps:
+
+//. Відкрийте додаток *Camunda Modeler* та створіть нову діаграму BPMN. Для цього у лівому верхньому куті натисніть меню *File* -> *New File* -> *BPMN Diagram*.
+. Open *Camunda Modeler* and create a new BPMN diagram by clicking *File* -> *New File* -> *BPMN Diagram* in the top left corner.
++
+image:registry-develop:bp-modeling/bp/modeling-instruction/bp-1.png[]
+
+//. На панелі інструментів зліва знайдіть елемент *Create pool/Participant* та перетягніть його до області моделювання.
+. On the left panel, find the *Create pool/Participant* element and drag it to the modelling canvas.
++
+image:registry-develop:bp-modeling/bp/modeling-instruction/bp-2.png[]
+
+//. Заповніть наступні поля відповідними значеннями:
+. Fill in the following fields with the corresponding values:
+
+//* У полі `Participant Name` введіть назву пулу, що відображатиметься у моделері -- `Бізнес-процес внесення даних`.
+* In the `Participant Name` field, enter the name of the pool -- `Partial data update`.
+//* У полі `Process id` введіть ідентифікатор бізнес-процесу -- `partially-data-update`.
+* In the `Process id` field, enter business process ID -- `partially-data-update`.
+//* У полі `Process Name` вкажіть бізнес-назву процесу -- `Бізнес-процес внесення даних`.
+* In the `Process Name` field, enter business process name -- `Partial data update`.
+
++
+image:bp-modeling/bp/partial-update/bp-partial-update-1.png[]
+
+//=== Моделювання стартової форми
+=== Modelling start form
+
+//На цьому етапі необхідно змоделювати стартову форму для внесення даних.
+On this stage we need to model the start form for data enteroing.
+
+//NOTE: Цей бізнес-процес ініційований не стартовою подією, а стартовою формою, яка відразу заповнюється даними користувача.
+NOTE: This business process is initiated by a start form that is filled with user data, not a start event.
+
+//Для налаштування стартової форми виконайте наступні кроки:
+To configure the start form, take the following steps:
+
+//. На панелі інструментів, зліва, знайдіть елемент (коло) *CreateStartEvent* та перетягніть його до панелі моделювання.
+. On the left panel, find the *CreateStartEvent* element, and drag it to the modelling canvas.
+//. На панелі налаштувань справа відкрийте вкладку *General*:
+. On the right panel, open the *General* tab:
+//* У полі `Id` вкажіть ідентифікатор елемента. Наприклад, `addPersonalProfile`.
+* In the `Id` field, enter element ID. For example, `addPersonalProfile`.
+//* У полі `Name` введіть назву початкової події -- `Внесення даних учня`.
+* In the `Name` field, enter start event name -- `Entering student data`
+//* У полі `Initiator` введіть `initiator`.
+* In the `Initiator` field, enter `initiator`.
++
+//TIP: `initiator` -- спеціальна змінна, що встановлюється для користувача, який розпочав процес.
+TIP: `initiator` -- is a special variable set for the user who started the process.
+
++
+image:bp-modeling/bp/partial-update/bp-partial-update-2.png[]
+//. Перейдіть до вкладки *Forms*. У полі `Form Key` введіть ключ форми бізнес-процесу -- `add-person-profile`.
+. Navigate to the *Forms* tab. In the `Form Key` field, enter the key for the business process form -- `add-person-profile`.
+
++
+image:bp-modeling/bp/partial-update/bp-partial-update-3.png[]
+
+//=== Моделювання форми для підпису даних КЕП
+=== Modelling a form for signing the data with Qualified Electronic Signature
+
+//На цьому етапі необхідно змоделювати користувацьку форму для підпису внесених даних КЕП. Тобто ми передаємо дані для підпису КЕП зі стартової форми до форми підписання даних. Дані передаємо через функцію `submission()` у полі `Form data pre-population`.
+Now we need to model a user form for the signing of entered data with an e-Signature. The data is transferred from data entering form to the signing form via the `submission()` function in the `Form data pre-population` field.
+
+//. Змоделюйте користувацьку задачу (*User form*) для підпису даних профілю користувача за допомогою КЕП та пов'яжіть її з формою бізнес-процесу параметром `Form key`.
+. Model a *User form* user task for the signing of user profile data with e-Signature, and connect it with the business process form using the `Form key` parameter.
+//. На панелі налаштувань справа сконфігуруйте такі параметри:
+. On the right panel, configure the following parameters:
+
+//* У полі `Id` вкажіть ідентифікатор задачі -- `signPersonalProfile`. Він є ключем визначення задачі (task definition key).
+* In the `Id` field, enter task ID -- `signPersonalProfile`. That's the task definition key.
+//* У полі `Name` введіть назву задачі. Наприклад, `Підписання даних учня`.
+* In the `Name` field, enter task name. For example, `Signing of student data`.
+//* У полі `Form key` введіть ключ форми бізнес-процесу -- `sign-person-profile`.
+* In the `Form key` field, enter business process form key -- `sign-person-profile`.
+//* У полі `Assignee` вкажіть змінну, що використовується для зберігання користувача, який запустив екземпляр процесу, -- `${initiator}`.
+* In the `Assignee` field, enter the variable of the user who initiated the process instance -- `${initiator}`.
+//* У полі `Form data pre-population` вкажіть дані, які необхідно передати зі стартової форми для підпису. Для цього використовуйте функцію `submission()` -- `${submission('addPersonalProfile').formData}`.
+* In the `Form data pre-population` field, enter the data that needs to be transferred from the start form for signing. Use the `submission()` function for this -- `${submission('addPersonalProfile').formData}`.
++
+image:bp-modeling/bp/partial-update/bp-partial-update-4.png[]
+
+//=== Моделювання задачі скриптування "Підготовка даних до запису (transient var)"
+=== Modelling "Preparing data for writing (transient var)" script task
+
+//Внесені на формі та підписані КЕП дані передаються задачі скриптування (*Script task*), де використовується groovy-скрипт, який формує із цих даних JSON-об'єкт і записує його до змінної `createPersonPayload`.
+The data entered into the form, and signed with an e-Signature are transferred to a *Script task*, where a groovy-script is used to form a JSON-object from the data, and write it into the `createPersonPayload` variable.
+
+//. Створіть нову задачу, визначте її тип, натиснувши іконку ключа та обравши з меню пункт *Script Task* (Задача скриптування).
+. Create a new task, define its type by clicking the _key icon_ and selecting *Script Task* from the menu.
+
+//. На панелі налаштувань справа заповніть наступні поля:
+. On the right panel, fill in the following fields:
+
+//* У полі `Name` вкажіть назву задачі -- `Підготовка даних для запису (transient var)`.
+* In the `Name` field, enter task name -- `Preparing data for writing (transient var)`.
+//* У полі `Script Format` вкажіть формат скрипту -- `groovy`.
+* In the `Script Format` field, enter script format -- `groovy`.
+//* У полі `Script Type` вкажіть тип скрипту -- `Inline Script`.
+* In the `Script Type` field, enter script type -- `Inline Script`.
+//* У полі `Script` введіть безпосередньо groovy-скрипт:
+* In the `Script` field, enter the groovy-script:
++
+//.Приклад. Groovy-скрипт, що формує JSON-об'єкт для подальшого запису до БД
+//====
+//[source,groovy]
+//----
+//def formData = submission('signPersonalProfile').formData
+//def cephData = [:]
+//        cephData['secondName'] = 'Іванович'
+//        cephData['lastName'] = formData.prop('lastName').value()
+//        cephData['firstName'] = formData.prop('firstName').value()
+//        cephData['birthday'] = formData.prop('birthday').value()
+
+//def createPersonPayload = S(cephData, 'application/json')
+//execution.removeVariable('createPersonPayload')
+//set_transient_variable('createPersonPayload', createPersonPayload)
+//----
+//====
+.The groovy-script that forms the JSON-object to be written to the database
+====
+[source,groovy]
+----
+def formData = submission('signPersonalProfile').formData
+
+def cephData = [:]
+        cephData['secondName'] = 'Tiberius'
+        cephData['lastName'] = formData.prop('lastName').value()
+        cephData['firstName'] = formData.prop('firstName').value()
+        cephData['birthday'] = formData.prop('birthday').value()
+
+def createPersonPayload = S(cephData, 'application/json')
+execution.removeVariable('createPersonPayload')
+set_transient_variable('createPersonPayload', createPersonPayload)
+----
+====
+
+//+
+image:bp-modeling/bp/partial-update/bp-partial-update-5.png[]
+
+//. В результаті виконання задачі, у виводі отримуємо сформований JSON, збережений до змінної `createPersonPayload`, що надалі використовуватиметься у бізнес-процесі.
+. As a result of the task execution we get a formed JSON, stored in the `createPersonPayload` variable to be used in the business process later.
++
+//.Приклад. Сформований JSON-об'єкт, збережений до змінної 'createPersonPayload'
+//====
+//[source,json]
+//----
+//{
+//"secondName": "string",
+//"firstName": "string",
+//"lastName": "string",
+//"birthday": "2022-02-16T13:17:10.952Z"
+//}
+//----
+//====
+
+.A formed JSON-object, stored in the `createPersonPayload` variable
+====
+[source,json]
+----
+{
+"secondName": "string",
+"firstName": "string",
+"lastName": "string",
+"birthday": "2022-02-16T13:17:10.952Z"
+}
+----
+====
+
+//TODO The section is subject to change (as well as 2.12)?
+//=== Моделювання Call Activity для підпису даних системним ключем
+
+//Далі необхідно створити Call Activity для виклику глобального підпроцесу підпису даних системним ключем. Call Activity використовує змінну `createPersonPayload`, дані з якої передаються до підпроцесу для подальшого їх підпису.
+
+//В результаті виконання підпроцесу, викликаного у Call Activity, дані підписуються системним Ceph-ключем. Ключ зберігається до змінної `createPersonPayloadDerivedKey`.
+
+//. Змоделюйте елемент *Call Activity*.
+//. Перейдіть до панелі налаштувань справа та застосуйте делегат *System digital signature*. Для цього оберіть відповідний шаблон із каталогу (`Open Catolog`).
+//+
+//TIP: Приклад налаштування делегата System digital signature наведено за xref:bp-modeling/bp/element-templates/bp-element-templates-installation-configuration.adoc#element-temp-system-digital-signature[посиланням].
+
+//. Виконайте подальші налаштування:
+
+//* У полі `Name` вкажіть назву елемента -- `Підписати дані системним ключем`.
+//* У полі `Input data` вкажіть вхідні дані, які необхідно передати підпроцесу, що викликатиметься -- `${createPersonPayload}`.
+//* У полі `Output variable name` введіть назву змінної, до якої буде записано системний Ceph-ключ -- `createPersonPayloadDerivedKey`. Він потрібний для додаткового системного підпису у Фабриці даних.
+//+
+//NOTE: Ідентифікатор підпроцесу, що викликатиметься, передається у полі `Called Element` і має стале значення `system-signature-bp`. Ці та деякі інші налаштування "вшито" до шаблону з метою спрощення моделювання.
+//+
+//image:bp-modeling/bp/partial-update/bp-partial-update-6.png[]
+
+//=== Моделювання сервісної задачі для створення сутності в базі даних
+=== Modelling a service task for entity creation in the database
+
+//Надалі дані використовуються у сервісній задачі для створення профілю користувача.
+The received data is used in a service task for user profile creation.
+
+//У задачі необхідно застосувати делегат для створення сутності у базі даних (*Create entity in data factory*), використавши підписані дані (Payload) зі змінної `${createPersonPayload}`, та надіслати запит до відповідного API-ендпоінту (ресурсу) `person-profile`.
+It is necessary to use the *Create entity in data factory* delegate for entity creation, using the Payload from the `${createPersonPayload}` variable, and send a request to the corresponding `person-profile` API-endpoint.
+
+//Разом із даними передається _токен доступу до ресурсу_, _КЕП_ і _ключ для системного підпису_.
+The _resource access token_, _e-Signature_, and _system signature key_ are sent with the data.
+
+//. Змоделюйте нову задачу.
+. Model a new task.
+//. Визначте її тип, натиснувши іконку ключа та обравши з меню пункт *Service Task* (сервісна задача).
+. Define its type by clicking the _key icon_ and selecting *Service Task* from the menu.
+//. Перейдіть до панелі налаштувань справа та застосуйте делегат *Create entity in data factory*. Для цього оберіть відповідний шаблон із каталогу (`Open Catalog`).
+. Navigate to the right panel and apply the *Create entity in data factory* delegate by selecting the corresponding template from the `Open Catalog`.
+//. Виконайте подальші налаштування:
+. Perform the following configurations:
+
+//* У полі `Name` вкажіть назву задачі. Наприклад, `Зберегти дані в БД`.
+* In the `Name` field, enter task name. For example, `Save data into the DB`
+//* У полі `Resource` вкажіть ресурс (API-ендпоінт), куди необхідно виконати запит -- `person-profile`.
+* In the `Resource` field, enter the resource (API-endpoint), where the request will be performed -- `person-profile`.
++
+//NOTE: На рівні API ендпоінт виглядає наступним чином: `/<resource name>`, де `<resource name>` -- назва ресурсу. Тобто у полі `Resource` необхідно ввести значення, вказане після косої риски (`/`).
+NOTE: On the API level, the endpoint looks like this: `/<resource name>`, where `<resource name>` is the name of the resource. In the `Resource` field, the value after slash (`/`) must be entered.
+
+//* У полі `Payload` введіть тіло запита -- JSON-об`єкт, тобто дані зі змінної `${createPersonPayload}`, які необхідно зберегти до Фабрики даних.
+* In the `Payload` field, enter request body -- the JSON-object, meaning the data from `${createPersonPayload}` variable, which needs to be saved in the Data Factory.
++
+//NOTE: Майте на увазі, що необхідно попередньо побудувати цей JSON-об`єкт, тобто `payload`, в рамках задачі скриптування.
+NOTE: Please be advised that this JSON-object (the payload) must be created earlier within the *Script Task*.
+
+//* У полі `X-Access-Token` вкажіть токен доступу до ресурсу -- `${completer('signPersonalProfile').accessToken}`.
+* In the `X-Access-Token` field, enter resource access token -- `${completer('signPersonalProfile').accessToken}`.
++
+[CAUTION]
+====
+//Токен доступу береться з АБО ініціатора (наприклад, `${initiator().accessToken}`), АБО виконавця задачі (наприклад, `${completer('taskDefinitionId').accessToken}`):
+The access token is taken from EITHER the initiator (for example, `${initiator().accessToken}`), OR task completer (for example, `${completer('taskDefinitionId').accessToken}`):
+
+//* Якщо перед сервісною задачею у бізнес-процесі немає жодної користувацької задачі, використовуємо токен ініціатора процесу (initiator).
+* If there is no other user task before the service task in the business proces, we use an initiator token.
+
+//* Якщо перед сервісною задачею є користувацька задача, використовуємо токен виконавця задачі (completer).
+* If there is another user task before the service task, we use the completer token.
+
+//Таким чином ми від імені користувача, який АБО запустив бізнес-процес, АБО виконав користувацьку задачу, створюємо сутність у базі даних.
+This way we create an entity in the database EITHER on behalf of the business process initiator, OR on behalf of the completer of the previous user task.
+====
+
+//* У полі `X-Digital-Signature-source` вкажіть джерело цифрового підпису (КЕП), тобто передайте функції `sign_submission()` ID користувацької форми, де застосовували КЕП -- `${sign_submission('signPersonalProfile').signatureDocumentId}`.
+* In the `X-Digital-Signature-source` field, enter e-Signature source -- `${sign_submission('signPersonalProfile').signatureDocumentId}`.
+
+//* У полі `X-Digital-Signature-Derived-source` вкажіть джерело системного підпису, тобто змінну, з якої необхідно взяти системний ключ, -- `${createPersonPayloadDerivedKey}`.
+* In the `X-Digital-Signature-Derived-source` field, enter the source of the system signature, meaning the variable where the system key is taken from -- `${createPersonPayloadDerivedKey}`.
+
+//* У полі `Result variable` вкажіть назву змінної, до якої необхідно зберегти відповідь від API, -- `response`.
+* In the `Result variable` field, enter variable name, where the API response will be written to -- `response`.
++
+//IMPORTANT: В результаті виконується транзакція, яка створює сутність із даними профілю користувача у базі даних.
+IMPORTANT: As a result, a transaction that creates the entity with the user profile data in the database, is performed.
++
+image:bp-modeling/bp/partial-update/bp-partial-update-7.png[]
+
+//=== Моделювання сервісної задачі для пошуку сутності в базі даних
+=== Modelling the entity search service task
+
+//Далі необхідно знайти внесені дані у БД. Тобто ми використовуємо критерій пошуку (search condition) для пошуку даних, і шукаємо особу за прізвищем, щойно записаним до БД. Тобто нам треба знайти ID користувача за певним критерієм пошуку, а саме за ключем `lastName`.
+Now we need to find the data written to the DB, using a search condition, looking for a person with the newest last name written into the DB. So we are trying to search for a user ID using `lastName` as the search condition.
+//Результат запишеться до змінної `response`.
+The result will be written into the `response` variable,
+
+//. Змоделюйте нову задачу.
+. Model a new task.
+//. Визначте її тип, натиснувши іконку ключа та обравши з меню пункт *Service Task* (сервісна задача).
+. Define its type by clicking the _key icon_ and selecting *Service Task* from the menu.
+//. Перейдіть до панелі налаштувань справа та застосуйте делегат *Create entity in data factory*. Для цього оберіть відповідний шаблон із каталогу (`Open Catalog`).
+. Navigate to the right panel and apply the *Create entity in data factory* delegate by selecting the corresponding template from the `Open Catalog`.
+
+//. Виконайте подальші налаштування:
+. Perform the following configurations:
+
+//* У полі `Name` вкажіть назву задачі. Наприклад, `Визначення ID запису`.
+* In the `Name` field, enter task name. For example, `Defining record ID`
+//* Розгорніть секцію *Resource*:
+* Expand the *Resource* section:
+//** У полі `Local Variable Assigment` увімкніть опцію визначення локальних змінних -- `On`.
+** In the `Local Variable Assigment` field, set the option for defining local variables -- `On`.
+//** У полі `Variable Assignment Type` із випадного списку оберіть тип призначення змінної -- `String or Expression`.
+** In the `Variable Assignment Type` field, select the type of variable assignment from the menu -- `String or Expression`.
+//** У полі `Variable Assignment Value` введіть значення локальної змінної -- `person-profile-equal-last-name`. Це назва критерію пошуку (search condition) для ресурсу на рівні Фабрики даних для відповідного представлення (view).
+** In the `Variable Assignment Value` field, enter the value for the local variable -- `person-profile-equal-last-name`. This is the name of our search condition for the resource on Data Factory level, for the corresponding view.
++
+image:bp-modeling/bp/partial-update/bp-partial-update-8.png[]
+
+//* Розгорніть секцію *Search variables*:
+* Expand the *Search variables* section:
+//** У полі `Local Variable Assigment` увімкніть опцію визначення локальних змінних -- `On`.
+** In the `Local Variable Assigment` field, set the option for defining local variables -- `On`.
+//** У полі `Variable Assignment Type` із випадного списку оберіть тип призначення змінної -- `Map`, тобто пари "ключ-значення".
+** In the `Variable Assignment Type` field, select the type of variable assignment from the menu -- `Map`, which is a "key-value" pair.
+//** Натисніть `Add Entry` (`+`) та додайте нову пару:
+** Click `Add Entry` (`+`) and add a new pair:
+//*** у полі `Key` введіть `lastName`, тобто ключ для пошуку параметра у БД. Це дозволить передати параметр пошуку до ресурсу (API-ендпоінт для пошуку даних).
+*** in the `Key` field, enter `lastName`, meaning the key for parameter search in the DB. This allows us to send the search parameter to the resource (API-endpoint for data search).
+//*** у полі `Value` введіть дані користувацької форми, де параметр `lastName` був введений, -- `${submission('signPersonalProfile').formData.prop('lastName').value()}`.
+*** in the `Value` field, enter data from the user form, where the `lastName` was entered -- `${submission('signPersonalProfile').formData.prop('lastName').value()}`.
++
+image:bp-modeling/bp/partial-update/bp-partial-update-8-1.png[]
+
+//* Розгорніть секцію *Access Token*. Введіть токен доступу до ресурсу -- `${completer('signPersonalProfile').accessToken}`.
+* Expand the *Access Token* section. Enter resource access token -- `${completer('signPersonalProfile').accessToken}`.
++
+[CAUTION]
+====
+//Токен доступу береться з АБО ініціатора (наприклад, `${initiator().accessToken}`), АБО виконавця задачі (наприклад, `${completer('taskDefinitionId').accessToken}`):
+The access token is taken from EITHER the initiator (for example, `${initiator().accessToken}`), OR task completer (for example, `${completer('taskDefinitionId').accessToken}`):
+
+//* Якщо перед сервісною задачею у бізнес-процесі немає жодної користувацької задачі, використовуємо токен ініціатора процесу (initiator).
+* If there is no other user task before the service task in the business proces, we use an initiator token.
+
+//* Якщо перед сервісною задачею є користувацька задача, використовуємо токен виконавця задачі (completer).
+* If there is another user task before the service task, we use the completer token.
+
+//Таким чином ми від імені користувача, який АБО запустив бізнес-процес, АБО виконав користувацьку задачу, створюємо сутність у базі даних.
+This way we create an entity in the database EITHER on behalf of the business process initiator, OR on behalf of the completer of the previous user task.
+====
+
+//* У полі `Result Variable` вкажіть назву _транзитної_ змінної, до якої буде збережено результат, отриманий в результаті запита, -- `response`.
+* In the `Result Variable` field, enter the name for the _transit_ variable, where the request result will be written to -- `response.
++
+image:bp-modeling/bp/partial-update/bp-partial-update-8-2.png[]
+
+//=== Моделювання задачі скриптування для отримання даних учня
+=== Modelling script task for getting student data
+
+//На цьому етапі необхідно за допомогою скрипту отримати id елемента із транзитної змінної `response` попередньої задачі. Це необхідно для того, щоб перезаписати результат до іншої, _НЕ транзитної_, змінної, де і зберігатиметься отриманий ID. Нова змінна використовуватиметься далі, під час операції часткового оновлення сутності в БД.
+On this stage we need to fet element ID from the `response` transit variable from the previous task, using a script. This action is required to write the result to another, _non-transit_ variable, and store the ID there. The new variable will be used further during the partial entity update.
+
+//. Створіть нову задачу, визначте її тип, натиснувши іконку ключа та обравши з меню пункт *Script Task* (Задача скриптування).
+. Create a new task, define its type by clicking the _key icon_ and selecting *Script Task* from the menu.
+
+//. На панелі налаштувань справа заповніть наступні поля:
+. On the right panel, fill in the following fields:
+
+//* У полі `Name` вкажіть назву задачі -- `Отримання даних учня`.
+* In the `Name` field, enter task name -- `Getting student data`.
+//* У полі `Script Format` вкажіть формат скрипту -- `groovy`.
+* In the `Script Format` field, enter script format -- `groovy`.
+//* У полі `Script Type` вкажіть тип скрипту -- `Inline Script`.
+* In the `Script Type` field, enter script type -- `Inline Script`.
+//* У полі `Script` введіть безпосередньо groovy-скрипт:
+* In the `Script` field, enter the groovy-script:
++
+//.Приклад. Groovy-скрипт, що отримує ID сутності за параметром і перезаписує його до НЕ транзитної змінної
+.The groovy-script that gets entity ID by parameter, and writes it to a non-transit variable
+====
+[source,groovy]
+----
+response.responseBody.elements().get(0).prop('personProfileId').value()
+----
+====
++
+//TIP: Тобто скрипт отримує значення першого елемента зі змінної `response`.
+TIP: The script gets the value from the first element of the `response` variable.
+
+//* У полі `Result Variable` вкажіть значення нової змінної для перезапису ID.
+* In the `Result Variable`, enter value for the new variable for ID rewriting.
++
+image:bp-modeling/bp/partial-update/bp-partial-update-9.png[]
+
+//=== Моделювання користувацької форми для редагування даних
+=== Modelling user form for data editing
+
+//На цьому етапі необхідно змоделювати форму, на якій користувач зможе внести оновлену інформацію щодо профілю учня.
+Now we need to model a form, where the user will be able to enter updated information on the student profile.
+
+//. Змоделюйте користувацьку задачу (*User form*) для підпису даних профілю користувача за допомогою КЕП та пов'яжіть її із формою бізнес-процесу параметром `Form key`.
+. Model a *User Form* for the signing of user profile data with e-Signature, and connect it with the business process form using `Form key` parameter.
+
+//. На панелі налаштувань справа сконфігуруйте такі параметри:
+. On the right panel, configure the following parameters:
+
+//* У полі `Id` вкажіть ідентифікатор задачі -- `editPersonalProfile`. Він є ключем визначення задачі (task definition key).
+* In the `Id` field, enter task ID -- `editPersonalProfile`. It is the task definition key.
+//* У полі `Name` введіть назву задачі. Наприклад, `Редагування даних учня`.
+* In the `Name` field, enter task name. For example, `Student data editing`.
+//* У полі `Form key` введіть ключ форми бізнес-процесу -- `edit-person-profile`.
+* In the `Form key` field, enter business process form key -- `edit-person-profile`.
+//* У полі `Assignee` вкажіть змінну, що використовується для зберігання користувача, який запустив екземпляр процесу, -- `${initiator}`.
+* In the `Assignee` field, enter the variable of the user who initiated the process instance -- `${initiator}`.
+//* У полі `Form data pre-population` вкажіть дані, які необхідно редагувати, -- `${submission('addPersonalProfile').formData}`.
+* In the `Form data pre-population` field, enter the data that needs to be edited -- `${submission('addPersonalProfile').formData}`.
+
++
+image:bp-modeling/bp/partial-update/bp-partial-update-9-1.png[]
+
+//=== Моделювання користувацької форми для підпису змінених даних КЕП
+=== Modelling user form for the signing of updated data with e-Signature
+
+//На цьому етапі необхідно змоделювати форму для підпису внесених змін КЕП.
+Now we need to model the user form for the signing of updated data with e-Signature.
+
+//. Змоделюйте користувацьку задачу (*User form*) для підпису даних профілю користувача за допомогою КЕП та пов'яжіть її із формою бізнес-процесу параметром `Form key`.
+. Model a *User Form* for the signing of user profile data with e-Signature, and connect it with the business process form using `Form key` parameter.
+
+//. На панелі налаштувань справа сконфігуруйте такі параметри:
+. On the right panel, configure the following parameters:
+
+//* У полі `Id` вкажіть ідентифікатор задачі -- `signEditedPersonalProfile`. Він є ключем визначення задачі (task definition key).
+* In the `Id` field, enter task ID -- `signEditedPersonalProfile`. It is the task definition key.
+//* У полі `Name` введіть назву задачі. Наприклад, `Підписати змінені дані`.
+* In the `Name` field, enter task name. For example, `Sign updated data`
+//* У полі `Form key` введіть ключ форми бізнес-процесу -- `sign-edited-person-profile`.
+* In the `Form key` field, enter business process form key -- `sign-edited-person-profile`.
+//* У полі `Assignee` вкажіть змінну, що використовується для зберігання користувача, який запустив екземпляр процесу, -- `${initiator}`.
+* In the `Assignee` field, enter the variable of the user who initiated the process instance -- `${initiator}`.
+//* У полі `Form data pre-population` вкажіть відредаговані дані, які необхідно підписати КЕП, -- `${submission('editPersonalProfile').formData}`.
+* In the `Form data pre-population` field, enter the edited data that needs to be signed -- `${submission('editPersonalProfile').formData}`.
+
++
+image:bp-modeling/bp/partial-update/bp-partial-update-10.png[]
+
+//=== Моделювання задачі скриптування для формування об'єкта зі зміненими даними
+=== Modelling script task for the forming of an object with updated data
+
+//Внесені на формі та підписані КЕП дані передаються задачі скриптування (*Script task*), де використовується groovy-скрипт, який формує із цих даних JSON-об'єкт і записує його до змінної `updatePersonPayload`.
+The data entered into the form, and signed with an e-Signature are transferred to a *Script task*, where a groovy-script is used to form a JSON-object from the data, and write it into the `updatePersonPayload` variable.
+
+//. Створіть нову задачу, визначте її тип, натиснувши іконку ключа та обравши з меню пункт *Script Task* (Задача скриптування).
+. Create a new task, define its type by clicking the _key icon_ and selecting *Script Task* from the menu.
+
+//. На панелі налаштувань справа заповніть наступні поля:
+. On the right panel, fill in the following fields:
+
+//* У полі `Name` вкажіть назву задачі -- `Підготовка даних для запису (transient var)`.
+* In the `Name` field, enter task name -- `Preparing data for writing (transient var)`.
+//* У полі `Script Format` вкажіть формат скрипту -- `groovy`.
+-* In the `Script Format` field, enter script format -- `groovy`.
+//* У полі `Script Type` вкажіть тип скрипту -- `Inline Script`.
+* In the `Script Type` field, enter script type -- `Inline Script`.
+//* У полі `Script` введіть безпосередньо groovy-скрипт:
+* In the `Script` field, enter the groovy-script:
++
+//.Приклад. Groovy-скрипт, що формує JSON-об'єкт для подальшого запису до БД
+
+.The groovy-script that forms the JSON-object to be written to the database
+====
+[source,groovy]
+----
+def formData = submission('signEditedPersonalProfile').formData
+def cephData = [:]
+
+        cephData['lastName'] = formData.prop('lastName').value()
+        cephData['firstName'] = formData.prop('firstName').value()
+        cephData['birthday'] = formData.prop('birthday').value()
+
+        set_transient_variable('updatePersonPayload', S(cephData, 'application/json'))
+----
+====
++
+image:bp-modeling/bp/partial-update/bp-partial-update-11.png[]
+
+//TODO The section is subject to change
+//=== Моделювання Call Activity для підпису оновлених даних системним ключем
+
+//Далі необхідно створити Call Activity для виклику глобального підпроцесу підпису даних системним ключем. Call Activity використовує змінну `updatePersonPayload`, дані з якої передаються до підпроцесу для подальшого їх підпису.
+
+//В результаті виконання підпроцесу, викликаного у Call Activity, дані підписуються системним Ceph-ключем. Ключ зберігається до змінної `updatePersonPayloadDerivedKey`.
+
+//. Змоделюйте елемент *Call Activity*.
+//. Перейдіть до панелі налаштувань справа та застосуйте делегат *System digital signature*. Для цього оберіть відповідний шаблон із каталогу (`Open Catolog`).
+//+
+//TIP: Приклад налаштування делегата System digital signature наведено за xref:bp-modeling/bp/element-templates/bp-element-templates-installation-configuration.adoc#element-temp-system-digital-signature[посиланням].
+
+//. Виконайте подальші налаштування:
+
+//* У полі `Name` вкажіть назву елемента -- `Підписати дані системним ключем`.
+//* У полі `Input data` вкажіть вхідні дані, які необхідно передати підпроцесу, що викликатиметься -- `${updatePersonPayload}`.
+//* У полі `Output variable name` введіть назву змінної, до якої буде записано системний Ceph-ключ -- `updatePersonPayloadDerivedKey`. Він потрібний для додаткового системного підпису у Фабриці даних.
+//+
+//NOTE: Ідентифікатор підпроцесу, що викликатиметься, передається у полі `Called Element` і має стале значення `system-signature-bp`. Ці та деякі інші налаштування "вшито" до шаблону з метою спрощення моделювання.
+//+
+//image:bp-modeling/bp/partial-update/bp-partial-update-12.png[]
+
+//=== Моделювання сервісної задачі для часткового оновлення сутності відповідно до внесених змін
+=== Modelling the service task for the partial entity update according to the changes made
+
+//На цьому етапі необхідно змоделювати сервісну задачу для оновлення сутності відповідно до внесених на формі змін. Це можна зробити за допомогою спеціального делегата.
+Now we need to model the service task for entity update according to the changes made into the form. This is done via a dedicated delegate.
+
+//Розширення *Update entity in data factory partially* -- делегат для часткового оновлення сутності у фабриці даних, який налаштовується за допомогою розробленого однойменного шаблону *Update entity in data factory partially* (_dataFactoryConnectorPartialUpdateDelegate.json_).
+The  ]Update entity in data factory partially* extension is a delegate for the partial update of an entity in Data Factory, which is configured through the developed *Update entity in data factory partially* template (_dataFactoryConnectorPartialUpdateDelegate.json_).
+
+//NOTE: Перед налаштуванням шаблону в Сamunda Modeler переконайтеся, що папка із застосунком _resources_ -> _element-templates_ містить файл _dataFactoryConnectorPartialUpdateDelegate.json_.
+NOTE: Before configuring the template in Camunda Modeler, ensure that the application folder _resources_ -> _element-templates_ includes the _dataFactoryConnectorPartialUpdateDelegate.json_ file.
+
+//. Створіть *Service Task*.
+. Create a *Service Task*.
+
+//. На панелі налаштувань справа натисніть кнопку `Open Catalog`, оберіть відповідний шаблон *Update entity in data factory partially* зі списку та натисніть `Apply` для підтвердження.
+. On the right panel, click `Open Catalog`, select the corresponding *Update entity in data factory partially* template from the list, and click `Apply` to confirm.
+
++
+image:bp-modeling/bp/element-temp/partial-update/partial-update-1.png[]
+
+//. Сконфігуруйте обраний шаблон:
+. Configure the selected template:
+
+//* У полі `Name` вкажіть назву задачі. Наприклад, `Часткове оновлення виконанно`.
+* In the `Name` field, enter task name. For example, `Partial update completed`.
+//* У полі `Resource` вкажіть ресурс, тобто назву ендпоінту, до якого необхідно звернутися, -- `person-profile`.
+* In the `Resource` field, enter the resource, meaning the name of the endpoint to send the request to -- `person-profile`.
++
+//NOTE: На рівні API ендпоінт виглядає як `/partial/<resource-name>/<resource-id>`, де `<resource-name>` -- назва ресурсу, а `<resource-id>` -- ідентифікатор ресурсу у Фабриці даних. У полі `Resource` необхідно вказати значення між `/partial` та `/<resource-id>`, без косої риски (`/`).
+NOTE: On the API level, the endpoint looks like this: `/partial/<resource-name>/<resource-id>`, where `<resource name>` is the name of the  and `<resource-id>` is the resource Data Factory ID. In the `Resource` field, the value between `/partial` and `/<resource-id>` must be entered without slash (`/`).
+
+//* У полі `Resource id` вкажіть ідентифікатор ресурсу, тобто сутності у Фабриці даних, яку необхідно оновити. Наприклад, `{id}`.
+* In the `Resource id` field, enter the ID of the resource, meaning the entity in Data Factory that needs to be updated. For example, `{id}`.
++
+[NOTE]
+====
+//Ідентифікатор ресурсу визначається у форматі `UUID`.
+//Його можна передати як змінну, взяту із попередніх задач бізнес-процесу, або напряму -- як `f7dc68fe-98e1-4d95-b80f-df5ce42cebb9`.
+Resource ID is defined in `UUID` format.
+It can be transferred as a variable taken from previous tasks of the business process, or plain -- `f7dc68fe-98e1-4d95-b80f-df5ce42cebb9`.
+====
+
+//* У полі `Payload` введіть тіло запита -- JSON-структуру із параметрами, які необхідно оновити у Фабриці даних. Наприклад, `${updatePersonPayload}`.
+* In the `Payload` field, enter request payload -- a JSON-structure with the parameters that need to be updated in Data Factory. For example, `${updatePersonPayload}`.
+
+//* У полі `X-Access-Token` введіть токен доступу до ресурсу. Наприклад, `${completer('signEditedPersonalProfile').accessToken}`.
+* In the `X-Access-Token` field, enter resource access token. For example, `${completer('signEditedPersonalProfile').accessToken}`.
++
+[TIP]
+====
+//Токен доступу береться з АБО ініціатора (наприклад, `$initiator().accessToken}`), АБО виконавця останньої користувацької задачі (наприклад, `${completer('taskDefinitionId').accessToken}`).
+The access token is taken from EITHER the initiator (for example, `${initiator().accessToken}`), OR task completer (for example, `${completer('taskDefinitionId').accessToken}`).
+====
+
+//* У полі `X-Digital-Signature source` вкажіть джерело для Ceph-документа, де зберігається підпис користувача, накладений на дані UI-форми при внесенні, -- `${sign_submission('signEditedPersonalProfile').signatureDocumentId}`.
+* In the `X-Digital-Signature source` field, enter the source for the Ceph-document, where the user's signature, used on the UI-form data during the entering, is stored -- `${sign_submission('signEditedPersonalProfile').signatureDocumentId}`.
+
+//* У полі `X-Digital-Signature-Derived source` вкажіть джерело для Ceph-документа, де зберігається системний підпис, автоматично накладений на тіло запита, -- `${updatePersonPayloadDerivedKey}`.
+In the `X-Digital-Signature-Derived source` field, enter the source for the Ceph-document, where the system signature, automatically attached to request body, is stored -- `${updatePersonPayloadDerivedKey}`.
+
+//* У полі `Result variable` вкажіть назву змінної процесу, до якої необхідно записати результат (за замовчуванням -- `response`).
+* In the `Result variable` field, enter the process variable name, where the result will be written (default -- `response`).
+
++
+image:bp-modeling/bp/element-temp/partial-update/partial-update-2.png[]
+
+//=== Моделювання події завершення процесу
+=== Modelling process end event
+
+//Завершіть бізнес-процес. Для цього змоделюйте подію завершення та у полі `Name` введіть `Завершення процесу`.
+End the business process by modelling an end event and entering `Process end` in the `Name` field.
+
+image:bp-modeling/bp/partial-update/bp-partial-update-13.png[]
+
+
+[#api-implementation]
+//== Імплементація на рівні API
+== API implementation
+
+//На рівні API Фабрики даних реалізовано окремий ендпоінт для роботи із методом `PATCH` для часткового оновлення сутності у базі даних.
+On the API level, Data Factory has a dedicated endpoint for processing `PATCH` method for partial entity update.
+
+//.Параметри запита для часткового оновлення сутності у БД
+
+.Partial entity update request parameters
+====
+//Метод та ресурс: ::
+Method and resource: ::
+----
+PATCH /partial/<resource-name>/<resource-id>
+----
+
+//Тіло запита: ::
+Request payload: ::
+[source,json]
+//----
+//{
+//	"firstName":"Іван",
+//	"lastName":"Сидоренко",
+//	"birthday":"2020-01-01"
+//}
+//----
+[source,json]
+----
+{
+	"firstName":"John",
+	"lastName":"Doe",
+	"birthday":"2020-01-01"
+}
+----
+====
+
+//== Імплементація на рівні моделі даних
+== Data model level implementation
+
+//На рівні структури даних, у файлі _createSearchConditions.xml_ необхідно додати відповідний changeSet із тегом `<ext:partialUpdate>`. Це дозволить автоматично створити окремий `PATCH`-ендпоінт на рівні API для підтримки функції часткового оновлення сутності.
+On the data structure level, add the corresponding changeSet with the `<ext:partialUpdate>` tag to the _createSearchConditions.xml_ file. This way you'll automatically create a dedicated `PATCH`-endpoing on the API level to support partial entity update.
+
+//NOTE: Тег `<ext:partialUpdate>` необхідно додати для кожної таблиці.
+NOTE: The `<ext:partialUpdate>` tag must be added to each table.
+
+//.Приклад. changeSet для часткового оновлення сутності у БД
+
+.changeSet for the partial entity update in the DB
+====
+[source,xml]
+----
+<changeSet author="registry owner" id="partial update person_profile">
+	<ext:partialUpdate>
+		<ext:table name="person_profile">
+			<ext:column name="last_name"/>
+			<ext:column name="first_name"/>
+			<ext:column name="birthday"/>
+		</ext:table>
+	</ext:partialUpdate>
+</changeSet>
+----
+====
