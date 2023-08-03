@@ -1,0 +1,212 @@
+:toc-title: On this page:
+:toc: auto
+:toclevels: 5
+:experimental:
+:sectnums:
+:sectnumlevels: 5
+:sectanchors:
+:sectlinks:
+:partnums:
+
+
+//= Валідація JWT-токенів за допомогою Istio Envoy
+=JWT token validation using Istio Envoy
+
+:sectanchors:
+
+//TIP: JWT-token (_eng. **JSON Web Token**_) -- формат безпечного обміну даними, який використовується найчастіше для передачі чутливої інформації або авторизації HTTP-запитів користувачів. JWT-токен може бути підписаний секретом (за допомогою HMAC алгоритму) або пар відкритий/приватний ключ використовуючи алгоритми RSA або ECDSA. Стандартизований у RFC 7519.
+TIP: JWT-token (_eng. **JSON Web Token**_) -- a secure data exchange format that is most commonly used to transfer sensitive information or authorize user HTTP requests. The JWT token can be signed with a secret (using the HMAC algorithm) or a public/private key pair using the RSA or ECDSA algorithms. Standardized in RFC 7519.
+
+//== Вступ
+== Introduction
+
+//JWT-токен зазвичай відправляється як Bearer токен у заголовку користувацького HTTP запиту. Перед тим як запит досягне мікросервісу, Istio Envoy може:
+JWT token is usually sent as a Bearer token in the header of a custom HTTP request. Before the request reaches the microservice, Istio Envoy can:
+////
+. Перевірити JWT-токен всередині заголовку HTTP запиту на коректність та відповідність встановленим правилам
+. Пропускати трафік з коректним JWT-токеном у мікросервіс
+. Не пропускати трафік з не коректним JWT-токеном.
+////
+
+. Check the JWT token inside the HTTP header of the request for correctness and compliance with the established rules
+. Pass traffic with the correct JWT token to the microservice
+. Do not allow traffic with an incorrect JWT token.
+
+image::architecture/platform/operational/service-mesh/istio/auth.svg[width=600,float="center",align="center"]
+
+:sectnums:
+
+//== Конфігурація правил для валідації токенів
+== Configuration of rules for token validation
+
+//Загалом, конфігурація Envoy проксі правил складається зі створення наступних API обʼєктів у OpenShift кластері для кожного сервісу, який виконує авторизацію користувачів:
+In general, the configuration of Envoy proxy rules consists of creating the following API objects in the OpenShift cluster for each service that performs user authorization:
+
+[source,yaml]
+----
+apiVersion: security.istio.io/v1beta1
+kind: RequestAuthentication
+metadata:
+  name: request-auth-digital-signature-ops
+spec:
+  jwtRules:
+    - forwardOriginalToken: true
+      fromHeaders:
+        - name: X-Access-Token
+      issuer: >-
+        https://platform-keycloak.apps.cicd2.mdtu-ddm.projects.epam.com/auth/realms/mdtu-ddm-edp-cicd-platform-sit-officer-portal
+      jwksUri: >-
+        https://platform-keycloak.apps.cicd2.mdtu-ddm.projects.epam.com/auth/realms/mdtu-ddm-edp-cicd-platform-sit-officer-portal/protocol/openid-connect/certs
+  selector:
+    matchLabels:
+      app: digital-signature-ops
+
+----
+////
+Конфігурація складається з декількох полів:
+
+- `forwardOriginalToken` -- токен з початкового запиту буде переданий далі;
+- `fromHeaders` -- імʼя заголовока з токеном;
+- `issuer` -- постачальник який сгенерував токен;
+- `jwksUri` -- URL-адреса відкритого ключа постачальника, встановленого для перевірки підпису JWT-токена;
+- `selector` -- селектор визначає до якого мікросервісу треба застосувати конфігурацію.
+
+Щоб відхилити запити без коректних JWT-токенів, треба додати політику авторизації з правилом, що вказує дію `DENY` для запитів без `RequestPrincipal`, що відображаються як `notRequestPrincipals: ["*"]` у наступному прикладі.
+////
+The configuration consists of several fields:
+
+- `forwardOriginalToken` -- the token from the initial request will be forwarded;
+- `fromHeaders` -- header name with token;
+- `issuer' -- the provider that generated the token;
+- `jwksUri` -- URL of the public key of the provider set to verify the signature of the JWT token;
+- `selector` -- the selector determines to which microservice the configuration should be applied.
+
+To reject requests without valid JWT tokens, you need to add an authorization policy with a rule specifying the `DENY' action for requests without a `RequestPrincipal', shown as `notRequestPrincipals: ["*"]` in the following example.
+
+[source,yaml]
+----
+apiVersion: "security.istio.io/v1beta1"
+kind: "AuthorizationPolicy"
+metadata:
+  name: digital-signature-ops
+spec:
+  selector:
+    matchLabels:
+      app: digital-signature-ops
+  action: DENY
+  rules:
+  - from:
+    - source:
+        notRequestPrincipals: ["*"]
+----
+////
+Таким чином, правило `AuthorizationPolicy` відхиляє запити без коректних JWT-токенів.
+
+Далі Istio Envoy проксі отримує конфігурацію з istiod у наступному порядку:
+
+ . При старті нової поди, за допомогою механізму `MutationWebhooks`, у неї додається додатковий контейнер Envoy проксі, який відповідає за перехоплення усього трафіку перед основним контейнером мікросервісу.
+
+ . При ініціалізації Envoy-проксі отримує необхідну конфігурацію від `istiod`, яка містить у собі наступну інформацію, яку було задано на минулому кроці при створенні `RequestAuthentication` обʼєкту:
+////
+
+Thus, the `AuthorizationPolicy` rule rejects requests without valid JWT tokens.
+
+Next, the Istio Envoy proxy receives the configuration from istiod in the following order:
+
+. When starting a new pod, using the ``MutationWebhooks'' mechanism, an additional Envoy proxy container is added to it, which is responsible for intercepting all traffic in front of the main microservice container.
+
+. During initialization, the Envoy-proxy receives the necessary configuration from `istiod`, which contains the following information, which was specified in the previous step when creating the `RequestAuthentication` object:
+
+[source,json]
+----
+...
+{
+"name": "envoy.filters.http.jwt_authn",
+"typed_config": {
+  "@type": "type.googleapis.com/envoy.extensions.filters.http.jwt_authn.v3.JwtAuthentication",
+  "providers": {
+    "origins-0": {
+      "issuer": "https://platform-keycloak.apps.cicd2.mdtu-ddm.projects.epam.com/auth/realms/mdtu-ddm-edp-cicd-sk-test-qa-admin",
+      "local_jwks": {
+          "inline_string": "<JWKS which will be received from the issuer>"
+        },
+      "forward": true,
+      "from_headers": [{
+         "name": "X-Access-Token"
+       }],
+      "payload_in_metadata": "https://platform-keycloak.apps.cicd2.mdtu-ddm.projects.epam.com/auth/realms/mdtu-ddm-edp-cicd-sk-test-qa-admin"
+}
+...
+----
+////
+ . На наступному кроці Envoy проксі використовуючи URL з поля `issuer` отримує JWKS з відкритим ключем від мікросервісу генерації JWT-токенів (Keycloak) та записує його у `local_jwks` поле. За замовчуванням, тривалість, після якої термін дії кешованого відкритого ключа закінчиться https://github.com/envoyproxy/envoy/blob/9d5627a0879b0a029e90515137c108e1d2884bfc/api/envoy/extensions/filters/http/jwt_authn/v3/config.proto#L308[дорівнює] 2 хвилинам.
+
+ . Далі виконується інша додаткова конфігурація та невдовзі Envoy проксі готовий обробляти запити.
+////
+. In the next step, the Envoy proxy, using the URL from the `issuer` field, receives JWKS with a public key from the JWT token generation microservice (Keycloak) and writes it in the `local_jwks` field. By default, the duration after which the cached public key will expire is https://github.com/envoyproxy/envoy/blob/9d5627a0879b0a029e90515137c108e1d2884bfc/api/envoy/extensions/filters/http/jwt_authn/v3/config.proto#L308[ ] for 2 minutes.
+
+. Next, another additional configuration is performed and soon the Envoy proxy is ready to process requests.
+
+//== Валідація токенів на стороні Envoy проксі
+== Token validation on the Envoy proxy side
+////
+Кожний запит який надходить на мікросервіс перехоплюється Envoy проксі та перевіряється на відповідність вказану у `RequestAuthentication`, а саме:
+
+. Перевірка чи присутній JWT-токен взагалі
+. Отримання JWT-токена з заголовку
+. Перевірка JWT-токена за допомогою відкритого ключа отриманого раніше з URL.
+
+Далі наведений приклад Envoy логів:
+////
+Every request that comes to the microservice is intercepted by the Envoy proxy and checked for compliance specified in `RequestAuthentication`, namely:
+
+. Checking if the JWT token is present at all
+. Getting the JWT token from the header
+. Validating the JWT token using the public key obtained earlier from the URL.
+
+The following is an example of Envoy logs:
+----
+2021-12-24T12:48:45.867291Z	debug	envoy http	[C8][S790218861205563098] request end stream
+2021-12-24T12:48:45.867334Z	debug	envoy jwt	Called Filter : setDecoderFilterCallbacks
+2021-12-24T12:48:45.867376Z	debug	envoy jwt	Called Filter : decodeHeaders
+2021-12-24T12:48:45.867393Z	debug	envoy jwt	Prefix requirement '/' matched.
+2021-12-24T12:48:45.867400Z	debug	envoy jwt	extract x-access-token
+2021-12-24T12:48:45.867447Z	debug	envoy jwt	Jwt authentication completed with: OK
+2021-12-24T12:48:45.867497Z	debug	envoy filter	AuthenticationFilter::decodeHeaders with config
+policy {
+  peers {
+    mtls {
+      mode: PERMISSIVE
+    }
+  }
+  origins {
+    jwt {
+      issuer: "https://platform-keycloak.apps.cicd2.mdtu-ddm.projects.epam.com/auth/realms/mdtu-ddm-edp-cicd-sk-test-qa-admin"
+    }
+  }
+  origins {
+    jwt {
+      issuer: "https://platform-keycloak.apps.cicd2.mdtu-ddm.projects.epam.com/auth/realms/mdtu-ddm-edp-cicd-sk-test-qa-citizen-portal"
+    }
+  }
+  origins {
+    jwt {
+      issuer: "https://platform-keycloak.apps.cicd2.mdtu-ddm.projects.epam.com/auth/realms/mdtu-ddm-edp-cicd-sk-test-qa-external-system"
+    }
+  }
+  origins {
+    jwt {
+      issuer: "https://platform-keycloak.apps.cicd2.mdtu-ddm.projects.epam.com/auth/realms/mdtu-ddm-edp-cicd-sk-test-qa-officer-portal"
+    }
+  }
+  origin_is_optional: true
+  principal_binding: USE_ORIGIN
+}
+skip_validate_trust_domain: true
+
+2021-12-24T12:48:45.867507Z	debug	envoy filter	[C8] validateX509 mode PERMISSIVE: ssl=false, has_user=false
+
+2021-12-24T12:48:45.867616Z	debug	envoy rbac	checking request: requestedServerName: , sourceIP: 10.128.32.10:55660, directRemoteIP: 10.128.32.10:55660, remoteIP: 10.128.32.10:55660,localAddress: 10.130.18.67:8080, ssl: none, headers: ':authority', '10.130.18.67:8080'
+
+2021-12-24T12:48:45.867628Z	debug	envoy rbac	enforced allowed, matched policy none
+----
