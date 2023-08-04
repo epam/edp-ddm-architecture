@@ -1,0 +1,217 @@
+:toc-title: On this page:
+:toc: auto
+:toclevels: 5
+:experimental:
+:sectnums:
+:sectnumlevels: 5
+:sectanchors:
+:sectlinks:
+:partnums:
+
+//= Контрольне завдання 3
+//{empty} +
+= Test No. 3
+
+//== Мета завдання
+== Objectives
+
+//_Виконання цього завдання має на меті:_
+During this test, you will:
+
+//* отримати поглиблені практичні знання зі створення бізнес-процесів на Платформі;
+* Deepen your practical skills in developing the business processes on the Platform.
+//* ознайомитися з вкладеними сутностями.
+* Get familiar with nested entities.
+
+//== Завдання
+== Tasks
+
+//["upperroman"]
+//. Створіть модель даних на базі представленої таблиці.
+. Create a data model based on the following table.
++
+[cols="5%,30%,30%,10%,20%,5%", options="header"]
+.Fields and descriptions
+|====
+//|_№_|_Назва поля на формі та в логічній моделі даних_|_Назва поля у фізичній моделі даних_|_Формат_|_Довідник, що використовується_|_Обов'язковість_
+|No. |Field name on the form and in the logical data model |Field name in the physical data model |Format |Reference used |Required field
+
+6+^|*person_edu_profile* entity
+|1|Child profile ID|person_profile_id|Text||+
+|2|Student status (Student status ID)|person_edu_state_id|UUID|link:{attachmentsdir}/study-project/control-task-3/dict-person-edu-state.csv[Student status (person_edu_state)]|+
+//|3|Ідентифікатор ЗЗСО (заклад освіти в якому навчається, або навчався учень на останній момент часу)|edu_organization_id|UUID Паспорту ЗЗСО (Edu_organization) з Паспорта ЗЗСО||+
+|3|Institution of general secondary education ID (Institution where the student is currently or was last studying)|edu_organization_id|UUID of the institution passport (Edu_organization) from the institution passport||+
+6+^|*orders* entity
+|4|Class ID|unit_id|UUID||+
+|5|Child profile ID|person_profile_id|UUID||+
+|6|Order number|order_number|Text||+
+|7|Order date|order_date|Date||+
+|8|Order type (Order type ID)|order_type_id|UUID|link:{attachmentsdir}/study-project/control-task-3/dict-order-type.csv[Order type (order_type)]|+
+|9|Enrollment date|enrollment_date|Date||+
+6+^|*transaction* entity
+|10|Order ID|order_id|UUID||+
+|11|Class ID|unit_id|UUID||+
+|12|Student's educational profile ID|person_edu_profile_id|UUID||+
+|====
++
+//. Створіть endpoint для сутностей `person_edu_profile`, `transaction`, `orders` за типом *_Composite Entity_*, в якій `orders` та `person_edu_profile` виступають батьківськими сутностями для `transaction`.
+. Create a *Composite Entity* endpoint for the `person_edu_profile`, `transaction`, and `orders` entities, where `orders` and `person_edu_profile` entities are parents of the `transaction` entity.
++
+//TIP: За детальною інформацією щодо створення Composite Entity зверніться до розділу xref:data-modeling/data/physical-model/liquibase-ddm-ext.adoc#createCompositeEntity[Збереження декількох сутностей в рамках однієї транзакції] відповідного документа.
+TIP: For details on creating Composite Entities, see xref:data-modeling/data/physical-model/liquibase-ddm-ext.adoc#createCompositeEntity[Saving multiple entities within a single transaction].
++
+//. Створіть наступний перелік Search condition:
+. Create the following search conditions:
++
+//["arabic"]
+//.. Створіть за типом Search condition (*unit_edu_organization_id_equals*) для пошуку класів ЗЗСО з підтримкою `EQUALS`.
+.. Create a search condition (*unit_edu_organization_id_equals*) for searching institution classes with `EQUALS` support.
+
+SEARCH BY EQUALS::
++
+* Input parameters:
++
+[source, sql]
+----
+SELECT unit.unit_id, unit.parallel, unit.name, unit_type.name, unit. students_max_number, COUNT (transaction_id)
+FROM unit
+INNER JOIN unit_type ON unit.unit_type_id = unit_type.unit_type_id
+INNER JOIN transaction on unit.unit_id = transaction.unit_id
+WHERE unit.edu_organization_id='UUID';
+Parameters: UUID
+Constants: none
+----
++
+* Output parameters:
++
+[source, roomsql]
+----
+UUID, 1, A, general, 25, 5
+----
++
+//.. Створіть за типом Search condition (*person_profile_equal*) для перевірки значення поля `'person_edu_profile_id'` з підтримкою `EQUALS`.
+.. Create a search condition (*person_profile_equal*) to check the `'person_edu_profile_id'` field with `EQUALS` support.
++
+SEARCH BY EQUALS::
++
+* Input parameters:
++
+[source, sql]
+----
+SELECT person_edu_profile.person_profile_id, person_edu_profile.edu_organization_id, person_edu_state.constant_code  FROM  person_edu_profile
+INNER JOIN  person_edu_state  ON  person_edu_profile.person_edu_state_id = person_edu_state.person_edu_state_id
+WHERE  person_edu_profile.person_edu_profile_id ='UUID'
+Parameters:  person_edu_profile.person_edu_profile_id
+Constants: none
+----
++
+* Output parameters:
++
+[source, roomsql]
+----
+UUID, UUID, STUDYING
+If the record does not exist Output:
+null
+----
++
+//.. Створіть за типом Search condition (*person_edu_state_equal*) для заповнення поля "Статус учня" з підтримкою `READ ALL` та `EQUALS`.
+.. Create a search condition (*person_edu_state_equal*) to fill out the `Student status` field with `READ ALL` and `EQUALS` support.
++
+READ ALL::
++
+* Input parameters:
++
+[source, sql]
+----
+SELECT person_edu_state_id, name, constant_code FROM person_edu_state ORDER BY name;
+Parameters: none
+Constants: none
+----
++
+* Output parameters:
++
+[source, roomsql]
+----
+UUID, Studying, STUDYING
+UUID, Not attending, NOT_ATTENDING
+UUID, Excluded, EXCLUDED
+UUID, Graduated, GRADUATED
+----
++
+EQUAL::
++
+* Input parameters:
++
+[source, sql]
+----
+SELECT person_edu_state_id, name, constant_code FROM person_edu_state WHERE  constant_code = 'STUDYING' ORDER BY name;
+Parameters: constant_code
+Constants: none
+----
++
+* Output parameters:
++
+[source, roomsql]
+----
+UUID, Studying, STUDYING
+----
++
+//.. Створіть за типом Search condition (*order_type_code_equals*) для заповнення поля "Тип наказу"  з підтримкою  `EQUALS`.
+.. Create a search condition (*order_type_code_equals*) to fill out the `Order type` field with `EQUALS` support.
++
+SEARCH BY EQUALS::
++
+* Input parameters:
++
+[source, sql]
+----
+SELECT order_type_id, name FROM order_type WHERE  constant_code='INITIAL_ONBOARDING' ;
+Parameters: constant_code
+Constants: none
+----
++
+* Output parameters:
++
+[source, roomsql]
+----
+UUID, Initial creation of an educational profile
+----
++
+//. Створіть наступний перелік форм:
+//["arabic"]
+. Create the following forms:
+//.. _Форма внесення даних для пошуку дитини (стартова)_
+.. A form for entering data to search for a child (start)
+//.. _Форма внесення даних про освітній профіль_
+.. A form for entering data into the educational profile
+//.. _Форма підписання даних про освітній профіль_
+.. A form for signing data for the educational profile
+//{empty} +
+//{empty} +
++
+//. Створіть наступний бізнес-процес:
+. Create the following business process:
++
+//* Бізнес-процес створення освітнього профілю дитини, де `businessKey` - `"ФІО дитини"`. Додайте наступні перевірки:
+* Develop a business process for creating a child's educational profile, where `businessKey` is `child's full name`. Add the following validations:
++
+--
+//** профіль дитини було створено в реєстрі;
+** A child's profile was created in the registry.
+//** освітній профіль дитини раніше не було створено.
+** A child's educational profile was not created previously.
+--
++
+//Об'єкт, який зберігається в базу даних являє собою вкладену сутність. Перед завершенням бізнес-процесу необхідно визначати статус цього бізнес-процесу.
+The object stored in the database is a nested entity.
++
+Before completing the business process, determine its status.
+
+//== Очікуваний результат завдання
+== Expected result
+
+//Змодельовано бізнес-процес створення освітнього профілю дитини у тестовому реєстрі. Бізнес-процес доступний у вигляді послуги в Кабінеті користувача.
+After completing this test, you should have the following:
+
+* A business process for creating a child's educational profile in a test registry.
+* Your business process must be available as a service in the user portal.
