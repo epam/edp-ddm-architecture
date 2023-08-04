@@ -1,0 +1,287 @@
+:toc-title: On this page:
+:toc: auto
+:toclevels: 5
+:experimental:
+:sectnums:
+:sectnumlevels: 5
+:sectanchors:
+:sectlinks:
+:partnums:
+
+//= Контрольне завдання 2
+= Test No. 2
+
+//== Мета завдання
+== Objectives
+
+//_Виконання цього завдання має на меті:_
+
+//* отримати поглиблені практичні знання зі створення бізнес-процесів на Платформі.
+This test aims to deepen your practical skills in developing business processes.
+
+//== Завдання
+== Tasks
+
+["upperroman"]
+//. Створіть модель даних на базі представленої таблиці.
+. Create a data model based on the following table.
++
+.Fields and descriptions
+|====
+//|_№_|_Назва поля на формі та в логічній моделі даних_|_Назва поля у фізичній моделі даних_|_Формат_|_Довідник, що використовується_|_Обов'язковість_
+|No. |Field name on the form and in the logical data model |Field name in the physical data model |Format |Reference used |Required field
+
+6+^|*person_profile* entity
+|1|Last name|last_name|Text||+
+|2|First name|first_name|Text||+
+|3|Middle name|second_name|Text||-
+|4|Date of birth|birthday|Date||+
+//|5|Тип документа, що посвідчує особу дитини (ідентифікатор типів документів, що посвідчує особу дитини)|doc_type_id|UUID|link:{attachmentsdir}/study-project/control-task-2/dict_doc_type.csv[Тип документа (doc_type)]|+
+|5|Type of document certifying child's identity (document type ID)|doc_type_id|UUID|link:{attachmentsdir}/study-project/control-task-2/dict_doc_type.csv[Document type (doc_type)]|+
+|6|Birth certificate series|birthday_doc_series|Text||-
+|7|Birth certificate number|birthday_doc_number|Text||-
+//|8|Серія (за наявності) та номер документа дитини|document_series_number|Text||-
+|8|Child's document series (if available) and number|document_series_number|Text||-
+|9|Gender|gender|Enum type="type_gender"||+
+6+^|*unit* entity
+|10|Institution of general secondary education ID|edu_organization_id|UUID||+
+|11|Class name|name|Text||+
+|12|Class type (class type ID)|unit_type_id|UUID|link:{attachmentsdir}/study-project/control-task-2/dict_unit_type.csv[Class type (unit_type)]|+
+|13|Grade|parallel|Text||+
+|14|Academic year|academic_year|Text||+
+|15|Maximum students|students_max_number|Smallint||+
+|====
+
+//TIP: За детальною інформацією щодо створення *_Enum type_*  зверніться до розділу xref:data-modeling/data/physical-model/liquibase-ddm-ext.adoc#ENUM[Тег створення перелічувального типу даних (ENUM)] відповідного документа.
+TIP: For details on creating *_Enum type_* fields, see xref:data-modeling/data/physical-model/liquibase-ddm-ext.adoc#ENUM[Tag for creating an enumerated data type (ENUM)].
+
+//. Створіть наступний перелік Search condition:
+. Create the following search conditions:
++
+//...... Створіть endpoint (за типом Search condition) для заповнення поля `Назва ЗЗСО, який я представляю` та `Назва ЗЗСО для зарахування` з підтримкою `EQUALS` *(edu_organization_edrpou_equals)*.
+.. Create a search condition endpoint to fill the *Name of the institution I represent* and *Name of the institution for enrollment* fields with `EQUALS` *(edu_organization_edrpou_equals)* support.
++
+SEARCH BY EQUALS::
++
+* Input parameters:
++
+[source, roomsql]
+----
+SELECT edu_organization_id, full_name FROM edu_organization WHERE edrpou ='23804735 '
+Parameters:  edrpou
+Constants: none
+
+----
++
+* Output parameters:
++
+[source, roomsql]
+----
+6731fad5-8c80-4965-9fc6-c2cebd508f24, Yaroslav Osmomysl Galicia Lyceum
+----
++
+//...... Створіть endpoint (за типом Search condition) для перевірки наявності в ЗЗСО класу з відповідною назвою і паралеллю з підтримкою `EQUALS` *(unit_name_parallel_equals)*.
+.. Create a search condition endpoint to check whether specific classes (name and grade) are available in the institution with `EQUALS` *(unit_name_parallel_equals)* support.
++
+SEARCH BY EQUALS::
++
+* Input parameters:
++
+[source, roomsql]
+----
+SELECT unit_id, parallel, name, edu_organization_id  FROM unit WHERE parallel =’1’ and name ='A ' and edu_organization_id=’UUID’
+Parameters:  parallel, name, edu_organization_id
+Constants: none
+----
++
+* Output parameters:
++
+[source, roomsql]
+----
+6731fad5-8c80-4965-9fc6-c2cebd508f24, 1, A, 5731fad5-8c80-4965-9fc6-c2cebd508f25
+Or
+NULL
+----
++
+//...... Створіть endpoint (за типом Search condition) для заповнення поля `Тип класу` з підтримкою `LIKE`  та  `READ ALL` *(unit_type_name_contains)*.
+.. Create a search condition endpoint to fill the *Class type* field with `LIKE` and `READ ALL` *(unit_type_name_contains)* support.
++
+READ ALL::
++
+* Input parameters:
++
+[source, roomsql]
+----
+SELECT unit_type_id, name, constant_code  FROM unit_type ORDER BY name ASC  ;
+Parameters: none
+Constants:  none
+----
++
+* Output parameters:
++
+[source, roomsql]
+----
+UUID, General, GENERAL_TYPE
+UUID, Inclusive, INCLUSIVE_TYPE
+UUID, Special, SPECIAL_TYPE
+----
++
+SEARCH BY LIKE::
++
+* Input parameters:
++
+[source, roomsql]
+----
+Input: SELECT unit_type_id, name, constant_code FROM unit_type WHERE name LIKE '%Спе%' ORDER BY name ASC ;
+Parameters: name
+Constants: none
+----
++
+* Output parameters:
++
+[source, roomsql]
+----
+UUID, Special, SPECIAL_TYPE
+----
++
+//...... Створіть endpoint (за типом Search condition) для заповнення поля `Тип документа` з підтримкою `LIKE` та `READ ALL` *(doc_type_contains)*.
+.. Create a search condition endpoint to fill the *Document type* field with `LIKE` and `READ ALL` *(doc_type_contains)* support.
++
+READ ALL::
++
+* Input parameters:
++
+[source, roomsql]
+----
+SELECT doc_type_id, name, constant_code FROM doc_type ORDER BY name;
+Parameters: none
+Constants: none
+----
++
+* Output parameters:
++
+[source, roomsql]
+----
+UUID, Birth certificate of a citizen of Ukraine, BIRTH_CERT_UKRAINE
+UUID, Birth certificate of a foreign citizen, BIRTH_CERT_FOREIGN
+UUID, Passport of a foreign citizen, PASSPORT_FOREIGN
+When displaying values from the doc_type table, the "Birth certificate of a citizen of Ukraine" (BIRTH_CERT_UKRAINE) value must be displayed at the top.
+----
++
+SEARCH BY LIKE::
++
+* Input parameters:
++
+[source, roomsql]
+----
+SELECT doc_type_id, name, constant_code FROM doc_type WHERE name LIKE '%сві%' ORDER BY name ASC ;
+Parameters: name
+Constants: none
+----
++
+* Output parameters:
++
+[source, roomsql]
+----
+UUID, Birth certificate of a citizen of Ukraine, BIRTH_CERT_UKRAINE
+UUID, Birth certificate of a foreign citizen, BIRTH_CERT_FOREIGN
+----
++
+//...... Створіть endpoint (за типом Search condition) для заповнення поля `ПІБ дитини` та `Дата народження дитини` (для громадян України) з підтримкою  `EQUALS`  *(person_profile_equal_doc_type_birthday_ua)*.
+.. Create a search condition endpoint to fill out the *Child's name* and *Child's date of birth* fields (for citizens of Ukraine) with `EQUALS`  *(person_profile_equal_doc_type_birthday_ua)* support.
++
+SEARCH BY EQUALS::
++
+* Input parameters:
++
+[source, roomsql]
+----
+SELECT person_profile_id , last_name , first_name, second_name (не обов'язкове), birthday FROM  person_profile  WHERE doc_type =' Birth certificate of a citizen of Ukraine ' AND  birthday_doc_series  ='I-AB'  AND  birthday_doc_number ='214722'  AND   birthday ='01.01.2012'
+Parameters:  doc_type ,  birthday_doc_series, birthday_doc_number , birthday
+Constants: none
+----
++
+* Output parameters:
++
+[source, roomsql]
+----
+UUID, Ivanov, Ivan, Ivanovych, 01.01.2012
+If the record does not exist Output:null
+----
++
+//...... Створіть endpoint (за типом Search condition) для заповнення поля `ПІБ дитини` та `Дата народження дитини` (для іноземних громадян) з підтримкою  `EQUALS` *(person_profile_equal_doc_type_birthday_foreigner)*.
+.. Create a search condition endpoint to fill out the *Child's name* and *Child's date of birth* fields (for foreign citizens) with `EQUALS` *(person_profile_equal_doc_type_birthday_foreigner)* support.
++
+SEARCH BY EQUALS::
++
+* Input parameters:
++
+[source, roomsql]
+----
+SELECT person_profile_id , last_name , first_name, second_name (не обов'язкове), birthday FROM  person_profile  WHERE doc_type  =' Birth certificate of a foreign citizen ' OR 'Passport of a foreign citizen' AND document_series_number  ='5577675'  AND   birthday ='18.07.2013'
+Parameters:  doc_type , document_series_number , birthday
+Constants: none
+----
++
+* Output parameters:
++
+[source, roomsql]
+----
+UUID, Magovaiev, Dmytro, Ibragymovych, 18.07.2013
+
+If the record does not exist
+Output:
+null
+----
++
+//. Створіть наступний перелік форм:
+. Create the following forms:
++
+//...... Форма для додавання інформації про клас (стартова форма).
+.. A form for adding information about classes (start form).
+//...... Форма для підписання внесених даних про клас.
+.. A form for signing class data.
+//...... Форма для додавання інформації про дитину (стартова форма).
+.. A form for adding information about children (start form).
+//...... Інформаційна форма про те, що дані провалідовані у ДРАЦС та можуть відрізнятися від введених.
+.. An informational form stating that the data has been validated in the State registry of civil status acts and may differ from the data provided.
+//...... Форма для підписання внесених даних про дитину.
+.. A form for signing child data.
++
+//. Створіть наступні бізнес-процеси:
+. Create the following business processes:
+//["arabic"]
+//.. Розробіть бізнес-процес створення класу, де `businessKey` --  `"паралель + назва класу"`. Додайте формування валідаційної помилки у разі якщо клас з такою назвою вже було створено й відобразіть це у повідомленні. Додайте динамічне формування назви задачі, щоб у повідомленні про виконання задачі відображалася інформація: _"Підписати дані про клас `"паралель + назва класу"` за допомогою КЕП"_. Перед завершенням бізнес-процесу необхідно визначати статусу цього бізнес-процесу.
+.. Develop a business process for adding classes, where `businessKey` is `"grade + class name"`.
++
+Add validation to check whether a class with the same name has already been added and display an error message if true.
++
+Configure a dynamic task name so that the message about the execution of the task displays the following information: _"Sign class data for `"grade + class name"` using QES"_.
++
+Before completing the business process, determine its status.
++
+//.. Розробіть бізнес-процесс створення профілю дитини, де `businessKey` -  `ФІО дитини`. Додайте формування валідаційної помилки у разі якщо профіль дитини з таким документом вже було створено й відобразіть це у повідомленні. У разі якщо дитина має українське свідоцтво про народження необхідно здійснити пошук дитини у ДРАЦС. Наразі можливі два варіанти пошуку:
+.. Develop a business process for creating a child profile, where `businessKey` is `child's full name`.
++
+Add validation to check whether a child profile with the same document has already been created and display an error message if true.
++
+If a child has a Ukrainian birth certificate, search for the child in the State registry of civil status acts. Currently, two search options are possible:
++
+--
+//* серія, номер свідоцтва та дата народження дитини;
+* certificate series, certificate number, date of birth
+//* серія, номер свідоцтва та ПІБ дитини.
+* certificate series, certificate number, full name
+--
++
+//Перед завершенням бізнес-процесу необхідно визначати статус цього бізнес-процесу.
+Before completing the business process, determine its status.
+
+//== Очікуваний результат завдання
+== Expected result
+
+//Змодельовано бізнес-процес створення класу і профілю дитини у тестовому реєстрі. Бізнес-процес доступний у вигляді послуги в Кабінеті користувача.
+After completing this test, you should have the following:
+
+* Business processes for adding classes and child profiles in a test registry.
+* Your business processes must be available as services in the user portal.
