@@ -1,0 +1,193 @@
+//:imagesdir: ../../../../../images
+:toc-title: On this page:
+:toc: auto
+:toclevels: 5
+:experimental:
+:sectnums:
+:sectnumlevels: 5
+:sectanchors:
+:sectlinks:
+:partnums:
+
+
+//= Підсистема управління даними реєстру
+= Registry data management subsystem
+
+//== Загальний опис
+== General description
+
+//Підсистема, призначення якої є надання доступу до даних реєстру через REST API та _Підсистему асинхронного обміну повідомленнями_, з можливістю запису, читання, зміни та видалення даних. Також підсистема відповідальна за управління збереженими файлами, перевіркою цілісності даних та виявленням несанкціонованих змін.
+A subsystem whose purpose is to provide access to registry data via the REST API and the _Asynchronous Messaging Subsystem_, with the ability to write, read, modify, and delete data. The subsystem is also responsible for managing saved files, checking data integrity, and detecting unauthorized changes.
+
+//== Функції підсистеми
+== Subsystem functions
+////
+* Створення, читання, зміна та видалення записів реєстру.
+* Пошук даних за параметрами.
+* Реалізація рольового доступу до даних (`RBAC`).
+* Ведення історичності змін.
+* Збереження інформації про походження даних.
+* Збереження пов'язаних файлів реєстру.
+* Збереження підписаних запитів в якості підстав для зміни даних реєстру.
+////
+* Create, read, modify and delete registry entries.
+* Search data by parameters.
+* Implementation of role-based access to data (`RBAC`).
+* Keeping track of changes.
+* Saving information about the origin of data.
+* Saving associated registry files.
+* Saving signed requests as grounds for changing registry data.
+
+
+//== Технічний дизайн підсистеми
+== Technical design of the subsystem
+
+image::architecture/registry/operational/registry-management/registry-management-overview.drawio.svg[float="center",align="center"]
+
+//== Складові підсистеми
+== Component subsystems
+
+////
+|===
+|Назва компоненти|Представлення в реєстрі|Походження|Репозиторій|Призначення
+
+|_Сервіс синхронного управління даними реєстру_
+|`registry-rest-api-deployment`
+|origin
+.2+|https://github.com/epam/edp-ddm-service-generation-utility[github:/epam/edp-ddm-service-generation-utility]
+
+https://github.com/epam/edp-ddm-rest-api-core-base-image[github:/epam/edp-ddm-rest-api-core-base-image]
+
+https://github.com/epam/edp-ddm-kafka-api-core-base-image[github:/epam/edp-ddm-kafka-api-core-base-image]
+|Обробляє синхронні REST API запити на читання та запис даних реєстру.
+
+|_Сервіс асинхронного управління даними реєстру_
+|`registry-kafka-api-deployment`
+|origin
+|Обробляє асинхронні запити на читання та запис даних реєстру.
+
+|xref:arch:architecture/registry/operational/registry-management/registry-db.adoc#[__Операційна БД реєстру__]
+|`registry`
+|origin
+|https://github.com/epam/edp-ddm-registry-postgres[github:/epam/edp-ddm-registry-postgres]
+|База даних що містить службові таблиці сервісів і всі таблиці реєстру змодельовані адміністратором регламенту. Вона також фіксує історію змін даних та перевіряє права згідно з RBAC.
+
+|xref:arch:architecture/registry/operational/registry-management/ceph-storage.adoc#_file_ceph_bucket[__Операційне сховище цифрових документів реєстру__]
+|`ceph:file-ceph-bucket`
+|origin
+|-
+|Зберігання цифрових документів реєстру
+
+|xref:arch:architecture/registry/operational/registry-management/ceph-storage.adoc#_datafactory_ceph_bucket[__Сховище вхідних даних__]
+|`ceph:datafactory-ceph-bucket`
+|origin
+|-
+|Зберігання підписаних даних при внесенні в реєстр
+
+|xref:arch:architecture/registry/operational/registry-management/ceph-storage.adoc#_response_ceph_bucket[__Сховище вихідних даних__]
+|`ceph:response-ceph-bucket`
+|origin
+|-
+|Тимчасове зберігання даних для передачі в рамках міжсервісної взаємодії всередині підсистеми
+
+|===
+////
+
+|===
+|Component name|Representation in the register|Source|Repository|Appointment
+
+|_Service of synchronous management of registry data_
+|`registry-rest-api-deployment`
+|origin
+.2+|https://github.com/epam/edp-ddm-service-generation-utility[github:/epam/edp-ddm-service-generation-utility]
+
+https://github.com/epam/edp-ddm-rest-api-core-base-image[github:/epam/edp-ddm-rest-api-core-base-image]
+
+https://github.com/epam/edp-ddm-kafka-api-core-base-image[github:/epam/edp-ddm-kafka-api-core-base-image]
+|Processes of synchronous REST API requests to read and write registry data.
+
+|_Asynchronous register data management service_
+|`registry-kafka-api-deployment`
+|origin
+|Processes of asynchronous requests to read and write registry data.
+
+|xref:arch:architecture/registry/operational/registry-management/registry-db.adoc#[__Operational database of the registry__]
+|`registry`
+|origin
+|https://github.com/epam/edp-ddm-registry-postgres[github:/epam/edp-ddm-registry-postgres]
+|The database containing official service tables and all registry tables is modeled by the regulation administrator. It also captures the history of data changes and checks permissions according to RBAC.
+
+|xref:arch:architecture/registry/operational/registry-management/ceph-storage.adoc#_file_ceph_bucket[__Operational storage of digital registry documents__]
+|`ceph:file-ceph-bucket`
+|origin
+|-
+|Storage of digital registry documents
+
+|xref:arch:architecture/registry/operational/registry-management/ceph-storage.adoc#_datafactory_ceph_bucket[__Input data storage__]
+|`ceph:datafactory-ceph-bucket`
+|origin
+|-
+|Storage of signed data when entered in the register.
+
+|xref:arch:architecture/registry/operational/registry-management/ceph-storage.adoc#_response_ceph_bucket[__Source data repository__]
+|`ceph:response-ceph-bucket`
+|origin
+|-
+|Temporary storage of data for transmission as part of interservice interaction within the subsystem
+
+|===
+
+//== Технологічний стек
+== Technological stack
+
+//При проектуванні та розробці підсистеми, були використані наступні технології:
+During the design and development of the subsystem, the following technologies were used:
+
+* xref:arch:architecture/platform-technologies.adoc#java[Java]
+* xref:arch:architecture/platform-technologies.adoc#spring[Spring]
+* xref:arch:architecture/platform-technologies.adoc#spring-boot[Spring Boot]
+* xref:arch:architecture/platform-technologies.adoc#spring-cloud[Spring Cloud]
+* xref:arch:architecture/platform-technologies.adoc#kafka[Kafka]
+* xref:arch:architecture/platform-technologies.adoc#postgresql[PostgreSQL]
+* xref:arch:architecture/platform-technologies.adoc#ceph[Ceph]
+
+//== Атрибути якості підсистеми
+== Subsystem Quality Attributes
+
+=== _Scalability_
+
+//_Підсистема управління даними реєстру_ підтримує як горизонтальне, так і вертикальне масштабування.
+The _Registry Data Management Subsystem_ supports both horizontal and vertical scaling.
+
+[TIP]
+--
+//Детальніше з масштабуванням підсистем можна ознайомитись у відповідних розділах:
+You can read more about scaling subsystems in the relevant sections:
+
+* xref:architecture/container-platform/container-platform.adoc[]
+--
+
+=== _Observability_
+
+//_Підсистема управління даними реєстру_ підтримує журналювання та збір метрик продуктивності для подальшого аналізу через веб-інтерфейси відповідних підсистем Платформи.
+The _Registry Data Management Subsystem_ supports logging and collection of performance metrics for further analysis through the web interfaces of the corresponding Platform subsystems.
+
+[TIP]
+--
+//Детальніше з дизайном підсистем можна ознайомитись у відповідних розділах:
+You can read more about the design of subsystems in the relevant sections:
+
+* xref:arch:architecture/platform/operational/logging/overview.adoc[]
+* xref:arch:architecture/platform/operational/monitoring/overview.adoc[]
+--
+
+=== _Auditability_
+
+//_Підсистема управління даними реєстру_ фіксує значимі технічні та бізнес події, пов'язані з експлуатацією системи кінцевими користувачами використовуючи xref:arch:architecture/registry/operational/audit/overview.adoc[підсистему журналювання подій аудиту].
+
+The _Registry Data Management Subsystem_ captures significant technical and business events related to system operation by end users using xref:arch:architecture/registry/operational/audit/overview.adoc[audit event logging subsystem]
+
+=== _Security_
+
+//В _Підсистемі управління даними реєстру_ всі запити до сервісів які безпосередньо здійснюють операції над даними реєстру вимагають автентифікацію. Сервіси підсистеми доступні лише у внутрішній мережі реєстру.
+In the _Registry Data Management Subsystem_, all requests to services that directly perform operations on registry data require authentication. The services of the subsystem are available only in the internal network of the registry.
