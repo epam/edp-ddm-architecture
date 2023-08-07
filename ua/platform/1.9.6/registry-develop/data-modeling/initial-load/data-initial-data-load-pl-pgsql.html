@@ -3059,6 +3059,22 @@
 </aside>
             <article class="doc">
 <h1 class="page">Опис процедури PL/pgSQL для первинного завантаження даних реєстру</h1>
+<div id="toc" class="toc">
+<div id="toctitle">ЗМІСТ</div>
+<ul class="sectlevel1">
+<li><a href="#_специфікація_plpgsql_процедури_для_бд_платформи">1. Специфікація PL/pgSQL процедури для БД Платформи</a></li>
+<li><a href="#_приклади_виклику_процедури">2. Приклади виклику процедури</a>
+<ul class="sectlevel2">
+<li><a href="#simple-case">2.1. Простий сценарій</a></li>
+<li><a href="#complex-case-1">2.2. Складний сценарій 1</a></li>
+<li><a href="#complex-case-2">2.3. Складний сценарій 2</a></li>
+</ul>
+</li>
+<li><a href="#_завантаження_даних_до_бд">3. Завантаження даних до БД</a></li>
+<li><a href="#initial-load-csv-requirements">4. Вимоги до файлів для автоматичного завантаження до БД</a></li>
+<li><a href="#_рекомендації_для_завантаження_великої_кількості_даних">5. Рекомендації для завантаження великої кількості даних</a></li>
+</ul>
+</div>
 <div id="preamble">
 <div class="sectionbody">
 <div class="paragraph">
@@ -3068,7 +3084,7 @@
 <table>
 <tr>
 <td class="icon">
-<i class="fa icon-caution" title="Caution"></i>
+<i class="fa icon-caution" title="УВАГА"></i>
 </td>
 <td class="content">
 Перед виконанням процедури первинного завантаження даних, переконайтеся, що виконано передумови, описані в секції <a href="data-initial-data-load-prep.html" class="xref page">Підготовка даних до міграції</a>.
@@ -3079,9 +3095,10 @@
 </div>
 </div>
 <div class="sect1">
-<h2 id="_специфікація_plpgsql_процедури_для_бд_платформи"><a class="anchor" href="#_специфікація_plpgsql_процедури_для_бд_платформи"></a>1. Специфікація PL/pgSQL процедури для БД Платформи</h2>
+<h2 id="_специфікація_plpgsql_процедури_для_бд_платформи"><a class="anchor" href="#_специфікація_plpgsql_процедури_для_бд_платформи"></a><a class="link" href="#_специфікація_plpgsql_процедури_для_бд_платформи">1. Специфікація PL/pgSQL процедури для БД Платформи</a></h2>
 <div class="sectionbody">
 <div class="listingblock">
+<div class="title">Процедура для завантаження даних</div>
 <div class="content">
 <pre class="highlightjs highlight"><code class="language-sql hljs" data-lang="sql">CREATE OR REPLACE PROCEDURE p_load_table_from_csv(
 p_table_name text
@@ -3091,8 +3108,10 @@ p_table_name text
 );</code></pre>
 </div>
 </div>
-<div class="sect2">
-<h3 id="_опис_параметрів"><a class="anchor" href="#_опис_параметрів"></a>1.1. Опис параметрів</h3>
+<div class="dlist">
+<dl>
+<dt class="hdlist1">Опис параметрів: </dt>
+<dd>
 <div class="ulist">
 <ul>
 <li>
@@ -3106,12 +3125,11 @@ p_table_name text
 </li>
 <li>
 <p><code>p_target_table_columns</code> - масив полів цільової таблиці (відсутній, якщо перелік полів збігається із полями в CSV-файлі).</p>
-</li>
-</ul>
-</div>
 <div class="paragraph">
-<p><strong>Значення елементів параметру <code>p_target_table_columns</code> може набувати різних форматів</strong>:</p>
+<p>Значення елементів параметра <code>p_target_table_columns</code> може набувати різних форматів:</p>
 </div>
+<div class="openblock">
+<div class="content">
 <div class="ulist">
 <ul>
 <li>
@@ -3119,28 +3137,21 @@ p_table_name text
 </li>
 <li>
 <p><code>&lt;col_name&gt;::&lt;some_calculation_based_on_source_cols&gt;</code>&#8201;&#8212;&#8201;поле отримує значення&#8201;&#8212;&#8201;результат виразу</p>
-</li>
-</ul>
-</div>
 <div class="admonitionblock tip">
 <table>
 <tr>
 <td class="icon">
-<i class="fa icon-tip" title="Tip"></i>
+<i class="fa icon-tip" title="ПІДКАЗКА"></i>
 </td>
 <td class="content">
-Детальніше&#8201;&#8212;&#8201;див. підрозділ <a href="#complex-case-1">Cкладний сценарій 1</a> у прикладах виклику.
+Детальніше&#8201;&#8212;&#8201;див. підрозділ <a href="#complex-case-1">Складний сценарій 1</a> у прикладах виклику.
 </td>
 </tr>
 </table>
 </div>
-<div class="ulist">
-<ul>
+</li>
 <li>
 <p><code>&lt;col_name&gt;::ref(lookup_col:&lt;lookup_col_name&gt;, ref_table:&lt;ref_table_name&gt;, ref_col:&lt;ref_col_name&gt;, ref_id:&lt;ref_id_col_name&gt;)</code>&#8201;&#8212;&#8201;для даного формату "під капотом" виконується наступний SQL-запит, що реалізовує пошук <code>id</code> по таблиці довідника:</p>
-</li>
-</ul>
-</div>
 <div class="listingblock">
 <div class="content">
 <pre class="highlightjs highlight"><code class="language-sql hljs" data-lang="sql">SELECT &lt;ref_id&gt; INTO &lt;col_name&gt; FROM &lt;ref_table&gt; WHERE &lt;ref_col&gt; = &lt;lookup_col&gt;;</code></pre>
@@ -3153,7 +3164,7 @@ p_table_name text
 <table>
 <tr>
 <td class="icon">
-<i class="fa icon-tip" title="Tip"></i>
+<i class="fa icon-tip" title="ПІДКАЗКА"></i>
 </td>
 <td class="content">
 Детальніше&#8201;&#8212;&#8201;див. підрозділ <a href="#complex-case-2">Cкладний сценарій 2</a> у прикладах виклику.
@@ -3161,8 +3172,7 @@ p_table_name text
 </tr>
 </table>
 </div>
-<div class="ulist">
-<ul>
+</li>
 <li>
 <p><code>&lt;col_name&gt;::ref_array(lookup_col:&lt;lookup_col_name&gt;, ref_table:&lt;ref_table_name&gt;, ref_col:&lt;ref_col_name&gt;, ref_id:&lt;ref_id_col_name&gt;, delim:&lt;delimeter_character&gt;)</code>&#8201;&#8212;&#8201;цей формат відмінний від попереднього лише тим, що поле <code>&lt;lookup_col_name&gt;</code> у CSV-файлі містить масив описових значень. В результаті повертатиметься масив відповідних <code>id</code>.</p>
 </li>
@@ -3170,12 +3180,19 @@ p_table_name text
 </div>
 </div>
 </div>
+</li>
+</ul>
+</div>
+</dd>
+</dl>
+</div>
+</div>
 </div>
 <div class="sect1">
-<h2 id="_приклади_виклику_процедури"><a class="anchor" href="#_приклади_виклику_процедури"></a>2. Приклади виклику процедури</h2>
+<h2 id="_приклади_виклику_процедури"><a class="anchor" href="#_приклади_виклику_процедури"></a><a class="link" href="#_приклади_виклику_процедури">2. Приклади виклику процедури</a></h2>
 <div class="sectionbody">
 <div class="sect2">
-<h3 id="simple-case"><a class="anchor" href="#simple-case"></a>2.1. Простий сценарій</h3>
+<h3 id="simple-case"><a class="anchor" href="#simple-case"></a><a class="link" href="#simple-case">2.1. Простий сценарій</a></h3>
 <div class="listingblock">
 <div class="content">
 <pre class="highlightjs highlight"><code class="language-sql hljs" data-lang="sql">CALL p_load_table_from_csv('research',
@@ -3185,7 +3202,7 @@ p_table_name text
 </div>
 </div>
 <div class="sect2">
-<h3 id="complex-case-1"><a class="anchor" href="#complex-case-1"></a>2.2. Складний сценарій 1</h3>
+<h3 id="complex-case-1"><a class="anchor" href="#complex-case-1"></a><a class="link" href="#complex-case-1">2.2. Складний сценарій 1</a></h3>
 <div class="listingblock">
 <div class="content">
 <pre class="highlightjs highlight"><code class="language-sql hljs" data-lang="sql">CALL p_load_table_from_csv('koatuu','${dataLoadPath}03-KOATUU_simple.csv'
@@ -3204,7 +3221,7 @@ p_table_name text
 </div>
 </div>
 <div class="sect2">
-<h3 id="complex-case-2"><a class="anchor" href="#complex-case-2"></a>2.3. Складний сценарій 2</h3>
+<h3 id="complex-case-2"><a class="anchor" href="#complex-case-2"></a><a class="link" href="#complex-case-2">2.3. Складний сценарій 2</a></h3>
 <div class="listingblock">
 <div class="content">
 <pre class="highlightjs highlight"><code class="language-sql hljs" data-lang="sql">CALL p_load_table_from_csv('staff','D:\PostgreSQL\csv\staff.csv'
@@ -3221,14 +3238,13 @@ p_table_name text
 </div>
 </div>
 <div class="sect1">
-<h2 id="_завантаження_даних_до_бд"><a class="anchor" href="#_завантаження_даних_до_бд"></a>3. Завантаження даних до БД</h2>
+<h2 id="_завантаження_даних_до_бд"><a class="anchor" href="#_завантаження_даних_до_бд"></a><a class="link" href="#_завантаження_даних_до_бд">3. Завантаження даних до БД</a></h2>
 <div class="sectionbody">
 <div class="paragraph">
 <p>Для завантаження даних в БД використовуємо стандартну функціональність liquibase.</p>
 </div>
-<div class="sect2">
-<h3 id="_приклад_xml_шаблону_для_завантаження_даних"><a class="anchor" href="#_приклад_xml_шаблону_для_завантаження_даних"></a>3.1. Приклад XML-шаблону для завантаження даних</h3>
 <div class="listingblock">
+<div class="title">Приклад XML-шаблону для завантаження даних</div>
 <div class="content">
 <pre class="highlightjs highlight"><code class="language-xml hljs" data-lang="xml">&lt;databaseChangeLog
         xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
@@ -3257,7 +3273,7 @@ p_table_name text
 <table>
 <tr>
 <td class="icon">
-<i class="fa icon-tip" title="Tip"></i>
+<i class="fa icon-tip" title="ПІДКАЗКА"></i>
 </td>
 <td class="content">
 За детальною інформацією щодо створення фізичної моделі даних реєстру за допомогою інструмента Liquibase зверніться до розділу <strong>"Створення фізичної моделі даних реєстру"</strong> цього документа.
@@ -3267,16 +3283,16 @@ p_table_name text
 </div>
 </div>
 </div>
-</div>
 <div class="sect1">
-<h2 id="initial-load-csv-requirements"><a class="anchor" href="#initial-load-csv-requirements"></a>4. Вимоги до файлів для автоматичного завантаження до БД</h2>
+<h2 id="initial-load-csv-requirements"><a class="anchor" href="#initial-load-csv-requirements"></a><a class="link" href="#initial-load-csv-requirements">4. Вимоги до файлів для автоматичного завантаження до БД</a></h2>
 <div class="sectionbody">
 <div class="paragraph">
 <p>Файли, що використовуватимуться для завантаження даних до БД, повинні мати чітку структуру.</p>
 </div>
-<div class="paragraph">
-<p>Вимоги до файлів для автоматичного завантаження в БД:</p>
-</div>
+<div class="dlist">
+<dl>
+<dt class="hdlist1">Вимоги до файлів для автоматичного завантаження в БД: </dt>
+<dd>
 <div class="ulist">
 <ul>
 <li>
@@ -3286,7 +3302,7 @@ p_table_name text
 <p>назва файлу&#8201;&#8212;&#8201;латиницею;</p>
 </li>
 <li>
-<p>кодування&#8201;&#8212;&#8201;UTF8;</p>
+<p>кодування&#8201;&#8212;&#8201;<code>UTF8</code>;</p>
 </li>
 <li>
 <p>перший рядок містить назви полів;</p>
@@ -3311,10 +3327,13 @@ p_table_name text
 </li>
 </ul>
 </div>
+</dd>
+</dl>
+</div>
 </div>
 </div>
 <div class="sect1">
-<h2 id="_рекомендації_для_завантаження_великої_кількості_даних"><a class="anchor" href="#_рекомендації_для_завантаження_великої_кількості_даних"></a>5. Рекомендації для завантаження великої кількості даних</h2>
+<h2 id="_рекомендації_для_завантаження_великої_кількості_даних"><a class="anchor" href="#_рекомендації_для_завантаження_великої_кількості_даних"></a><a class="link" href="#_рекомендації_для_завантаження_великої_кількості_даних">5. Рекомендації для завантаження великої кількості даних</a></h2>
 <div class="sectionbody">
 <div class="paragraph">
 <p>Для завантаження великої кількості даних (понад 1 млн рядків) рекомендується тимчасова зміна конфігурації БД&#8201;&#8212;&#8201;у файлі з налаштуваннями PostgreSQL <code>postgresql.conf</code> встановити наступні значення для часу очікування підключень між реплікою та основною (master) БД:</p>
