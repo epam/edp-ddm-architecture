@@ -1,0 +1,243 @@
+:toc-title: On this page:
+:toc: auto
+:toclevels: 5
+:experimental:
+:sectnums:
+:sectnumlevels: 5
+:sectanchors:
+:sectlinks:
+:partnums:
+= Validation for checking empty required fields at the level of element templates in a business process
+//= Валідація на перевірку пустих обов'язкових полів на рівні шаблонів елементів в бізнес-процесі
+
+== Abstract
+//== Загальний опис
+When modeling business processes, _Element Templates_ are used for the typical BPMN elements (service tasks, user tasks, etc.) together with a description of the corresponding contract. For the input parameters of this type of templates, validation is configured, which works on the client side in _Regulation Modeling Web Interface_. However, as part of the implementation, the validation rules were not applied to all required parameters of _Element Templates_. Because of this, a modeler sees the absence of a required field only when executing the business process, and not when simulating it. It is necessary to apply validation rules within the current solution for all _Element Templates_ and additionally develop a server validation mechanism.
+//При моделюванні бізнес-процесів використовуються _Шаблони елементів_ для типових BPMN елементів (сервісні задачі, задачі користувача тощо) з описом відповідного контракту. Для вхідних параметрів такого роду шаблонів налаштовується валідація, яка відпрацьовує на стороні клієнта у _Веб-інтерфейсі моделювання регламенту_. Проте в рамках реалізації правила валідації були застосовані не для всіх необхідних параметрів _Шаблонів елементів_ Через це відсутність обов'язкового поля моделювальник побачить тільки при виконанні бізнес-процесу, а не при його моделюванні. Необхідно застосувати правила валідації в рамках чинного рішення для всіх _Шаблонів елементів_ та додатково розробити механізм серверної валідації.
+
+== Concepts
+//== Концепти
+
+* _Element Templates_: Camunda element templates that simplify the process of business process modeling. See details at the https://docs.camunda.io/docs/components/modeler/desktop-modeler/element-templates/about-templates/[link].
+//* _Шаблони елементів_ - Camunda element templates, які спрощують процес моделювання бізнес-процесів. Детальніше https://docs.camunda.io/docs/components/modeler/desktop-modeler/element-templates/about-templates/[за посиланням]
+* _Regulations validation pipeline_: Jenkins Code Review pipeline that is launched when changes are made to the candidate version, or directly to the RM in Gerrit.
+//* _Пайплайн перевірки регламенту_ - Jenkins Code Review pipeline, який запускається при внесенні змін в версію кандидат, або безпосередньо в МР в Gerrit
+* _Regulation publication pipeline_: Jenkins Build pipeline that is launched when changes are made to the master version of the registry regulations.
+//* _Пайплайн публікації регламенту_ - Jenkins Build pipeline, який запускається при внесенні змін в мастер версію регламенту реєстру
+
+== Functional scenarios
+//== Функціональні сценарії
+* Using _Element Templates_ when modeling business processes of the registry regulations in the _Regulations Modeling Web Interface_.
+//* Використання _Шаблонів елементів_ при моделюванні бізнес-процесів регламенту реєстру у _Веб-інтерфейс моделювання регламенту_
+* Validation of the task template input parameters in the _Regulations validation pipeline_ when modeling the regulations.
+//* Валідація вхідних параметрів шаблонів задач у _Пайплайні перевірки регламенту_ при моделюванні регламенту
+* Validation of the task template input parameters in the _Regulations publishing pipeline_ when modeling the regulations.
+//* Валідація вхідних параметрів шаблонів задач у _Пайплайні публікації регламенту_ при моделюванні регламенту
+* Validation of the task template input parameters in the _Regulations modeling pipeline_ when modeling the regulations.
+//* Валідація вхідних параметрів шаблонів задач у _Веб-інтерфейсі моделювання регламенту_ при моделюванні регламенту
+* Validation the task template input parameters in the _Regulations publication pipeline_ when deploying the regulations to the production environment
+//* Валідація вхідних параметрів шаблонів задач у _Пайплайні публікації регламенту_ при розгортанні регламенту на продакшен оточенні
+
+== User roles
+//== Ролі користувачів
+* Registry developer
+//* Розробник регламенту
+* Registry administrator
+//* Адміністратор реєстру
+
+== General principles and provisions
+//== Загальні принципи та положення
+
+=== Server Validation
+//=== Серверна валідація
+* Server validation of _Element Templates_ takes place according to the general principles of the registry regulations validation in the _Regulations publication pipeline_ and the _Regulations verification pipeline_.
+//* Серверна валідація _Шаблонів елементів_ проходить за загальними принципами валідації регламенту реєстру на _Пайплайні публікації регламенту_ та _Пайплайні перевірки регламенту_
+* The registry regulations validation step adds to the _Regulations verification pipeline_.
+//* _Пайплайн перевірки регламенту_ розширюється кроком по валідації регламенту реєстру
+* Validation of the _Element Templates_ input parameters must be performed using the registry-regulations-validator-cli utility.
+//* Валідація вхідних параметрів _Шаблонів елементів_ повинна виконуватися за допомогою утиліти registry-regulations-validator-cli
+* In case of input parameter validation errors in _Element Templates_, the _Regulations validation pipeline_ must display an error with a clear message to understand the error.
+//* При наявності помилок валідації вхідних параметрів _Шаблонів елементів_, _Пайплайн перевірки регламенту_ повинен викидати помилку з повідомленням, яке є достатнім для розуміння помилки
+* Validation rules use the same version of _Element Templates_ as for _Regulations Modeling Web Interface_.
+//* Для правил валідації використовується та сама версія _Шаблонів елементів_, що і для _Веб-інтерфейсу моделювання регламенту_
+* The version of _Element Templates_ must correspond to the version of the registry. That is, _Element Templates_ can be modified only when the registry version is updated.
+//* Версія _Шаблонів елементів_ відповідає версії реєстру. Тобто _Шаблонів елементів_ можуть бути змінені тільки в момент оновлення версії реєстру
+* ConfigMap is used for saving _Element Templates_, which is updated when the registry version is updated.
+//* Для збереження _Шаблонів елементів_ використовується ConfigMap, яка оновлюється при оновленні версії реєстру
+* The standard element templates (constraints) mechanism is used to describe the validation rules.
+//* Для опису правил валідації використовується стандарний механізм element templates (constraints)
+* As part of the current solution, only notEmpty constraint validation is supported (100% of use cases in platform version 1.9.5).
+//* В рамках поточного рішення підтримується тільки notEmpty constraint валідація (100% випадків використання в версії платформи 1.9.5)
+
+=== Validation in the _Regulations Modeling Web Interface_ (current state)
+//=== Валідація у _Веб-інтерфейсі моделювання регламенту_ (поточний стан)
+* When developing a task template, you can specify the field type of the input parameter.
+//* При розробці шаблону задач можна вказати тип поля вхідного параметра
+* The client-side validation is supported only when the input parameter type is specified.
+//* Валідація на клієнті підтримується тільки при вказанні типу вхідного параметра
+* In Camunda version 7.x, it is possible not to specify the type of the input parameter.
+//* В Camunda версії 7.x є можливість не вказувати тип вхідного параметра
+* The following types of input parameters are currently supported: String, Text, Boolean, Dropdown and Hidden.
+//* На даний момент підтримуються наступні типи вхідних параметрів: String, Text, Boolean, Dropdown and Hidden
+* For listing the task templates in the platform, the Map type must be used, which is not supported in Camunda version 7.x/8.x.
+//* Для переліку шаблонів задач в платформі потрібне використання типу Map, який не підтримується в Camunda версії 7.x/8.x
+* If you do not specify the input parameter type, the modeler will have to independently choose the Map type from the list.
+//* Якщо не вказувати тип вхідного параметра, у моделювальника буде можливість самостійно обрати тип Map зі списку
+* Typed input parameters are shown in the Custom Properties section, while untyped ones are shown in the Input Parameters section.
+//* Типізовані вхідні параметри показуються в секції Custom Properties, в той час, як нетипізовані - в секції Input Parameters
+
+NOTE: Camunda 8.x does not support untyped input parameters.
+//NOTE: Camunda 8.x не підтримує нетипізовані вхідні параметри.
+https://docs.camunda.io/docs/components/modeler/desktop-modeler/element-templates/defining-templates/[Read details here].
+//https://docs.camunda.io/docs/components/modeler/desktop-modeler/element-templates/defining-templates/[Деталі тут]
+
+.Modeling panel. Typed parameters
+//.Панель моделювання. Типізовані параметри
+image::architecture/registry/administrative/regulation-management/platform-evolution/template-validation/panel-properties.png[300,200]
+
+.Modeling panel. Untyped parameters
+//.Панель моделювання. Нетипізовані параметри
+image::architecture/registry/administrative/regulation-management/platform-evolution/template-validation/panel-inputs.png[300,200]
+
+.Modeling panel. Mixed parameters
+//.Панель моделювання. Змішані параметри
+image::architecture/registry/administrative/regulation-management/platform-evolution/template-validation/panel-inputs-properties.png[300,200]
+
+== High-level solution design
+//== Високорівневий дизайн рішення
+
+.Component diagram
+//.Компонентна діаграма
+image::architecture/registry/administrative/regulation-management/platform-evolution/template-validation/component.svg[]
+
+.Deployment diagram (current)
+//.Діаграма розгортання (поточна)
+image::architecture/registry/administrative/regulation-management/platform-evolution/template-validation/delivery-current.svg[]
+
+.Deployment diagram (target)
+//.Діаграма розгортання (цільова)
+image::architecture/registry/administrative/regulation-management/platform-evolution/template-validation/delivery-target.svg[]
+
+.Validation of the element template parameters in the regulations validator
+//.Валідація параметрів шаблонів елементів у валідаторі регламенту
+[plantuml, template-validation-1, svg]
+----
+@startuml
+start
+:CLI received the list of BPMN files to validate;
+:CLI read element templates config map;
+repeat
+
+  :get next BPMN file to validate;
+  group BPMN file validation
+  repeat
+    :get next BPMN element to validate;
+    group BPMN element validation
+    :getAttributeValue camunda:modelerTemplate on BPMN element;
+
+    if (camunda:modelerTemplate is empty?) then (no)
+      :find element template where id = camunda:modelerTemplate;
+      :get child element bpmn:extensionElements;
+      :get child element camunda:inputOutput;
+
+      repeat
+        :get next tag (camunda:inputParameter or camunda:outputParameter;
+        group Parameter validation
+        :find element.property where parameter name = binding.name;
+
+        if (template has property) then (no)
+          :error;
+          kill
+        endif
+
+        :get property constraints;
+        :validate tag value against constraint;
+        endgroup
+      repeat while (more input/output parameters?) is (yes)
+      -> no;
+     endif
+     endgroup
+  repeat while (more elements to validate) is (yes)
+  -> no;
+  endgroup
+repeat while (more bpmn to validate) is (yes)
+-> no;
+
+stop
+@enduml
+----
+
+== Decision log
+//== Журнал рішень
+* Approach to validation:
+//* Підхід до валідації:
+** 2 approaches to the validation of _Element Templates_ were compared at the level of the _Regulations publication pipeline_ and the _Regulations validation pipeline_:
+//** Було порівняно 2 підходи до валідації _Шаблонів елементів_ на рівні _Пайплайну публікації регламенту_ та _Пайплайну перевірки регламенту_:
+*** Parameter validation rules are stored directly in the BPMN file.
+//*** Правила валідації параметрів зберігаються безпосередньо в самому файлі BPMN
+*** Validation rules are stored separately together with the specifications of input parameters in _Element Templates_.
+//*** Правила валідації зберігаються окремо разом зі специфікацією вхідних параметрів у _Шаблонах елементів_
+** The main principles behind choosing the 2nd approach:
+//** Основні принципи, за якими був обраний 2 підхід:
+*** Centralized approach to storing validation rules.
+//*** Централізований підхід до зберігання правил валідації
+*** Maintaining the standard BPMN/camunda schema for the bpmn files for compatibility reasons.
+//*** Збереження стандартної BPMN/camunda схеми для bpmn файлів для сумісності
+*** Making it impossible for a modeler to exclude validation rules when using _Element Template_.
+//*** Унеможливлювання для моделювальника виключити правила валідації при використанні _Шаблону елемента_
+* Client-side validation:
+//* Валідація на клієнті:
+** A POC was conducted, as a result of which it was found that customization of the simulator panel is possible only in case of a fork of the bpmn-js-properties-panel library.
+//** Був проведений POC за результатами якого було виявлено що кастомізація панелі моделювальника можлива тільки при форку бібліотеки bpmn-js-properties-panel
+** It was decided not to fork the library for updating to new versions and to leave the client-side validation unchanged.
+//** Прийнято рішення не форкати бібліотеку для можливості оновлення до нових версій і залишити валідацію на клієнті без змін
+** Further extension of the simulator panel for autotips is possible without a fork of the library.
+//** Подальше розширення панелі моделювальника для автопідказок можливе без форку бібліотеки
+* Approach to the ConfigMap deployment with a list of _Element Templates_ has to be redone, and the files and templates has to be made a part of the registry-configuration component.
+//* Підхід до розгортання ConfigMap з переліком _Шаблонів елементів_ переробити і зробити файли з шаблонами частиною registry-configuration компонента
+
+== Scope of work
+//== Обсяг робіт
+
+=== Preliminary decomposition
+//=== Попередня декомпозиція
+* [DEVOPS] Move files from element templates to the registry-configuration repository and create OpenShift ConfigMap.
+//* [DEVOPS] Перенести файли з element templates в репозиторій registry-configuration зі створенням OpenShift ConfigMap
+* [DEVOPS] [FE] Rename ConfigMap from element templates to business-process-modeler-element-templates.
+//* [DEVOPS] [FE] Перейменувати ConfigMap з element templates на business-process-modeler-element-templates
+* [FE] Rework the logic for reading the value from ConfigMap (common json instead of js file).
+//* [FE] Переробити логіку по зчитуванню значення з ConfigMap (замість js файлу - загальний json)
+* [DEVOPS] Add the regulations validation step to the regulations validation pipeline.
+//* [DEVOPS] Додати крок з валідацією регламенту в пайплайн перевірки регламенту
+* [DEVOPS] Remove the post-upgrade script from common-web-app for filling ConfigMap with element templates.
+//* [DEVOPS] Прибрати post-upgdade скрипт з common-web-app для наповнення ConfigMap з element templates
+* [BE] Add the element template validation parameters to the regulations validator (in the scope only the notEmpty constraint type with possible further extension).
+//* [BE] Додати валідацію параметрів шаблонів елементів у валідатор регламенту (в скоупі тільки тип обмеження notEmpty з можливим подальшим розширенням)
+* [BE] Add typing of input parameters in _Element Templates_ with required validation (switching to a mixed approach of input parameters).
+//* [BE] Додати типізацію вхідних параметрів в _Шаблонах елементів_ з необхідною валідацією (перехід на змішаний підхід вхідних параметрів)
+* [FE] Add blocking for saving changes in the _Regulation Modeling Web Interface_ if _Element Template_ has not been validated.
+//* [FE] Додати блокування збереження зміни у _Веб-інтерфейсі моделювання регламенту_ якщо не пройшлв валідація по _Шаблону елементів_
+
+=== Out of scope
+//=== Поза скоупом
+* Customization of the https://github.com/bpmn-io/bpmn-js-properties-panel[simulator panel] that requires a fork of the library:
+//* Кастомізація https://github.com/bpmn-io/bpmn-js-properties-panel[панелі моделювальника] яка потребує форку бібліотеки:
+** Adding the new Map input parameter type.
+//** Додавання нового типу вхідного параметру Map
+** Blocking for saving changes in the _Regulations Modeling Web Interface_ if _Element Template_ has not been validated.
+//** Блокування збереження зміни у _Веб-інтерфейсі моделювання регламенту_ якщо не пройшлв валідація по _Шаблону елементів_
+** Combining two sections -- Inputs (untyped input parameters) and Custom Properties (typed input parameters) -- into one.
+//** Об'єднання двох секція Inputs (нетипізовані вхідні параметри) та Custom Properties (типізовані) в одну
+* Support of the server-side validation for types not supported by the standard element templates mechanism.
+//* Підтримка серверної валідації для типів, які не підтримуються стандартним механізмом element templates
+* Support of the server validation using the pattern (regexp), minLength and maxLength.
+//* Підтримка серверної валідації по патерну (regexp), minLength та maxLength
+
+== Limitations of the solution
+//== Обмеження рішення
+* The client-side validation remains incomplete due to the lack of support of the Map parameter type.
+//* Валідація на клієнті залишається неповною через відсутність підтримки типу параметру Map
+* The backend-side Validation is asynchronous in the publication pipeline (there is no quick feedback to a user).
+//* Валідація на бекенді проходить асинхронно в пайплайні публікації (нема швидкого фідбеку для користувача)
+* Existing business processes with element templates that do not meet the validation rules may cause a pipeline deployment error when upgrading to a new version.
+//* Існуючі бізнес-процеси з шаблонами елементів, які не відповідають правилам валідації можуть бути причиною помилки при розгортанні пайплайну при переході на нову версію
