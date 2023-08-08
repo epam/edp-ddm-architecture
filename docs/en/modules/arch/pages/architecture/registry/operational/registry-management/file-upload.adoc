@@ -1,0 +1,93 @@
+:toc-title: On this page:
+:toc: auto
+:toclevels: 5
+:experimental:
+:sectnums:
+:sectnumlevels: 5
+:sectanchors:
+:sectlinks:
+:partnums:
+
+//= Завантаження файлів
+= Downloading files
+
+//== Контекст
+==Context
+
+image::architecture/registry/operational/registry-management/file-upload.drawio.svg[]
+
+//Збереження файлів в Дата Фабриці відбувається за принципом id reference де безпосередньо файл зберігається в "бакеті" Ceph, а ключ файлу і його контрольна сума в реляційній БД реєстру.
+Files are stored in the Data Factory according to the id reference principle, where the file is directly stored in the Ceph "bucket", and the file key and its checksum are stored in the relational registry database.
+
+//== Взаємодія з Low-Code
+== Interaction with Low-Code
+
+//Читання та повернення файлів в систему Low-Code відбувається за рахунок читання або запису файлу в доступний для Low-Code "бакет" Ceph.
+Reading and returning files to the Low-Code system is done by reading or writing a file to a Ceph "bucket" accessible to Low-Code.
+
+//== Моделювання
+== Modeling
+//Для збереження файлів в Дата Фабриці передбачено спеціальний тип "file". Такий запис дозволяє зберігати один файл, будь якого, формату (архів, багато сторінковий документ, картинку).
+A special "file" type is provided for saving files in the Data Factory. Such a record allows you to save one file of any format (archive, multi-page document, picture).
+
+[source, xml]
+----
+<changeSet id="..." author="...">
+  <createTable tableName="...">
+    <column name="id" type="uuid" defaultValue="uuid_generate_v4()"/>
+      <constraints primaryKey="true" nullable="false"/>
+    </column>
+    ...
+    <column name="scan_copy" type="file"/>
+    ...
+    <column name="..." type="..."/>
+  </createTable>
+</changeSet>
+----
+
+//=== Структура даних БД для збереження файлів
+=== DB data structure for saving files
+
+
+[plantuml, db_for_file, svg]
+----
+@startuml
+skinparam Monochrome true
+
+map "..." as table {
+    ... => ....
+    scan_copy => key in Ceph
+    .... => ....
+}
+
+map "..._hst" as hst {
+    ... => ....
+    ddm_scan_copy_checksum => file checksum
+    .... => ....
+}
+@enduml
+----
+
+//== Операції з файлами
+== File operations
+
+//=== Зміна структур які містять файли
+=== Changing the structures that contain files
+////
+Зміна безпосередньо файлів в Дата Фабриці заборонена. Кожна нова версія файлу зберігається в БД з новим унікальним ключем. Всі додані файли зберігаються в "бакеті" Ceph для підтримки історичності даних.
+
+Зміна версії файлу можлива лише при умові отримання запиту "update" або "partialUpdate" з ключем відмінним від існуючого.
+
+У випадку отримання пустого ключа посилання на Ceph - посилання буде видалено разом з контрольною сумою, але безпосередньо файл залишиться збережений.
+////
+Changing files directly in the Data Factory is prohibited. Each new version of the file is stored in the database with a new unique key. All added files are stored in a Ceph "bucket" to maintain data history.
+
+Changing the file version is possible only if an "update" or "partialUpdate" request is received with a key different from the existing one.
+
+In case of receiving an empty key of the link to Ceph - the link will be deleted together with the checksum, but the file itself will remain saved.
+
+
+//=== Повернення файлу
+=== Return file
+//Для повернення файлу з Дата Фабрики використовується той самий принцип, повертається ключ до об'єкту файлу в структурі частиною якої є файл. У разі якщо файл з таким ключем існує в "бакеті" Low-Code то цей файл переписується.
+The same principle is used to return a file from Data Factory, the key to the file object in the structure of which the file is a part is returned. If a file with such a key exists in the Low-Code "bucket", then this file is overwritten.
