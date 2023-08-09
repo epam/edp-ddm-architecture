@@ -1,0 +1,537 @@
+:toc-title: On this page:
+:toc: auto
+:toclevels: 5
+:experimental:
+:sectnums:
+:sectnumlevels: 5
+:sectanchors:
+:sectlinks:
+:partnums:
+= Ability to check the QES signature validity and who signed the content received in a business process through the API
+//= Можливість перевіряти валідність підпису КЕП і ким підписано контент, що прийшов в бізнес процес по API
+
+== Abstract
+//== Загальний опис
+
+When integrating with third-party systems at the business process level, there is a need to work with signed files that are downloaded or transferred to a business process by these systems.
+//При інтеграції зі сторонніми системами на рівні бізнес-процесів є необхідність роботи з підписаними файлами які завантажуються або передаються в бізнес процес цими системами.
+Namely, there is a need to ensure the integrity of these files by checking the QES applied to these files. Get information about the signatory for further processing or entry into registers. There is also a need to view the contents of container files.
+//А саме, є необхідність впевнитись в цілісності цих файлів шляхом перевірки КЕП накладеного на ці файли. Отримати інформацію про підписанта для подальшої обробки або внесення в реєстри. Також є необхідність перегляду вмісту файлів-контейнерів.
+
+== Functional scenarios
+//== Функціональні сценарії
+
+* Verification of data integrity by validating the signature indicating the container type.
+//* Перевірка цілісності даних шляхом перевірки підпису з вказанням типу контейнеру.
+* Getting information about all data signatories.
+//* Отримання інформації про всіх підписантів даних
+* Getting content from a signed data array.
+//* Отримання контенту з підписаного масиву даних.
+
+== User Roles
+//== Ролі користувачів
+
+* Modeler
+//* Моделювальник
+
+== General principles and provisions
+//== Загальні принципи та положення
+
+* Data is processed in the script-tasks of a business process.
+//* Дані опрацьовуються в скрипт-задачах бізнес-процесу.
+* Getting data from third-party sources outside of this design.
+//* Отримання даних з сторонніх джерел поза межами цього дизайну.
+* Byte data between systems is transmitted encoded using Base64.
+//* Байтові дані між системами передаються закодованими за допомогою Base64
+* The default format is CAdES-X-Long.
+//* Формат за замовченням  використовується CAdES-X-Long.
+* Data and signature in a given iteration always arrive in the same data array.
+//* Дані і підпис в даній ітерації завжди приходять в одному масиві даних.
+* Implementation of different validation formats outside of this design.
+//* Імплементація різних форматів валідація поза межами цього дизайну
+* Signing files outside of this design.
+//* Підписання файлів поза межами цього дизайну.
+* Implementation of algorithms for working with signatures undergoes using the `IIT` library.
+//* Імплементація алгоритмів по роботі з підписами відбувається за допомогою `ІІТ`-бібліотеки
+
+== Glossary and acronyms
+//== Глосарій та акроніми
+
+*Container* is the resulting file type. The following containers are distinguished: XAdES (xml), PAdES (pdf), CAdES (p7s), ASiC (asic). The most modern and recommended is the ASiC container type. +
+//*Контейнер* - тип результуючого файлу. Розрізняються такі контейнери XAdES (xml), PAdES (pdf), CAdES (p7s),  ASiC (asic). Найбільш сучасним і рекомендованим  є контейнер типу ASiC. +
+
+*ASiC*: a feature of this container is that it is built as an archive for storing files, and the only one from the listed ones allows you to store several files in different formats. +
+//*ASiC* - особливістю даного контейнеру є те що він побудований як архів для зберігання файлів і єдиний з перелічених дозволяє зберігати декілька файлів в різних форматах. +
+
+*Format* is an algorithm used for data signing (XAdES-B-LT/CAdES-X-Long/CAdES-BASE/PAdES-B-LT). The recommended format is CAdES-X-Long. +
+//*Формат* - алгоритм який застосовується для підписання даних (XAdES-B-LT/CAdES-X-Long/CAdES-BASE/PAdES-B-LT) рекомендованим форматом є CAdES-X-Long +
+
+*Signature type*: THere are two types of signatures: separated (detached) and enveloped (embedded). +
+//*Тип підпису* - розрізняється два типи підпису відокремлений (detached) та enveloped (вбудований). +
+
+[NOTE]
+The file and data terms in this design are interchangeable.
+//Терміни файл і дані в даному дизайні взаємозамінні.
+
+== Modeling examples
+//== Приклади моделювання
+
+=== An example of a BP simulation with an ASiC container as an input parameter that contains several files
+//=== Приклад моделювання БП з ASiC контейнером в якості вхідного параметра який містить декілька файлів
+
+image:architecture/registry/administrative/regulation-management/platform-evolution/sign-validation/submission_form.png[]
+
+.Example of a script task
+//.Приклад скриптової задачі
+[source, groovy]
+----
+def formData = submission('start_event').formData
+def file = formData.prop('signed_data').value()
+
+def allSignInfo = signature_details(file, SignFormat.ASiC).getAllSignInfo()
+for (signInfo in allSignInfo) {
+    if (signInfo.subjDRFOCode == null) {
+        println "DRFO should be present"
+    }
+}
+
+def allFiles = get_content(file, SignFormat.ASiC).getAllContent()
+for (singleFile in allFiles) {
+    set_variable(singleFile.getReference(), singleFile.getReferenceData())
+}
+
+----
+
+=== Example of a BP modeling to get a p7s container with an embedded signature as part of the data from an external API
+//=== Приклад моделювання БП з отриманням p7s контейнера з вбудованим підписом як частина даних із зовнішнього API
+
+image:architecture/registry/administrative/regulation-management/platform-evolution/sign-validation/external_system.png[]
+
+.Example of an external system response
+//.Приклад відповіді сторонньої системи
+[source, json]
+----
+{
+    "name": "Ololow",
+    "day-of-birth": "01/01/01",
+    "request": "dGVzdCBkYXRh",
+    "request_received": "20/02/14"
+}
+----
+
+.Example of a script task
+//.Приклад скриптової задачі
+[source, groovy]
+----
+
+def containerType = validationResult.prop('container').value()
+
+def info = signature_details(request, containerType).getSignInfo()
+
+if (info.subjDRFOCode == null) {
+    println "DRFO should be present"
+}
+
+originRequestDate = signature_content(request, containerType).getContent().getData()
+
+def requestBytes = Base64.decode(originRequestDate)
+
+save_digital_document(requestBytes, 'request.pdf')
+
+set_variable('fileContent', originRequestDate)
+----
+
+
+
+== Delegate for validation
+//== Делегат для валідації
+
+=== Delegate parameters
+//=== Параметри делегату
+|===
+|Parameter |Description |Type |Data type
+//|Назва параметру |Опис |Тип |Тип даних
+
+|data
+| Data containing a signature in Base64 format
+//|Дані які включають в себе підпис в форматі Base64
+|Input
+//|Вхідний
+|String
+
+|container
+| List of available file types
+//|Перелік доступних для використання типів файлів
+|Input
+//|Вхідний
+|Enum (ASiC/CAdES)
+
+|result
+| Validation result
+//|Результат валідації
+|Output
+//|Вихідний
+|ValidatioResult
+|===
+
+=== REST API
+
+_POST /api/esignature/validate_
+
+.Example of the request body
+//.Приклад тіла запиту
+[source,json]
+----
+{
+  "data": "dGVzdCBkYXRh",
+  "container": "CAdES/ASiC/XdES/..."
+}
+----
+
+.Structure of the response body
+//.Структура тіла відповіді
+|===
+|Json Path|Type|Description
+//|Json Path|Тип|Опис
+
+|*$result.isValid*
+|boolean
+|Result of data validation
+//|Результат перевірки даних
+|*$result.container*
+|String
+|Container type
+//|Тип контейнеру
+|*$.error.code*
+|String
+| Corresponding status code
+//|Відповідний код статусу
+|*$.error.message*
+|String
+| Error details and description
+//|Деталі та опис помилки
+|*$.error.localizedMessage*
+|String
+| Localized details and error description
+//|Локалізовані деталі та опис помилки
+|===
+
+=== Low-level design
+//=== Низькорівневий дизайн
+
+To validate the signatures of ASiC containers, the number of signatories is obtained using `EndUser::ASiCGetSignsCount(base64Data)`, and then the validity of each `EndUser::ASiCVerify(index, base64Data)` is checked.
+//Для валідації підписів ASiC контейнерів відбувається отримання кількості підписантів за допомогою `EndUser::ASiCGetSignsCount(base64Data)`, а далі перевіряється валідність кожного `EndUser::ASiCVerify(index, base64Data)`
+
+`EndUser::VerifyInternal(base64Data)` is used for CAdES.
+//Для CAdES використовується `EndUser::VerifyInternal(base64Data)`
+
+
+== signature_details(<string|data>, <enum|dataFormat>)
+
+=== JUEL function
+//=== JUEL функція
+|===
+|Parameter |Description |Type |Data type
+//|Назва параметру |Опис |Тип |Тип даних
+
+|data
+| Data containing signature in Base64 format
+//|Дані які включають в себе підпис в форматі Base64
+|Input
+//|Вхідний
+|String
+
+|container
+| List of available file types
+//|Перелік доступних для використання типів файлів
+|Input
+//|Вхідний
+|Enum (ASiC/CAdES)
+
+|signInfo
+|Signature details
+//|Деталі про підпис
+|Output
+//|Вихідний
+|SignatureInfo
+|===
+
+
+.Structures for receiving content in a BP
+//.Структури для отримання контенту в БП
+[plantuml]
+----
+class SignatureInfo {
+- List<SignDetails> data
++ SignDetails getSignInfo()
++ List<SignDetails> getAllSignInfo()
+}
+
+----
+.SignDetails structure
+//.Структура SignDetails
+|===
+|Json Path|Type|Description
+//|Json Path|Тип|Опис
+
+|*issuer*
+|String
+| Certificate issuer
+//|Видавець сертифікату
+|*issuerCN*
+|String
+| Certificate issuer name
+//|Назва видавця сертифікату
+|*serial*
+|String
+| Certificate serial number
+//|Серійний номер сертифікату
+|*subject*
+|String
+| General information about the certificate owner
+//|Загальна інформація про власника сертифікату
+|*subjCN*
+|String
+| Certificate owner name
+//|Ім’я власника сертифікату
+|*subjOrg*
+|String
+| Organization of the certificate owner
+//|Організація власника сертифікату
+|*subjOrgUnit*
+|String
+| Unit of the certificate owner
+//|Підрозділ власника сертифікату
+|*subjTitle*
+|String
+| Position of the certificate owner
+//|Посада власника сертифікату
+|*subjState*
+|String
+| Certificate owner region/province
+//|Регіон/область власника сертифікату
+|*subjLocality*
+|String
+| Signatory locale
+//|Локаль підписанта
+|*subjFullName*
+|String
+|Signatory full name
+//|ПІБ підписанта
+|*subjAddress*
+|String
+|Signatory address
+//|Адреса підписанта
+|*subjPhone*
+|String
+|Signatory phone number
+//|Телефон підписанта
+|*subjDNS*
+|String
+|DNS or other name of a device
+//|DNS-ім'я чи інше технічного засобу
+|*subjEDRPOUCode*
+|String
+|Signatory EDRPOU
+//|ЄДРПОУ підписанта
+|*subjDRFOCode*
+|String
+|Signatory DRFO
+//|ДРФО підписанта
+|===
+
+=== REST API
+
+_POST /api/esignature/info_
+
+.Example of the request body
+//.Приклад тіла запиту
+[source,json]
+----
+{
+  "data": "dGVzdCBkYXRh",
+  "container": "CAdES/ASiC/XdES/..."
+}
+----
+
+.Structure of the response body
+//.Структура тіла відповіді
+|===
+|Json Path|Type|Description
+//|Json Path|Тип|Опис
+
+|*$.info[]*
+|array[SignatureInfo]
+| Data array containing details about each signature
+//|Масив даних що містить в себе деталі про кожен підпис
+|*$.error.code*
+|String
+| Corresponding status code
+//|Відповідний код статусу
+|*$.error.message*
+|String
+| Error details and description
+//|Деталі та опис помилки
+|*$.error.localizedMessage*
+|String
+| Localized description
+//|Локалізований опис
+|===
+
+=== Low-level design
+//=== Низькорівневий дизайн
+
+For data in ASiC format, it is possible to put several signatures, therefore, when receiving information about a signature, an array with details about each signature on the data is returned.
+//Для даних у форматі ASiC передбачено можливість накладання декількох підписів, тому при отриманні інформації про підпис, повертається масив з деталями про кожен накладений на дані підпис.
+
+.Example of ASiC logics validation
+//.Приклад логіки валідації ASiC
+[source, java]
+----
+IntStream.rangeClosed(0, endUser.ASiCGetSignsCount(data))
+                .mapToObj(index -> endUser.ASiCVerify(index, data))
+                .collect(Collectors.toList());
+----
+
+For CAdES data, `EndUser::VerifyInternal(base64Data)` is used, and the details from the 'EndUserSignInfo' object are returned as a single element in the array.
+//Для даних в форматі CAdES використовується `EndUser::VerifyInternal(base64Data)` та повертається деталі з об'єкту `EndUserSignInfo` як єдиний елемент в масиві.
+
+== signature_content((<string|data>, <enum|dataFormat>)
+
+=== JUEL function
+//=== JUEL функція
+
+|===
+|Parameter |Description |Type |Data type
+//|Назва параметру |Опис |Тип |Тип даних
+
+|data
+| Data containing signature in Base64 format
+//|Дані які включають в себе підпис в форматі Base64
+|Input
+//|Вхідний
+|String
+
+|container
+| List of available file types
+//|Перелік доступних для використання типів файлів
+|Input
+//|Вхідний
+|Enum (ASiC/CAdES)
+
+|response
+|Object with data
+//|Обʼєкт з даними
+|Output
+//|Вихідний
+|SignData
+|===
+
+.Structures for getting content in a BP
+//.Структури для отримання контенту в БП
+[plantuml]
+----
+class SignData {
+- List<Content> data
++ Content getContent()
++ List<Content> getAllContent()
+}
+
+class Content {
+- String data
++ String getData() //Base64 string
+}
+----
+
+=== REST API
+
+_POST /api/esignature/content_
+
+.Example of the request body
+//.Приклад тіла запиту
+[source,json]
+----
+{
+  "data": "dGVzdCBkYXRh",
+  "container": "CAdES/ASiC/XdES/..."
+}
+----
+
+.Structure of the response body
+//.Структура тіла відповіді
+|===
+|Json Path|Type|Description
+//|Json Path|Тип|Опис
+
+|*$.content[]*
+|array[Content]
+| Container contents
+//|Вміст контейнеру
+|*$.error.code*
+|String
+| Corresponding status code
+//|Відповідний код статусу
+|*$.error.message*
+|String
+| Error details and description
+//|Деталі та опис помилки
+|*$.error.localizedMessage*
+|String
+| Localized details and error description
+//|Локалізовані деталі та опис помилки
+|===
+
+=== Low-level design
+//=== Низькорівневий дизайн
+
+For an ASiC container, `EndUser::ASiCGetSignReferences(index, base64Data)` is used to get a list of all files in a container for each index, and `EndUser::ASiCGetReference(reference)` is used to get the content.
+//Для ASiC контейнеру отримання переліку всіх файлів в контенйері відбувається за допомогою `EndUser::ASiCGetSignReferences(index, base64Data)` для кожного індексу, а отримання контенту за допомогою `EndUser::ASiCGetReference(reference)`
+
+For CAdES containers, the data is a part of the `EndUser::VerifyInternal(base64Data)::GetData()` output parameter.
+//Для CAdES контейнерів дані є частина вихідного параметру `EndUser::VerifyInternal(base64Data)::GetData()`
+
+== Updating IIT library
+//== Оновлення бібліотеки ІІТ
+
+1. The crypto library is provided as a link to the https://iit.com.ua/download/EUSignCP-Java-20230629.zip archive.
+//1. Криптобібліотека надається у вигляді посилання на архів
+//https://iit.com.ua/download/EUSignCP-Java-20230629.zip
+2. The archive with library consists of the folders:
+//2. Архів з бібліотекою складається з папок
+- Documentation: Up-to-date documentation for the current version of the crypto library.
+//- Documentation – актуальна документація для поточної версії криптобібліотеки;
+- Modules and\or Installs: Up-to-date modules and\or installation packages of the current version of the crypto library.
+//- Modules та\або Installs – актуальні модулі та\або інсталяційні пакети поточної версії криптобібліотеки;
+- Usage: A real example of the crypto library usage.
+//- Usage – актуального прикладу використання криптобібліотеки.
+The documentation includes a manual for a system programmer (contains general information on the library: how to connect, configure and use the library), and an application (contains a description of functions and parameters).
+//Документація складається з настанови для системного програміста (містить загальну інформацію по бібліотеці: як підключати, налаштовувати та використовувати бібліотеку) та додатку (містить опис функцій та параметрів).
+
+3. Updates containing non-critical improvements can be provided upon request to supp@iit.com.ua (in the letter it is necessary to indicate the number of the actual technical support contract).
+//3. Оновлення, що містять не критичні доопрацювання, надаються за запитом на пошту supp@iit.com.ua (в листі треба вказати номер діючого договору тех. підтримки).
+We inform you about critical updates by mail, to the address specified in the contacts for your organization.
+//Про критичні оновлення інформуємо листом на пошту, яка вказана в контактах для організації
+
+== High level development plan
+//== Високорівневий план розробки
+
+== Technical expertise
+//== Технічні експертизи
+
+* BE (java)
+
+== Development Plan
+//== План розробки
+
+* IIT library update.
+//* Оновлення бібліотеки ІІТ
+* Extension of DSO with appropriate integration points.
+//* Розширення DSO відповідними точками інтеграції
+* Creation of a delegate for validation.
+//* Створення делегату для валідації
+* Adding JUEL functions.
+//* Додавання JUEL-функцій
+* Adding a utility function for Base64 encoding and decoding.
+//* Додавання утілітарної функції для кодування і декодування Base64
+* Development of reference examples.
+//* Розробка референтних прикладів
