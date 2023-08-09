@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
-    <title>Externalization of UI form scripts :: Platform for deployment and maintenance of state electronic registers</title>
+    <title>Public API and rate limits for reading registry data :: Platform for deployment and maintenance of state electronic registers</title>
     <meta name="generator" content="Antora 3.1.1">
     <link rel="stylesheet" href="../../../../../../../../../_/css/site.css">
   </head>
@@ -1086,14 +1086,14 @@
 <nav class="breadcrumbs" aria-label="breadcrumbs">
   <ul>
     <li><a href="../../../../../../../index.html">The Registries Platform</a></li>
-    <li><a href="form-scripts.html">Externalization of UI form scripts</a></li>
+    <li><a href="public-api.html">Public API and rate limits for reading registry data</a></li>
   </ul>
 </nav>
 <div class="page-languages">
     <button class="language-menu-toggle" title="Show other languages of page">English</button>
     <div class="language-menu">
-        <a class="language " href="../../../../../../../../../../ua/platform/1.9.6/arch/architecture/registry/administrative/regulation-management/platform-evolution/form-scripts/form-scripts.html">Українська</a>
-        <a class="language is-current" href="../../../../../../../../../../en/platform/1.9.6/arch/architecture/registry/administrative/regulation-management/platform-evolution/form-scripts/form-scripts.html">English</a>
+        <a class="language " href="../../../../../../../../../../ua/platform/1.9.6/arch/architecture/registry/operational/registry-management/platform-evolution/public-api/public-api.html">Українська</a>
+        <a class="language is-current" href="../../../../../../../../../../en/platform/1.9.6/arch/architecture/registry/operational/registry-management/platform-evolution/public-api/public-api.html">English</a>
     </div>
 </div></div>
     <div class="content">
@@ -1101,314 +1101,665 @@
   <div class="toc-menu"></div>
 </aside>
             <article class="doc">
-<h1 class="page">Externalization of UI form scripts</h1>
+<h1 class="page">Public API and rate limits for reading registry data</h1>
 <div id="toc" class="toc">
 <div id="toctitle">On this page:</div>
 <ul class="sectlevel1">
-<li><a href="#_abstract">1. Abstract</a>
+<li><a href="#_general_description">1. General description</a></li>
+<li><a href="#_functional_scripts">2. Functional scripts</a></li>
+<li><a href="#_user_roles">3. User roles</a></li>
+<li><a href="#_general_principles_and_provisions">4. General principles and provisions</a></li>
+<li><a href="#_high_level_solution_design">5. High-level solution design</a>
 <ul class="sectlevel2">
-<li><a href="#_user_roles">1.1. User roles</a></li>
+<li><a href="#_interservice_interaction_diagram">5.1. Interservice interaction diagram</a></li>
 </ul>
 </li>
-<li><a href="#_functional_scenarios">2. Functional scenarios</a></li>
-<li><a href="#_target_design">3. Target design</a>
+<li><a href="#_simulation_of_the_registry_regulation">6. Simulation of the registry regulation</a>
 <ul class="sectlevel2">
-<li><a href="#_example_of_a_file_containing_an_externalized_script">3.1. Example of a file containing an externalized script</a></li>
-<li><a href="#_system_components_and_their_purpose_in_the_solution_design">3.2. System components and their purpose in the solution design</a></li>
-<li><a href="#_registry_regulations">3.3. Registry regulations</a></li>
-<li><a href="#_regulations_publication_pipeline">3.4. Regulations publication pipeline</a></li>
-<li><a href="#_portals_and_validation_service">3.5. Portals and validation service</a></li>
-<li><a href="#_form_providing_service">3.6. Form providing service</a>
-<ul class="sectlevel3">
-<li><a href="#_changes_in_redis">3.6.1. Changes in Redis</a></li>
-<li><a href="#_add_endpoints">3.6.2. Add endpoints:</a></li>
+<li><a href="#_structure_of_the_regulation">6.1. Structure of the regulation</a></li>
+<li><a href="#_simulation_extension">6.2. Simulation extension</a></li>
 </ul>
 </li>
-<li><a href="#_regulations_management_service">3.7. Regulations management service</a>
-<ul class="sectlevel3">
-<li><a href="#_add_endpoint">3.7.1. Add endpoint:</a></li>
-</ul>
-</li>
-</ul>
-</li>
-<li><a href="#_development_plan">4. Development plan</a>
+<li><a href="#_deployment_of_services">7. Deployment of services</a>
 <ul class="sectlevel2">
-<li><a href="#_technical_assessments">4.1. Technical assessments</a></li>
-<li><a href="#_plan">4.2. Plan</a></li>
+<li><a href="#_networkpolicy_configuration">7.1. NetworkPolicy configuration</a></li>
+</ul>
+</li>
+<li><a href="#_low_level_design_of_services">8. Low-level design of services</a>
+<ul class="sectlevel2">
+<li><a href="#_components_and_their_purpose">8.1. Components and their purpose</a></li>
+<li><a href="#_health_and_load_monitoring_for_public_apis">8.2. Health and load monitoring for public APIs</a></li>
+<li><a href="#_get_documentation_for_the_public_api">8.3. Get documentation for the public API</a></li>
+<li><a href="#_create_a_service_account_to_perform_public_requests">8.4. Create a service account to perform public requests.</a></li>
+<li><a href="#_providing_access_and_setting_rate_limits_at_the_configuration_level">8.5. Providing access and setting rate limits at the configuration level.</a></li>
+</ul>
+</li>
+<li><a href="#_administrative_access">9. Administrative access</a></li>
+<li><a href="#_registry_configuration_management">10. Registry configuration management</a>
+<ul class="sectlevel2">
+<li><a href="#_registry_configuration">10.1. Registry configuration</a></li>
+<li><a href="#_admin_interfaces">10.2. Admin interfaces</a></li>
+</ul>
+</li>
+<li><a href="#_high_level_development_plan">11. High-level development plan</a>
+<ul class="sectlevel2">
+<li><a href="#_technical_examinations">11.1. Technical examinations</a></li>
+<li><a href="#_development_plan">11.2. Development plan</a></li>
 </ul>
 </li>
 </ul>
 </div>
 <div class="sect1">
-<h2 id="_abstract"><a class="anchor" href="#_abstract"></a><a class="link" href="#_abstract">1. Abstract</a></h2>
+<h2 id="_general_description"><a class="anchor" href="#_general_description"></a><a class="link" href="#_general_description">1. General description</a></h2>
 <div class="sectionbody">
 <div class="paragraph">
-<p>When modeling forms for tasks, it is often necessary to use the same Javascript functions that have to be duplicated. This relates both to functions that are relevant for any registry, and to those that make sense to reuse within specific regulations or even a business process.</p>
+<p>In order to ensure public access to registry data that is considered public and to ensure the possibility for third-party systems to receive such data in an up-to-date state, process and visualize them, it is possible to mark individual search criteria (`search conditions') as public, which will allow their further use without need to authenticate.</p>
 </div>
-<div class="paragraph">
-<p>To process all these scenarios, it is suggested to save individual javascript files <strong>at the regulations level</strong>. These files are available through API in form-schema-provider and are used when performing tasks.</p>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_functional_scripts"><a class="anchor" href="#_functional_scripts"></a><a class="link" href="#_functional_scripts">2. Functional scripts</a></h2>
+<div class="sectionbody">
+<div class="ulist">
+<ul>
+<li>
+<p>Publication of search requests</p>
+</li>
+<li>
+<p>Configuration of public API resources</p>
+</li>
+<li>
+<p>Creation of integration points for the public API by the registry technical administrator.</p>
+</li>
+<li>
+<p>Getting documentation and using the public API.</p>
+</li>
+<li>
+<p>Status monitoring and use of public search criteria.</p>
+</li>
+<li>
+<p>Changing `rate-limits' for existing integration points.</p>
+</li>
+</ul>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_user_roles"><a class="anchor" href="#_user_roles"></a><a class="link" href="#_user_roles">3. User roles</a></h2>
+<div class="sectionbody">
+<div class="ulist">
+<ul>
+<li>
+<p>Unauthorized user or third-party system</p>
+</li>
+<li>
+<p>Developer of regulations</p>
+</li>
+<li>
+<p>Technical registry administrator</p>
+</li>
+</ul>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_general_principles_and_provisions"><a class="anchor" href="#_general_principles_and_provisions"></a><a class="link" href="#_general_principles_and_provisions">4. General principles and provisions</a></h2>
+<div class="sectionbody">
+<div class="ulist">
+<ul>
+<li>
+<p>An API that does not require client authentication is considered public.</p>
+</li>
+<li>
+<p>Requests to the Data Factory are made on behalf of the system user</p>
+</li>
+<li>
+<p>Only search queries (`search conditions') can be presented as a public API</p>
+</li>
+<li>
+<p>Restriction of access to the public API (ip blacklist, geoip, protection against ddos attacks) outside the scope of this design</p>
+</li>
+<li>
+<p>The integration points are set up in two stages - through the configuration of the regulation by the registry modeler and through changing the registry settings by adding the corresponding integration points to the ``Public access'' list by the technical administrator of the registry</p>
+</li>
+<li>
+<p>Wildecard links are prohibited</p>
+</li>
+</ul>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_high_level_solution_design"><a class="anchor" href="#_high_level_solution_design"></a><a class="link" href="#_high_level_solution_design">5. High-level solution design</a></h2>
+<div class="sectionbody">
+<div class="imageblock">
+<div class="content">
+<img src="../../../../../../_images/architecture/registry/operational/registry-management/platform-evolution/public-api/context.svg" alt="context">
+</div>
+</div>
+<div class="admonitionblock note">
+<table>
+<tr>
+<td class="icon">
+<i class="fa icon-note" title="Note"></i>
+</td>
+<td class="content">
+In the first iteration, it was decided not to allocate a separate instance of API Gateway for the public API.
+</td>
+</tr>
+</table>
 </div>
 <div class="sect2">
-<h3 id="_user_roles"><a class="anchor" href="#_user_roles"></a><a class="link" href="#_user_roles">1.1. User roles</a></h3>
-<div class="ulist">
-<ul>
-<li>
-<p>Regulations developer</p>
-</li>
-</ul>
+<h3 id="_interservice_interaction_diagram"><a class="anchor" href="#_interservice_interaction_diagram"></a><a class="link" href="#_interservice_interaction_diagram">5.1. Interservice interaction diagram</a></h3>
+<div class="imageblock kroki">
+<div class="content">
+<img src="https://kroki.io/plantuml/svg/eNqNkDFPwzAQhff8ilMnGJx0rDIgMSAEXSqoxNLlcriJVcc29rkoqvrfSewUqXRhO7377t69w8jWxL6RvkBi62GxkT5YswAMEMMoO_SsSDk0DIvHzQs8I8tvHHbmbm1Ne5_I9hrbaOS99f2FTYz7A63lQNoiHbJXf919e3rfwmg32rjYaEXZyMvAxXQXiAdoa6jQqSoD1Scyin2KMVSnLIog0VN3LtppwI0T8C_c_fJsD9IAHlFpbJRWPAB1kg4zEvsa8mx6F2DkTpoxB7KypvCSozfw-rEVadHNYkLqlGlnfYpXQ8fs6qryslWB_SAmVYxBRTYqT5fOuQxHKknHwNKX2hLqerVcLXfmJtB8yFeUfphsouaQTNMfi1xMCeofc-O5VQ==" alt="Diagram">
+</div>
 </div>
 </div>
 </div>
 </div>
 <div class="sect1">
-<h2 id="_functional_scenarios"><a class="anchor" href="#_functional_scenarios"></a><a class="link" href="#_functional_scenarios">2. Functional scenarios</a></h2>
-<div class="sectionbody">
-<div class="ulist">
-<ul>
-<li>
-<p>Reusing Javascript repeated functions within Javascript inserts when modeling forms. The following form parameters are supported:</p>
-<div class="ulist">
-<ul>
-<li>
-<p>Custom Default Value</p>
-</li>
-<li>
-<p>Calculated Value</p>
-</li>
-<li>
-<p>Custom Validation</p>
-</li>
-<li>
-<p>Advanced Conditions</p>
-</li>
-<li>
-<p>others, including specific to some components (for example, Filter Query and Custom Filter on the Select component)</p>
-</li>
-</ul>
-</div>
-</li>
-</ul>
-</div>
-</div>
-</div>
-<div class="sect1">
-<h2 id="_target_design"><a class="anchor" href="#_target_design"></a><a class="link" href="#_target_design">3. Target design</a></h2>
+<h2 id="_simulation_of_the_registry_regulation"><a class="anchor" href="#_simulation_of_the_registry_regulation"></a><a class="link" href="#_simulation_of_the_registry_regulation">6. Simulation of the registry regulation</a></h2>
 <div class="sectionbody">
 <div class="sect2">
-<h3 id="_example_of_a_file_containing_an_externalized_script"><a class="anchor" href="#_example_of_a_file_containing_an_externalized_script"></a><a class="link" href="#_example_of_a_file_containing_an_externalized_script">3.1. Example of a file containing an externalized script</a></h3>
+<h3 id="_structure_of_the_regulation"><a class="anchor" href="#_structure_of_the_regulation"></a><a class="link" href="#_structure_of_the_regulation">6.1. Structure of the regulation</a></h3>
 <div class="paragraph">
-<p>After adding such a file, users are able to use the <code>myUtil</code> function and the <code>myConst</code> variable in their Javascript inserts:</p>
+<p>Access control is carried out at the data model configuration level using the <code>exposeSearchCondition</code> tag</p>
 </div>
+</div>
+<div class="sect2">
+<h3 id="_simulation_extension"><a class="anchor" href="#_simulation_extension"></a><a class="link" href="#_simulation_extension">6.2. Simulation extension</a></h3>
 <div class="listingblock">
 <div class="content">
-<pre class="highlightjs highlight"><code class="language-javascript hljs" data-lang="javascript">function myUtil() {
-  return JSON.stringify(data); // you can use common formio variables here
-}
-
-var myConst = 'veryCustom';</code></pre>
+<pre class="highlightjs highlight"><code class="language-xml hljs" data-lang="xml">&lt;exposeSearchCondition public="true" name="search-laboratories-by-city"/&gt;</code></pre>
 </div>
 </div>
+<div class="paragraph">
+<p>When exposing an API as public and modeling <code>searchCondition</code> for them, the modeler should take into account the following recommendations:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>Each <code>searchCondition</code> that should be published as public should be created separately for this scenario, it is not necessary to expose to public access <code>searchCondition</code> that are used for offices, business processes and integrations with <em>SHO Trembita</em>.</p>
+</li>
+<li>
+<p>Recommended pagination type <code>page</code> as it allows you to see the total number of records without displaying them.</p>
+</li>
+<li>
+<p><code>limit</code> for such <code>searchCondition</code> should be selected depending on the data type and should be the smallest sufficient.</p>
+</li>
+</ul>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_deployment_of_services"><a class="anchor" href="#_deployment_of_services"></a><a class="link" href="#_deployment_of_services">7. Deployment of services</a></h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>To ensure fault tolerance and separate public requests from others, a separate instance of the <code>rest-api</code> service is deployed to improve security.</p>
 </div>
 <div class="sect2">
-<h3 id="_system_components_and_their_purpose_in_the_solution_design"><a class="anchor" href="#_system_components_and_their_purpose_in_the_solution_design"></a><a class="link" href="#_system_components_and_their_purpose_in_the_solution_design">3.2. System components and their purpose in the solution design</a></h3>
+<h3 id="_networkpolicy_configuration"><a class="anchor" href="#_networkpolicy_configuration"></a><a class="link" href="#_networkpolicy_configuration">7.1. NetworkPolicy configuration</a></h3>
 <div class="paragraph">
-<p>This section provides a list of system components that are involved or need to be changed/created as part of the implementation of functional requirements according to the technical design of the solution.</p>
+<p>A public `REST API' instance can only be accessed:</p>
 </div>
+<div class="ulist">
+<ul>
+<li>
+<p>User <code>public-user</code> from <code>realm</code> to <code>external-system</code></p>
+</li>
+<li>
+<p>Only using the <code>GET</code> method</p>
+</li>
+<li>
+<p>Only to `urls' that have been exposed publicly and links to the OpenAPI specification</p>
+</li>
+<li>
+<p>Technical links for the actuator and health-check should be available only in the middle of the cluster</p>
+</li>
+</ul>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_low_level_design_of_services"><a class="anchor" href="#_low_level_design_of_services"></a><a class="link" href="#_low_level_design_of_services">8. Low-level design of services</a></h2>
+<div class="sectionbody">
+<div class="sect2">
+<h3 id="_components_and_their_purpose"><a class="anchor" href="#_components_and_their_purpose"></a><a class="link" href="#_components_and_their_purpose">8.1. Components and their purpose</a></h3>
 <table class="tableblock frame-all grid-all stretch">
 <colgroup>
-<col style="width: 33.3333%;">
-<col style="width: 33.3333%;">
-<col style="width: 33.3334%;">
+<col style="width: 50%;">
+<col style="width: 50%;">
 </colgroup>
 <thead>
 <tr>
 <th class="tableblock halign-left valign-top">Component</th>
-<th class="tableblock halign-left valign-top">Official name</th>
-<th class="tableblock halign-left valign-top">Purpose / Essence of changes</th>
+<th class="tableblock halign-left valign-top">Appointment</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><em>Register regulations</em></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><strong>registry-regulations-publications</strong></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Add the form-scripts folder for storing externalized scripts.</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">infrastructure/monitoring</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Installation and configuration of platform monitoring</p></td>
 </tr>
 <tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><em>Regulations publication pipeline</em></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><strong>registry-regulations-publication-pipeline</strong></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Add processing of externalized scripts&#8201;&#8212;&#8201;their storage and updating in the <strong>form-schema-provider</strong> service (similar to forms).</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">data-architecture/libraries/ddm-starter-swagger</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">A library for generating an OpenAPI specification based on internal rules</p></td>
 </tr>
 <tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><em>Form providing service</em></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><strong>form-schema-provider</strong></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Forms will now require externalized scripts. In the form-schema-provider service, it is necessary to add the ability to store and update scripts separately from forms. You also need to add a separate GET formScriptList endpoint so that it returns all scripts together in the String format.</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">general/registry-configuration</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Configuration and creation of registry resources</p></td>
 </tr>
 <tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><em>Regulations management service</em></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><strong>registry-regulation-management</strong></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">For correct work with form preview on <strong>admin-portal</strong>, externalized scripts must be connected to the form. Therefore, in addition to <strong>form-schema-provider</strong>, changes are also required in the regulation management service. As part of these changes, one more endpoint should be added for the candidate and master versions that will read script files and return them in String format.</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><em>UI form data validation service</em></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><strong>form-submission-validation</strong></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">For the correct validation of entered data, it is necessary to make the same computations as in the portals. Therefore, the validation service must also take into account externalized scripts.</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><em>Register administrator portal</em></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><strong>admin-portal</strong></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Change the form component so that it accepts arbitrary scripts as text and performs all Javascript computations based on these scripts.</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><em>Officer portalи</em></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><strong>officer-portal</strong></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Add script data processing and transfer it to the form component as text</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><em>Citizen portal</em></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><strong>citizen-portal</strong></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Add script data processing and transfer it to the form component as text</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">general/kong-admin-tools</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Configuration of global plugins for API Gateway</p></td>
 </tr>
 </tbody>
 </table>
 </div>
 <div class="sect2">
-<h3 id="_registry_regulations"><a class="anchor" href="#_registry_regulations"></a><a class="link" href="#_registry_regulations">3.3. Registry regulations</a></h3>
+<h3 id="_health_and_load_monitoring_for_public_apis"><a class="anchor" href="#_health_and_load_monitoring_for_public_apis"></a><a class="link" href="#_health_and_load_monitoring_for_public_apis">8.2. Health and load monitoring for public APIs</a></h3>
 <div class="paragraph">
-<p>Add the <strong>form-scripts</strong> folder to regulations' Gerrit for storing scripts:</p>
+<p>To monitor the current state of the API, metrics are downloaded from <code>API Gateway</code> (<code>Kong</code>) using the plugin:</p>
 </div>
-<div class="imageblock kroki">
+<div class="listingblock">
 <div class="content">
-<img src="https://kroki.io/plantuml/svg/eNq9jjEOAyEMBL9CkZajv3-kilJY4Fws2YAMRsrvA6ekyAfS7Y69Xl-zYis8MDnKkS2hS6QYOw2cxElJxtgCaHyGCsdHUp8rphgUD2pdXwGSUF4SVnRx4ylL9gJ55gRzD3WiR1HxOArbmobTtqhUe_sxG6QSnf--te8VtBPw5U_9ft6ys2SrJny7vwFj_HVB" alt="Structure of the registry regulations">
+<pre class="highlightjs highlight"><code class="language-yaml hljs" data-lang="yaml">apiVersion: configuration.konghq.com/v1
+kind: KongClusterPlugin
+metadata:
+  name: kong-prometheus-plugin
+  annotations:
+    kubernetes.io/ingress.class: kong
+  labels:
+    global: "true"
+config:
+  status_code_metrics: true
+  latency_metrics: true
+  bandwidth_metrics: true
+  per_consumer: true
+plugin: prometheus</code></pre>
 </div>
-<div class="title">Figure 1. Structure of the registry regulations</div>
 </div>
+<div class="admonitionblock warning">
+<table>
+<tr>
+<td class="icon">
+<i class="fa icon-warning" title="Warning"></i>
+</td>
+<td class="content">
+This configuration will be applied to absolutely all integration points that are exposed through <code>API Gateway</code>.
+According to the documentation, these settings can lead to a deterioration in the performance of ``API Gateway'', therefore, in the case of significant performance degradation, the list of metrics can be revised downwards, and their configuration can be brought to the level of individual integration points.
+</td>
+</tr>
+</table>
 </div>
-<div class="sect2">
-<h3 id="_regulations_publication_pipeline"><a class="anchor" href="#_regulations_publication_pipeline"></a><a class="link" href="#_regulations_publication_pipeline">3.4. Regulations publication pipeline</a></h3>
 <div class="paragraph">
-<p>The <code>UploadFormScripts.groovy</code> file in <code>/platform/pipelines/stages/impl/lowcode</code> must be added to <strong>registry-regulations-publications</strong>. The implementation of this script is similar to the <code>UploadFormChanges.groovy</code> script for saving forms.</p>
+<p>Creating a service for collecting metrics</p>
 </div>
-</div>
-<div class="sect2">
-<h3 id="_portals_and_validation_service"><a class="anchor" href="#_portals_and_validation_service"></a><a class="link" href="#_portals_and_validation_service">3.5. Portals and validation service</a></h3>
-<div class="paragraph">
-<p>One way or another, portals will receive externalized scripts in the <code>String</code> format and pass them to the form component. The form component will add the script text to any Javascript attribute of the form components. This way, all functions and constants will be available when computing Javascript attributes. This applies to officer-portal, citizen-portal, admin-portal and form-submission-validation.</p>
-</div>
-<div class="imageblock kroki">
+<div class="listingblock">
 <div class="content">
-<img src="https://kroki.io/plantuml/svg/eNq9jjsOAjEMBa-Sgjabfu9BhShMYhZLzkeOHYnbkyAouADdvLGf7HMR7JUHJkclsiV0iQSj0sBpXK7JGHsAiY_Q4Pgg6VwxwSB4UFd5BkiZykJY1eWNJ9biM5TZy1g0tKnuVbLHUdnWNLxjj0JN-0_YINXo_PetfW8gSsCnP933oCp0M8WtWebL9QViZXUk" alt="Execution order of the Javascript attribute">
+<pre class="highlightjs highlight"><code class="language-yaml hljs" data-lang="yaml">apiVersion: v1
+kind: Service
+metadata:
+  name: kong-prometheus-monitoring
+  labels:
+    app: kong-prometheus-monitoring
+spec:
+  selector:
+    app.kubernetes.io/name: kong
+  type: ClusterIP
+  ports:
+  - name: metrics
+    protocol: TCP
+    port: 8100
+    targetPort: 8100</code></pre>
 </div>
-<div class="title">Figure 2. Execution order of the Javascript attribute</div>
+</div>
+<div class="paragraph">
+<p>and <code>ServiceMonitor</code></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-yaml hljs" data-lang="yaml">apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: kong-service-monitor
+spec:
+  namespaceSelector:
+    any: true
+  endpoints:
+  - port: metrics
+  selector:
+    matchLabels:
+      app: kong-prometheus-monitoring</code></pre>
 </div>
 </div>
-<div class="sect2">
-<h3 id="_form_providing_service"><a class="anchor" href="#_form_providing_service"></a><a class="link" href="#_form_providing_service">3.6. Form providing service</a></h3>
-<div class="sect3">
-<h4 id="_changes_in_redis"><a class="anchor" href="#_changes_in_redis"></a><a class="link" href="#_changes_in_redis">3.6.1. Changes in Redis</a></h4>
+<div class="paragraph">
+<p>It is suggested to use <a href="https://grafana.com/grafana/dashboards/7424-kong-official/">official</a> as a basis for the Grafana Dashboard.
+Creation of <code>ConfigMap</code> with dashboard for monitoring</p>
+</div>
+<div class="listingblock">
+<div class="title">monitoring/deploy-templates/dashboard/public-api.yaml</div>
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-yaml hljs" data-lang="yaml">apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-public-api
+data:
+  public-api-statistic.json: |-
+  ...</code></pre>
+</div>
+</div>
+<div class="listingblock">
+<div class="title">monitoring/deploy-templates/values.yaml</div>
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-yaml hljs" data-lang="yaml">dashboardsConfigMaps:
+  - configMapName: grafana-public-api
+    fileName: public-api-statistic.json</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Key metrics:</p>
+</div>
 <div class="ulist">
 <ul>
 <li>
-<p>Create the new namespace (keyspace): <code>bpm-form-scripts</code></p>
+<p>The number of requests for each integration point</p>
+</li>
+<li>
+<p>The number of successful 2xx codes, 5xx server errors, and 4xx client errors, all other codes can be assigned to a separate group</p>
+</li>
+<li>
+<p>Performance statistics (longest request, average, fastest)</p>
 </li>
 </ul>
 </div>
 </div>
-<div class="sect3">
-<h4 id="_add_endpoints"><a class="anchor" href="#_add_endpoints"></a><a class="link" href="#_add_endpoints">3.6.2. Add endpoints:</a></h4>
-<details>
-<summary class="title">form-schema-provider new API</summary>
-<div class="content">
-      <div id="swagger-ui_VV3APYDFFKM554W45AASXB6CML1D58KX"></div>
-
-      <script>
-        document.addEventListener('DOMContentLoaded', function() {
-          SwaggerUIBundle({
-            url: "../../../../../../_attachments/architecture/registry/administrative/regulation-management/platform-evolution/form-scripts/form-provider-swagger.yml",
-            dom_id: "#swagger-ui_VV3APYDFFKM554W45AASXB6CML1D58KX",
-            presets: [
-              SwaggerUIBundle.presets.apis,
-              SwaggerUIStandalonePreset
-            ]
-          })
-        }, false);
-      </script>
+<div class="sect2">
+<h3 id="_get_documentation_for_the_public_api"><a class="anchor" href="#_get_documentation_for_the_public_api"></a><a class="link" href="#_get_documentation_for_the_public_api">8.3. Get documentation for the public API</a></h3>
+<div class="paragraph">
+<p>Getting the specification (<code>OpenAPI</code>) for an API that has been marked as public. (<a href="https://springdoc.org/faq.html#how-can-i-agreagte-external-endpoints-exposing-openapi-3-spec-inside-one-single-application">example</a>)</p>
 </div>
-</details>
+<div class="paragraph">
+<p>`Rate-limits' are not applied to the documentation link, however, to reduce the load on the service, the response is additionally cached on the `API Gateway' (`Kong') using the `proxy-cache' plugin.</p>
+</div>
+<div class="paragraph">
+<p>TTL-based caching is used.
+The configuration of which is carried out at the plug-in configuration level through <code>Gerrit</code></p>
+</div>
+<div class="paragraph">
+<p>General caching configuration requirements:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>Caching is set only by the reference to the documentation and only by the <code>GET</code> method</p>
+</li>
+<li>
+<p>``TTL'' is 15 minutes by default</p>
+</li>
+<li>
+<p>The cache is stored in memory by API Gateway</p>
+</li>
+</ul>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_regulations_management_service"><a class="anchor" href="#_regulations_management_service"></a><a class="link" href="#_regulations_management_service">3.7. Regulations management service</a></h3>
-<div class="sect3">
-<h4 id="_add_endpoint"><a class="anchor" href="#_add_endpoint"></a><a class="link" href="#_add_endpoint">3.7.1. Add endpoint:</a></h4>
-<details>
-<summary class="title">registry-regulation new API</summary>
-<div class="content">
-      <div id="swagger-ui_H384E0ESO09QA7TGDBOHCNRWVD48I3MF"></div>
-
-      <script>
-        document.addEventListener('DOMContentLoaded', function() {
-          SwaggerUIBundle({
-            url: "../../../../../../_attachments/architecture/registry/administrative/regulation-management/platform-evolution/form-scripts/registry-regulation-swagger.yml",
-            dom_id: "#swagger-ui_H384E0ESO09QA7TGDBOHCNRWVD48I3MF",
-            presets: [
-              SwaggerUIBundle.presets.apis,
-              SwaggerUIStandalonePreset
-            ]
-          })
-        }, false);
-      </script>
+<h3 id="_create_a_service_account_to_perform_public_requests"><a class="anchor" href="#_create_a_service_account_to_perform_public_requests"></a><a class="link" href="#_create_a_service_account_to_perform_public_requests">8.4. Create a service account to perform public requests.</a></h3>
+<div class="paragraph">
+<p>Although formally the integration points are public, in order to maintain uniformity of auditing and logging in the middle of the platform, such requests will be made on behalf of the official user from <code>realm' to `external-system'.
+Creation of service user `public-user</code> for authorization at <code>platform-gateway</code> level.</p>
 </div>
-</details>
+<div class="listingblock">
+<div class="title">general/registry-configuration/values.yaml</div>
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-yaml hljs" data-lang="yaml">    publicUser:
+      name: public-user
+      clientId: public-user
+      public: false
+      secretName: keycloak-public-user-client-secret
+      targetRealm:
+        name: external-system
+    ...</code></pre>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_providing_access_and_setting_rate_limits_at_the_configuration_level"><a class="anchor" href="#_providing_access_and_setting_rate_limits_at_the_configuration_level"></a><a class="link" href="#_providing_access_and_setting_rate_limits_at_the_configuration_level">8.5. Providing access and setting rate limits at the configuration level.</a></h3>
+<div class="paragraph">
+<p>Authentication header checking must be disabled for all `urls' listed.</p>
+</div>
+<div class="paragraph">
+<p>The service settings should be such that <code>`GET'' request to <a href="https://{domin}/api/public/data-factory/search-laboratories-by-city" class="bare">https://{domin}/api/public/data-factory/search-laboratories-by-city</a>
+made a request to `registry-rest-api-public.{registry-namespace}.svc.cluster.local:8080/search-laboratories-by-city</code></p>
+</div>
+<div class="listingblock">
+<div class="title">An example of a simplified configuration</div>
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-yaml hljs" data-lang="yaml">apiVersion: v1
+kind: Service
+metadata:
+  name: public-city-lab-route
+  labels:
+    app: registry-rest-api-public
+  annotations:
+    konghq.com/plugins: post-transformer, city-lab-rate-limiting
+    konghq.com/override: registry-rest-api-public:/search-laboratories-by-city
+    konghq.com/path: /search-laboratories-by-city
+spec:
+  ports:
+  - port: 80
+    targetPort: 8080
+    protocol: TCP
+    name: registry-rest-api-public
+  selector:
+    app: registry-rest-api-public</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>General requirements for the configuration of rate-limits:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>The request counter is stored in ``Redis'' memory</p>
+</li>
+<li>
+<p>Set at the level of integration points (`routes')</p>
+</li>
+<li>
+<p>Maintained for each `IP' address of the user</p>
+</li>
+</ul>
+</div>
+<div class="listingblock">
+<div class="title">An example of the configuration of the main aspects</div>
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-yaml hljs" data-lang="yaml">apiVersion: configuration.konghq.com/v1
+kind: KongPlugin
+metadata:
+  name: city-lab-rate-limiting
+plugin: rate-limiting
+config:
+  second: 5
+  hour: 100
+  limit_by: ip
+  policy: redis
+  ...</code></pre>
+</div>
 </div>
 </div>
 </div>
 </div>
 <div class="sect1">
-<h2 id="_development_plan"><a class="anchor" href="#_development_plan"></a><a class="link" href="#_development_plan">4. Development plan</a></h2>
+<h2 id="_administrative_access"><a class="anchor" href="#_administrative_access"></a><a class="link" href="#_administrative_access">9. Administrative access</a></h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>In order to prevent the API from being mistakenly presented as public, it is assumed that such integration points need to be configured not only by the modeler of the regulation, but also by the technical administrator of the registry. Also, the technical administrator of the registry should set rate limits.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_registry_configuration_management"><a class="anchor" href="#_registry_configuration_management"></a><a class="link" href="#_registry_configuration_management">10. Registry configuration management</a></h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Management is carried out by adding the path registry to the <code>Public access</code> list by the technical administrator,</p>
+</div>
+<div class="paragraph">
+<p>In case of deleting existing integration points or temporarily disabling them when accessing them, the user receives <code>HTTP 404</code> that such integration points do not exist.</p>
+</div>
+<div class="sect2">
+<h3 id="_registry_configuration"><a class="anchor" href="#_registry_configuration"></a><a class="link" href="#_registry_configuration">10.1. Registry configuration</a></h3>
+<div class="paragraph">
+<p>In <code>Helm</code>  chart <code>registry-configurations</code> section public <code>API</code> which provides configuration of technical name for public <code>API</code>, relative path to integration point in <code>public-rest-api</code> and limits.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-yaml hljs" data-lang="yaml">publicApi:
+  - name: city-lab
+    enabled: true
+    url: /search-laboratories-by-city
+    limits:
+        second: 5
+        hour: 100
+  - ...</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The current values are used to create the <code>kong</code> service and configure the <code>rate-limit</code> plugin for it.</p>
+</div>
+<div class="paragraph">
+<p>When the limit is reached, a response from API Gateway with code 429 and a body is generated</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-json hljs" data-lang="json">{ "message": "API rate limit exceeded" }</code></pre>
+</div>
+</div>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 50%;">
+<col style="width: 50%;">
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Attribute name</th>
+<th class="tableblock halign-left valign-top">Functional value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">name</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">The technical name of the rule, serves as the unique identifier of the rule and cannot be changed</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">enabled</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Displays the state of the integration point, if false the route is not removed API Gateway generates a response with code 503</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">url</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">The relative path to the search entry can be changed</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">limits</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">List of limits applied to the integration point</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="sect2">
+<h3 id="_admin_interfaces"><a class="anchor" href="#_admin_interfaces"></a><a class="link" href="#_admin_interfaces">10.2. Admin interfaces</a></h3>
+<div class="paragraph">
+<p><a href="https://www.figma.com/file/mWTVRcPrvFwsek4o4eJlFp/05-Admin-Console?type=design&amp;node-id=4166-41260&amp;t=jYpg90NpnfO39BIL-0">Actual mockups</a></p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="../../../../../../_images/architecture/registry/operational/registry-management/platform-evolution/public-api/public-api-add.png" alt="public api add">
+</div>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="../../../../../../_images/architecture/registry/operational/registry-management/platform-evolution/public-api/public-api-list.png" alt="public api list">
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_high_level_development_plan"><a class="anchor" href="#_high_level_development_plan"></a><a class="link" href="#_high_level_development_plan">11. High-level development plan</a></h2>
 <div class="sectionbody">
 <div class="sect2">
-<h3 id="_technical_assessments"><a class="anchor" href="#_technical_assessments"></a><a class="link" href="#_technical_assessments">4.1. Technical assessments</a></h3>
+<h3 id="_technical_examinations"><a class="anchor" href="#_technical_examinations"></a><a class="link" href="#_technical_examinations">11.1. Technical examinations</a></h3>
 <div class="ulist">
 <ul>
 <li>
-<p>FE (changes in portals)</p>
+<p>FE</p>
 </li>
 <li>
-<p>BE (changes in services)</p>
-</li>
-<li>
-<p>DevOps (changes in the publication pipeline)</p>
+<p>BE</p>
 </li>
 </ul>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_plan"><a class="anchor" href="#_plan"></a><a class="link" href="#_plan">4.2. Plan</a></h3>
+<h3 id="_development_plan"><a class="anchor" href="#_development_plan"></a><a class="link" href="#_development_plan">11.2. Development plan</a></h3>
 <div class="ulist">
 <ul>
 <li>
-<p>Add an endpoint to the <strong>registry-regulation-management</strong> service for getting scripts</p>
+<p>Public API</p>
+<div class="ulist">
+<ul>
+<li>
+<p>Extension of ``Liquibase'' scheme and library.</p>
 </li>
 <li>
-<p>Add endpoints to the <strong>form-schema-provider</strong> service for saving, changing and getting scripts</p>
+<p>Changed deployment template for <code>registry-rest-api</code>.</p>
 </li>
 <li>
-<p>Update the form component</p>
+<p>Adding plugin for collecting metrics from <code>API Gateway</code>.</p>
 </li>
 <li>
-<p>Request externalized scripts on the admin-portal and transfer them to the form component</p>
+<p>Grafana dashboard adaptation and deployment.</p>
 </li>
 <li>
-<p>Process the parameter of the externalized scripts on the citizen and officer portal and pass it to the form component</p>
+<p>Adding section to configure public <code>API</code> in <code>registry-configuration</code>.</p>
 </li>
 <li>
-<p>Add request for <strong>form-schema-provider</strong> in <strong>form-submission-validation</strong> and process scripts</p>
+<p>Adding validation of the uniqueness of the name and `url' to the pipeline of making changes to the registry.</p>
 </li>
 <li>
-<p>Add changes to the publication pipeline</p>
+<p>Adding "Public access" integration type at Admin Technical Console level and configuration <code>registry-configuration</code> from registry configuration.</p>
+</li>
+</ul>
+</div>
 </li>
 <li>
-<p>Add a reference business process to consent</p>
+<p>Rate limits</p>
+<div class="ulist">
+<ul>
+<li>
+<p>Change of deployment template and creation of `rate limit' plugins in `registry-configuration'</p>
+</li>
+<li>
+<p>Extension of the configuration section of the public API with rate limits.</p>
+</li>
+<li>
+<p>Adding a check for the presence of rate limits on the pipeline of making changes to the register.</p>
+</li>
+<li>
+<p>Documentation caching settings</p>
+</li>
+<li>
+<p>Transferring settings to the registry configuration level.</p>
+</li>
+<li>
+<p>Adding the ability to configure through the administrative console.</p>
+</li>
+</ul>
+</div>
 </li>
 </ul>
 </div>

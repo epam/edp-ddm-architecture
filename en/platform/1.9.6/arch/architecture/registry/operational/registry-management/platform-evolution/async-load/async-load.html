@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
-    <title>Externalization of UI form scripts :: Platform for deployment and maintenance of state electronic registers</title>
+    <title>Asynchronous data loading :: Platform for deployment and maintenance of state electronic registers</title>
     <meta name="generator" content="Antora 3.1.1">
     <link rel="stylesheet" href="../../../../../../../../../_/css/site.css">
   </head>
@@ -1086,14 +1086,14 @@
 <nav class="breadcrumbs" aria-label="breadcrumbs">
   <ul>
     <li><a href="../../../../../../../index.html">The Registries Platform</a></li>
-    <li><a href="form-scripts.html">Externalization of UI form scripts</a></li>
+    <li><a href="async-load.html">Asynchronous data loading</a></li>
   </ul>
 </nav>
 <div class="page-languages">
     <button class="language-menu-toggle" title="Show other languages of page">English</button>
     <div class="language-menu">
-        <a class="language " href="../../../../../../../../../../ua/platform/1.9.6/arch/architecture/registry/administrative/regulation-management/platform-evolution/form-scripts/form-scripts.html">Українська</a>
-        <a class="language is-current" href="../../../../../../../../../../en/platform/1.9.6/arch/architecture/registry/administrative/regulation-management/platform-evolution/form-scripts/form-scripts.html">English</a>
+        <a class="language " href="../../../../../../../../../../ua/platform/1.9.6/arch/architecture/registry/operational/registry-management/platform-evolution/async-load/async-load.html">Українська</a>
+        <a class="language is-current" href="../../../../../../../../../../en/platform/1.9.6/arch/architecture/registry/operational/registry-management/platform-evolution/async-load/async-load.html">English</a>
     </div>
 </div></div>
     <div class="content">
@@ -1101,62 +1101,46 @@
   <div class="toc-menu"></div>
 </aside>
             <article class="doc">
-<h1 class="page">Externalization of UI form scripts</h1>
+<h1 class="page">Asynchronous data loading</h1>
 <div id="toc" class="toc">
 <div id="toctitle">On this page:</div>
 <ul class="sectlevel1">
-<li><a href="#_abstract">1. Abstract</a>
-<ul class="sectlevel2">
-<li><a href="#_user_roles">1.1. User roles</a></li>
-</ul>
-</li>
+<li><a href="#_general_description">1. General description</a></li>
 <li><a href="#_functional_scenarios">2. Functional scenarios</a></li>
-<li><a href="#_target_design">3. Target design</a>
+<li><a href="#_users_roles">3. User`s roles</a></li>
+<li><a href="#_general_principles_and_provisions">4. General principles and provisions</a></li>
+<li><a href="#_high_level_solution_design">5. High-level solution design</a>
 <ul class="sectlevel2">
-<li><a href="#_example_of_a_file_containing_an_externalized_script">3.1. Example of a file containing an externalized script</a></li>
-<li><a href="#_system_components_and_their_purpose_in_the_solution_design">3.2. System components and their purpose in the solution design</a></li>
-<li><a href="#_registry_regulations">3.3. Registry regulations</a></li>
-<li><a href="#_regulations_publication_pipeline">3.4. Regulations publication pipeline</a></li>
-<li><a href="#_portals_and_validation_service">3.5. Portals and validation service</a></li>
-<li><a href="#_form_providing_service">3.6. Form providing service</a>
-<ul class="sectlevel3">
-<li><a href="#_changes_in_redis">3.6.1. Changes in Redis</a></li>
-<li><a href="#_add_endpoints">3.6.2. Add endpoints:</a></li>
+<li><a href="#_key_scenarios_of_services_interaction">5.1. Key scenarios of services interaction</a></li>
 </ul>
 </li>
-<li><a href="#_regulations_management_service">3.7. Regulations management service</a>
-<ul class="sectlevel3">
-<li><a href="#_add_endpoint">3.7.1. Add endpoint:</a></li>
-</ul>
-</li>
-</ul>
-</li>
-<li><a href="#_development_plan">4. Development plan</a>
+<li><a href="#_simulation_of_the_registry_regulation">6. Simulation of the registry regulation</a>
 <ul class="sectlevel2">
-<li><a href="#_technical_assessments">4.1. Technical assessments</a></li>
-<li><a href="#_plan">4.2. Plan</a></li>
+<li><a href="#_simulation_extension">6.1. Simulation extension</a></li>
+</ul>
+</li>
+<li><a href="#_low_level_service_design">7. Low-level service design</a>
+<ul class="sectlevel2">
+<li><a href="#_library_of_liquibase_extensions_for_modeling_the_date_model_of_the_registry">7.1. Library of Liquibase-extensions for modeling the date model of the registry</a></li>
+<li><a href="#_delegate_for_sending_asynchronous_messages">7.2. Delegate for sending asynchronous messages</a></li>
+<li><a href="#_synchronous_registry_data_management_service">7.3. Synchronous registry data management service</a></li>
+<li><a href="#_asynchronous_registry_data_management_service">7.4. Asynchronous registry data management service</a></li>
+<li><a href="#_handler_of_data_loading_results_event_messages_for_the_business_process_execution_service">7.5. Handler of data loading results event messages for the business process execution service</a></li>
+</ul>
+</li>
+<li><a href="#_high_level_development_plan">8. High-level development plan</a>
+<ul class="sectlevel2">
+<li><a href="#_technical_examinations">8.1. Technical examinations</a></li>
+<li><a href="#_development_plan">8.2. Development plan</a></li>
 </ul>
 </li>
 </ul>
 </div>
 <div class="sect1">
-<h2 id="_abstract"><a class="anchor" href="#_abstract"></a><a class="link" href="#_abstract">1. Abstract</a></h2>
+<h2 id="_general_description"><a class="anchor" href="#_general_description"></a><a class="link" href="#_general_description">1. General description</a></h2>
 <div class="sectionbody">
 <div class="paragraph">
-<p>When modeling forms for tasks, it is often necessary to use the same Javascript functions that have to be duplicated. This relates both to functions that are relevant for any registry, and to those that make sense to reuse within specific regulations or even a business process.</p>
-</div>
-<div class="paragraph">
-<p>To process all these scenarios, it is suggested to save individual javascript files <strong>at the regulations level</strong>. These files are available through API in form-schema-provider and are used when performing tasks.</p>
-</div>
-<div class="sect2">
-<h3 id="_user_roles"><a class="anchor" href="#_user_roles"></a><a class="link" href="#_user_roles">1.1. User roles</a></h3>
-<div class="ulist">
-<ul>
-<li>
-<p>Regulations developer</p>
-</li>
-</ul>
-</div>
+<p>In the current implementation, there is a mechanism that allows you to download a csv file with data that will be uploaded to the corresponding table. This process occurs synchronously, so the client should receive a response within 30 seconds (the maximum allowable timeout). In addition, since the communication between the synchronous and asynchronous registry data management services takes place through a message broker, there is a limit of one megabyte for messages. Therefore, an artificial limit of 50 lines was set. In the process of operation, it became necessary to download larger volumes of data, the size of which can take a much longer time to download.</p>
 </div>
 </div>
 </div>
@@ -1166,55 +1150,168 @@
 <div class="ulist">
 <ul>
 <li>
-<p>Reusing Javascript repeated functions within Javascript inserts when modeling forms. The following form parameters are supported:</p>
-<div class="ulist">
-<ul>
-<li>
-<p>Custom Default Value</p>
+<p>Saving data from a file that is larger than one megabyte and may take longer than 30 seconds to save.</p>
 </li>
 <li>
-<p>Calculated Value</p>
-</li>
-<li>
-<p>Custom Validation</p>
-</li>
-<li>
-<p>Advanced Conditions</p>
-</li>
-<li>
-<p>others, including specific to some components (for example, Filter Query and Custom Filter on the Select component)</p>
-</li>
-</ul>
-</div>
+<p>Saving data from a file to several tables.</p>
 </li>
 </ul>
 </div>
 </div>
 </div>
 <div class="sect1">
-<h2 id="_target_design"><a class="anchor" href="#_target_design"></a><a class="link" href="#_target_design">3. Target design</a></h2>
+<h2 id="_users_roles"><a class="anchor" href="#_users_roles"></a><a class="link" href="#_users_roles">3. User`s roles</a></h2>
+<div class="sectionbody">
+<div class="ulist">
+<ul>
+<li>
+<p>Developer of regulations</p>
+</li>
+<li>
+<p>Service provider</p>
+</li>
+</ul>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_general_principles_and_provisions"><a class="anchor" href="#_general_principles_and_provisions"></a><a class="link" href="#_general_principles_and_provisions">4. General principles and provisions</a></h2>
+<div class="sectionbody">
+<div class="ulist">
+<ul>
+<li>
+<p>Saving data from a file takes place in one transaction.</p>
+</li>
+<li>
+<p>The file is processed line by line.</p>
+</li>
+<li>
+<p>The business process is built on events that occur when a message is sent to the broker.</p>
+</li>
+<li>
+<p>Events loaded into a business process must be processed by the main process and cannot be associated with a sub-process.</p>
+</li>
+<li>
+<p>The save operation is asynchronous.</p>
+</li>
+<li>
+<p>Download progress is not tracked.</p>
+</li>
+<li>
+<p>As a reference to the derived document for all entities, there will be one key for the entire file without specifying a specific line.</p>
+</li>
+<li>
+<p>Files that do not comply with the rules of the installed simulators cannot be loaded.</p>
+</li>
+<li>
+<p>The file size limit is managed at the control plane level</p>
+</li>
+</ul>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_high_level_solution_design"><a class="anchor" href="#_high_level_solution_design"></a><a class="link" href="#_high_level_solution_design">5. High-level solution design</a></h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p><span class="image"><img src="../../../../../../_images/architecture/registry/operational/registry-management/platform-evolution/async-load/context.svg" alt="context"></span></p>
+</div>
+<div class="paragraph">
+<p><span class="image"><img src="../../../../../../_images/architecture/registry/operational/registry-management/platform-evolution/async-load/context-details.svg" alt="context details"></span></p>
+</div>
+<div class="sect2">
+<h3 id="_key_scenarios_of_services_interaction"><a class="anchor" href="#_key_scenarios_of_services_interaction"></a><a class="link" href="#_key_scenarios_of_services_interaction">5.1. Key scenarios of services interaction</a></h3>
+<div class="imageblock kroki">
+<div class="content">
+<img src="https://kroki.io/plantuml/svg/eNqFVMtu2zAQvOsrtu61_QEBLpC0l6IuGiTHpAeKWkuEKZLlQ2n-vsuXLEUJChiwSO7O7swO-cGPOCEYyYRqDLNecGGY8nC409YzeQDmwKTP7fE3zcOE9BWM1Kx_UuDQzoJjyuh713T6Lxxu734-HODjSQyjv5UBtyC3wQmFjipYzek_5XZmctuwH-x8YdCjxIF5hFyhrN6KPAnnUaFNgbIsGlQ9UE_bhHsc6Ny-wD06Dzd331OOpcWNEc2fgAELajq4xK-GaymRe6GVg8NXNGM64_TxDnhuq6InkAjfM8865qjCL4OWRUAmScm6n4l2ryjiCyfFLxmqLJrmeIQHNgs1wFlIdHA8Nnls8PlLHEdbBhUjWIppaDceFrItzEyKPnUB-gxkjBQGXCsfBy0Uhcp87nU6J3KB-2ARGImrwtShjbkULrxA11ikU_UqrgIyWqeatZOoYAsu04j4fTFZxVnvwRi9gqgKMSwwhJOJtwkvSlTbXeCuykSzUUnyRhFG2wmehR-LSDG9GawOBrTJAyI2aJqYeAXgbl7EmtE6ClwidqyK2eOStA9yoRdrUSdLZvV4m9rKDVokUzqfBn4q84x-iQNfbgjlJpO1UEc-UUE2IJC7HoXielpvJpv_bqovV-kWOYp5UzmKSWRwMcg2rxiyBd15elNyKkcy8Fnw2BtRIYgLze3qtyqACZ0UfB2-bypZdQewDsuC7-xeaqQxdS9JtHfQK265TNWwDthAlKIEIz6p_5p_39PKBAmYpGRkPrrfURnntaVxlEaL6zjpifCIjI9g9fN2Sn23YBKjCMu1JU8Znf1cnuTlGubQYrrotLf5L25T9HPP9HZe467eqO5Jt2Xn6eQ0Hfyg33BafZOXspud-t1mNuXJSWUixeLDT1QA5_gQxHZzDOOUkZgvDxTzwW3Q84W95pSnLkGVm7d6Qna8_gHFrY03" alt="File processing">
+</div>
+<div class="title">Figure 1. File processing</div>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_simulation_of_the_registry_regulation"><a class="anchor" href="#_simulation_of_the_registry_regulation"></a><a class="link" href="#_simulation_of_the_registry_regulation">6. Simulation of the registry regulation</a></h2>
 <div class="sectionbody">
 <div class="sect2">
-<h3 id="_example_of_a_file_containing_an_externalized_script"><a class="anchor" href="#_example_of_a_file_containing_an_externalized_script"></a><a class="link" href="#_example_of_a_file_containing_an_externalized_script">3.1. Example of a file containing an externalized script</a></h3>
+<h3 id="_simulation_extension"><a class="anchor" href="#_simulation_extension"></a><a class="link" href="#_simulation_extension">6.1. Simulation extension</a></h3>
 <div class="paragraph">
-<p>After adding such a file, users are able to use the <code>myUtil</code> function and the <code>myConst</code> variable in their Javascript inserts:</p>
+<p>To implement the possibility of asynchronous loading of entities to the database, the configuration consists of several parts:</p>
+</div>
+<div class="paragraph">
+<p>Configuration at the level of the data model using the liquibase extension, modeling the file upload form, and using the asynchronous interaction delegate for BP modeling.</p>
 </div>
 <div class="listingblock">
+<div class="title">An extension of the liquibase library</div>
 <div class="content">
-<pre class="highlightjs highlight"><code class="language-javascript hljs" data-lang="javascript">function myUtil() {
-  return JSON.stringify(data); // you can use common formio variables here
-}
+<pre class="highlightjs highlight"><code class="language-xml hljs" data-lang="xml">&lt;changeSet&gt;
+    &lt;createTable name="item"&gt;
+        &lt;!-- Description of table fields !--&gt;
+    &lt;/createTable&gt;
+    &lt;createTable name="demo_entity"&gt;
+        &lt;!-- Description of table fields !--&gt;
+    &lt;/createTable&gt;
 
-var myConst = 'veryCustom';</code></pre>
+    &lt;createCompositeEntity name="item_with_references"&gt;
+        &lt;!-- Description of the fields of a complex entity !--&gt;
+    &lt;/createCompositeEntity&gt;
+
+    &lt;createAsyncLoad name="allowedAsyncLoads"&gt;
+        &lt;entityList&gt;
+            &lt;entity name="item" limit="100"/&gt;
+            &lt;entity name="item_with_references" limit="1000"/&gt;
+            &lt;entity name="demo_entity" limit="1000000"/&gt;
+        &lt;/entityList&gt;
+    &lt;/createAsyncLoad&gt;
+
+    &lt;deleteAsyncLoad name="removeEntities"&gt;
+        &lt;entityList&gt;
+            &lt;entity name="demo_entity"/&gt;
+        &lt;/entityList&gt;
+    &lt;/deleteAsyncLoad&gt;
+
+&lt;/changeSet&gt;</code></pre>
 </div>
 </div>
-</div>
-<div class="sect2">
-<h3 id="_system_components_and_their_purpose_in_the_solution_design"><a class="anchor" href="#_system_components_and_their_purpose_in_the_solution_design"></a><a class="link" href="#_system_components_and_their_purpose_in_the_solution_design">3.2. System components and their purpose in the solution design</a></h3>
 <div class="paragraph">
-<p>This section provides a list of system components that are involved or need to be changed/created as part of the implementation of functional requirements according to the technical design of the solution.</p>
+<p>The <code>limit</code> attribute is required when creating <code>createAsyncLoad</code></p>
+</div>
+<div class="paragraph">
+<p><span class="image"><img src="../../../../../../_images/architecture/registry/operational/registry-management/platform-evolution/async-load/business-process.png" alt="business process"></span></p>
+</div>
+<div class="exampleblock">
+<div class="title">Example 1. Configuring a delegate for asynchronous loading</div>
+<div class="content">
+<div class="paragraph">
+<p><span class="image"><img src="../../../../../../_images/architecture/registry/operational/registry-management/platform-evolution/async-load/delegateConfiguration.png" alt="delegateConfiguration"></span></p>
+</div>
+</div>
+</div>
+<div class="paragraph">
+<p>As a result of processing, several events may occur, depending on the status of the result.
+An event type consists of an entity name and a status.</p>
+</div>
+<div class="exampleblock">
+<div class="title">Example 2. Examples of setting event handling of successful loading of the item entity</div>
+<div class="content">
+<div class="paragraph">
+<p><span class="image"><img src="../../../../../../_images/architecture/registry/operational/registry-management/platform-evolution/async-load/succesEvent.png" alt="succesEvent"></span></p>
+</div>
+</div>
+</div>
+<div class="exampleblock">
+<div class="title">Example 3. Examples of setting event processing for when saving the item entity</div>
+<div class="content">
+<div class="paragraph">
+<p><span class="image"><img src="../../../../../../_images/architecture/registry/operational/registry-management/platform-evolution/async-load/constraintViolation.png" alt="constraintViolation"></span></p>
+</div>
+</div>
+</div>
+<div class="paragraph">
+<p>The general rule for forming events during asynchronous interaction is formed using `camel case' and consists of `the name of the entity on which the operation is performed + the name of the operation + the result of the operation'</p>
 </div>
 <table class="tableblock frame-all grid-all stretch">
+<caption class="title">Table 1. Possible statuses of the processing result</caption>
 <colgroup>
 <col style="width: 33.3333%;">
 <col style="width: 33.3333%;">
@@ -1222,193 +1319,196 @@ var myConst = 'veryCustom';</code></pre>
 </colgroup>
 <thead>
 <tr>
-<th class="tableblock halign-left valign-top">Component</th>
-<th class="tableblock halign-left valign-top">Official name</th>
-<th class="tableblock halign-left valign-top">Purpose / Essence of changes</th>
+<th class="tableblock halign-left valign-top">The result of the operation</th>
+<th class="tableblock halign-left valign-top">Description</th>
+<th class="tableblock halign-left valign-top">An example of an event on a business process</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><em>Register regulations</em></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><strong>registry-regulations-publications</strong></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Add the form-scripts folder for storing externalized scripts.</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">SUCCESS</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">The operation ended successfully.</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">%item%DataLoadCsvSuccess</p></td>
 </tr>
 <tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><em>Regulations publication pipeline</em></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><strong>registry-regulations-publication-pipeline</strong></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Add processing of externalized scripts&#8201;&#8212;&#8201;their storage and updating in the <strong>form-schema-provider</strong> service (similar to forms).</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">CONSTRAINT_VIOLATION</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Data from the file cannot be loaded because one of them violates existing database rules.</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">%item%DataLoadCsvConstraintViolation</p></td>
 </tr>
 <tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><em>Form providing service</em></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><strong>form-schema-provider</strong></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Forms will now require externalized scripts. In the form-schema-provider service, it is necessary to add the ability to store and update scripts separately from forms. You also need to add a separate GET formScriptList endpoint so that it returns all scripts together in the String format.</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><em>Regulations management service</em></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><strong>registry-regulation-management</strong></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">For correct work with form preview on <strong>admin-portal</strong>, externalized scripts must be connected to the form. Therefore, in addition to <strong>form-schema-provider</strong>, changes are also required in the regulation management service. As part of these changes, one more endpoint should be added for the candidate and master versions that will read script files and return them in String format.</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><em>UI form data validation service</em></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><strong>form-submission-validation</strong></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">For the correct validation of entered data, it is necessary to make the same computations as in the portals. Therefore, the validation service must also take into account externalized scripts.</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><em>Register administrator portal</em></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><strong>admin-portal</strong></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Change the form component so that it accepts arbitrary scripts as text and performs all Javascript computations based on these scripts.</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><em>Officer portalи</em></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><strong>officer-portal</strong></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Add script data processing and transfer it to the form component as text</p></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><em>Citizen portal</em></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><strong>citizen-portal</strong></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Add script data processing and transfer it to the form component as text</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">OPERATION_FAILED</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">An error occurred while processing the file.</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">%item%DataLoadCsvOperationFailed</p></td>
 </tr>
 </tbody>
 </table>
 </div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_low_level_service_design"><a class="anchor" href="#_low_level_service_design"></a><a class="link" href="#_low_level_service_design">7. Low-level service design</a></h2>
+<div class="sectionbody">
 <div class="sect2">
-<h3 id="_registry_regulations"><a class="anchor" href="#_registry_regulations"></a><a class="link" href="#_registry_regulations">3.3. Registry regulations</a></h3>
+<h3 id="_library_of_liquibase_extensions_for_modeling_the_date_model_of_the_registry"><a class="anchor" href="#_library_of_liquibase_extensions_for_modeling_the_date_model_of_the_registry"></a><a class="link" href="#_library_of_liquibase_extensions_for_modeling_the_date_model_of_the_registry">7.1. Library of Liquibase-extensions for modeling the date model of the registry</a></h3>
 <div class="paragraph">
-<p>Add the <strong>form-scripts</strong> folder to regulations' Gerrit for storing scripts:</p>
-</div>
-<div class="imageblock kroki">
-<div class="content">
-<img src="https://kroki.io/plantuml/svg/eNq9jjEOAyEMBL9CkZajv3-kilJY4Fws2YAMRsrvA6ekyAfS7Y69Xl-zYis8MDnKkS2hS6QYOw2cxElJxtgCaHyGCsdHUp8rphgUD2pdXwGSUF4SVnRx4ylL9gJ55gRzD3WiR1HxOArbmobTtqhUe_sxG6QSnf--te8VtBPw5U_9ft6ys2SrJny7vwFj_HVB" alt="Structure of the registry regulations">
-</div>
-<div class="title">Figure 1. Structure of the registry regulations</div>
+<p>The result of processing the <code>createAsyncLoad</code> <code>deleteAsyncLoad</code> tags is the formation of a list of structures for which asynchronous loading of data from files in the metadata table is allowed.</p>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_regulations_publication_pipeline"><a class="anchor" href="#_regulations_publication_pipeline"></a><a class="link" href="#_regulations_publication_pipeline">3.4. Regulations publication pipeline</a></h3>
+<h3 id="_delegate_for_sending_asynchronous_messages"><a class="anchor" href="#_delegate_for_sending_asynchronous_messages"></a><a class="link" href="#_delegate_for_sending_asynchronous_messages">7.2. Delegate for sending asynchronous messages</a></h3>
 <div class="paragraph">
-<p>The <code>UploadFormScripts.groovy</code> file in <code>/platform/pipelines/stages/impl/lowcode</code> must be added to <strong>registry-regulations-publications</strong>. The implementation of this script is similar to the <code>UploadFormChanges.groovy</code> script for saving forms.</p>
+<p>When sending a message using a delegate, service headers for tracing are sent along with the message body.</p>
 </div>
-</div>
-<div class="sect2">
-<h3 id="_portals_and_validation_service"><a class="anchor" href="#_portals_and_validation_service"></a><a class="link" href="#_portals_and_validation_service">3.5. Portals and validation service</a></h3>
 <div class="paragraph">
-<p>One way or another, portals will receive externalized scripts in the <code>String</code> format and pass them to the form component. The form component will add the script text to any Javascript attribute of the form components. This way, all functions and constants will be available when computing Javascript attributes. This applies to officer-portal, citizen-portal, admin-portal and form-submission-validation.</p>
+<p>Delegate fields that are filled in during modeling.</p>
 </div>
-<div class="imageblock kroki">
+<div class="paragraph">
+<p>Entity name_ - name of the object date of the model (table or complex object)<br>
+<em>File</em> is a structure that represents a file and consists of a key to the file and a checksum.<br>
+<em>Signature</em> - a structure that represents the form that was signed with the contents of the file.<br>
+<em>Derived file (optional) </em>- a structure that represents a file that was created in a business process or as a result of processing the original file.<br>
+<em>Variable</em> - the name of the variable in which the result of file processing will be saved.<br>
+<em>JWT token</em> - user token.<br></p>
+</div>
+<div class="listingblock">
+<div class="title">An example of a message body for saving data from a file</div>
 <div class="content">
-<img src="https://kroki.io/plantuml/svg/eNq9jjsOAjEMBa-Sgjabfu9BhShMYhZLzkeOHYnbkyAouADdvLGf7HMR7JUHJkclsiV0iQSj0sBpXK7JGHsAiY_Q4Pgg6VwxwSB4UFd5BkiZykJY1eWNJ9biM5TZy1g0tKnuVbLHUdnWNLxjj0JN-0_YINXo_PetfW8gSsCnP933oCp0M8WtWebL9QViZXUk" alt="Execution order of the Javascript attribute">
+<pre class="highlightjs highlight"><code class="language-json hljs" data-lang="json">{
+  "payload": {
+    "file": {
+      "checksum": "....",
+      "id": "process/bp-instance-id/uuid"
+    },
+    "derivedFile": {
+      "checksum": "...",
+      "id": "process/bp-instance-id/uuid"
+    }
+  }
+}</code></pre>
 </div>
-<div class="title">Figure 2. Execution order of the Javascript attribute</div>
+</div>
+<div class="paragraph">
+<p>Всі метадані до повідомлення передаються в заголовках до повідомлення разом з типовими для БП "X-Digital-*" заголовками.</p>
+</div>
+<div class="paragraph">
+<p><em>X-Digital-Signature</em> - користувацький підпис.<br>
+<em>X-Digital-Signature-Derived</em> - підпис який генерується на підставі фінального повідомлення.<br>
+<em>EntityName</em> - назва обʼєкту дата моделі.<br>
+<em>ResultVariable</em> - назва персистеної змінної в яку буде збережено результат обробки файлу.<br></p>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_form_providing_service"><a class="anchor" href="#_form_providing_service"></a><a class="link" href="#_form_providing_service">3.6. Form providing service</a></h3>
-<div class="sect3">
-<h4 id="_changes_in_redis"><a class="anchor" href="#_changes_in_redis"></a><a class="link" href="#_changes_in_redis">3.6.1. Changes in Redis</a></h4>
-<div class="ulist">
-<ul>
-<li>
-<p>Create the new namespace (keyspace): <code>bpm-form-scripts</code></p>
-</li>
-</ul>
+<h3 id="_synchronous_registry_data_management_service"><a class="anchor" href="#_synchronous_registry_data_management_service"></a><a class="link" href="#_synchronous_registry_data_management_service">7.3. Synchronous registry data management service</a></h3>
+<div class="paragraph">
+<p>Validation takes place according to the existing process by proxying requests to the synchronous data management service, the rules regarding the permitted number of entities exposed by the modeler are formed at the service generation stage.</p>
 </div>
 </div>
-<div class="sect3">
-<h4 id="_add_endpoints"><a class="anchor" href="#_add_endpoints"></a><a class="link" href="#_add_endpoints">3.6.2. Add endpoints:</a></h4>
-<details>
-<summary class="title">form-schema-provider new API</summary>
+<div class="sect2">
+<h3 id="_asynchronous_registry_data_management_service"><a class="anchor" href="#_asynchronous_registry_data_management_service"></a><a class="link" href="#_asynchronous_registry_data_management_service">7.4. Asynchronous registry data management service</a></h3>
+<div class="paragraph">
+<p>The process of processing the message is carried out by existing handlers for saving entities (<code>createEntity</code>, <code>createCompositeEntity</code>) which is dynamically selected according to the entity name depending on the value of the <code>entityName</code> field, the formation of the routing list of <code>entityName</code> to the handler takes place at the generation stage.</p>
+</div>
+<div class="paragraph">
+<p>The processing result will be the status and details for the message.</p>
+</div>
+<div class="listingblock">
 <div class="content">
-      <div id="swagger-ui_VV3APYDFFKM554W45AASXB6CML1D58KX"></div>
+<pre class="highlightjs highlight"><code class="language-json hljs" data-lang="json">{
+  "status": "SUCCESS",
+  "details": "OK"
+}</code></pre>
+</div>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-json hljs" data-lang="json">{
+  "status": "CONSTRAINT_VIOLATION",
+  "details": "error: {%s} in line: {%d}"
+}</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The text from the error about the violation of the database rules is taken from the procedure, and the line number is due to keeping a counter in the middle of the transaction.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_handler_of_data_loading_results_event_messages_for_the_business_process_execution_service"><a class="anchor" href="#_handler_of_data_loading_results_event_messages_for_the_business_process_execution_service"></a><a class="link" href="#_handler_of_data_loading_results_event_messages_for_the_business_process_execution_service">7.5. Handler of data loading results event messages for the business process execution service</a></h3>
+<div class="paragraph">
+<p>Correlation of the result with the business process occurs due to <code>BusinessProcessInstanceId</code> from the context.
+The message type is generated dynamically based on the entity type and the result.</p>
+</div>
+<div class="listingblock">
+<div class="title">An example of a possible correlation</div>
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-java hljs" data-lang="java">@Component
+public class AsyncDataLoadResponseKafkaListener {
+    private static final String ACTION = "DataLoadCsv";
+    @Autowired
+    private RuntimeService runtimeService;
 
-      <script>
-        document.addEventListener('DOMContentLoaded', function() {
-          SwaggerUIBundle({
-            url: "../../../../../../_attachments/architecture/registry/administrative/regulation-management/platform-evolution/form-scripts/form-provider-swagger.yml",
-            dom_id: "#swagger-ui_VV3APYDFFKM554W45AASXB6CML1D58KX",
-            presets: [
-              SwaggerUIBundle.presets.apis,
-              SwaggerUIStandalonePreset
-            ]
-          })
-        }, false);
-      </script>
-</div>
-</details>
-</div>
-</div>
-<div class="sect2">
-<h3 id="_regulations_management_service"><a class="anchor" href="#_regulations_management_service"></a><a class="link" href="#_regulations_management_service">3.7. Regulations management service</a></h3>
-<div class="sect3">
-<h4 id="_add_endpoint"><a class="anchor" href="#_add_endpoint"></a><a class="link" href="#_add_endpoint">3.7.1. Add endpoint:</a></h4>
-<details>
-<summary class="title">registry-regulation new API</summary>
-<div class="content">
-      <div id="swagger-ui_H384E0ESO09QA7TGDBOHCNRWVD48I3MF"></div>
+    @KafkaListener("data-load.csv.outbound")
+    public void processAsyncMessages(
+            @Payload AsyncDataLoadResponse message,
+            MessageHeaders headers) {
+        AsyncDataLoadResult payload = message.geyPayload();
 
-      <script>
-        document.addEventListener('DOMContentLoaded', function() {
-          SwaggerUIBundle({
-            url: "../../../../../../_attachments/architecture/registry/administrative/regulation-management/platform-evolution/form-scripts/registry-regulation-swagger.yml",
-            dom_id: "#swagger-ui_H384E0ESO09QA7TGDBOHCNRWVD48I3MF",
-            presets: [
-              SwaggerUIBundle.presets.apis,
-              SwaggerUIStandalonePreset
-            ]
-          })
-        }, false);
-      </script>
+        RequestContext requestContext = message.getRequestContext();
+        Result result = new Result(message.getStatus(), message.getDetails());
+        runtimeService.createMessageCorrelation(payload.getEntityName() + ACTION + message.getStatus())
+          .processInstanceId(requestContext.getProcessInstanceId())
+          .setVariable(payload.getResultVariable(), result)
+          .correlate();
+    }
+
+}</code></pre>
 </div>
-</details>
 </div>
 </div>
 </div>
 </div>
 <div class="sect1">
-<h2 id="_development_plan"><a class="anchor" href="#_development_plan"></a><a class="link" href="#_development_plan">4. Development plan</a></h2>
+<h2 id="_high_level_development_plan"><a class="anchor" href="#_high_level_development_plan"></a><a class="link" href="#_high_level_development_plan">8. High-level development plan</a></h2>
 <div class="sectionbody">
 <div class="sect2">
-<h3 id="_technical_assessments"><a class="anchor" href="#_technical_assessments"></a><a class="link" href="#_technical_assessments">4.1. Technical assessments</a></h3>
+<h3 id="_technical_examinations"><a class="anchor" href="#_technical_examinations"></a><a class="link" href="#_technical_examinations">8.1. Technical examinations</a></h3>
 <div class="ulist">
 <ul>
 <li>
-<p>FE (changes in portals)</p>
+<p>BE</p>
 </li>
 <li>
-<p>BE (changes in services)</p>
-</li>
-<li>
-<p>DevOps (changes in the publication pipeline)</p>
+<p>FE</p>
 </li>
 </ul>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_plan"><a class="anchor" href="#_plan"></a><a class="link" href="#_plan">4.2. Plan</a></h3>
+<h3 id="_development_plan"><a class="anchor" href="#_development_plan"></a><a class="link" href="#_development_plan">8.2. Development plan</a></h3>
 <div class="ulist">
 <ul>
 <li>
-<p>Add an endpoint to the <strong>registry-regulation-management</strong> service for getting scripts</p>
+<p>Creation of a new form for uploading data from CSV files</p>
 </li>
 <li>
-<p>Add endpoints to the <strong>form-schema-provider</strong> service for saving, changing and getting scripts</p>
+<p>Liquibase library extension with additional tags.</p>
 </li>
 <li>
-<p>Update the form component</p>
+<p>Development of a new delegate for sending asynchronous messages.</p>
 </li>
 <li>
-<p>Request externalized scripts on the admin-portal and transfer them to the form component</p>
+<p>Extension of the asynchronous registry data management service to work with data download notifications.</p>
 </li>
 <li>
-<p>Process the parameter of the externalized scripts on the citizen and officer portal and pass it to the form component</p>
+<p>Extension of the business process execution service with a component for processing incoming messages.</p>
 </li>
 <li>
-<p>Add request for <strong>form-schema-provider</strong> in <strong>form-submission-validation</strong> and process scripts</p>
+<p>Development of an abstract example of BP.</p>
 </li>
 <li>
-<p>Add changes to the publication pipeline</p>
+<p>Changing the existing form in terms of the need to specify the entity for validation (the field becomes optional and validation is carried out only if there is a value in this field)</p>
 </li>
 <li>
-<p>Add a reference business process to consent</p>
+<p>Expanding the ability to save CSV files as files in registry data management services</p>
 </li>
 </ul>
 </div>
