@@ -1,0 +1,174 @@
+= Можливість запуску БП за прямим посиланнями для надавачів і отримувачів послуг
+
+== Загальний опис
+
+Існує необхідність реалізувати можливість входу до кабінетів з подальшим призначенням необхідної ролі даному користувачу.
+
+== Функціональні сценарії
+
+* Вхід до кабінету за посиланням і запуск бізнес-процесу для автоматизованого розподілення ролей.
+
+== Ролі користувачів
+
+* Моделювальник
+* Надавач послуг
+* Отримувач послуг
+
+== Глосарій та акроніми
+
+Пряме посилання на бізнес-процес — посилання для запуску бізнес-процесу через _GET_ запит та можливості передачі даних стартової форми у посиланні. +
+
+Спеціальний вхід — (окремий випадок використання прямих посилань) процес при якому під час переходу за окремим посиланням автоматично відбувається запуск бізнес-процесу який змінює права доступу/ролі для користувача. +
+
+== Загальні принципи та положення
+
+* Надання ролей відбувається за допомогою бізнес-процесу.
+* Бізнес-процес зі стартовою формою можу бути стартований відповідним кабінетом при переході за посиланням.
+* Створення користувача для надавачів послуг при першому вході налаштовується окремо за допомогою наявного механізму.
+* Бізнес-процеси для спеціального входу рекомендовано розробляти ідемпотентними.
+* Доступність бізнес-процесу для виклику регулюється наявними механізмами.
+* Спеціальний вхід та _онбордінг_ процес можуть використовуватись незалежно так і разом в рамках реєстру, доки задовільняються чинні обмеження використння _онбордінг_ процесу.
+* Прямі посилання можуть бути побудовано до будь-якого доступного для користувача бізнес-процесу.
+
+
+
+== Високорівневий дизайн рішення
+
+В порталах існує окремий шлях (_route_) через який можна передати ідентифікатор БП через параметр в посиланні (_path parameters_) та передати дані стартової форми при наявності через параметри запиту (_query parameters_).
+
+.Загальний шаблон побудови прямого посилання до бізнес-процесу для надавачів послуг
+[source, httprequest]
+----
+https://officer-portl.base-url/officer/setup/${business-process-id}?data=${data}
+----
+
+
+.Загальний шаблон побудови прямого посилання до бізнес-процесу для отримувачів послуг
+[source, httprequest]
+----
+https://citizen-portl.base-url/setup/${business-process-id}?data=${data}
+----
+
+|===
+|Назва параметра |Опис
+
+|business-process-id
+|Рядок, унікальний ідентифікатор бізнес-процесу (ОБОВ'ЯЗКОВИЙ)
+
+|data
+|Base64 представлення JSON структури для стартової форми процесу (ОПЦІЙНИЙ)
+
+|===
+
+[NOTE]
+Відмінності у поведінці між кабінетами нема, єдина відмінність це різні шляхи для побудови посилань спеціального входу. Тому далі в дизайні розглядається все на прикладі спеціального входу для надавачів послуг.
+
+
+При переході за таким посиланням буде стартовано автоматично бізнес-процес через _Сервіс управління процесами користувача_ за допомогою наявних точок інтеграції `/{key}/start` або `/{key}/start-with-form`
+
+image::arch:architecture/registry/operational/portals/platform-evolution/bp-url-visual.svg[]
+
+
+== Низькорівневий дизайн сервісів
+
+== Ключові сценарії
+
+Повернення користувача за посиланням з якого він прийшов після автентифікації.
+
+В поточній реалізації після успішної автентифікації користувач завжди перенаправляється на стартову сторінку і у випадку якщо користувач використав посилання на внутрішній захищений ресурс, то ця інформація не зберігається.
+
+=== Використання сесійного сховища для зберігання стану
+
+[plantuml]
+----
+actor "Надавач послуг" as officer
+participant "Browser" as browser
+participant "Kong" as kong
+participant "Кабінет\nнадавача послуг" as portal
+participant "Сервіс управління процесами користувача\n(user-process management)" as upm
+participant "Kong" as kong
+
+officer -> browser: спеціальне посилання \n https://${baseUrl}/officer/setup/${bp-id}?data=Base64String
+browser -> portal: перехід за посиланням
+portal --> browser: збереження параметрів для входу в сесійне сховище (Session Storage)\nназва бізнес процесу, данні для стартової форми
+browser -> kong: перевірка автентифікація
+kong --> browser: сторінка автентифікації
+browser --> officer: сторінка входу \nhttps://${baseUrl}/officer/login
+officer -> browser: кнопка вхід
+browser -> kong: перехід на сторінку з віджетом \nhttps://${baseUrl}/officer/home
+return сторінка з віджетом
+browser --> officer: форма віджету
+officer -> browser: файл ключа і пароль
+browser -> kong: перенаправлення на головну сторінку\nhttps://${baseUrl}/officer/home
+kong --> portal: успішна автентифікація
+portal -> portal: перевірка сесійного сховище
+portal -> upm: старт відповідного бізнес-процесу
+return успішний запуск
+portal -> upm: перевірка стану процесу
+return стан процесу
+portal -> portal: визначення сторінки сторінки для переходу
+portal -> portal: видалення інформації з сесійного сховища
+portal -> browser: перехід на сторінку задачі/послуг
+browser -> officer: відображення відповідної сторінки
+----
+
+=== Розширення API для сторінки /home опційним параметром redirect_url
+
+[plantuml]
+----
+actor "Надавач послуг" as officer
+participant "Browser" as browser
+participant "Kong" as kong
+participant "Кабінет\nнадавача послуг" as portal
+participant "\n(user-process management)" as upm
+participant "Kong" as kong
+
+officer -> browser: спеціальне посилання \n https://${baseUrl}/officer/setup/${bp-id}?data=Base64String
+browser -> portal: перехід за посиланням
+portal --> browser: збереження параметрів для входу в сесійне сховище (Session Storage)\nназва бізнес процесу, данні для стартової форми
+browser -> kong: перевірка автентифікація
+kong --> browser: сторінка автентифікації
+browser --> officer: сторінка входу \nhttps://${baseUrl}/officer/login
+officer -> browser: кнопка вхід
+browser -> portal: перехід на сторінку з віджетом \nhttps://${baseUrl}/officer/home
+return сторінка з віджетом
+browser --> officer: форма віджету
+officer -> browser: файл ключа і пароль
+browser -> kong: перенаправлення на головну сторінку\nhttps://${baseUrl}/officer/home?redirect_url=...
+kong -> portal: перхід на сторінку для запуску бізнес-процесу
+portal -> upm: старт відповідного бізнес-процесу
+return успішний запуск
+portal -> upm: перевірка стану процесу
+return стан процесу
+portal -> portal: визначення сторінки сторінки для переходу
+portal -> browser: перехід на сторінку задачі/послуг
+browser -> officer: відображення відповідної сторінки
+----
+
+.Приклад коду OIDC-плагіну
+[source, lua]
+----
+local function make_oidc(oidcConfig)
+  ngx.log(ngx.DEBUG, "OidcHandler calling authenticate, requested path: " .. ngx.var.request_uri)
+
+-- Отримання query parameter redirect_url з /home і прокидання цього параметру до kong oidc plugin/resty.openidc бібліотеки
+
+  local res, err, target_url = require("resty.openidc").authenticate(oidcConfig, nil, oidcConfig.unauth_action, oidcConfig.session_opts)
+  if err then
+    ngx.log(ngx.DEBUG, "OidcHandler error: " .. err)
+    if err == "unauthorized request" then
+      ngx.log(ngx.INFO, "OidcHandler unauthorized request to " .. target_url)
+      utils.exit(ngx.HTTP_UNAUTHORIZED, err, ngx.HTTP_UNAUTHORIZED)
+    end
+    if oidcConfig.recovery_page_path then
+      ngx.log(ngx.DEBUG, "Entering recovery page: " .. oidcConfig.recovery_page_path)
+      ngx.redirect(oidcConfig.recovery_page_path)
+    end
+	  ngx.log(ngx.DEBUG, "Error while requesting " .. ngx.var.request_uri)
+    utils.exit(500, err, ngx.HTTP_INTERNAL_SERVER_ERROR)
+  end
+  return res
+end
+----
+
+
