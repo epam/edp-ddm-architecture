@@ -1,0 +1,73 @@
+include::ROOT:partial$templates/document-attributes/default-set-en.adoc[]
+
+= Integration with notification service
+
+include::ROOT:partial$admonitions/language-en.adoc[]
+
+//== Загальний опис підходу до інтеграції
+
+== General provisions
+
+//Задля запобігання блокування основного потоку виконання використовується принцип розділення публікації події про необхідність виконання операції від фактичного її виконання з використанням _publish-subscribe_ підходу, реалізованому за допомогою _Kafka_. З повним переліком, налаштуваннями та структурами об'єктів подій можна ознайомитись xref:architecture/registry/operational/notifications/notifications-design.adoc#_kafka_топіки_запитів_на_відправку_повідомлень_користувачам[за посиланням].
+
+In order to prevent the blocking of the main flow of execution, the principle of separating the publication of the event about the need to perform the operation from its actual execution using the _publish-subscribe_ approach implemented with the help of _Kafka_ is used. The complete list, settings and structures of event objects can be found at xref:architecture/registry/operational/notifications/notifications-design.adoc#_kafka_topics_of_requests_for_sending_notifications_to_users [link].
+
+[TIP]
+//Для спрощення інтеграції реалізовано окрему бібліотеку _ddm-starter-notifications_, яка надає Java API для публікації запитів на відправлення повідомлень.
+
+To simplify the integration, a separate library _ddm-starter-notifications_ is implemented, which provides a Java API for publishing requests to send messages.
+
+//.Приклад налаштувань сервісу для публікації подій через Kafka-топік (на прикладі використання *ddm-starter-kafka* бібліотеки)
+.An example of service settings for publishing events via a Kafka topic (using the *ddm-starter-kafka* library as an example)
+[source, yaml]
+----
+data-platform:
+  kafka:
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      custom-config:
+        "[enable.idempotence]": true
+    topic-properties:
+      creation:
+        enabled: true
+        timeout-in-seconds: 60
+      retention:
+        default-in-days: 7
+        num-partitions: 1
+        replication-factor: 1
+    error-handler:
+      initial-interval: 1500
+      max-elapsed-time: 6000
+      multiplier: 2
+    topics:
+      "user-notifications": "user-notifications"
+----
+
+//== Приклади інтеграції згідно сценаріїв використання
+
+== Integration examples according to usage scenarios
+
+//=== Інтеграція механізмів відправлення повідомлень у _Сервіс виконання бізнес-процесів_
+
+=== === Integration of mechanisms for sending messages to the _Business Process Management System_
+
+image::architecture/registry/operational/notifications/notifications-starter.svg[]
+
+//В основу рішення покладено використання Camunda-концепції _Java Delegate_ для виконання операцій по відправці повідомлень з бізнес-процесу. Спрощення досвіду моделювання реалізовано за допомогою окремих  xref:architecture/registry/operational/notifications/notifications-modelling.adoc#_моделювання_бізнес_процесів_з_відправленням_повідомлень_користувачам[типових розширень].
+
+The solution is based on the use of the Camunda concept _Java Delegate_ to perform operations for sending messages from the business process. Simplification of the modeling experience is implemented with the help of individual xref:architecture/registry/operational/notifications/notifications-modelling.adoc#_modeling_business_processes_with_sending_notifications_to_users [typical extensions].
+
+[plantuml, bp-notification-flow, svg]
+----
+include::partial$architecture/registry/operational/notifications/bpm/bp-notification-flow.puml[]
+----
+
+//=== Інтеграція механізмів відправлення повідомлень для службового використання сервісами реєстру
+
+=== Integration of mechanisms for sending notifications for official use by registry services
+
+[plantuml, upstream-notification-flow, svg]
+----
+include::partial$architecture/registry/operational/notifications/general/upstream-notification-flow.puml[]
+----
