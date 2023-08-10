@@ -1,0 +1,78 @@
+
+
+= CD processes
+
+include::ROOT:partial$admonitions/language-en.adoc[]
+
+== EDP flow
+
+//=== Бібліотека
+=== Library
+
+//Най простіший CI процес який зводиться до створення jar файлу та публікації його в Nexus
+This simple CI process involves creating a jar file and publishing it in Nexus.
+
+image::architecture/registry/administrative/regulation-publication/edp-lib-pipeline.svg[]
+
+//=== Додаток
+=== Application
+
+//Додатково до бібліотеки дозволяє збирати Docker image та публікувати його в registry. Окрім цього передбачено що кожен додаток розгортається за допомогою Helm chart який знаходиться в папці deploy-templates
+In addition to the library, the application enables you to deploy a Docker image and publish it in the registry. Each application is deployed using the Helm chart located in the _deploy-templates_ folder.
+
+image::architecture/registry/administrative/regulation-publication/edp-application-pipeline.svg[]
+
+//== Середовища розробки
+== Development environments
+
+//=== Інтеграція БД та АПІ для шаблонних сервісів
+=== DB and API for template services integration
+
+image::architecture/registry/administrative/regulation-publication/template-cd.svg[]
+
+== Jenkins agent
+
+image::architecture/registry/administrative/regulation-publication/jenkins-image.svg[]
+
+//== Розгортання реєстру (target)
+== Registry deployment (target)
+
+image::architecture/registry/administrative/regulation-publication/target-cd.svg[]
+
+//== Перевірка змін
+== Verification of changes
+
+//Фінальним артефактом який буде постачатись є https://gitbud.epam.com/mdtu-ddm/data-architecture/poc/devops-test/dataplatform-jenkins-agent[dataplatform-jenkins-agent]. Тому будь які зміни які вносяться в один з компонентів мають бути інтегровані та перевірені у зв'язці з іншими.
+The final artifact that will be delivered is the https://gitbud.epam.com/mdtu-ddm/data-architecture/poc/devops-test/dataplatform-jenkins-agent[dataplatform-jenkins-agent]. Any changes made to one of the components must be integrated and verified in conjunction with others.
+
+//Агент складається з узгоджених версій:
+The agent consists of verified versions:
+
+* service-generation-utility
+//* службових структур для БД (процедури, історичні таблиці і т.п.)
+* DB service structures (procedures, historical tables, and so on)
+* liquibase-ddm-ext
+* blueprint-generator
+
+//Узгодження відбувається в Dockerfile.
+Verification takes place in the Dockerfile.
+
+//Кроки для розгортання нової версії Дата Фабрики:
+Steps to deploy a new version of the data factory:
+
+//* зібрати змінений артефакт
+* Build the modified artifact.
+//* змінити версію в Jenkins агенті (Dockerfile)
+* Update the version in the Jenkins agent (Dockerfile).
+//* дочекатись зібраного артефакту
+* Wait for the artifact to be built.
+//* змінити версію агента в Jenkins операторі https://gitbud.epam.com/mdtu-ddm/low-code-platform/platform/registry-regulations-publication/jenkins-operator/-/blob/master/deploy-templates/templates/jenkinsAgentsCm.yaml[ConfigMap] ключ: dataplatform-jenkins-agent-template
+* Update the agent version in the Jenkins https://gitbud.epam.com/mdtu-ddm/low-code-platform/platform/registry-regulations-publication/jenkins-operator/-/blob/master/deploy-templates/templates/jenkinsAgentsCm.yaml[ConfigMap] operator key: `dataplatform-jenkins-agent-template`.
+//* дочекатись кінця збірки
+* Wait for the build to finish.
+//* розгорнути дженкінс оператор в середовище розробки (dev. environment)
+* Deploy the Jenkins operator to the development environment.
+//* розгорнути реєстр закомітивши регламент в gerrit
+* Deploy the registry by committing the regulations to Gerrit.
+//* перевірити що внесені зміни працюють (dev. testing)
+* Verify that the changes work properly (dev. testing).

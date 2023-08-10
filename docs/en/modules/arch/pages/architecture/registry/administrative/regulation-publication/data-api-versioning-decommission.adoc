@@ -1,0 +1,152 @@
+
+
+//= Відмова від збереження попередніх версій сервісів API фабрики даних
+= Decommissioning of saving previous versions of data factory API services
+
+include::ROOT:partial$admonitions/language-en.adoc[]
+
+== Overview
+
+//Наразі, при розгортанні регламенту реєстру, зберігається код та docker образи всіх попередніх версій API даних. Також від розробника реєстру вимагається змінювати версію регламенту кожен раз коли він змінює модель даних.
+Currently, during the registry regulations deployment, the code and Docker images of all previous versions of data API are saved. Additionally, the registry developer is required to change the version of the regulations every time they modify the data model.
+
+//Оскільки старі версії не використовуються при роботі чи обслуговуванні реєстру, пропонується відмовитися від іх збереження і скасувати перевірку версії при розгортанні регламенту.
+Since the old versions are not used when operating or maintaining the registry, it is recommended to discontinue saving them and cancel the version check when deploying the regulations.
+
+//== Актори та ролі користувачів
+== Actors and user roles
+
+* Regulations developer
+* Registry administrator
+
+//== Загальні принципи та положення
+== General provisions
+
+//* В реєстровому gerrit зберігаються тільки останні версії згенерованих сервісів API даних.
+* Only the latest versions of the generated data API services are stored in the registry Gerrit.
+//* Пайплайни для збірки сервісів існують в одному екземплярі на кожен сервіс. Для окремих версій пайплайни не створюються.
+* One service build pipeline instance per service. Pipelines are not created for individual versions.
+//* В реєстровому nexus зберігаються тільки останні версії згенерованих сервісів API даних.
+* Only the latest versions of the generated data API services are stored in the registry Nexus.
+//* В kafka видаляються теми (topics) які не використовуються останньою версією API.
+* In Kafka, topics that are not used by the latest version of the API are deleted.
+//* Обов'язкова зміна версії регламенту скасовується.
+* Mandatory change of the regulations version is canceled.
+
+//== Функціональні сценарії
+== Functional scenarios
+
+//* Розробка моделі даних реєстру
+* Developing the registry data model
+//* Розгортання регламенту реєстру
+* Deploying the registry regulations
+
+//== Поточна реалізація
+== Current implementation
+
+//.Розгортання моделі даних регламенту реєстру
+.Deploying the registry regulations data model
+[plantuml, data-model-pipeline-current, svg]
+----
+include::partial$architecture/registry/administrative/regulation-publication/data-api-versioning-decommission/data-model-pipeline-current.puml[]
+----
+
+//== Цільовий дизайн
+== Target design
+
+//.Розгортання реєстру та моделі даних регламенту реєстру
+.Deploying the registry and registry regulations data model
+[plantuml, data-model-pipeline-target, svg]
+----
+include::partial$architecture/registry/administrative/regulation-publication/data-api-versioning-decommission/data-model-pipeline-target.puml[]
+----
+//NOTE: Має сенс розглянути можливість не виносити створення codebase та пайплайнів API даних в пайплайн розгортання реєстру. Їх створення може залишитись в пайплайні розгортання моделі даних, за принципом "створювати якщо ще не існує". Таким чином не знадобляться зміни в процедурах створення регламенту(які в нас різні для cicd та target оточень) та створення міграційних upgrade скриптів.
+NOTE: It makes sense to consider the possibility of not including the creation of the codebase and data API pipelines in the registry deployment pipeline. Their creation can remain in the data model deployment pipeline, following the "create if not exists" principle. This way, there won't be a need for changes in the regulations creation procedures (which are different for CI/CD and target environments) and the creation of migration upgrade scripts.
+
+//=== Компоненти системи та їх призначення в рамках дизайну рішення
+=== System components and their purpose within the solution design
+
+//У даному розділі наведено перелік компонент системи, які задіяні або потребують змін/створення в рамках реалізації функціональних вимог згідно з технічним дизайном рішення.
+This section provides a list of system components that are used or require modification/creation as part of implementing the functional requirements according to the technical design of the solution.
+
+|===
+//|Компонент|Службова назва|Призначення / Суть змін
+|Component |Service name |Purpose / What's changed
+
+|JobProvisioner
+|jenkins-operator
+//|Створення codebase та пайплайнів для сервісів API даних
+|Creating codebase and pipelines for data API services.
+
+|JobProvisionerDefault
+|control-plane-jenkins
+|Creating codebase and pipelines for data API services.
+
+//|Пайплайн публікації регламенту реєстру
+|Registry regulations publication pipeline
+|registry-regulations-publication-pipeline
+//|Публікація регламенту без зберігання попередніх версій генерованих компонентів
+|Publishing the regulations without saving the previous versions of the generated components.
+
+//|Liquibase скрипти пре- та пост- розгортання моделі даних
+|Liquibase scripts for pre- and post-deployment data model
+|data-model
+//|Видалення перевірки версії регламенту
+|Removing the regulations version check.
+
+|===
+
+//== Моделювання регламенту реєстру
+== Registry regulations modeling
+
+//=== Версія регламенту
+=== Regulations version
+
+//Вимога змінювати версію при зміні моделі даних скасовується.
+The requirement to change the version when changing the data model is canceled.
+
+//Адміністратору регламенту надається можливість використовувати атрибут `settings.general.version` в файлі налаштувань регламенту _settings.yaml_ на власний розсуд.
+Regulations administrators can use the `settings.general.version` attribute in the regulations settings file _settings.yaml_ at their discretion.
+
+//.Структура регламенту реєстру
+.Registry regulations structure
+[plantuml, settings-registry-regulation-structure, svg]
+----
+@startsalt
+{
+{T
++ <&folder> registry-regulation
+++ <&folder> bpmn
+++ <&folder> dmn
+++ <&folder> ... 
+++ <&file> <b>settings.yaml</b>
+++ ...
+}
+}
+@endsalt
+----
+
+//=== Міграція
+=== Migration
+
+//Має бути створений і виконаний при оновленні реєстру міграційний скрипт який створить неверсіоновані codebases і пайплайни API даних.
+When updating the registry, you need to create and run a migration script that will create unversioned codebases and data API pipelines.
+
+//Після оновлення, для очищення codebase та артефактів застарілих версій API, рекомендовано виконати процедури які застосовуються для очищення в поточної версії - cleanup пайплайн для оточень розробки та ручне очищення для промислових оточень.
+After the update, to clean up the codebase and outdated API artifacts, it is recommended to perform the current version cleanup procedures - a cleanup pipeline for development environments and manual cleaning for production environments.
+
+//== Високорівневий план розробки
+== High-level development plan
+
+//=== Технічні експертизи
+=== Technical expertise
+
+* _DEVOPS_
+
+//=== План розробки
+=== Development plan
+
+//* Зміни в механізмах розгортання реєстру та публікації моделі даних регламенту
+* Make changes to the process of registry deployment and regulations data model publishing.
+//* Актуалізація інструкцій для розробника регламенту.
+* Update documentation for the regulations developers.
