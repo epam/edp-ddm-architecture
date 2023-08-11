@@ -1,0 +1,323 @@
+include::ROOT:partial$templates/document-attributes/default-set-en.adoc[]
+
+= API notification management
+
+include::ROOT:partial$admonitions/language-en.adoc[]
+
+//== API управління шаблонами повідомлень
+
+== Notification template management API
+
+//=== Створення або внесення змін до шаблону для каналу зв'язку за назвою
+
+[WARNING]
+//Призначенням API-роута є службове використання _Пайплайном публікації регламенту_ для наповнення даними сховища шаблонів. Роут не доступний для зовнішнього доступу через _Kong_.
+The API route is intended for service use by the _Regulation Publication Pipeline_ to populate the template repository with data. Root is not accessible externally via _Kong_.
+
+_PUT /api/notifications/templates/{channel}:{name}_
+////
+|===
+|Параметр|Тип|Частина запиту|Опис
+
+|*channel*
+|Текстовий
+|Параметр запиту
+|Назва каналу [inbox, email, diia]
+
+|*name*
+|Текстовий
+|Параметр запиту
+|Унікальна назва шаблону в рамках каналу
+|===
+////
+|===
+|Parameter|Type|Part of the request|Description
+
+|*channel*
+|Textual
+|Query parameter
+|Channel name [inbox, email, diia]
+
+|*name*
+|Textual
+|Query parameter
+|The unique name of the template within the channel
+|===
+
+//.Приклад тіла запиту
+.Example of request body
+[source, json]
+----
+{
+  "title": "{title}",
+  "content": "{content}",
+  "attributes": [
+    {
+      "name": "actionType",
+      "value": "message"
+    },
+    {
+      "name": "templateType",
+      "value": "attention"
+    },
+    {
+      "name": "shortText",
+      "value": "{shortText}"
+    }
+  ]
+}
+----
+
+//.Приклад відповіді
+.An example of response
+[source, json]
+----
+{
+  "name": "{template_name}",
+  "channel": "{channel}",
+  "title": "{title}",
+  "content": "{content}",
+  "checksum": "{sha256-hash}",
+  "attributes": [
+    {
+      "name": "actionType",
+      "value": "message"
+    },
+    {
+      "name": "templateType",
+      "value": "attention"
+    },
+    {
+      "name": "shortText",
+      "value": "{shortText}"
+    }
+  ],
+  "createdAt": "{timestamp}",
+  "updatedAt": "{timestamp}",
+  "externalTemplateId": "{external-id}",
+  "externallyPublishedAt": "{timestamp}"
+}
+----
+
+//.Коди помилок
+.Error codes
+////
+|===
+|Код|Опис
+
+a|[green]#200#
+|OK з поверненням результату даних зміненого шаблону
+a|[green]#201#
+|Created з поверненням результату даних шаблону
+a|[red]#400#
+|Некоректно сформований запит
+a|[yellow]#401#
+|Помилка автентифікації (відсутній токен доступу)
+a|[red]#500#
+|Серверна помилка обробки запиту
+|===
+////
+
+|===
+|Code|Description
+
+a|[green]#200#
+|OK with returning the data result of the modified template
+a|[green]#201#
+|Created with returning the result of the template data
+a|[red]#400#
+|Incorrectly formed request
+a|[yellow]#401#
+|Authentication error (missing access token)
+a|[red]#500#
+|Server error processing of the request
+|===
+
+//== API доступу до inbox повідомлень користувача
+==API access to the inbox of user notifications
+
+[WARNING]
+//Отримання доступу до API можливе лише в рамках виконання запиту автентифікованого користувача в системі
+Obtaining access to the API is possible only within the framework of the execution of a request of an authenticated user in the system
+
+//=== Отримання переліку in-app повідомлень у Кабінеті Користувача
+=== Receiving a list of in-app notifications in the User portal
+
+[NOTE]
+//Данний API-роут є публічним та має бути опублікованим для зовнішнього доступу через окремий _Kong Route_ для _Кабінету Громадянина_.
+
+This API route is public and should be published for external access via a separate _Kong Route_ for _Citizen portal_.
+
+_GET /api/notifications/inbox_
+////
+|===
+|Параметр|Тип|Частина запиту|Опис
+
+|*X-Access-Token*
+|JWT
+|HTTP заголовок
+|Токен доступу користувача
+
+|*limit*
+|int
+|Параметр запиту
+|Кількість повідомлень для одноразового отримання (для пагінації)
+
+|*offset*
+|int
+|Параметр запиту
+|Відступ від першого повідомлення (для пагінації)
+|===
+////
+
+|===
+|Parameter|Type|Part of the request|Description
+
+|*X-Access-Token*
+|JWT
+|HTTP header
+|User access token
+
+|*limit*
+|int
+|Query parameter
+|Number of notifications for one-time receiving (for pagination)
+
+|*offset*
+|int
+|Query parameter
+|Indent from the first notification (for pagination)
+|===
+
+[NOTE]
+//Ідентифікатор користувача для фільтрації повідомлень отримується з токену доступу (поле _RECIPIENT_ID_).
+//Отримані записи мають бути впорядковані у зворотньому напрямку за параметром _created_at_ (created_at DESC)
+
+The user ID for message filtering is obtained from the access token (_RECIPIENT_ID_ field).
+The resulting records should be ordered in reverse order by _created_at_ (created_at DESC)
+
+//.Приклад відповіді
+.An example of response
+[source, json]
+----
+[
+  {
+    "id": "id1",
+    "subject": "SUBJECT",
+    "message": "Some content",
+    "isAcknowledged": true,
+    "createdAt": "2022-07-29 11:08:16"
+  },
+  {
+    "id": "id2",
+    "subject": "SUBJECT2",
+    "message": "Some different content",
+    "isAcknowledged": false,
+    "createdAt": "2022-07-27 16:04:17"
+  }
+]
+----
+
+//.Коди відповіді
+.Response codes
+////
+|===
+|Код|Опис
+
+a|[green]#200#
+|OK
+a|[red]#400#
+|Некоректно сформований запит
+a|[yellow]#401#
+|Помилка автентифікації (відсутній токен доступу)
+a|[red]#500#
+|Серверна помилка обробки запиту
+|===
+////
+
+|===
+|Code|Description
+
+a|[green]#200#
+|OK
+a|[red]#400#
+|Incorrectly formed request
+a|[yellow]#401#
+|Authentication error (missing access token)
+a|[red]#500#
+|Server error processing the request
+|===
+
+//=== Підтвердження перегляду in-app повідомлення у Кабінеті Користувача
+
+=== Confirmation of viewing the in-app notification in the User portal
+
+[NOTE]
+//Данний API-роут є публічним та має бути опублікованим для зовнішнього доступу через окремий _Kong Route_ для _Кабінету Громадянина_.
+
+This API route is public and should be published for external access via a separate _Kong Route_ for _Citizen portal_.
+
+_POST /api/notifications/inbox/{id}/ack_
+////
+|===
+|Параметр|Тип|Частина запиту|Опис
+
+|*X-Access-Token*
+|JWT
+|HTTP заголовок
+|Токен доступу користувача
+
+|*id*|Text
+|Параметр запиту
+|Ідентифікатор повідомлення
+
+|===
+////
+
+|===
+|Parameter|Type|Part of the request|Description
+
+|*X-Access-Token*
+|JWT
+|HTTP header
+|User access token
+
+|*id*|Text
+|Query parameter
+|Notification ID
+
+|===
+
+////
+.Коди відповіді
+|===
+|Код|Опис
+
+a|[green]#200#
+|OK
+a|[red]#400#
+|Некоректно сформований запит
+a|[yellow]#401#
+|Помилка автентифікації (відсутній токен доступу)
+a|[yellow]#403#
+|Заборонений доступ (при спробі оновити чуже повідомлення)
+a|[red]#500#
+|Серверна помилка обробки запиту
+|===
+////
+
+.Response codes
+|===
+|Code|Description
+
+a|[green]#200#
+|OK
+a|[red]#400#
+|Incorrectly formed request
+a|[yellow]#401#
+|Authentication error (missing access token)
+a|[yellow]#403#
+|Access denied (when trying to update someone else's message)
+a|[red]#500#
+|Server error processing the request
+|===
