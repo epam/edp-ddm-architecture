@@ -3,81 +3,81 @@
 autonumber
 skinparam responseMessageBelowArrow true
 
-actor "Адміністратор\n регламенту" as User
-actor "Інспектор\n регламенту" as Reviewer
+actor "Regulations\n administrator" as User
+actor "Regulations\n inspector" as Reviewer
 
-participant "Адміністративний портал" as FrontEnd
-participant "Сервіс управління\n регламентом реєстру" as BackendService
-participant "Сервіс інспекції змін" as Gerrit
-participant "Сервіс публікації\n регламенту реєстру" as Jenkins
+participant "Administrative portal" as FrontEnd
+participant "Registry regulations\n management service" as BackendService
+participant "Change inspection service" as Gerrit
+participant "Registry regulations\n publishing service" as Jenkins
 
 activate User
-User -> FrontEnd: Ствоерння версії-кандидата регламенту
-FrontEnd -> BackendService: Ствоерння версії-кандидата регламенту
+User -> FrontEnd: Create candidate version of the regulations
+FrontEnd -> BackendService: Create candidate version of the regulations
 activate BackendService
-BackendService -> Gerrit: Створення окремої гілки
+BackendService -> Gerrit: Create a separate branch
 activate Gerrit
-BackendService -> Gerrit: Отримання актуальної версії DataModelSnapshot
+BackendService -> Gerrit: Get updated version of DataModelSnapshot
 BackendService <-- Gerrit: DataModelSnapshot
 
-BackendService -> Gerrit: Отримання історії змін DataModelSnapshot
+BackendService -> Gerrit: Get change history of DataModelSnapshot
 FrontEnd <-- BackendService: DataModelSnapshot
 
-BackendService -> BackendService: Опрацювання історії змін
+BackendService -> BackendService: Processing change history
 FrontEnd <-- BackendService: History
-User <-- FrontEnd: Версія-кандидат регламенту
+User <-- FrontEnd: Regulations candidate version
 
-User -> FrontEnd: Запит на збереження змін\n версії-кандидата регламенту
-FrontEnd -> BackendService: Нова версія DataModelSnapshot
+User -> FrontEnd: Request to save changes of\n regulations candidate version
+FrontEnd -> BackendService: New version of DataModelSnapshot
 
-User -> FrontEnd: Запит на інспекцію змін\n версії-кандидата регламенту
-FrontEnd -> BackendService: Відправка на review версії-кандидата
+User -> FrontEnd: Request for change inspection of\n regulations candidate version
+FrontEnd -> BackendService: Send the candidate version for review
 
 deactivate User
 
-BackendService -> Gerrit: Отримання DataModelSnapshot документу\n актуальної на момент створення гілки змін
+BackendService -> Gerrit: Get DataModelSnapshot of the document\n that is up-to-date when creating the change branch
 BackendService <-- Gerrit: DataModelSnapshot
 
-BackendService -> Gerrit: Отримання зміненої DataModelSnapshot
+BackendService -> Gerrit: Get changed DataModelSnapshot
 BackendService <-- Gerrit: DataModelSnapshot
-BackendService -> BackendService: побудова Diff документу
-BackendService -> BackendService: перетворення Diif документу\n в liquibase changeset
+BackendService -> BackendService: build Diff document
+BackendService -> BackendService: conversion of Diif document\n in liquibase changeset
 
-BackendService -> BackendService: Додавання до liquibase сhangelog\n інформації з liquibase changeset
-BackendService -> Gerrit: Збереження liquibase changeset
+BackendService -> BackendService: Add information to liquibase сhangelog\n from liquibase changeset
+BackendService -> Gerrit: Save liquibase changeset
 deactivate BackendService
 
 activate Reviewer
-Reviewer -> FrontEnd: Запит на інспекцію версії
-FrontEnd -> BackendService: Запит на інспекцію версії
+Reviewer -> FrontEnd: Request for version inspection
+FrontEnd -> BackendService: Request for version inspection
 
 activate BackendService
-BackendService -> Gerrit: Отримання статусу стану версії-кандидата
-BackendService <-- Gerrit: Статус стану (конфлікти та тести)
-BackendService -> Gerrit: Отримання DataModelSnapshot\n з гілки змін версії-кандидата
+BackendService -> Gerrit: Get candidate version status
+BackendService <-- Gerrit: Condition status (conflicts and tests)
+BackendService -> Gerrit: Get DataModelSnapshot\n from the candidate version change branch
 
 'Add diff here
 
-BackendService -> Gerrit: Отримання документу з історією змін
+BackendService -> Gerrit: Get document with change history
 BackendService <-- Gerrit: History
-FrontEnd <-- BackendService: Версія-кандидат
-Reviewer <-- FrontEnd: Версія-кандидат
+FrontEnd <-- BackendService: Candidate version
+Reviewer <-- FrontEnd: Candidate version
 
-Reviewer -> FrontEnd: Запит на застосування змін
+Reviewer -> FrontEnd: Request to apply changes
 deactivate Reviewer
 
-FrontEnd -> BackendService: Запит на застосування змін
+FrontEnd -> BackendService: Request to apply changes
 
 BackendService -> Gerrit: Merge PR
 deactivate BackendService
 
-Gerrit --> Jenkins: Відправка івенту на запуск RegistryRegulationJob
+Gerrit --> Jenkins: Send event to start RegistryRegulationJob
 
 activate Jenkins
-Jenkins -> Jenkins: Створення структури БД\n та заповнювання таблиці метаданних\n використовуючи liquibase changelog
-Jenkins -> Jenkins: Створення DataModelSnapshot\n використовуючи БД
+Jenkins -> Jenkins: Create DB structure\n and informing metadata table\n using liquibase changelog
+Jenkins -> Jenkins: Create DataModelSnapshot\n using DB
 
-Jenkins -> Gerrit: Збереження актуалізованного DataModelSnapshot
+Jenkins -> Gerrit: Save updated DataModelSnapshot
 deactivate Jenkins
 Gerrit -> Gerrit: merge changes to master
 deactivate Gerrit
