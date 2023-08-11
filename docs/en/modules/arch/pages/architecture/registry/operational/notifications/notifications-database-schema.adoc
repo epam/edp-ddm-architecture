@@ -1,14 +1,21 @@
-include::ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+include::ROOT:partial$templates/document-attributes/default-set-en.adoc[]
 
-= Фізична модель збереження зберігання даних
+= Physical model of data storage
 
-include::ROOT:partial$admonitions/language-ua.adoc[]
+include::ROOT:partial$admonitions/language-en.adoc[]
 
-В рамках реалізації функціональних вимог, необхідно створити окрему схему _NOTIFICATIONS_ та розширити фізичну модель додатковими таблицями:
+//В рамках реалізації функціональних вимог, необхідно створити окрему схему _NOTIFICATIONS_ та розширити фізичну модель додатковими таблицями:
 
+As part of the implementation of functional requirements, it is necessary to create a separate scheme _NOTIFICATIONS_ and expand the physical model with additional tables:
+////
 - _NOTIFICATION_TEMPLATE_ - зберігання даних шаблонів повідомлень
 - _NOTIFICATION_TEMPLATE_ATTR_ - зберігання додаткових атрибутів шаблонів в залежності від вимог окремого каналу зв'язку
 - _INBOX_NOTIFICATION_ - зберігання _in-app_ повідомлень користувачів для відображення у _Кабінеті Громадянина_
+////
+
+- _NOTIFICATION_TEMPLATE_ - storage of notification template data
+- _NOTIFICATION_TEMPLATE_ATTR_ - storage of additional template attributes depending on the requirements of a separate communication channel
+- _INBOX_NOTIFICATION_ - storage of _in-app_ user notifications for display in _Citizen portal_
 
 [plantuml]
 ----
@@ -54,10 +61,15 @@ package "NOTIFICATIONS" as notifications {
 }
 ----
 
-== Структури даних
+//== Структури даних
 
-=== Структура даних шаблонів повідомлень (_NOTIFICATION_TEMPLATE_)
+== Data structure
 
+//=== Структура даних шаблонів повідомлень (_NOTIFICATION_TEMPLATE_)
+
+=== Notification Template Data Structure (_NOTIFICATION_TEMPLATE_)
+
+////
 |===
 |Поле|Тип|Обмеження|Значення за замовчуванням|Опис
 
@@ -122,9 +134,79 @@ package "NOTIFICATIONS" as notifications {
 |Дата/Час останньої публікації запису у зовнішню систему
 
 |===
+////
 
-=== Структура даних атрибутів шаблонів повідомлень (_NOTIFICATION_TEMPLATE_ATTR_)
+|===
+|Field|Type|Restriction|Default Value|Description
 
+|*ID*
+|UUID
+|Primary Key
+|_uuid_generate_v4()_
+|A unique auto-generated identifier for the record
+
+|*NAME*
+|TEXT
+|Not Null, Unique Constraint*
+|-
+|Service name of the notification template
+
+|*CHANNEL*
+|ENUM
+|Not Null, Unique Constraint*, _[inbox, email, diia]_
+|-
+|The communication channel for using the message template
+
+|*TITLE*
+|TEXT
+|-
+|-
+|Text header of notification
+
+|*CONTENT*
+|TEXT
+|Not Null
+|-
+|Notification body text template for further filling with data
+
+|*CHECKSUM*
+|TEXT
+|Not Null
+|-
+|SHA-256 checksum generated for the contents of the _CONTENT_ field
+
+|*CREATED_AT*
+|TIMESTAMP
+|Not Null
+|_now()_
+|Date/Time of creation/publishing template
+
+|*UPDATED_AT*
+|TIMESTAMP
+|Not Null
+|_now()_
+|Date/Time of the last modification within the template publication
+
+|*EXT_TEMPLATE_ID*
+|TEXT
+|Unique Constraint
+|-
+|The unique identifier of the record in the external system
+
+|*EXT_PUBLISHED_AT*
+|TIMESTAMP
+|
+|-
+|Date/Time of the last publication of the record in the external system
+
+|===
+
+
+//=== Структура даних атрибутів шаблонів повідомлень (_NOTIFICATION_TEMPLATE_ATTR_)
+
+=== Notification Template Attribute Data Structure (_NOTIFICATION_TEMPLATE_ATTR_)
+
+////
 |===
 |Поле|Тип|Обмеження|Значення за замовчуванням|Опис
 
@@ -153,9 +235,42 @@ package "NOTIFICATIONS" as notifications {
 |Значення атрибуту
 
 |===
+////
 
-=== Структура даних _in-app_ повідомлень _INBOX_NOTIFICATION_
+|===
+|Field|Type|Restriction|Default value|Description
 
+|*ID*
+|UUID
+|Primary Key
+|_uuid_generate_v4()_
+|A unique auto-generated identifier for the record
+
+|*TEMPLATE_ID*
+|UUID
+|Not Null, Foreign Key
+|-
+|Communication with the record _NOTIFICATION_TEMPLATE_
+
+|*NAME*
+|TEXT
+|Not Null
+|-
+|Attribute service name
+
+|*VALUE*
+|TEXT
+|Not Null
+|-
+|Attribute value
+
+|===
+
+//=== Структура даних _in-app_ повідомлень _INBOX_NOTIFICATION_
+
+=== Data structure of _in-app_ notifications _INBOX_NOTIFICATION_
+
+////
 |===
 |Поле|Тип|Обмеження|Значення за замовчуванням|Опис
 
@@ -202,13 +317,80 @@ package "NOTIFICATIONS" as notifications {
 |Дата/Час оновлення повідомлення
 
 |===
-
-== Ролі/системні користувачі БД
-
-Для обслуговування операцій взаємодії з БД, необхідно створити ролі/користувачів з визначеними правами доступу для використання відповідними компонентами системи:
+////
 
 |===
+|Field|Type|Restriction|Default value|Description
+
+|*ID*
+|UUID
+|Primary Key
+|_uuid_generate_v4()_
+|A unique auto-generated identifier for the record
+
+|*RECIPIENT_ID*
+|TEXT
+|Not Null
+|-
+|The ID of the user who should receive the message
+
+|*SUBJECT*
+|TEXT
+|Not Null
+|-
+
+|Notification header
+|*MESSAGE*
+|TEXT
+|Not Null
+|-
+|Notification content
+
+|*IS_ACKNOWLEDGED*
+|BOOLEAN
+|Not Null
+|false
+|Notification status (read/unread)
+
+|*CREATED_AT*
+|TIMESTAMP
+|Not Null
+|_now()_
+|Date/Time creation of notification
+
+|*UPDATED_AT*
+|TIMESTAMP
+|Not Null
+|_now()_
+|Date/Notification update time
+
+|===
+
+
+//== Ролі/системні користувачі БД
+
+== Roles/ system users of DB
+
+//Для обслуговування операцій взаємодії з БД, необхідно створити ролі/користувачів з визначеними правами доступу для використання відповідними компонентами системи:
+
+To maintain database interaction operations, it is necessary to create roles/users with defined access rights for use by the relevant system components:
+////
+|===
 |Компонент системи|Роль/Користувач|Привілегії
+
+|*notification-service*
+|_notification_service_user_
+|_GRANT SELECT, INSERT, UPDATE, DELETE ON NOTIFICATION_TEMPLATE_
+
+_GRANT SELECT, INSERT, UPDATE, DELETE ON NOTIFICATION_TEMPLATE_ATTR_
+
+_GRANT SELECT, INSERT, UPDATE, DELETE ON INBOX_NOTIFICATION_
+
+|===
+////
+
+|===
+|Component of the system|Role/User|Privileges
 
 |*notification-service*
 |_notification_service_user_
