@@ -768,7 +768,7 @@
     <a class="nav-link" href="../data-modeling/data/physical-model/liquibase-standard-change-types.html">Перелік стандартних тегів Liquibase</a>
   </li>
   <li class="nav-item" data-depth="4">
-    <a class="nav-link" href="../data-modeling/data/physical-model/liquibase-ddm-ext.html">Перелік розширених тегів Liquibase</a>
+    <a class="nav-link" href="../data-modeling/data/physical-model/liquibase-ddm-ext.html">Розширення Liquibase для моделювання даних</a>
   </li>
   <li class="nav-item" data-depth="4">
     <a class="nav-link" href="../data-modeling/data/physical-model/liquibase-changes-management-sys-ext.html">Побудова фізичної моделі даних реєстру за допомогою функціональних розширень Liquibase</a>
@@ -3147,7 +3147,13 @@
 </li>
 <li><a href="#db-tables">5. Робота з таблицями у базі даних реєстру</a></li>
 <li><a href="#openapi">6. Робота з API</a></li>
-<li><a href="#_повязані_сторінки">7. Пов&#8217;язані сторінки</a></li>
+<li><a href="#geoserver-rls">7. Застосування правил ієрархічної моделі при роботі з геоданими</a>
+<ul class="sectlevel2">
+<li><a href="#_загальний_опис">7.1. Загальний опис</a></li>
+<li><a href="#_моделювання_доступу_та_застосування_rls_правил">7.2. Моделювання доступу та застосування RLS-правил</a></li>
+</ul>
+</li>
+<li><a href="#_повязані_сторінки">8. Пов&#8217;язані сторінки</a></li>
 </ul>
 </div>
 <div class="sect1">
@@ -3271,6 +3277,9 @@
 <ul class="checklist">
 <li>
 <p><input type="checkbox" data-item-complete="0"> <a href="#openapi">Робота з API</a></p>
+</li>
+<li>
+<p><input type="checkbox" data-item-complete="0"> <a href="#geoserver-rls">Застосування правил ієрархічної моделі при роботі з геоданими</a></p>
 </li>
 </ul>
 </div>
@@ -3431,6 +3440,20 @@
 </div>
 <div class="paragraph">
 <p>Детальніше&#8201;&#8212;&#8201;див. у розділі <a href="#geoserver">Робота з GeoServer</a>.</p>
+</div>
+</td>
+</tr>
+</table>
+</div>
+<div class="admonitionblock note">
+<table>
+<tr>
+<td class="icon">
+<i class="fa icon-note" title="ПРИМІТКА"></i>
+</td>
+<td class="content">
+<div class="paragraph">
+<p>При використанні ієрархічної моделі доступу, налаштуйте RLS-правила для таблиць та критеріїв пошуку. Докладніше&#8201;&#8212;&#8201;у розділі <a href="#geoserver-rls">Застосування правил ієрархічної моделі при роботі з геоданими</a>.</p>
 </div>
 </td>
 </tr>
@@ -4416,12 +4439,161 @@ println "payloadData: " + data</code></pre>
 </div>
 </div>
 <div class="sect1">
-<h2 id="_повязані_сторінки"><a class="anchor" href="#_повязані_сторінки"></a><a class="link" href="#_повязані_сторінки">7. Пов&#8217;язані сторінки</a></h2>
+<h2 id="geoserver-rls"><a class="anchor" href="#geoserver-rls"></a><a class="link" href="#geoserver-rls">7. Застосування правил ієрархічної моделі при роботі з геоданими</a></h2>
+<div class="sectionbody">
+<div class="sect2">
+<h3 id="_загальний_опис"><a class="anchor" href="#_загальний_опис"></a><a class="link" href="#_загальний_опис">7.1. Загальний опис</a></h3>
+<div class="paragraph">
+<p>Користувачі Платформи можуть доступатись до геоданих у реєстрі з урахуванням RLS-правил (Row-Level Security) та ієрархічних обмежень.
+При використанні правил ієрархічної моделі, користувачі матимуть доступ лише до географічних об&#8217;єктів того рівня ієрархії, який визначений JWT-атрибутом у токені доступу користувача.</p>
+</div>
+<div class="admonitionblock note">
+<table>
+<tr>
+<td class="icon">
+<i class="fa icon-note" title="ПРИМІТКА"></i>
+</td>
+<td class="content">
+RLS-правила та ієрархічна модель&#8201;&#8212;&#8201;це додаткові опції доступу до геоданих. Їх застосування не є обов&#8217;язковим. Ви можете використовувати базову модель доступу.
+</td>
+</tr>
+</table>
+</div>
+<div class="dlist">
+<dl>
+<dt class="hdlist1">Основні принципи та положення: </dt>
+<dd>
+<div class="ulist">
+<ul>
+<li>
+<p>RLS-фільтрація та доступ до геоданих: Геомодуль надає доступ до даних реєстру, враховуючи обмеження, встановлені RLS-правилами читання регламенту.</p>
+</li>
+<li>
+<p>Конфігурація фільтрації: система автоматично налаштовує правила фільтрації на основі RLS-метаданих. Коли користувач робить запит до шару геоданих, система автоматично включає відповідний RLS-фільтр, заснований на атрибутах користувача. Атрибути передаються у JWT-токені.</p>
+</li>
+<li>
+<p>Публікація регламенту: якщо реєстр розгорнуто із геомодулем, то під час публікації регламенту система автоматично генерує та застосовує необхідні RLS-правила для геомодуля. Якщо обмежень RLS немає, система автоматично видаляє будь-які наявні правила.</p>
+</li>
+</ul>
+</div>
+</dd>
+</dl>
+</div>
+<div class="admonitionblock tip">
+<table>
+<tr>
+<td class="icon">
+<i class="fa icon-tip" title="ПІДКАЗКА"></i>
+</td>
+<td class="content">
+<div class="paragraph">
+<p>Детальніше про ієрархічну модель доступу до даних та налаштування RLS-правил читайте на сторінці <a href="hierarchical-model.html" class="xref page">Ієрархічна модель</a>.</p>
+</div>
+</td>
+</tr>
+</table>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_моделювання_доступу_та_застосування_rls_правил"><a class="anchor" href="#_моделювання_доступу_та_застосування_rls_правил"></a><a class="link" href="#_моделювання_доступу_та_застосування_rls_правил">7.2. Моделювання доступу та застосування RLS-правил</a></h3>
+<div class="paragraph">
+<p>Створення моделі даних реєстру із додаванням RLS-правил подібне до стандартного <a href="#create-data-model">Створення моделі даних реєстру</a>, лише потрібно додати changeset із RLS-правилом:</p>
+</div>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>Створіть таблицю із типом <code>geometry</code>.</p>
+<details>
+<summary class="title"><em>Приклад. Моделювання таблиці із типом geometry</em></summary>
+<div class="content">
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-xml hljs" data-lang="xml">&lt;changeSet id="table geometry type" author="registry owner"&gt;
+    &lt;createTable tableName="entity_with_geo_type" ext:historyFlag="true" remarks="Сутність з геотипом"&gt;
+        &lt;column name="entity_id" type="UUID" defaultValueComputed="uuid_generate_v4()"&gt;
+            &lt;constraints nullable="false" primaryKey="true" primaryKeyName="pk_entity_id"/&gt;
+        &lt;/column&gt;
+        &lt;column name="name" type="TEXT"&gt;
+            &lt;constraints nullable="false"/&gt;
+        &lt;/column&gt;
+        &lt;column name="address" type="TEXT"&gt;
+            &lt;constraints nullable="false"/&gt;
+        &lt;/column&gt;
+        &lt;column name="entity_location" type="geometry"&gt;
+            &lt;constraints nullable="false"/&gt;
+        &lt;/column&gt;
+    &lt;/createTable&gt;
+&lt;/changeSet&gt;</code></pre>
+</div>
+</div>
+</div>
+</details>
+</li>
+<li>
+<p>Створіть таблицю-представлення</p>
+<details>
+<summary class="title"><em>Моделювання таблиці-представлення (Search Condition) із типом geometry</em></summary>
+<div class="content">
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-xml hljs" data-lang="xml">&lt;changeSet author="registry owner" id="create SC get_entity_with_geo_type_not_equals"&gt;
+    &lt;ext:createSearchCondition name="get_entity_with_geo_type_not_equals"&gt;
+        &lt;ext:table name="entity_with_geo_type"&gt;
+            &lt;ext:column name="entity_id"/&gt;
+            &lt;ext:column name="name" searchType="notEqual"/&gt;
+            &lt;ext:column name="address"/&gt;
+            &lt;ext:column name="entity_location"/&gt;
+        &lt;/ext:table&gt;
+    &lt;/ext:createSearchCondition&gt;
+&lt;/changeSet&gt;</code></pre>
+</div>
+</div>
+</div>
+</details>
+</li>
+<li>
+<p>Додайте правило до таблиці або представлення</p>
+<details>
+<summary class="title"><em>Додавання RLS-правила на читання геоданих із таблиці-представлення</em></summary>
+<div class="content">
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-xml hljs" data-lang="xml">&lt;changeSet id="entity_with_geo_type_rls" author="registry owner"&gt;
+	&lt;ext:rls name="entity_with_geo_type_read_rls"&gt;
+		&lt;ext:addReadRule
+      name="entity_with_geo_type_read_rule"
+      jwtAttribute="hierarchy_code"
+      checkColumn="entity_location"
+      checkTable="get_entity_with_geo_type_not_equals_v"/&gt;
+	&lt;/ext:rls&gt;
+&lt;/changeSet&gt;</code></pre>
+</div>
+</div>
+</div>
+</details>
+<div class="paragraph">
+<p>Атрибут <code>hierarchy_code</code> є сурогатним ключем для контролю ієрархічного доступу.
+Взяте з Keycloak, значення <code>hierarchy_code</code> включається до JWT-токена користувача.</p>
+</div>
+<div class="paragraph">
+<p>Завдяки цьому RLS-правилу, користувач побачить на мапі лише ті геопросторові об&#8217;єкти з колонки <code>entity_location</code>, до яких у нього є права на основі <code>hierarchy_code</code>.</p>
+</div>
+</li>
+</ol>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_повязані_сторінки"><a class="anchor" href="#_повязані_сторінки"></a><a class="link" href="#_повязані_сторінки">8. Пов&#8217;язані сторінки</a></h2>
 <div class="sectionbody">
 <div class="ulist">
 <ul>
 <li>
 <p><a href="../bp-modeling/forms/components/map/map.html" class="xref page">Компонент Map</a></p>
+</li>
+<li>
+<p><a href="hierarchical-model.html" class="xref page">Ієрархічна модель</a></p>
 </li>
 </ul>
 </div>
