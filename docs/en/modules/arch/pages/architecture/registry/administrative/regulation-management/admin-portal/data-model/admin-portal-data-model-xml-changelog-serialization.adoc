@@ -1,0 +1,278 @@
+= Converting database structure models to Liquibase ChangeSets
+include::platform:ROOT:partial$templates/document-attributes/arch-set-en.adoc[]
+
+include::ROOT:partial$admonitions/language-en.adoc[]
+
+== Functional scenarios
+//== Функціональні сценарії
+
+- Create _Diff Document_ based on _DataModelSnapshot_ database (current version and version changes) in _.json_ format according to the xref:architecture/registry/administrative/regulation-management/admin-portal/data-model/admin-portal-data-model-management.adoc#_допустимі_операції_з_обєктами_доменної_моделі_що_ввійшли_в_попередній_реліз[requirements].
+//- Створення _Diff Document_ на основі _DataModelSnapshot_ бази даних (поточна версія та версія змін) в форматі _.json_ відповідно до xref:architecture/registry/administrative/regulation-management/admin-portal/data-model/admin-portal-data-model-management.adoc#_допустимі_операції_з_обєктами_доменної_моделі_що_ввійшли_в_попередній_реліз[вимог].
+- Create _Xml liquibase Changesets_ based on the generated _Diff Document_.
+//- Створення _Xml liquibase Changesets_ на основі згенерованого _Diff Document_.
+
+== Out of scope
+- Delete operation for _AccessRule_
+//- Операція видалення для _AccessRule_
+
+== Technology stack
+//== Технологічний стек
+
+|===
+|Technology / Library|Version|License|Documentation|Description
+//|Технологія / Бібліотека|Версія|Ліцензія|Документація|Опис
+
+|Guava|31.1-jre|Apache License 2.0|https://github.com/google/guava/wiki[Documentation]|Guava — Google library for working with collections in Java.
+//|Guava|31.1-jre|Apache License 2.0|https://github.com/google/guava/wiki[Документація]|Guava — Google бібліотека для роботи з колекціями в Java.
+
+|===
+
+== _Diff calculator_
+//== Компонент _Diff calculator_
+The _Diff calculator_ component based on the DataModelSnapshot creates _Diff Document_. Since the DataModelSnapshot has a structure based on _Map_, the _Guava_ library is used to calculate the difference.
+//Компонент _Diff calculator_ на основі DataModelSnapshot створює _Diff Document_. Так як DataModelSnapshot має структуру на основі _Map_, то для підрахунку різниці використовується бібліотека _Guava_.
+
+TIP: The calculation of difference between two states of database structure on the xref:architecture/registry/administrative/regulation-management/admin-portal/data-model/domain-snapshot-example.adoc[test data] takes 30 msec.
+//TIP: Підрахунок різниці між двома станами структури БД
+//на xref:architecture/registry/administrative/regulation-management/admin-portal/data-model/domain-snapshot-example.adoc[тестових даних] займає 30 мс.
+
+
+=== Example of generated _Diff Document_
+//=== Приклад згенерованого _Diff Document_
+[source, json]
+----
+{
+   "tablesToAdd":{
+      "application_type":{
+         "name":"application_type",
+         "remarks":"Application type guide",
+         "columns":{
+            "name":{
+               "name":"name",
+               "remarks":"Application type",
+               "type":"text",
+               "notNullFlag":true,
+               "tableName":"application_type"
+            },
+            "application_type_id":{
+               "name":"application_type_id",
+               "remarks":"Application type identifier",
+               "type":"uuid",
+               "defaultValue":"uuid_generate_v4()",
+               "notNullFlag":true,
+               "tableName":"application_type"
+            },
+            "constant_code":{
+               "name":"constant_code",
+               "remarks":"Character constant",
+               "type":"text",
+               "notNullFlag":true,
+               "tableName":"application_type"
+            }
+         },
+         "primaryKey":{
+            "name":"pk_application_type_id",
+            "columns":[
+               {
+                  "name":"application_type_id",
+                  "sorting":"ASC"
+               }
+            ],
+            "tableName":"application_type"
+         },
+         "uniqueConstraints":{
+            "application_type_name_key":{
+               "name":"application_type_name_key",
+               "columns":[
+                  {
+                     "name":"name",
+                     "sorting":"ASC"
+                  }
+               ],
+               "tableName":"application_type"
+            }
+         }
+      }
+   },
+   "tablesToEdit":{
+      "staff":{
+         "attributesToEdit":{
+            "remarks":"Personnel structure"
+         },
+         "columnsToAdd":{
+            "researches":{
+               "name":"researches",
+               "remarks":"Array of study identifiers",
+               "type":"_uuid",
+               "notNullFlag":false,
+               "tableName":"staff"
+            }
+         },
+         "columnsToEdit":{
+            "education":{
+               "remarks":"Education, profession",
+               "defaultValue":"Law faculty"
+            }
+         },
+         "foreignKeysToAdd":{
+            "fk_staff_status":{
+               "name":"fk_staff_status",
+               "targetTable":"staff_status",
+               "columnPairs":[
+                  {
+                     "sourceColumnName":"staff_status_id",
+                     "targetColumnName":"staff_status_id"
+                  }
+               ],
+               "sourceTable":"staff"
+            },
+            "fk_staff_laboratory_new":{
+               "name":"fk_staff_laboratory_new",
+               "targetTable":"laboratory",
+               "columnPairs":[
+                  {
+                     "sourceColumnName":"laboratory_id",
+                     "targetColumnName":"laboratory_id"
+                  }
+               ],
+               "sourceTable":"staff"
+            }
+         },
+         "foreignKeysToDelete":{
+            "fk_staff_laboratory":{
+               "name":"fk_staff_laboratory",
+               "targetTable":"laboratory",
+               "columnPairs":[
+                  {
+                     "sourceColumnName":"laboratory_id",
+                     "targetColumnName":"laboratory_id"
+                  }
+               ],
+               "sourceTable":"staff"
+            }
+         },
+         "indicesToAdd":{
+            "ix_staff_staff_status__staff_status_id":{
+               "name":"ix_staff_staff_status__staff_status_id",
+               "columns":[
+                  {
+                     "name":"staff_status_id",
+                     "sorting":"ASC"
+                  }
+               ],
+               "tableName":"staff"
+            },
+            "ix_staff_laboratory__laboratory_id_new":{
+               "name":"ix_staff_laboratory__laboratory_id_new",
+               "columns":[
+                  {
+                     "name":"laboratory_id",
+                     "sorting":"ASC"
+                  }
+               ],
+               "tableName":"staff"
+            }
+         },
+         "indicesToDelete":{
+            "ix_staff_laboratory__laboratory_id":{
+               "name":"ix_staff_laboratory__laboratory_id",
+               "columns":[
+                  {
+                     "name":"laboratory_id",
+                     "sorting":"ASC"
+                  }
+               ],
+               "tableName":"staff"
+            }
+         }
+      }
+   },
+   "accessRulesToAdd":{
+      "1":{
+         "permissionId":"1",
+         "roleName":"isAuthenticated",
+         "objectName":"laboratory",
+         "columnName":"edrpou",
+         "operation":"SELECT"
+      }
+   }
+}
+----
+
+[NOTE]
+--
+TODO: A _Json_ scheme of the _Diff Document_ description must be implemented.
+//TODO: необхідно реалізувати _Json_ схему опису _Diff Document_.
+--
+
+
+== _LiquibaseDataModelSerializer_
+//== Компонент _LiquibaseDataModelSerializer_
+The _LiquibaseDataModelSerializer_ component based on _Diff Document_ generates _Liquibase XML-Changelog_ using the following algorithm:
+//Компонент _LiquibaseDataModelSerializer_ на основі _Diff Document_ генерує _Liquibase XML-Changelog_ за наступним алгоритмом:
+
+- Get _Liquibase ChangeLog_.
+//- Отримуємо _Liquibase ChangeLog_
+- Form _Liquibase Changes_ based on _Diff Document_.
+//- На основі _Diff Document_ формуємо _Liquibase Changes_
+- Add _Liquibase Changes_ to the corresponding _Liquibase ChangeSet_ or create a new one.
+//- Додаємо _Liquibase Changes_ до потрібного _Liquibase ChangeSet_ або створюємо новий
+- _Liquibase_ based on updated _Liquibase ChangeLog_ generates _Liquibase XML-Changelog_.
+//- _Liquibase_ на основі оновленого _Liquibase ChangeLog_ генерує _Liquibase XML-Changelog_
+
+
+=== Example of generated Liquibase XML-Changelog
+//=== Приклад згенерованого Liquibase XML-Changelog
+[source, xml]
+----
+<?xml version="1.1" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:ext="http://www.liquibase.org/xml/ns/dbchangelog-ext"
+                   xmlns:pro="http://www.liquibase.org/xml/ns/pro"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog-ext
+                   https://nexus-public-mdtu-ddm-edp-cicd.apps.cicd2.mdtu-ddm.projects.epam.com/repository/extensions/com/epam/digital/data/platform/liquibase-ext-schema/latest/liquibase-ext-schema-latest.xsd
+                   http://www.liquibase.org/xml/ns/pro http://www.liquibase.org/xml/ns/pro/liquibase-pro-4.6.xsd
+                   http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.6.xsd">
+
+    <changeSet author="system" id="id" objectQuotingStrategy="LEGACY">
+        <createTable ext:isObject="false" remarks="Application type guide" tableName="application_type">
+            <column name="name" remarks="Application type" type="text">
+                <constraints nullable="false"/>
+            </column>
+            <column defaultValue="uuid_generate_v4()" name="application_type_id" remarks="Application type identifier" type="uuid">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="pk_application_type_id"/>
+            </column>
+            <column name="constant_code" remarks="Character constant" type="text">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addUniqueConstraint columnNames="name" constraintName="application_type_name_key" tableName="application_type"/>
+        <setTableRemarks remarks="Personnel structure" tableName="staff"/>
+        <addColumn tableName="staff">
+            <column name="researches" remarks="Array of study identifiers" type="_uuid"/>
+        </addColumn>
+        <setColumnRemarks columnName="education" remarks="Education, profession" tableName="staff"/>
+        <dropDefaultValue columnName="education" tableName="staff"/>
+        <addDefaultValue columnName="education" defaultValue="Law faculty" tableName="staff"/>
+        <dropForeignKeyConstraint baseTableName="staff" constraintName="fk_staff_laboratory"/>
+        <addForeignKeyConstraint baseColumnNames="staff_status_id" baseTableName="staff" constraintName="fk_staff_status" referencedColumnNames="staff_status_id" referencedTableName="staff_status"/>
+        <addForeignKeyConstraint baseColumnNames="laboratory_id" baseTableName="staff" constraintName="fk_staff_laboratory_new" referencedColumnNames="laboratory_id" referencedTableName="laboratory"/>
+        <dropIndex indexName="ix_staff_laboratory__laboratory_id" tableName="staff"/>
+        <createIndex indexName="ix_staff_staff_status__staff_status_id" tableName="staff">
+            <column descending="false" name="staff_status_id"/>
+        </createIndex>
+        <createIndex indexName="ix_staff_laboratory__laboratory_id_new" tableName="staff">
+            <column descending="false" name="laboratory_id"/>
+        </createIndex>
+        <ext:rbac>
+            <ext:role name="isAuthenticated">
+                <ext:table name="laboratory">
+                    <ext:column name="edrpou" read="true"/>
+                </ext:table>
+            </ext:role>
+        </ext:rbac>
+    </changeSet>
+</databaseChangeLog>
+
+----
