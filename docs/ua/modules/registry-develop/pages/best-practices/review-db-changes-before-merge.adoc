@@ -1,0 +1,227 @@
+= Перевірка змін моделі даних перед інтеграцією в майстер-версію
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+== Загальний опис
+
+Ця сторінка пропонує докладний підхід до перевірки змін моделі даних перед інтеграцією в майстер-версію. Тут ви знайдете кроки для створення таблиць, налаштування критеріїв пошуку (Search conditions), впровадження первинного завантаження даних (initial data load) та способи перегляду цих змін у тимчасовій базі даних за допомогою *pgAdmin*.
+
+== Налаштування та перегляд змін
+
+. Створіть версію-кандидат в адміністративному порталі.
++
+image:registry-develop:best-practices/review-db-changes-before-merge/review-db-changes-before-merge-1.png[]
++
+image:registry-develop:best-practices/review-db-changes-before-merge/review-db-changes-before-merge-2.png[]
+
+. Створіть нову таблицю. Для цього:
+
+.. Перейдіть до розділу +++<b style="font-weight: 600;">Таблиці<b>+++ та відкрийте +++<b style="font-weight: 600;">Файл опису структури<b>+++.
++
+image:registry-develop:best-practices/review-db-changes-before-merge/review-db-changes-before-merge-3.png[]
+
+.. Додайте необхідний Changeset, що створює таблицю.
++
+image:registry-develop:best-practices/review-db-changes-before-merge/review-db-changes-before-merge-4.png[]
+
++
+._Приклад XML-схеми_
+[%collapsible]
+====
+[source, XML]
+----
+<changeSet id="11111" author="ab">
+	<comment>CREATE TABLE parent</comment>
+	<createTable tableName="parent" ext:historyFlag="true">
+		<column name="id" type="UUID" defaultValueComputed="uuid_generate_v4()">
+			<constraints
+                    nullable="false"
+                    primaryKey="true"
+                    primaryKeyName="pk_parent_id"/>
+		</column>
+		<column name="parent_full_name" type="VARCHAR(255)"
+                    remarks = "Батьківське ім'я"></column>
+		<column name="phone_number" type="VARCHAR(255)"
+                    remarks = "Номер мобільного"></column>
+	</createTable>
+</changeSet>
+----
+====
+
++
+TIP: Детальніше про створення таблиць див. у розділі xref:registry-develop:data-modeling/data/physical-model/liquibase-ddm-ext.adoc#createTable[Керування таблицями].
+
+. Створіть Search Conditions. Зміни виконайте через інтерфейс Gerrit:
+
+.. В адміністративному порталі перейдіть на +++<b style="font-weight: 600;">Огляд версії<b>+++.
+.. У правому верхньому куті натисніть іконку *`&#8942;`* та перейдіть до реєстрового сервісу Gerrit.
++
+image:registry-develop:best-practices/review-db-changes-before-merge/review-db-changes-before-merge-5.png[]
+
+.. Натисніть *`Edit`*, щоб увімкнути режим редагування.
++
+image:registry-develop:best-practices/review-db-changes-before-merge/review-db-changes-before-merge-6.png[]
+
+.. Натисніть *`Add/Open/Upload`*. Далі створіть або відкрийте наявний файл із search conditions у директорії _data-model_.
++
+image:registry-develop:best-practices/review-db-changes-before-merge/review-db-changes-before-merge-7.png[]
+
+.. Додайте файл для search condition.
++
+.Приклад створення файлу для критерію пошуку
+image::registry-develop:best-practices/review-db-changes-before-merge/review-db-changes-before-merge-8.png[]
+
+.. Додайте search condition у файл.
++
+image:registry-develop:best-practices/review-db-changes-before-merge/review-db-changes-before-merge-9.png[]
++
+._Приклад XML-схеми_
+[%collapsible]
+====
+[source, XML]
+----
+<?xml version="1.1" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+	xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:ext="http://www.liquibase.org/xml/ns/dbchangelog-ext"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://artifactory.control-plane-nexus/nexus/repository/extensions/com/epam/digital/data/platform/dbchangelog/4.5/dbchangelog-4.5.xsd
+        http://www.liquibase.org/xml/ns/dbchangelog-ext http://artifactory.control-plane-nexus/nexus/repository/extensions/com/epam/digital/data/platform/liquibase-ext-schema/latest/liquibase-ext-schema-latest.xsd">
+
+	<changeSet author="ab" id="11112">
+		<ext:createSearchCondition name="get_parent_by_name" limit="100">
+			<ext:table name="parent">
+				<ext:column name="phone_number"/>
+				<ext:column name="parent_full_name" searchType="startsWith"/>
+			</ext:table>
+		</ext:createSearchCondition>
+	</changeSet>
+
+</databaseChangeLog>
+
+----
+====
+
+. Виконайте первинне завантаження даних до реєстру -- initial data load. Це також можна зробити в інтерфейсі Gerrit. Для цього:
+
+.. Створіть CSV-файл із потрібними даними.
++
+image:registry-develop:best-practices/review-db-changes-before-merge/review-db-changes-before-merge-10.png[]
++
+image:registry-develop:best-practices/review-db-changes-before-merge/review-db-changes-before-merge-11.png[]
++
+[TIP]
+Детальніше про формат файлу для первинного завантаження див. у розділі xref:data-modeling/initial-load/data-initial-data-load-pl-pgsql.adoc#initial-load-csv-requirements[Вимоги до файлів для завантаження до БД].
+
+.. Додайте changeset, який завантажує CSV-дані до БД.
++
+image:registry-develop:best-practices/review-db-changes-before-merge/review-db-changes-before-merge-12.png[]
++
+._Приклад XML-схеми_
+[%collapsible]
+====
+[source, XML]
+----
+<?xml version="1.1" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+	xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:ext="http://www.liquibase.org/xml/ns/dbchangelog-ext"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://artifactory.control-plane-nexus/nexus/repository/extensions/com/epam/digital/data/platform/dbchangelog/4.5/dbchangelog-4.5.xsd
+        http://www.liquibase.org/xml/ns/dbchangelog-ext http://artifactory.control-plane-nexus/nexus/repository/extensions/com/epam/digital/data/platform/liquibase-ext-schema/latest/liquibase-ext-schema-latest.xsd">
+	<property  name="dataLoadPath" value="/tmp/data-load/"/>
+	<changeSet id="11113" author="ab">
+		<sql dbms="postgresql" endDelimiter=";" splitStatements="true" stripComments="true">
+CALL p_load_table_from_csv('parent','${dataLoadPath}/parents.csv', array['parent_full_name','phone_number']);
+</sql>
+	</changeSet>
+</databaseChangeLog>
+
+----
+====
++
+TIP: Детальніше про initial load ви можете переглянути на сторінці xref:data-modeling/initial-load/data-initial-data-load-pl-pgsql.adoc[].
+
+. Додайте створені файли з вашими наборами змін до головного -- _main-liquibase.xml_. Це можна зробити за допомогою тегу `<include>` та атрибута `file`. +
+Збережіть натисканням кнопки *`Save`*.
++
+image:registry-develop:best-practices/review-db-changes-before-merge/review-db-changes-before-merge-13.png[]
+
+. Опублікуйте зміни натисканням кнопки *`Publish Edit`*.
++
+image:registry-develop:best-practices/review-db-changes-before-merge/review-db-changes-before-merge-14.png[]
+
+. Перевірте стан розгортання тимчасової бази даних реєстру:
+
+.. Після публікації запуститься Jenkins-пайплайн із назвою *MASTER-Code-review-registry-regulations*.
+.. Слідкуйте за виконанням збірки за посиланням, яке з’явиться внизу сторінки в Gerrit.
++
+image:registry-develop:best-practices/review-db-changes-before-merge/review-db-changes-before-merge-15.png[]
++
+[TIP]
+====
+Пайплайн, що пройшов успішно, вказує на застосування змін у тимчасовій базі даних.
+
+image:registry-develop:best-practices/review-db-changes-before-merge/review-db-changes-before-merge-16.png[]
+====
+
+. Перегляньте зміни у тимчасовій базі даних за допомогою інструмента *pgAdmin*:
+
+.. Відкрийте *Openshift* > *Projects* > Ваш реєстр.
+.. Перейдіть до *Networking* > *Routes* та у пошуку знайдіть роут сервісу `pgadmin`.
++
+image:registry-develop:best-practices/review-db-changes-before-merge/review-db-changes-before-merge-17.png[]
++
+[TIP]
+====
+[%collapsible]
+.Де знайти логін та пароль для pgadmin?
+=====
+Логін та пароль для `pgadmin` можна знайти у секції *Workloads* > *Secrets*, у секреті під назвою *pgadmin-secret*.
+
+image:registry-develop:best-practices/review-db-changes-before-merge/review-db-changes-before-merge-18.png[]
+=====
+====
+
+.. В інтерфейсі *pgAdmin* знайдіть розділ *Servers* та введіть пароль для системного користувача `application_role`, щоб встановити з'єднання із реєстровим БД-сервером.
++
+image:registry-develop:best-practices/review-db-changes-before-merge/review-db-changes-before-merge-19.png[]
++
+[TIP]
+====
+[%collapsible]
+.Де знайти пароль для з'єднання із реєстровим БД-сервером?
+=====
+Пароль для з'єднання із реєстровим БД-сервером `Registry` для користувача `application_role` можна знайти у секції *Workloads* > *Secrets*, у секреті під назвою *citus-roles-secrets*. Скопіюйте пароль у полі *appRolePass*.
+
+image:registry-develop:best-practices/review-db-changes-before-merge/review-db-changes-before-merge-20.png[]
+
+image:registry-develop:best-practices/review-db-changes-before-merge/review-db-changes-before-merge-21.png[]
+=====
+====
+
+. Визначте тимчасову БД та перегляньте зміни:
+
+.. Визначте тимчасову базу даних, яка зберігає ваші зміни. Це можна зробити за номером версії-кандидата в URL адміністративного порталу. Наприклад, `601`.
++
+image:registry-develop:best-practices/review-db-changes-before-merge/review-db-changes-before-merge-22.png[]
+
+.. Відкрийте pgAdmin та знайдіть тимчасову БД. Вона буде доступна за шляхом: +
+*Servers* > *Registry* > *Databases* > `registry_dev_<номер-версії-кандидата>`. Наприклад, `registry_dev_601`.
++
+image:registry-develop:best-practices/review-db-changes-before-merge/review-db-changes-before-merge-23.png[]
+
+* Створені таблиці можна переглянути за шляхом: *Schemas* > `registry` > *Tables*.
++
+image:registry-develop:best-practices/review-db-changes-before-merge/review-db-changes-before-merge-24.png[]
+
+* Створені search conditions можна переглянути за шляхом: *Schemas* > `registry` > *Views*.
++
+image:registry-develop:best-practices/review-db-changes-before-merge/review-db-changes-before-merge-25.png[]
++
+[NOTE]
+====
+Критерії пошуку у базі даних є таблицями-представленнями (`VIEW`), що призначені виключно для читання даних. Конвенція назв для search conditions на рівнях моделі даних та БД збігається, за єдиним винятком -- у БД до назви кожного критерію пошуку додається суфікс `_v`.
+
+Наприклад, якщо ви створили search condition із назвою `get_parent_by_name`, то у базі даних ця назва трансформується у `get_parent_by_name_v`.
+====
+
