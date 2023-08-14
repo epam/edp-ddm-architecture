@@ -1,0 +1,142 @@
+@startuml
+skinparam monochrome true
+
+actor "User" as user
+participant "User portal client application" as cabinet
+participant "Kong \nAPI Management" as kong
+participant "User tasks management service" as user_task_mngmnt
+participant "Digital documents service" as digital_documents
+participant "Business processes management service" as bpms
+participant "Data Factory" as data_factory
+participant "Ceph object storage \n(bucket: lowcode-file-storage)" as file_storage_ceph
+participant "Ceph object storage \n(bucket: lowcode-form-data-storage)" as form_data_ceph
+
+skinparam responseMessageBelowArrow false
+title Downloading and viewing files when performing user tasks
+
+activate bpms
+  note over bpms, data_factory: Business process in progress
+  bpms -> bpms: Prepare data to form a request to the Data Factory
+  bpms -> data_factory: Get entity with digital documents \n* X-Access-Token \n* X-Source-Business-Process-Instance-Id
+  activate data_factory
+    data_factory -> data_factory: Prepare entity \nwith Ceph document UUIDs
+    data_factory -> file_storage_ceph: Save digital documents \nfor further use \nin Low-code platform \nusing the keys <process/processInstanceId/UUID>
+  return JSON document with document UUIDs
+
+  note left
+    {
+      "<file_property_name>": [
+        {
+          "id": "{UUID}",
+          "checksum": "{SHA256-hash}"
+        }
+      ]
+    }
+  end note
+  bpms -> bpms: Prepare document with data for pre-populating the form
+
+  bpms -> form_data_ceph: Save data for task's UI form with document UUIDs
+  note right
+    {
+      "data": {
+        "<file_property_name>": [
+          {
+            "id": "{UUID}",
+            "checksum": "{SHA256-hash}"
+          }
+        ]
+      }
+    }
+  end note
+
+  form_data_ceph --> bpms
+  bpms -> bpms: Transition to waiting for the task completion
+  bpms --> user: Return control to user
+deactivate bpms
+
+user -> cabinet: Switch to the task of viewing file attachments
+activate cabinet
+  cabinet -> kong: Request task data: GET "/task/{id}" \nParameters: \nKong session ID
+  activate kong
+    kong -> user_task_mngmnt: Request task data: GET "/task/{id}" \nParameters: \nX-Access-Token
+    activate user_task_mngmnt
+      user_task_mngmnt -> user_task_mngmnt: Check if the Assignee of the task corresponds to the current user
+      user_task_mngmnt -> user_task_mngmnt: Generate Ceph document ID \nto get data \n(processInstanceId, taskDefinitionKey)
+      user_task_mngmnt -> form_data_ceph: Read form data JSON document using the key
+      form_data_ceph --> user_task_mngmnt: Prepared JSON document of the UI form with UUIDs
+      note left
+        {
+          "data": {
+            "<file_property_name>": [
+              {
+                "id": "{UUID}",
+                "checksum": "{SHA256-hash}"
+              }
+            ]
+          }
+        }
+      end note
+
+      user_task_mngmnt -> user_task_mngmnt: Prepare aggregated task data and data to display in the UI form
+      user_task_mngmnt --> cabinet: Return task data
+      note left
+        {
+          "data": {
+            "<file_property_name>": [
+              {
+                "id": "{UUID}",
+                "checksum": "{SHA256-hash}"
+              }
+            ]
+          }
+        }
+      end note
+    deactivate
+  deactivate
+  cabinet -> kong: Request file metadata: \nPOST "/documents/{processInstanceId}/{taskId}/search" ([{id, fieldName}]) \n* Kong session ID
+  activate kong
+    kong -> digital_documents: Request file metadata: POST "/documents/{processInstanceId}/{taskId}/search" ([{id, fieldName}]) \n*X-Access-Token
+    digital_documents --> kong: Document metadata
+    kong -> cabinet: Document metadata
+  deactivate kong
+  note left
+    [
+      {
+          "id": "{UUID}",
+          "name": "{filename}",
+          "type:": "{mime-type}",
+          "size": 1000,
+          "checksum": "{sha256-hash}",
+          "url": "https://.../documents/{processInstanceId}/{taskId}/{fieldName}/{id}"
+      }
+    ]
+  end note
+
+  cabinet -> cabinet: Bring the values of the "File" type fields to the canonical form for use in the client application
+  note left
+      {
+          "id": "{UUID}",
+          "name": "{filename}",
+          "type:": "{mime-type}",
+          "size": 1000,
+          "checksum": "{sha256-hash}",
+          "url": "https://.../documents/{processInstanceId}/{taskId}/{fieldName}/{id}"
+      }
+  end note
+return
+
+user -> cabinet: Download attachment via task UI form
+activate cabinet
+  cabinet -> kong: Document download request: \nGET "https://.../documents/{processInstanceId}/{taskId}/{fieldName}/{id}" \n* Kong session ID
+  activate kong
+    kong -> digital_documents: Document download request: GET "https://.../documents/{processInstanceId}/{taskId}/{fieldName}/{id}" \n*X-Access-Token
+    digital_documents -> file_storage_ceph: Get digital document \nfor further use \nin Low-code platform \nusing keys <process/processInstanceId/UUID>
+    file_storage_ceph --> digital_documents: Ceph object
+    digital_documents -> digital_documents: Generate the file for download
+    digital_documents --> kong: File
+    kong --> cabinet: File
+  deactivate kong
+  cabinet --> user: File
+deactivate cabinet
+
+@enduml

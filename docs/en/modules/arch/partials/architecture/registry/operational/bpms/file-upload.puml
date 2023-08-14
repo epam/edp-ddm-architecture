@@ -1,0 +1,114 @@
+@startuml
+skinparam monochrome true
+
+actor "User" as user
+participant "User portal client application" as cabinet
+participant "Kong \nAPI Management" as kong
+participant "Digital documents service" as digital_documents
+participant "Ceph object storage \n(bucket: lowcode-file-storage)" as file_storage_ceph
+participant "User tasks management service" as user_task_mngmnt
+participant "Business processes management service" as bpms
+participant "Ceph object storage \n(bucket: lowcode-form-data-storage)" as form_data_ceph
+
+skinparam responseMessageBelowArrow false
+title Uploading and using files when performing user tasks
+
+user -> cabinet: Switch to the task of adding file attachments through the UI form
+return
+
+user -> cabinet: Upload file attachments through a separate UI component of the task form
+activate cabinet
+  cabinet -> kong: File upload request: \nPOST "/documents/{processInstanceId}/{taskId}/{fieldName}" \n* Kong session ID; \n* File metadata; \n* File binary content;
+  activate kong
+    kong -> digital_documents: File upload request: \nPOST "/documents/{processInstanceId}/{taskId}/{fieldName}" \n* X-Access-Token; \n* File metadata; \n* File binary content;
+    digital_documents -> digital_documents: Access authorization to perform the operation
+    digital_documents -> digital_documents: Validate digital document
+    digital_documents -> digital_documents: Prepare digital document
+    digital_documents -> file_storage_ceph: Save digital document \n* Key: <process/{processInstanceId}/{UUID}>
+    file_storage_ceph --> digital_documents
+    digital_documents -> kong: Return newly created document metadata
+    note left
+      {
+          "id": "{UUID}",
+          "name": "{filename}",
+          "type:": "{mime-type}",
+          "size": 1000,
+          "checksum": "{sha256-hash}",
+          "url": "https://.../documents/{processInstanceId}/{taskId}/{fieldName}/{id}"
+      }
+    end note
+    kong --> cabinet: Return newly created document metadata
+  deactivate kong
+return Return control to user
+
+user -> cabinet: Confirm data entry task completion
+activate cabinet
+  cabinet -> cabinet: Client validation of form data
+
+  cabinet -> cabinet: Bring the values of the "File" type fields in accordance to the interaction contract with the server application
+  note left
+    {
+      "data": {
+        "<file_property_name>": [
+          {
+            "id": "{UUID}",
+            "checksum": "{SHA256-hash}"
+          }
+        ]
+      }
+    }
+  end note
+
+  cabinet -> kong: Confirm task completion: POST "/task/{id}/complete" \n*Kong session ID \n*Form data with Ceph link to file attachments
+  activate kong
+    kong -> user_task_mngmnt: Confirm task completion: POST "/task/{id}/complete" \n* X-Access-Token \n*Form data with Ceph link to file attachments
+    activate user_task_mngmnt
+      user_task_mngmnt -> user_task_mngmnt: Check if the Assignee of the task corresponds to the current user
+      user_task_mngmnt -> user_task_mngmnt: Set the X-Access-Token for the JSON document of the form data
+
+      user_task_mngmnt -> user_task_mngmnt: Generate Ceph document ID for further data storage \n(processInstanceId, taskDefinitionKey)
+      user_task_mngmnt -> form_data_ceph: Save form data JSON document \n* Document name \n* JSON document of the form data with file UUIDs
+      note right
+        {
+          "data": {
+            "<file_property_name>": [
+              {
+                "id": "{UUID}",
+                "checksum": "{SHA256-hash}"
+              }
+            ]
+          },
+          "x-access-token": "{X-Access-Token}"
+        }
+      end note
+
+      form_data_ceph --> user_task_mngmnt
+
+      user_task_mngmnt -> bpms: Confirm task completion
+      activate bpms
+        bpms -> form_data_ceph: Get UI form data JSON document using task ID
+        form_data_ceph --> bpms: JSON document with file UUIDs
+        bpms -> bpms: Prepare data to pre-populate the form of the next task of viewing file attachments
+        bpms -> form_data_ceph: Save UI form data JSON document for the next task
+        note right
+          {
+            "data": {
+              "<file_property_name>": [
+                {
+                  "id": "{UUID}",
+                  "checksum": "{SHA256-hash}"
+                }
+              ]
+            }
+          }
+        end note
+
+        form_data_ceph --> bpms
+        bpms -> bpms: Transition to waiting for the next task
+      return Return control
+      user_task_mngmnt --> user: Return control to user
+    deactivate
+  deactivate
+deactivate
+
+@enduml
