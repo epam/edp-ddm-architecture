@@ -1,0 +1,66 @@
+@startuml
+skinparam monochrome true
+skinparam responseMessageBelowArrow true
+
+box Low-code subsystem
+  participant "User portal client application" as cabinet
+  participant "Digital documents service" as digital_documents
+  participant "User tasks management service" as user_task_mngmnt
+  participant "Business processes management service" as bpms
+  participant "Ceph bucket \n(lowcode-form-data-storage)" as lowcode_form_data_ceph
+  participant "Ceph bucket \n(lowcode-file-storage)" as lowcode_file_ceph
+end box
+
+box Data Factory
+  participant "REST API" as data_factory
+  participant "Ceph bucket \n(registry-file-storage)" as data_file_ceph
+  participant "Data storage" as citus
+end box
+
+title File exchange between Low-Code and Data Factory
+
+activate cabinet
+  cabinet -> digital_documents: Upload digital document files
+  activate digital_documents
+    digital_documents -> digital_documents: Generate SHA256 hashes
+    digital_documents -> lowcode_file_ceph: Save digital document files using the keys <process/{processInstanceId}/{id}>
+    lowcode_file_ceph --> digital_documents:
+    digital_documents --> cabinet: UUIDs and SHA256 file hashes
+  deactivate digital_documents
+
+  cabinet -> user_task_mngmnt: Sign form data document with UUIDs and SHA256 file hashes
+  activate user_task_mngmnt
+    user_task_mngmnt -> lowcode_form_data_ceph: Save form data document with UUIDs and SHA256 file hashes
+    user_task_mngmnt -> bpms: Complete task
+    activate bpms
+      bpms -> lowcode_form_data_ceph: Read form data document
+      lowcode_form_data_ceph --> bpms: Form data document with UUIDs and SHA256 file hashes
+      note over bpms, data_factory: X-Digital-Signature, X-Source-Business-Process-Instance-Id
+      bpms -> data_factory: Save request for the form data document with UUIDs and SHA256 file hashes
+      activate data_factory
+        data_factory -> data_factory: Validate digital signature
+        data_factory -> lowcode_file_ceph: Get digital document files using the keys "process/{X-Source-Business-Process-Instance-Id}/UUID
+        lowcode_file_ceph --> data_factory
+        data_factory -> data_factory: Verify that the request checksum matches the newly calculated SHA256 file hash
+        data_factory -> data_file_ceph: Save files using UUIDs
+        data_factory -> citus: Save entity data using UUIDs and SHA256 file hashes
+        data_factory -> bpms: 200 OK, Data saved
+      deactivate data_factory
+
+      note over bpms, data_factory: X-Source-Business-Process-Instance-Id
+      bpms -> data_factory: Get entity data
+      activate data_factory
+        data_factory -> citus: Get entity data using UUIDs
+        citus --> data_factory
+        data_factory -> data_file_ceph: Get files using UUIDs
+        data_file_ceph --> data_factory
+        data_factory -> data_factory: Verify that the previosly saved checksum matches the newly calculated SHA256 file hash
+        data_factory -> lowcode_file_ceph: Save files with keys "process/{X-Source-Business-Process-Instance-Id}/UUID
+        data_factory -> bpms: 200 OK, Entity data
+      deactivate data_factory
+      bpms -> cabinet: Return control
+    deactivate bpms
+  deactivate user_task_mngmnt
+deactivate cabinet
+
+@enduml

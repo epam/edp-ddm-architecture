@@ -1,0 +1,368 @@
+//= Робота з цифровими документами у кабінеті користувача
+= Working with digital documents in the user portal
+
+include::platform:ROOT:partial$templates/document-attributes/arch-set-en.adoc[]
+
+include::ROOT:partial$admonitions/language-en.adoc[]
+
+//Поточний технічний дизайн сфокусований на загальних аспектах реалізації вимог щодо роботи із файлами через Кабінети користувача та на особливостях взаємодії між підсистемами "_Lowcode_" та "_Дата Фабрика_" в цьому контексті.
+The current technical design focuses on implementing the requirements for working with files through the user portals and the interaction features between the _Low-code_ and _Data Factory_ subsystems.
+
+[NOTE]
+//Детальніше з дизайном компоненти "_Сервіс цифрових документів_" підсистеми "_Lowcode_" можна ознайомитися
+//xref:digital-document-service:digital-document-service.adoc[за посиланням]
+//TODO: Smth weird with UA link here...
+For details on the _Digital documents service_ of the _Low-code_ subsystem, see xref:architecture/registry/operational/bpms/services/digital-document-service/digital-document-service.adoc[].
+
+//== Функціональні можливості
+== Functional capabilities
+
+//Для забезпечення вимог по роботі з цифровими документами через кабінет користувача, платформа надає наступні можливості:
+To meet the requirements for working with digital documents through the user portals, the Platform provides the following capabilities:
+
+//- Завантаження цифрових документів користувачами через UI-форми задач бізнес-процесів
+* Users can upload digital documents through the UI forms of business process tasks.
+//- Вивантаження та перегляд цифрових документів користувачами через UI-форми задач бізнес-процесів
+* Users can download and view digital documents through the UI forms of business process tasks.
+
+//== Загальні принципи реалізації
+== General implementation principles
+
+//- Файли цифрових документів, завантажені через UI-форми задач, підлягають збереженню в об'єктному сховищі _Ceph_ до моменту закінчення бізнес-процесу
+* Digital document files uploaded through the UI forms are stored in the _Ceph_ object storage until the completion of the business process.
+//- Для усіх файлів цифрових документів, завантажених через UI-форми задач, генерується _SHA256_-геш та зберігається у вигляді атрибуту Ceph-документа для подальшого використання при накладанні підпису
+* For each digital document uploaded through the UI form, a _SHA256_ hash is generated and stored as a Ceph document attribute for later use in applying a signature.
+//- Файли цифрових документів, завантажені через UI-форми задач, та дані форми зберігаються у вигляді окремих Ceph-документів в різних бакетах (_lowcode-file-storage_ та _lowcode-form-data-storage_)
+* Digital document files uploaded through the UI forms and form data are stored as separate Ceph documents in different buckets (_lowcode-file-storage_ and _lowcode-form-data-storage_).
+//- Для забезпечення цілістності даних, отриманих від користувача та завантажених ним файлів цифрових документів через UI-форму, Ceph-документ даних форми містить унікальні ідентифікатори Ceph-документів файлів та згенеровані з них _SHA256_-геші
+* To ensure the integrity of user-provided data and digital document files uploaded through the UI forms, the form's Ceph document contains unique identifiers of the Ceph document files and the _SHA256_ hashes generated for them.
+//- Файли цифрових документів не є об'єктом виконання операцій на рівні бізнес-процесів на відміну від їх ідентифікаторів
+* Unlike their IDs, digital document files are not subject to operations at the level of business processes.
+//- При накладанні підпису приватним ключем користувача на дані форми з завантаженими файлами цифрових документів, підпис генерується на документ даних UI-форми, який містить унікальні ідентифікатори Ceph-документів та _SHA256_-геші файлів
+* When applying a signature with the user's private key to the UI form data with digital document files, the signature is generated for the UI form data document, which contains unique identifiers of Ceph documents and _SHA256_ file hashes.
+//- Обмін цифровими документами між підсистемами платформи "_Low-code_" та "_Дата Фабрика_" реалізується внаслідок обміну унікальних ідентифікаторів та їх Ceph-документів через окремий Ceph-бакет "_lowcode-file-storage_"
+* The exchange of digital documents between the _Low-code_ and _Data Factory_ subsystems of the Platform is implemented by exchanging unique identifiers and their Ceph documents via a dedicated _lowcode-file-storage_ Ceph bucket.
+//- Усі документи, які завантажені в рамках бізнес-процесу,  зберігаються у вигляді Ceph-об'єктів в "_lowcode-file-storage_" бакеті під ключами з ознакою групування за префіксом (_process/{processInstanceId}/{id}_) процесу
+* All documents uploaded via a business process are stored as Ceph objects in the _lowcode-file-storage_ bucket under the keys grouped by the prefix of the process (_process/{processInstanceId}/{id}_).
+//- Бакет "_low-code-file-storage_" призначений для тимчасового зберігання цифрових документів у процесі виконання бізнес-процесів. Для перманентного зберігання використовується окремий бакет "_Дата Фабрики_" - "_registry-file-storage_"
+* The _low-code-file-storage_ bucket is used for temporary storage of digital documents during the execution of business processes. For permanent storage, a separate _Data Factory_ _registry-file-storage_ bucket is used.
+
+//== Взаємодія компонентів системи
+== System components interaction
+
+//На даній діаграмі зображено задіяні для реалізації вимог сервіси платформи та взаємодію між ними. Додатково зображено важливі особливості, які необхідно прийняти до уваги в рамках реалізації.
+The following diagram presents Platform services involved in the implementation and their interactions. The diagram also outlines aspects that are important to consider during the implementation.
+
+image::architecture/registry/operational/bpms/file-management.svg[]
+
+//=== Сервіс цифрових документів
+=== Digital documents service
+
+//За реалізацію вимог по роботи з ціфровими документами через кабінет, відповідає окремий компонент "_Сервіс цифрових документів_", який використовує _Ceph_ у якості сховища файлів.
+The requirements for working with digital documents through user portals are implemented via a separate _Digital document service_ component, which uses _Ceph_ as a file repository.
+
+[NOTE]
+//Детальніше з дизайном компоненти "_Сервіс цифрових документів_" можна ознайомитися
+//xref:digital-document-service:digital-document-service.adoc[за посиланням]
+//TODO: Broken link?
+For details on the _Digital documents service_, see xref:architecture/registry/operational/bpms/services/digital-document-service/digital-document-service.adoc[].
+
+//=== Обмін цифровими документами між підсистемами платформи
+=== Digital documents exchange between the Platform subsystems
+
+//- Файли цифрових документів є невід'ємною частиною сутності, в рамках створення якої вони були збережені
+* Digital document files are an integral part of the entity within which they were saved.
+//- _REST API_ підсистеми "_Дата Фабрика_" оперує лише UUID-ідентифікаторами та _SHA256_-гешами на рівні структур даних сутностей
+* The _Data Factory_ subsystem's _REST API_ only handles the UUIDs and _SHA256_ hashes at the entities' data structure level.
+//- При виконанні запиту на збереження сутності, яка містить UUID-ідентифікатори, Дата Фабрика очікує, що в бакеті "_lowcode-file-storage_" є наявні Ceph-документи з ключами, які відповідають конвенції іменування _process/{processInstanceId}/{UUID}_ (значення _processInstanceId_ передається у вигляді заголовка "*X-Source-Business-Process-Instance-Id*" разом з запитом), _SHA256_-геші яких співпадають з тими, які були передані разом с запитом
+* When a request is made to save an entity containing UUIDs, the Data Factory expects the following:
+** The _lowcode-file-storage_ bucket must have Ceph documents with the keys that follow the _process/{processInstanceId}/{UUID}_ naming convention. The _processInstanceId_ value is passed as the "*X-Source-Business-Process-Instance-Id*" header along with the request.
+** Document _SHA256_ hashes must match those provided with the request.
+//- При виконанні запиту на отримання сутності, яка містить UUID-ідентифікатори, Дата Фабрика гарантує клієнту наявність у бакеті "_lowcode-file-storage_" Ceph-документів з ключами, які відповідають конвенції іменування _process/{processInstanceId}/{UUID}_ (значення _processInstanceId_ передається у вигляді заголовка "*X-Source-Business-Process-Instance-Id*" разом з запитом), _SHA256_-геші яких співпадають з тими, які передані як частина сутності
+* When a request is made to retrieve an entity containing UUIDs, the Data Factory ensures the _lowcode-file-storage_ bucket has Ceph documents with the keys that follow the _process/{processInstanceId}/{UUID}_ naming convention (the _processInstanceId_ value is passed as the "*X-Source-Business-Process-Instance-Id*" header along with the request), and their _SHA256_ hashes match those provided as part of the entity.
+//- Доступ до файлів, завантажених як вкладення до сутності, на рівні підсистеми "Low-code" можливий лише через отримання даних цієї сутності та послідуюче отримання документа за UUID-ідентифікатором документа через компоненту "_Сервіс цифрових документів_"
+* Access to files uploaded as attachments to an entity at the _Low-code_ subsystem level is only possible by obtaining the entity data and retrieving the document using the document's UUID through the _Digital documents service_ component.
+
+[plantuml, file_exchange, svg]
+----
+include::partial$architecture/registry/operational/bpms/digital-documents-exchange.puml[]
+----
+
+//=== Контракт взаємодії між підсистемами платформи
+=== Interaction contract between the Platform subsystems
+
+//.Канонічний вигляд тіла запиту до Дата Фабрики на збереження даних сутності з файловими вкладеннями
+.Canonical body of the Data Factory request to save entity data with file attachments
+[source,json]
+----
+{
+  "<file_property_name>": [
+    {
+      "id": "{UUID}",
+      "checksum": "{SHA256-hash}"
+    }
+  ]
+}
+----
+
+//.Канонічний вигляд відповіді Дата Фабрики на запит отримання даних сутності з файловими вкладеннями
+.Canonical Data Factory response to the request to receive entity data with file attachments
+[source,json]
+----
+{
+  "<file_property_name>": [
+    {
+      "id": "{UUID}",
+      "checksum": "{SHA256-hash}"
+    }
+  ]
+}
+----
+
+//=== Загальна структура Ceph-об'єктів, які задіяні в обміні між "Lowcode" та "Дата Фабрикою"
+=== General structure of Ceph objects involved in the exchange between "Low-code" and "Data Factory"
+
+|===
+//|Назва атрибуту|Атрибут JSON-документа|Атрибут Ceph об'єкта|Значення
+|Attribute name |JSON document attribute |Ceph object attribute |Value
+
+//|Ключ Ceph-об'єкта
+|Ceph object key
+|
+|key
+//|Унікальний ідентифікатор Ceph-документу для збереження файла в області доступу поточного бізнес-процесу. Автоматично формується на базі згенерованого *id* згідно конвенції  _process/<processInstanceId>/<id>_
+|A unique Ceph document identifier for storing a file within the access zone of the current business process. Created automatically based on the generated *id* according to the _process/<processInstanceId>/<id>_ convention.
+
+//|Ідентифікатор цифрового документу
+|Digital document ID
+|id
+|UserMetaData.id
+//|Унікальний ідентифікатор файла, зформований з використанням генератора псевдо-випадкових чисел (_cad2e994-0e32-4a9f-9959-b420e20d4522_)
+//TODO: В дужках це приклад? Тоді варто додати for example, ...
+|A unique file ID generated using a pseudo-random number generator (_cad2e994-0e32-4a9f-9959-b420e20d4522_).
+
+|File name
+|name
+|UserMetaData.name
+|<File name>
+
+|Content type
+|type
+|Content-Type (UserMetaData.type)
+|application/pdf, image/png, image/jpeg
+
+|Size
+|size
+|Content-Length (UserMetaData.size)
+|<File size>
+
+|Document content
+|content
+|input
+|<File content>
+
+|Document hash
+|checksum
+|(UserMetaData.checksum)
+|Generated SHA256 file hash
+|===
+
+//== Сценарії взаємодії користувача з системою
+== User interaction scenarios
+
+//=== Завантаження цифрових документів
+=== Uploading digital documents
+
+//На даній діаграмі зображено сценарій внесення даних з файловими вкладеннями в рамках виконання задачі користувачем, обробка даних в рамках бізнес-процесу та використання їх для попереднього заповнення наступної задачі користувача.
+The following diagram demonstrates a scenario where data is provided with file attachments during a user task, processed by the business process, and used to pre-populate the next user task.
+
+[plantuml, file_upload, svg]
+----
+include::partial$architecture/registry/operational/bpms/file-upload.puml[]
+----
+
+//.Канонічний вигляд структури документа у тілі запиту на збереження даних форми через серверний додаток
+.Canonical document structure in the body of a request to save form data through a server application
+[source, json]
+----
+{
+  "data": {
+      "<file_property_name>": [
+        {
+          "id": "{UUID}",
+          "checksum": "{SHA256-hash}"
+        }
+      ]
+  }
+}
+----
+
+//.Опис формату збереження документів в Ceph у процесі обробки запиту на виконання задачі
+.Format of saving documents in Ceph when processing a task request
+[source, json]
+----
+{
+  "data": {
+      "<file_property_name>": [
+        {
+          "id": "{UUID}",
+          "checksum": "{SHA256-hash}"
+        }
+      ]
+  },
+  "x-access-token": "<X-Access-Token>"
+}
+----
+
+//=== Вивантаження цифрових документів
+=== Downloading digital documents
+
+//На даній діаграмі зображено сценарій отримання сутності з файловими вкладеннями, яка була попередньо збережена у Дата Фабриці та послідуюча її підготовка для відображення на UI-формі задачі користувача.
+The following diagram demonstrates a scenario of obtaining an entity with file attachments from the Data Factory and its subsequent preparation for display via the UI form of a user task.
+
+[plantuml, file_download, svg]
+----
+include::partial$architecture/registry/operational/bpms/file-download.puml[]
+----
+
+//.Канонічний вигляд відповіді серверного додатоку на запит отримання даних форми
+.Canonical response from a server application to the request to obtain form data
+[source, json]
+----
+{
+  "data": {
+      "<file_property_name>": [
+        {
+          "id": "{UUID}",
+          "checksum": "{SHA256-hash}"
+        }
+      ]
+  }
+}
+----
+
+//=== Підпис даних UI-форм з цифровими документами
+=== Signing UI form data with digital documents
+
+//На даній діаграмі зображено сценарій підпису даних з файловими вкладеннями в рамках виконання задачі користувачем, обробка даних в рамках бізнес-процесу та їх збереження в Дата Фабрику.
+The following diagram demonstrates a scenario of signing data with file attachments during a user task, processing data by the business process, and saving it to the Data Factory.
+
+[plantuml, file_signing, svg]
+----
+include::partial$architecture/registry/operational/bpms/file-signing.puml[]
+----
+
+//.Канонічний вигляд структури документа у тілі запиту на збереження підписаних даних форми через серверний додаток
+.Canonical document structure in the body of a request to save signed data through a server application
+[source, json]
+----
+{
+  "data": {
+      "<file_property_name>": [
+        {
+          "id": "{UUID}",
+          "checksum": "{SHA256-hash}"
+        }
+      ]
+  },
+  "signature": "<e-Signature>"
+}
+----
+
+//.Опис формату збереження документів з підписом в Ceph
+.Format of saving signed documents in Ceph
+[source, json]
+----
+{
+  "data": {
+      "passport_scans": [
+        {
+          "id": "{UUID}",
+          "checksum": "{SHA256-hash}"
+        }
+      ]
+  },
+  "x-access-token": "<X-Access-Token>",
+  "signature": "<e-Signature>"
+}
+----
+
+//== Моделювання UI-форм
+== UI forms modeling
+
+//=== Типова конфігурація поля типу "_File_" для налаштування адміністратором регламента
+//TODO: Maybe call it "Recommended" configuration?
+=== Typical configuration of the "File" type field for the regulations administrators
+
+|===
+//|Розділ меню|Назва налаштування|Значення|Опис
+|Menu section |Setting |Value |Description
+
+|Display
+|Label
+//|<На розсуд адміністратора>
+|<At the administrator's discretion>
+//|Текстовий опис поля для користувача
+|Field label for the user.
+
+|API
+|Property Name
+|<At the administrator's discretion>
+//|Назва поля у JSON-документі структури даних
+|The field name in the data structure JSON document.
+
+|File
+|Storage
+|URL
+//|Збереження контента завантаженого файла на сервері
+|Saving the content of the downloaded file on the server.
+
+|File
+|Url
+|/documents
+//|Адреса сервісу цифрових документів
+|Digital documents service address.
+
+|File
+|Display as Image(s)
+|false
+//|Відображення піктограм для зображень, замість табличного вигляду
+|Display icons for images instead of tabular view.
+
+|Data
+|Multiple Values
+|false
+//|Підтримка завантаження декількох файлів
+|Support for uploading multiple files.
+
+|File
+|File Pattern
+|application/pdf,image/jpeg,image/png
+//|Паттерн файлів, дозволених для завантаження
+|A pattern of files allowed for download.
+
+|File
+|File Maximum Size
+|<At the administrator's discretion>
+//|Максимальний розмір одного файлу
+|Maximum file size per file.
+|===
+
+//=== JSON-схема опису структури UI-форми з полем типу "File"
+=== JSON schema describing the structure of a UI form with a "File" type field
+
+[source, json]
+----
+{
+  "components": [
+    {
+      "label": "<file_property_label>",
+      "storage": "url",
+      "key": "<file_property_name>",
+      "type": "file",
+      "url": "/documents",
+      "input": true
+    }
+  ]
+}
+----
