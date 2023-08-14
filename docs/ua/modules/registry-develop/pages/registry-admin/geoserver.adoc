@@ -101,6 +101,7 @@ Contains more than one block.
 +
 [%interactive]
 * [ ] xref:#openapi[]
+* [ ] xref:#geoserver-rls[]
 
 [#geoserver-deployment]
 == Розгортання геомодуля
@@ -188,6 +189,11 @@ TIP: Детальніше про розгортання реєстру -- див
 В результаті GeoServer міститиме опубліковані сутності `entity_with_geo_type` та `get_entity_with_geo_type_not_equals_v`, до яких можна звертатися для відображення геоданих на UI-формах бізнес-процесу.
 
 Детальніше -- див. у розділі xref:#geoserver[].
+====
+
+[NOTE]
+====
+При використанні ієрархічної моделі доступу, налаштуйте RLS-правила для таблиць та критеріїв пошуку. Докладніше -- у розділі xref:#geoserver-rls[].
 ====
 
 [#bp-modeling]
@@ -748,6 +754,104 @@ https://registry-rest-api-<назва-реєстру>.apps.envone.dev.registry.e
 Обов'язково додавайте *`/openapi`* в кінець посилання, інакше ви потрапите до тестового середовища (пісочниці) Swagger.
 ====
 
+[#geoserver-rls]
+== Застосування правил ієрархічної моделі при роботі з геоданими
+
+=== Загальний опис
+
+Користувачі Платформи можуть доступатись до геоданих у реєстрі з урахуванням RLS-правил (Row-Level Security) та ієрархічних обмежень.
+При використанні правил ієрархічної моделі, користувачі матимуть доступ лише до географічних об'єктів того рівня ієрархії, який визначений JWT-атрибутом у токені доступу користувача.
+
+NOTE: RLS-правила та ієрархічна модель -- це додаткові опції доступу до геоданих. Їх застосування не є обов'язковим. Ви можете використовувати базову модель доступу.
+
+Основні принципи та положення: ::
+
+* RLS-фільтрація та доступ до геоданих: Геомодуль надає доступ до даних реєстру, враховуючи обмеження, встановлені RLS-правилами читання регламенту.
+
+* Конфігурація фільтрації: система автоматично налаштовує правила фільтрації на основі RLS-метаданих. Коли користувач робить запит до шару геоданих, система автоматично включає відповідний RLS-фільтр, заснований на атрибутах користувача. Атрибути передаються у JWT-токені.
+
+* Публікація регламенту: якщо реєстр розгорнуто із геомодулем, то під час публікації регламенту система автоматично генерує та застосовує необхідні RLS-правила для геомодуля. Якщо обмежень RLS немає, система автоматично видаляє будь-які наявні правила.
+
+[TIP]
+====
+Детальніше про ієрархічну модель доступу до даних та налаштування RLS-правил читайте на сторінці xref:registry-admin/hierarchical-model.adoc[].
+====
+
+=== Моделювання доступу та застосування RLS-правил
+
+Створення моделі даних реєстру із додаванням RLS-правил подібне до стандартного xref:#create-data-model[], лише потрібно додати changeset із RLS-правилом:
+
+. Створіть таблицю із типом `geometry`.
++
+._Приклад. Моделювання таблиці із типом geometry_
+[%collapsible]
+====
+[source,xml]
+----
+<changeSet id="table geometry type" author="registry owner">
+    <createTable tableName="entity_with_geo_type" ext:historyFlag="true" remarks="Сутність з геотипом">
+        <column name="entity_id" type="UUID" defaultValueComputed="uuid_generate_v4()">
+            <constraints nullable="false" primaryKey="true" primaryKeyName="pk_entity_id"/>
+        </column>
+        <column name="name" type="TEXT">
+            <constraints nullable="false"/>
+        </column>
+        <column name="address" type="TEXT">
+            <constraints nullable="false"/>
+        </column>
+        <column name="entity_location" type="geometry">
+            <constraints nullable="false"/>
+        </column>
+    </createTable>
+</changeSet>
+----
+====
+
+. Створіть таблицю-представлення
++
+[%collapsible]
+._Моделювання таблиці-представлення (Search Condition) із типом geometry_
+====
+[source,xml]
+----
+<changeSet author="registry owner" id="create SC get_entity_with_geo_type_not_equals">
+    <ext:createSearchCondition name="get_entity_with_geo_type_not_equals">
+        <ext:table name="entity_with_geo_type">
+            <ext:column name="entity_id"/>
+            <ext:column name="name" searchType="notEqual"/>
+            <ext:column name="address"/>
+            <ext:column name="entity_location"/>
+        </ext:table>
+    </ext:createSearchCondition>
+</changeSet>
+----
+====
+
+. Додайте правило до таблиці або представлення
++
+[%collapsible]
+._Додавання RLS-правила на читання геоданих із таблиці-представлення_
+====
+[source,xml]
+----
+<changeSet id="entity_with_geo_type_rls" author="registry owner">
+	<ext:rls name="entity_with_geo_type_read_rls">
+		<ext:addReadRule
+      name="entity_with_geo_type_read_rule"
+      jwtAttribute="hierarchy_code"
+      checkColumn="entity_location"
+      checkTable="get_entity_with_geo_type_not_equals_v"/>
+	</ext:rls>
+</changeSet>
+----
+====
++
+Атрибут `hierarchy_code` є сурогатним ключем для контролю ієрархічного доступу.
+Взяте з Keycloak, значення `hierarchy_code` включається до JWT-токена користувача.
++
+Завдяки цьому RLS-правилу, користувач побачить на мапі лише ті геопросторові об'єкти з колонки `entity_location`, до яких у нього є права на основі `hierarchy_code`.
+
 == Пов'язані сторінки
 
 * xref:registry-develop:bp-modeling/forms/components/map/map.adoc[]
+* xref:registry-develop:registry-admin/hierarchical-model.adoc[]
