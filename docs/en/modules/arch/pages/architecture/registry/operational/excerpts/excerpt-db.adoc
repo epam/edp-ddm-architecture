@@ -1,0 +1,178 @@
+= Excerpts operational database
+include::platform:ROOT:partial$templates/document-attributes/arch-set-en.adoc[]
+
+include::platform:ROOT:partial$admonitions/language-en.adoc[]
+
+//== Загальний опис
+== General overview
+
+//Призначенням бази даних `excerpt` є зберігання службових даних шаблонів витягів та статусу запитів на формування витягів.
+The purpose of the `excerpt` database is to store operational data of excerpt templates and the status of requests for generating excerpts.
+
+//== Схема бази даних
+== Database schema
+
+[plantuml, excerpt-schema, svg]
+----
+@startuml
+hide circle
+skinparam linetype ortho
+skinparam monochrome true
+
+entity "**excerpt_record**" {
+  + ""id"": //uuid [PK]//
+  --
+  ""status"": //text //
+  ""status_details"": //text //
+  ""keycloak_id"": //text //
+  ""checksum"": //text //
+  ""excerpt_key"": //text //
+  *""created_at"": //timestamp with time zone //
+  *""updated_at"": //timestamp with time zone //
+  ""signature_required"": //boolean //
+  ""x_source_system"": //text //
+  ""x_source_application"": //text //
+  ""x_source_business_process"": //text //
+  ""x_source_business_activity"": //text //
+  ""x_digital_signature"": //text //
+  ""x_digital_signature_derived"": //text //
+  *""excerpt_type"": //text //
+}
+
+entity "**excerpt_template**" {
+  + ""id"": //uuid [PK]//
+  --
+  *""template_name"": //text //
+  *""template"": //text //
+  *""created_at"": //timestamp with time zone //
+  *""updated_at"": //timestamp with time zone //
+  *""checksum"": //text //
+  *""template_type"": //text //
+}
+@enduml
+----
+//.Умовні позначення
+.Notation Key
+[%collapsible]
+====
+include::partial$architecture-workspace/documentation-templates/component-design-template/db-schema-legend.adoc[]
+====
+
+//== Структури даних
+== Data structures
+
+=== excerpt_record
+//Записи генерації витягів та статусу
+Records of excerpt generation and status
+
+[options="header",cols="a"]
+|======
+//Опис
+|Column name +
+description
+| `*id* _uuid_ *(PK)*` + 
+//Ідентифікатор рядка
+Row identifier
+| `status _text_` + 
+//Статус генерації витягу
+Excerpt generation status
+
+//* 0 - Виконується
+//* 1 - Помилка
+//* 2 - Завершено
+* 0 - In progress
+* 1 - Error
+* 2 - Completed
+| `status_details _text_` + 
+//Деталі у разі помилки
+Details in case of an error
+| `keycloak_id _text_` + 
+//Ідентифікатор користувача який ініціював витяг
+Identifier of the user who initiated the excerpt
+| `checksum _text_` + 
+//Контрольна сума витягу
+Excerpt checksum
+| `excerpt_key _text_` + 
+//Ключ документу витягу у CEPH
+Document key for the excerpt in CEPH
+| `*created_at* _timestamp with time zone_` + 
+//Час створення запиту
+Time of request creation
+| `*updated_at* _timestamp with time zone_` + 
+//Час оновлення запиту
+Time of request update
+| `signature_required _boolean_` + 
+//Необхідність накладання системного підпису для заданого типу звіту
+Necessity of applying a system signature for the given report type
+| `x_source_system _text_` + 
+//Назви підсистеми, яка виконує запит
+Name of the subsystem executing the request
+| `x_source_application _text_` + 
+//Назва компоненти підсистеми, яка ініціює запит
+Name of the subsystem component initiating the request
+| `x_source_business_process _text_` + 
+//Назва бізнес-процесу, яку визначив адміністратор регламенту при моделюванні
+Name of the business process defined by the regulation administrator during modeling
+| `x_source_business_activity _text_` + 
+//Назва сервісної задачі, яку визначив адміністратор регламенту при моделюванні
+Name of the service task defined by the regulation administrator during modeling
+| `x_digital_signature _text_` + 
+//Посилання на Ceph документ, в якому збережено оригінальний запит користувача та підпис
+Link to the Ceph document storing the original user request and signature
+| `x_digital_signature_derived _text_` + 
+//Посилання на Ceph документ в якому зберігається системний підпис, який автоматично накладено на тіло запиту
+Link to the Ceph document storing the system signature automatically applied to the request body
+
+| `*excerpt_type* _text_` + 
+//Тип витягу, який необхідно згенерувати в рамках бізнес-процесу
+Type of excerpt to be generated within the business process
+
+* csv
+* pdf
+* docx
+
+|======
+
+=== excerpt_template
+//Шаблони витягів. Таблиця заповнюється на етапі розгортання регламенту, у разі співпадіння імен та не співпадіння контрольної суми оновлюється тіло шаблону.
+Excerpt templates. This table is populated during regulations deployment, and the template body is updated if names match and checksums do not.
+
+[options="header",cols="a"]
+|======
+//|Ім'я колонки +
+//Опис
+|Column name +
+Description
+| `*id* _uuid_ *(PK)*` + 
+//Ідентифікатор рядка
+Row identifier
+| `*template_name* _text_` + 
+//Ім'я шаблону. Є унікальним.
+Template name. It is a unique value.
+| `*template* _text_` + 
+//Зміст шаблону
+Template content
+| `*created_at* _timestamp with time zone_` + 
+//Час створення шаблону
+Time of template creation
+| `*updated_at* _timestamp with time zone_` + 
+//Час оновлення шаблону
+Time of template update
+| `*checksum* _text_` + 
+//Контрольна сума шаблону
+Template checksum
+| `*template_type* _text_` + 
+//Формат витягу
+Excerpt format
+
+* csv
+* pdf
+* docx
+
+|======
+[options="header",cols="a"]
+|======
+//|Обмеження унікальності
+|Uniqueness constraint
+|`template_name`
+|======

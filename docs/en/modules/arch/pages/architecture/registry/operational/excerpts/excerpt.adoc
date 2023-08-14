@@ -1,0 +1,97 @@
+= Generating excerpts
+include::platform:ROOT:partial$templates/document-attributes/arch-set-en.adoc[]
+
+include::platform:ROOT:partial$admonitions/language-en.adoc[]
+
+== Context
+
+image::architecture/registry/operational/excerpts/excerpt-context.drawio.svg[]
+
+== Data structures
+
+=== Database structures
+
+//*excerpt_template* - таблиця заповнюється шаблонами витягів на етапі розгортання регламенту, у разі співпадіння імен та не співпадіння контрольної суми  оновлюється тіло шаблону. +
+*excerpt_template* -- a table populated with excerpt templates during regulations deployment, where the template body is updated in case of name matches and checksum mismatches. +
+//*excerpt_record* - таблиця записів генерації витягів та статусу. +
+*excerpt_record* -- a table containing records of excerpt generation and status. +
+
+[plantuml]
+----
+@startuml Data structure
+skinparam Monochrome true
+
+
+map "excerpt_template" as templates {
+    id => [UUID] request id
+    template_name => [String] template name
+    template => [String] template text
+    creted_at => [Timestamp] request created
+    updated_at => [Timestamp] request updated
+    checksum => [String] checksum of the excerpt template
+
+}
+
+map "excerpt_record" as record {
+    id => [UUID] request id
+    status => [String] status of the excerpt generation
+    status_details => [String] Details in case of error
+    keycloak_id => [String] user id
+    checksum => [String] excerpt checsum
+    excerpt_key => [String] Ceph key
+    created_at => [Timestamp] request created
+    updated_at => [Timestamp] request updated
+    signature_required => [Boolean] does system signature need to be applied
+    x-source-system  => [String] header values
+    x-source-application => [String] header values
+    x-source-business-process => [String] header values
+    x-source-business-activity => [String] header values
+}
+@enduml
+----
+//=== Користувачі БД
+=== Database users
+
+//*excerpt_service_user* - має право на створення записів у таблиці excerpt_record. +
+*excerpt_service_user* -- authorized to create records in the excerpt_record table. +
+//*excerpt_worker_user* - право на оновлення та вибірку записів в таблиці excerpt_record. +
+*excerpt_worker_user* -- authorized for updating and querying records in the excerpt_record table.
+
+//=== Структура події генерації витягу
+=== Generation event structure
+[plantuml]
+----
+@startuml Data structure
+skinparam Monochrome true
+
+map "Event" as event {
+    record_id => [UUID] request id
+    excerpt_data => [json] Data used for populating excerpts
+    excerpt_name => [String] template name
+}
+@enduml
+----
+//== Сервіси
+== Services
+=== Excerpt Service
+//Надає інтерфейси має три основні ендпоінти для взаємодії:
+Provides interfaces and has three main endpoints for interaction:
+
+//*Доступні з бізнес процесів*
+*Accessible from business processes:*
+
+//- запис на створення витягу
+//- перевірка статусу витягу
+- Creation a record for excerpt generation
+- Performing excerpt status check
+
+//*Доступні ззовні через Kong*
+*Accessible externally through Kong*
+
+//- отримання витягу по ідентифікатору
+- Retrieval of an excerpt by identifier
+
+=== Excerpt Worker
+
+//Java додаток який забезпечує  Exactly-Once обробку подій на генерацію витягів та зберігання їх в Ceph бакет.
+A Java application ensuring Exactly-Once event processing for excerpt generation and storing them in the Ceph bucket.
