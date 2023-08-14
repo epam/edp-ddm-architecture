@@ -1,0 +1,68 @@
+= Viewing data history
+include::platform:ROOT:partial$templates/document-attributes/arch-set-en.adoc[]
+
+include::platform:ROOT:partial$admonitions/language-en.adoc[]
+
+== General description
+
+//*Перегляд історичності даних* - механізм для перегляду еволюції даних та їх походження, що також може слугувати для виявлення помилок або втручань в цілісність даних.
+*Viewing data history* is a mechanism for observing the evolution and origins of data, which can also serve for error detection or identifying intrusions into data integrity.
+
+== General workflow
+
+image::architecture/registry/operational/excerpts/history-pipeline.svg[]
+
+== Кроки для K8s Job
+[plantuml, job_flow, svg]
+----
+@startuml
+skinparam monochrome true
+participant "Jenkins" as jenkins
+control "Job" as job
+database "Analytical DB" as db
+participant "Digital Signature (Qualified Electronic Signature)" as sign
+participant "Ceph" as ceph
+participant "Excerpts service" as service
+== Retrieving data ==
+jenkins -> job: table name \nand record identifier
+job -> db: request to the history table
+return historical data
+== Data enrochment ==
+loop for each record
+    job -> ceph:  obtaining digital signature \nfor record
+    return digital signature
+    job -> sign: obtaining info for signing
+    return taxpayer id number, full name
+end
+== Excerpt request ==
+job -> job: making a request \nfor excerpt generation
+job -> sign: applying digital signature
+return
+job -> service: request for generating an excerpt
+return excerpt id
+== Awaiting status change ==
+job -> job: quering for an excerpt status
+loop
+job -> service: status check
+return request status
+end
+== Resource update ==
+job -> job: Adding annotation to Job resource
+@enduml
+----
+
+//== Процес збирання даних
+== Data collection process
+
+//* Історичні дані можливо отримати в рамках однієї таблиці для конкретного первинного ідентифікатора.
+//* Запити виконуються під окремим користувачем аналітичної бази даних
+//* Пошук відбувається в рамках тільки поточної версії регламенту
+* Historical data can be obtained within a single table for a specific primary identifier.
+* Queries are executed under a separate user of the analytical database.
+* Search is conducted only within the current version of the regulations.
+
+//== Шаблон
+== Template
+
+//Шаблон завантажується разом з регламентом, рекомендований шаблон `ddm-history-excerpt` може бути стилізований та доповнений моделювальником
+The template is loaded together with the regulation. The recommended `ddm-history-excerpt` template can be customized and enhanced by the modeler.
