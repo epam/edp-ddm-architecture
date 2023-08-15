@@ -1,0 +1,333 @@
+= Перевірка цілісності запиту на внесення змін до регламенту реєстру
+
+== Загальний опис
+Складові xref:architecture/registry/administrative/regulation-management/registry-regulation/registry-regulation.adoc[Цифрового регламенту реєстру] мають внутрішні зв'язки між собою, які в поточній реалізації
+перевіряються частково. В рамках впровадження перевірки цілісності запит необхідно розширити правила валідації регламенту
+реєстру на перевірку такого роду зв'язків при внесенні змін.
+
+== Концепти
+* _Цілісний запит на внесення змін_ - запит на зміни, після якого складові регламенту реєстру будуть мати валідні
+зв'язки між собою
+
+NOTE: Наприклад, при використанні делегату в бізнес-процесі на створення сутності можна виконати перевірку на існування
+відповідної таблиці в дата-моделі. Якщо такої таблиці не існує, то запит на внесення змін вважається не цілісним і не
+може бути внесений
+
+
+== Функціональні сценарії
+* Моделювання бізнес-процесів з використанням делегатів
+* Моделювання форм з використанням критеріїв пошуку
+* Налаштування правил доступу до бізнес-процесів
+* Групування бізнес-процесів
+* Виставлення бізнес-процесів через Трембіту
+* Моделювання звітів
+
+== Ролі користувачів
+* Розробник регламенту
+
+== Загальні принципи та положення
+* Перевірка цілісності запиту проходить за загальними принципами валідації регламенту реєстру на _Пайплайні публікації регламенту_ та _Пайплайні перевірки регламенту_
+* Перевірка цілісності запиту повинна виконуватися за допомогою утиліти _registry-regulations-validator-cli_
+* При наявності помилок перевірки цілісності запиту, _Пайплайн перевірки регламенту_ повинен викидати помилку з повідомленням, яке є достатнім для розуміння помилки
+* Для опису правил внутрішніх зв'язків в делегатах бізнес-процесів розширюється стандарний механізм _element templates_
+* При використанні експрешенів як вхідних параметрів в делегаті, які повинні пройти перевірку на існування відповідних
+ресурсів, пайплайн перевірки повинен мати статус WARNING з повідомленням про те, що перевірка не може бути виконана для
+відповідного делегату у відповідного бізнес-процесу
+* Перевірка цілісності в рамках _data-model_ модуля проходить на етапі збірки дата-моделі (існуюча поведінка)
+* При перевірці залежностей на складові дата-моделі враховується наявність тегів, які можуть видаляти сутність
+(drop search condition)
+
+== Високорівневий дизайн рішення
+
+=== Попередній аналіз
+.Зв'язки між складовими регламенту реєстру
+|===
+|Module |Dependency |Entity.Property |Notes
+
+|bp-auth
+|roles
+|role.name
+|
+
+|bp-auth
+|bpmn
+|process.id
+|Implemented
+
+|bp-grouping
+|bpmn
+|process.id
+|
+
+|bp-trembita
+|bpmn
+|process.id
+|
+
+|forms
+|data-model
+|search-condition.rest-api-name
+|
+
+|reports
+|roles
+|role.name
+|
+
+|reports
+|data-model
+|analytic-view.name
+|Out of scope
+|===
+
+NOTE: Валідація виконується стандартним механізмом і розширюється додатковими правилами в утіліті
+_registry-regulations-validator-cli_
+
+.Залежності для делегатів бізнес-процесів
+|===
+|Delegate |Dependency |Entity.Property |Notes
+
+|Add role to keycloak user
+|roles
+|role.name
+|
+
+|Batch creation of entities in data factory
+|data-model
+|table.rest-api-name
+|
+
+|Batch creation of entities in data factory v2
+|data-model
+|table.rest-api-name
+|
+
+|Batch read entities from data factory
+|data-model
+|table.rest-api-name
+|
+
+|Create entity in data factory
+|data-model
+|table.rest-api-name
+|
+
+|Delete entity in data factory
+|data-model
+|table.rest-api-name
+|
+
+|Create nested entities in data factory
+|data-model
+|composite-entity.rest-api-name
+|
+
+|Update entity in data factory
+|data-model
+|table.rest-api-name
+|
+
+|Update entity in data factory partially
+|data-model
+|partial-update.rest-api-name
+|
+
+|Read entity from data factory
+|data-model
+|table.rest-api-name
+|
+
+|Search for entities in data factory
+|data-model
+|search-condition.rest-api-name
+|
+
+|Generate excerpt
+|excerpts
+|excerpt.name
+|
+
+|Connect to external system
+|bp-trembita
+|external-system.name, external-system.operation.name
+|
+
+|Get users by role from keycloak
+|roles
+|role.name
+|
+
+|Remove role from keycloak user
+|roles
+|role.name
+|
+
+|Send User Notification V2
+|notification
+|notification.template.name
+|
+
+|Citizen Sign Task
+|forms
+|form.name
+|
+
+|Officer Sign Task
+|forms
+|form.name
+|
+
+|User form
+|forms
+|form.name
+|
+
+|Call Activity
+|bpmn
+|process.id
+|
+
+|Business rule task
+|dmn
+|decision.reference
+|Out of scope
+
+|===
+
+.Залежності для juel-функцій бізнес-процесів
+|===
+|Delegate |Dependency |Entity.Property
+
+|completer(String taskDefinitionKey)
+|bpmn
+|process.user-task.id
+
+|message_payload(String bpmnElementId)
+|bpmn
+|process.element.id
+
+|sign_submission(String bpmnElementId)
+|bpmn
+|process.sign-task.id
+
+|submission(String bpmnElementId)
+|bpmn
+|process.sign-task.id
+
+
+|===
+
+=== Високорівневий дизайн рішення
+
+==== Перевірка цілісності при використанні делегатів бізнес-процесів
+
+Для можливості перевірки шаблонних елементів бізнес-процесів необхідно розширити стандартний механізм _element templates_
+для вказання типу поля який в собі буде містить залежність на інший складовий регламенту реєстру.
+
+.Приклад опису шаблонного елемента бізнес-процесу
+====
+[source,json]
+----
+{
+  "name": "Create entity in data factory",
+  "properties": [
+    {
+      "label": "Resource",
+      "description": "Resource type",
+      "type": "String",
+      "binding": {
+        "type": "camunda:inputParameter",
+        "name": "resource"
+      },
+      "constraints": {
+        "notEmpty": true,
+        "type": "table.rest-api-name"
+      }
+    }
+...
+}
+
+----
+====
+
+.Приклад опису змодельованої сервісної задачі з використанням шаблонного елемента
+====
+[source,xml]
+----
+    <bpmn:serviceTask id="Activity_0ng025n" camunda:modelerTemplate="dataFactoryConnectorCreateDelegate" camunda:delegateExpression="${dataFactoryConnectorCreateDelegate}">
+      <bpmn:extensionElements>
+        <camunda:inputOutput>
+          <camunda:inputParameter name="x_digital_signature_ceph_key" />
+          <camunda:inputParameter name="x_digital_signature_derived_ceph_key" />
+          <camunda:inputParameter name="resource">vip-resource</camunda:inputParameter> // Should be validated
+          <camunda:inputParameter name="payload">${some}</camunda:inputParameter>
+          <camunda:inputParameter name="x_access_token">${seom}</camunda:inputParameter>
+          <camunda:outputParameter name="response">${ response }</camunda:outputParameter>
+        </camunda:inputOutput>
+      </bpmn:extensionElements>
+    </bpmn:serviceTask>
+----
+====
+
+
+В рамках роботи утіліти registry-regulations-validator-cli буде проходити перевірка відповідного поля
+в сервісній задачі на наявність відповідної залежного ресурсу в регламенті реєстру
+
+
+NOTE: Зчитування element-templates в рамках валідації в утіліті registry-regulations-validator-cli реалізовано
+в рамках епіку Валідація на перевірку пустих обов'язкових полів на рівні шаблонів елементів в бізнес-процесі
+
+
+==== Перевірка цілісності при моделюванні форм з критеріями пошуку
+
+.Валідація критеріїв пошуку при інтеграції в компоненті select
+[plantuml, integrity-form-validation, svg]
+----
+@startuml
+start
+:CLI received the list of form files to validate;
+repeat
+
+  :get next form file to validate;
+  group form file validation
+  repeat
+    :get next component to validate;
+    group form component validation
+
+    if (component.type == selectLatest?) then (yes)
+        if (component.dataSrc == url?) then (yes)
+            if (component.data.url starts with /officer/api/data-factory?) then (yes)
+                :trim resource name from url;
+                :find search condition by resource name;
+                if (search condition is not found) then (yes)
+                    :report error;
+                endif
+            endif
+        endif
+    endif
+
+    endgroup
+  repeat while (more components to validate) is (yes)
+  -> no;
+  endgroup
+repeat while (more form files to validate) is (yes)
+-> no;
+
+stop
+@enduml
+----
+
+==== Перевірка цілісності при використанні juel функцій в бізнес-процесах
+
+* Визначення juel функцій відбувається повнотекстовим пошуком по всьому bpmn файлу
+* Якщо в juel функцію передане строкове значення, то проходить перевірка на наявність відповідного ідентифікатора
+* При передачі в juel функцію змінної, валідація не відбувається, папйлайн помічається статусом WARNING з описом можливої
+проблеми
+
+=== Поза скоупом
+* Перевірка зв'язків при інтеграції з зовнішніми реєстрами (існування відповідного бізнес-процесу, сутності тощо)
+* Перевірка на цілісність при налаштуванні сервісів емуляції
+
+== Обмеження рішення
+* При наявності в тексті bpmn файлу слів, які повністю співпадають з назвою juel функції може відбуватися зайва перевірка.
+Наприклад, закоментована частина коду, яка містить слово "completer('sss')" буде помічена як juel функція, хоча це не так.
