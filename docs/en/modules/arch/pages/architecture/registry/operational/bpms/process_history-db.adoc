@@ -1,0 +1,159 @@
+//= Операційна БД історичних даних бізнес-процесів
+= Business processes historical data operational database
+
+include::platform:ROOT:partial$templates/document-attributes/arch-set-en.adoc[]
+
+include::platform:ROOT:partial$admonitions/language-en.adoc[]
+
+== Overview
+
+//Призначенням бази даних `process_history` є довгострокове зберігання історії виконання екземплярів бізнес-процесів та задач користувачів.
+The `process_history` database provides long-term storage for the execution history of business process instances and user tasks.
+
+== Database schema
+
+[plantuml, process_history-schema, svg]
+----
+@startuml
+hide circle
+skinparam linetype ortho
+skinparam monochrome true
+
+entity "**bpm_history_process**" {
+  + ""process_instance_id"": //text [PK]//
+  --
+  ""super_process_instance_id"": //text //
+  *""process_definition_id"": //text //
+  *""process_definition_key"": //text //
+  ""process_definition_name"": //text //
+  ""business_key"": //text //
+  *""start_time"": //timestamp without time zone //
+  ""end_time"": //timestamp without time zone //
+  ""start_user_id"": //text //
+  *""state"": //text //
+  ""excerpt_id"": //text //
+  ""completion_result"": //text //
+}
+
+entity "**bpm_history_task**" {
+  + ""activity_instance_id"": //text [PK]//
+  --
+  *""task_definition_key"": //text //
+  ""task_definition_name"": //text //
+  *""process_instance_id"": //text //
+  *""process_definition_id"": //text //
+  *""process_definition_key"": //text //
+  ""process_definition_name"": //text //
+  *""root_process_instance_id"": //text //
+  *""start_time"": //timestamp without time zone //
+  ""end_time"": //timestamp without time zone //
+  ""assignee"": //text //
+}
+@enduml
+----
+//.Умовні позначення
+.Legend
+[%collapsible]
+====
+include::partial$architecture-workspace/documentation-templates/component-design-template/db-schema-legend.adoc[]
+====
+
+//Відношення/зв'язок між таблицями не встановлено навмисно, оскільки в результаті денормалізації вони містять весь необхідний набір атрибутів для обслуговування історичних запитів та наповнюються даними незалежно одна від одної.
+A table relationship is not established intentionally because, as a result of denormalization, they contain the entire set of attributes necessary for serving historical queries and are filled with data independently of each other.
+
+//== Структури даних
+== Data structures
+
+=== bpm_history_process
+
+//Історичні дані бізнес-процесів
+Provides storage for business processes history.
+
+[options="header",cols="a"]
+|======
+|Column name +
+Description
+| `*process_instance_id* _text_ *(PK)*` + 
+//Ідентифікатор екземпляру бізнес-процесу.
+Business process instance ID.
+| `super_process_instance_id _text_` + 
+//Ідентифікатор батьківського екземпляру бізнес-процесу.
+Business process parent instance ID.
+| `*process_definition_id* _text_` + 
+//Ідентифікатор поточної версії бізнес-процесу.
+Business process current version ID.
+| `*process_definition_key* _text_` + 
+//Унікальний ідентифікатор для всіх версій бізнес-процесу
+A unique ID for all versions of a business process.
+| `process_definition_name _text_` + 
+//Назва бізнес-процесу
+Business process name.
+| `business_key _text_` + 
+//Специфічний для домену ідентифікатор екземпляра процесу
+Domain-specific process instance ID.
+| `*start_time* _timestamp without time zone_` + 
+//Час початку бізнес-процесу
+Business process start time.
+| `end_time _timestamp without time zone_` + 
+//Час завершення бізнес-процесу
+Business process end time.
+| `start_user_id _text_` + 
+//Ідентифікатор користувача що почав бізнес-процес
+The ID of the user who initiated the business process.
+| `*state* _text_` + 
+//Стан бізнес-процесу
+Business process state.
+
+* ACTIVE
+* COMPLETED
+| `excerpt_id _text_` + 
+//Ідентифікатор витягу для бізнес-процесів що формують витяги
+Excerpt ID for business processes that generate excerpts.
+| `completion_result _text_` + 
+//Текстове повідомлення з інформацією про результат виконання бізнес-процесу
+A text message with business process execution result.
+|======
+
+=== bpm_history_task
+
+//Історичні дані задач
+Provides storage for tasks history.
+
+[options="header",cols="a"]
+|======
+|Column name +
+Description
+| `*activity_instance_id* _text_ *(PK)*` + 
+//Ідентифікатор рядка
+Row ID.
+| `*task_definition_key* _text_` + 
+//Унікальний ідентифікатор задачі
+Unique task ID.
+| `task_definition_name _text_` + 
+//Ім'я задачі
+Task name.
+| `*process_instance_id* _text_` + 
+//Ідентифікатор екземпляру бізнес-процесу якому належить задача
+The ID of the business process instance to which the task belongs.
+| `*process_definition_id* _text_` + 
+//Ідентифікатор поточної версії бізнес-процесу
+Business process current version ID.
+| `*process_definition_key* _text_` + 
+//Унікальний ідентифікатор для всіх версій бізнес-процесу
+A unique ID for all versions of a business process.
+| `process_definition_name _text_` + 
+//Назва бізнес-процесу
+Business process name.
+| `*root_process_instance_id* _text_` + 
+//Ідентифікатор кореневого екземпляру бізнес-процесу
+Business process root instance ID.
+| `*start_time* _timestamp without time zone_` + 
+//Час створення екземпляра задачі, з якого вона стала доступною до виконання
+The time the task instance was created and became available for execution.
+| `end_time _timestamp without time zone_` + 
+//Час завершення задачі
+Task end time.
+| `assignee _text_` + 
+//Ідентифікатор користувача якому була призначена задача
+ID of the user to whom the task was assigned.
+|======
