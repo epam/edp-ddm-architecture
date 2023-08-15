@@ -21,7 +21,7 @@ skinparam sequence {
 
 skinparam responseMessageBelowArrow true
 
-actor "Розробник\n регламенту" as Dev
+actor "Registry\n developer" as Dev
 
 participant "Registry Regulation\nManagement" as rrm
 participant "Gerrit" as gerrit
@@ -30,37 +30,37 @@ database "Template\nDB Schema" as TemplateDB
 database "Registry dev VC\nDB Schema" as VCTemplateDB
 participant "run-db-scripts" as OkdJob
 
-OkdJob -> TemplateDB ** : Створює та розгортає
+OkdJob -> TemplateDB ** : Creates and deploys
 
-Dev -> rrm: Створює версію-кандидат
-  rrm -> gerrit: Створює MR
+Dev -> rrm: Creates candidate version
+  rrm -> gerrit: Creates MR
   gerrit --> rrm: result
-rrm --> Dev: версія-кандидат
+rrm --> Dev: candidate version
 
-gerrit -> jenkins: запуск пайплайну перевірки регламенту
+gerrit -> jenkins: run regulations verification pipeline
 
-  group "Створення тимчасової БД"
-    jenkins -> TemplateDB: отримує еталонну БДc
+  group "Creating temporary DB"
+    jenkins -> TemplateDB: gets the reference DB
     jenkins <-- TemplateDB: result
-    jenkins -> VCTemplateDB ** : Створює тимчасову схему БД
+    jenkins -> VCTemplateDB ** : Creates temporary DB scheme
     jenkins <-- VCTemplateDB: result
   end group
 
-  group "Розгортання тимчасової БД моделлю даних регламенту реєстру"
-    jenkins -> VCTemplateDB: Розгортання моделі даних по liquibase changelog's майстер версії
+  group "Deployment of a temporary database by the registry regulation data model"
+    jenkins -> VCTemplateDB: Deploying the data model according to liquibase changelog's master version
     jenkins <-- VCTemplateDB: result
-    jenkins -> VCTemplateDB: Розгортання моделі даних по liquibase changelog's версії-кандидату
+    jenkins -> VCTemplateDB: Deploying the data model according to liquibase changelog's candidate version
     jenkins <-- VCTemplateDB: result
   end group
 
-jenkins --> gerrit: публікація результату розгортання (Verified +1)
+jenkins --> gerrit: publishing the deployment result (Verified +1)
 
-Dev -> rrm: Отримує перелік таблиць моделі даних
-  rrm -> gerrit: зчитує стан розгортання регламенту
+Dev -> rrm: Gets the list of the data model tables
+  rrm -> gerrit: reads the regulations deployment status
   rrm <-- gerrit: result
 
-  rrm -> VCTemplateDB: Зчитування структури\nтимчасової БД
+  rrm -> VCTemplateDB: Reading the structure of\nthe temporary DB
   VCTemplateDB --> rrm: result
-rrm --> Dev: перелік таблиць
+rrm --> Dev: the list of tables
 
 @enduml
