@@ -1,0 +1,272 @@
+= Editing registry data model table structure in the web code editor
+include::platform:ROOT:partial$templates/document-attributes/arch-set-en.adoc[]
+
+include::platform:ROOT:partial$admonitions/language-en.adoc[]
+
+== Abstract
+//== Загальний опис
+Development of the registry regulations includes the development of a registry data model. The administrative portal provides functionality for viewing the registry data model. It is necessary to provide the ability to edit the data model of the registry regulations.
+//Розробка регламенту реєстру включає в себе розробку моделі даних реєстру. Адміністративний портал надає функціонал по перегляду моделі даних реєстру. Необхідно забезпечити можливість редагування моделі даних регламенту реєстру.
+
+== Problem description
+//== Опис проблеми
+The admin portal can view the status of the registry regulations data model. The existing approach involves committing changes to Gerrit to the corresponding MR candidate version while developing the registry regulations data model.
+
+== Actors
+//== Актори
+- Registry regulations developer
+//- Розробник регламенту реєстру
+
+== Glossary
+//== Глосарій
+- LS: language server
+
+== Functional scenarios
+//== Функціональні сценарії
+- Changing the data structure in the registry regulations data model.
+//- Зміна структури даних в моделі даних регламенту реєстру
+- Saving the changes made to the candidate version of the registry regulations.
+//- Збереження внесених змін в версію-кандидат регламенту реєстру
+- Viewing error notifications in the edit window of the registry regulations data model table structure.
+//- Перегляд сповіщень про помилки у вікні редагування структури таблиць моделі даних регламенту реєстру
+- Auto-prompts and auto-updates when editing liquibase changelog xml.
+//- Автопідказки та автодоповнення при редагуванні liquibase changelog xml
+- Checking liquibase configuration according to liquibase and DDM xsd.
+//- Перевірка liquibase конфігурації згідно з liquibase та DDM xsd
+
+== Design of the existing solution
+//== Дизайн існуючого рішення
+
+=== Reviewing and editing the data model
+//=== Перегляд та редагування моделі даних
+image::architecture/registry/administrative/regulation-management/admin-portal/data-model/edit-data-model-version-candidate/data-model-edit-current-design.svg[]
+
+=== Interacting with Language Server
+//=== Взаємодія з Language Server
+image::architecture/registry/administrative/regulation-management/admin-portal/data-model/edit-data-model-version-candidate/ls-current-design.svg[]
+
+
+=== General principles
+//=== Загальні принципи
+- Changes to the data model of the registry regulations are made by making changes directly to Gerrit.
+//- Внесення змін в модель даних регламенту реєстру відбувається шляхом внесення змін безпосередньо в Gerrit
+- The source file for data model deployment is `data-model/main-liquibase.xml`.
+//- Початковий файл для розгортання моделі даних є `data-model/main-liquibase.xml`
+- The structure of files on the file system is not clearly regulated. `Liquibase changeset's` with instructions for creating data model tables can technically be found in any file in the file system.
+//- Структура файлів на файловій системі чітко не регламентована. `Liquibase changeset's` з інструкціями для створення таблиць моделі даних технічно може знаходитись в будь-якому файлі на файловій системі
+- ddm-language-server only supports the Groovy language.
+//- ddm-language-server підтримує лише Groovy мову
+
+== Solution technical design
+//== Технічний дизайн рішення
+
+image::architecture/registry/administrative/regulation-management/admin-portal/data-model/edit-data-model-version-candidate/edit-data-model-target-design.svg[]
+
+=== General principles
+//=== Загальні принципи
+
+- The data structure of the data model is only edited in the createTables.xml file.
+//- Редагування структури даних дата моделі відбувається тільки в createTables.xml файлі.
+- registry-regulation-management receives and modifies createTables.xml using corresponding RestAPI methods.
+//- registry-regulation-management отримує та змінює createTables.xml через RestAPI відповідні методи.
+- Language Server supports Groovy and XML.
+//- Language Server підтримує Groovy та XML.
+- In the list of statuses of the candidate version components, the change in the database structure is displayed as a single item without a list of detailed changes for each data model table.
+//- В переліку стану складових версії-кандидату зміна структури БД відображається єдиним пунктом без переліку детальних змін по кожній із таблиць моделі даних.
+
+=== Changing the registry regulations data model description contract
+//=== Зміна контракту опису дата моделі регламентур реєстру
+
+To ensure that the structure of the data model tables of the registry regulations is edited, it is necessary to change the approach to organizing the structure of liquibase configuration files as follows:
+//Для забезпечення редагування структури таблиць моделі даних регламенту реєстру необхідно змінити підхід по організації структури liquibase файлів конфігурації наступним чином:
+
+- All operations on creation or changing the structure of database tables must be stored in the `data-model/createTables.xml` file.
+//- Всі операції по створенню або зміні структури таблиць БД необхідно тримати в файлі `data-model/createTables.xml`
+- `data-model/createTables.xml` must be explicitly included in the list of files for deployment in the `data-model/main-liquibase.xml` configuration.
+//- `data-model/createTables.xml` повинен бути явно включений до переліку файлів для розгортання в `data-model/main-liquibase.xml` конфігурацію
+
+==== Migration of existing registries
+//==== Міграція існуючих реєстрів
+
+To ensure the compatibility of the registry regulations file structure, it is necessary to verify the above rules, and change the file structure (*without changing the liquibase changeset content*), if necessary.
+//Для забезпечення сумісності структури фалів регламенту реєстру необхідно переконатися в вищенаведених правилах та провести зміну структури файлів (*без зміни liquibase changeset контенту*) в разі необхідності.
+
+[CAUTION]
+If createTables.xml is not available, the admin portal does not provide the ability to edit the liquibase configuration using the Web-UI. The performance of the existing configuration of the registry regulations does not change in any way.
+//При відсутності createTables.xml адмін-портал не надасть можливість редагування liquibase конфігурації використовуючи Web-ui. Працездатність існуючої конфігурації регламенту реєстру при цьому не ніяк зміниться.
+
+=== Distribution of perspectives for editing and viewing the data model
+//=== Розподіл перспектив редагування і перегляду моделі даних
+To edit the registry regulations data model, you have to create a new editing perspective.
+//Для редагування моделі даних регламенту реєстру необхідно створити нову перспективу редагування.
+All operations associated with viewing the state of the data model (present and future) are allocated in the view perspective.
+//Всі операції, пов'язані з переглядом стану моделі даних (наявні та майбутні) виокремлюються в перспективу перегляду
+
+[NOTE]
+TODO: add screenshots when will be ready
+
+=== Sequence diagram
+//=== Діаграма послідовності
+
+[plantuml, edit-data-model edit-data-model-tables-sequence, svg]
+----
+include::partial$architecture/registry/administrative/regulation-management/admin-portal/data-model-version-candidates/edit-data-model-tables-sequence.puml[]
+----
+
+=== Deployment of XML LS
+//=== Розгортання XML LS
+
+- To deploy XML Language Server, use the https://github.com/eclipse/lemminx[lemminx language server].
+//- Для розгортання XML Language Server необхідно використати https://github.com/eclipse/lemminx[lemminx language server].
+This LS is published in the `https://mvnrepository.com/artifact/org.eclipse.lemminx/org.eclipse.lemminx/0.23.2[maven central repository]` (there is no need to place the code of this component in your gerrit).
+//Даний LS публікується в `https://mvnrepository.com/artifact/org.eclipse.lemminx/org.eclipse.lemminx/0.23.2[maven central repository]` (немає необхідності розміщовати код даного компоненту у себе в gerrit).
+
+- It is necessary to connect the above artifact and use the `org.eclipse.lemminx.XMLLanguageServer` LS implementation in the ddm-language-server module.
+//- Необхідно підключити наведений артефакт та використати `org.eclipse.lemminx.XMLLanguageServer` імплементацію LS в ddm-language-server модулі.
+
+- In accordance with the https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocumentItem[LS specification], the URL for creating websocket must be `/xml`.
+//- Згідно зі https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocumentItem[специфікацією LS] URL для створення websocket повинен бути `/xml`.
+
+=== Working with DDM XSD
+//=== Робота з DDM XSD
+
+To provide hints in full scope when editing XML documents (displaying field descriptions from xsd schemas as hoover messages, auto-completion, etc.), it is necessary to provide access to the `ddm-language-server` to load the corresponding xsd schemas using the specified URL in the XSD document.
+//Для забезпечення підказок під час редагування XML документів в повному об'ємі (показ опису полів з xsd схем у вигляді hoover повідомлень, автодоповнення та інше) необхідно забезпечити доступ `ddm-language-server` до завантаження відповідних xsd схем за вказаним URL в XSD документі.
+
+All required XSD for editing XML Liquibase documents must be placed in platform nexus.
+//Всі необхідні XSD для редагування XML Liquibase документів повинні бути розміщені в platform nexus
+
+XSD required to edit liquibase scripts:
+//XSD, необхідні для редагування liquibase скриптів:
+
+- liquibase xsd: http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.5.xsd
+- ddm liquibase extension: https://nexus-public-mdtu-ddm-edp-cicd.apps.cicd2.mdtu-ddm.projects.epam.com/repository/extensions/com/epam/digital/data/platform/liquibase-ext-schema/latest/liquibase-ext-schema-latest.xsd
+
+[CAUTION]
+To ensure compatibility of the liquibase configurations with `ddm-language-server`, it is necessary to migrate the URI for the `http://www.liquibase.org/xml/ns/dbchangelog` namespace. The URI must point to the corresponding xsd published in platform nexus.
+//Для забезпечення сумісності liquibase конфігурацій з `ddm-language-server` необхідно провести міграцію URI для `http://www.liquibase.org/xml/ns/dbchangelog` namespace. URI повинен вказувати на відповідну xsd, опубліковану в platform nexus
+
+=== RestAPI for liquibase configurations
+//=== RestAPI по роботі з liquibase конфігураціями
+
+It is necessary to extend the existing registry-regulation-management RestAPI by adding the methods for:
+//Необхідно розширити registry-regulation-management існуючий RestAPI шляхом додавання методів для:
+
+- Getting the liquibase configuration of the data model table structure for the candidate version.
+//- Отримання liquibase конфігурації структури таблиць моделі даних для версії-кандидату
+- Getting the liquibase configuration of the data model table structure for master versions.
+//- Отримання liquibase конфігурації структури таблиць моделі даних для мастер версії
+- Changing the liquibase configuration of the data model table structure for the candidate version.
+//- Зміна liquibase конфігурації структури таблиць моделі даних для версії-кандидату
+
+==== Getting the liquibase configuration of the data model tables
+//==== Отримання liquibase конфігурації таблиць дата моделі
+
+Request:
+//Запит:
+
+[source,http,options="nowrap"]
+----
+GET /versions/candidates/{versionCandidateId}/data-model/tables
+GET /versions/master/data-model/tables
+----
+
+Response structure:
+//Структура відповіді:
+
+[CAUTION]
+Content-type=text/xml
+
+[source,xml,options="nowrap"]
+----
+<?xml version="1.1" encoding="UTF-8" standalone="no"?>
+
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xmlns:ext="http://www.liquibase.org/xml/ns/dbchangelog-ext"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.5.xsd
+        http://www.liquibase.org/xml/ns/dbchangelog-ext https://nexus-public-mdtu-ddm-edp-cicd.apps.cicd2.mdtu-ddm.projects.epam.com/repository/extensions/com/epam/digital/data/platform/liquibase-ext-schema/latest/liquibase-ext-schema-latest.xsd">
+
+    ...
+</databaseChangeLog>
+----
+
+==== Changing the liquibase configuration of the data model tables
+//==== Зміна liquibase конфігурації таблиць дата моделі
+
+Request:
+//Запит:
+
+[source,http,options="nowrap"]
+----
+PUT /versions/candidates/{versionCandidateId}/data-model/tables
+----
+
+[CAUTION]
+Content-type=text/xml
+
+Body:
+[source,xml,options="nowrap"]
+----
+<?xml version="1.1" encoding="UTF-8" standalone="no"?>
+
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xmlns:ext="http://www.liquibase.org/xml/ns/dbchangelog-ext"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.5.xsd
+        http://www.liquibase.org/xml/ns/dbchangelog-ext https://nexus-public-mdtu-ddm-edp-cicd.apps.cicd2.mdtu-ddm.projects.epam.com/repository/extensions/com/epam/digital/data/platform/liquibase-ext-schema/latest/liquibase-ext-schema-latest.xsd">
+    ...
+</databaseChangeLog>
+----
+
+
+=== Receiving and displaying changes in the status view of the registry regulations components
+//=== Отримання та відображення змін в перегляді стану складових регламенту реєстру
+
+The work with the registry database structure is performed by editing only one resource in terms of RestAPI `/versions/candidates/{versionCandidateId}/data-model/tables`.
+//Робота зі структурою БД реєстру ведеться в цілому редагуванням лише одного ресурсу в термінах RestAPI '/versions/candidates/{versionCandidateId}/data-model/tables'.
+Therefore, it is necessary to operate with one single item called "Database table structure" in the list of the registry regulations component states.
+//Тому в переліку стану складових регламенту реєстру необхідно оперувати одним єдиним пунктом під назвою `Структура таблиць БД`.
+
+This item can have the only `Modified` state if any changes were made to the `data-model/createTables.xml` file through the admin portal or directly by adding of a patchset in Gerrit to the corresponding MR to the candidate version.
+//Даний пункт може мати єдиний стан `Змінено` в тому разі, якщо будь-які зміни були внесені в файл `data-model/createTables.xml` через адмін-портал або напряму через додавання патчсету в Gerrit у відповідний MR до версії-кандидату.
+
+== High level development plan
+//== Високорівневий план розробки
+=== Required expertise
+//=== Необхідні експертизи
+- DevOps
+- BE
+- FE
+- QA/AQA
+- One TeamLead or One QALead
+
+=== DevOps
+- Configure Kong for working with XML LS.
+//- Налаштувати kong для роботи з XML LS.
+
+=== Backend
+- Extend RestAPI for getting and saving liquibase configurations (for the candidate versions and master versions). Add RestAPI Optimistic locking headers to the `/versions/candidates/{versionCandidateId}/data-model/tables` endpoints.
+//- Розширити RestAPI для отримання та збереження liquibase конфігурацій (для версій-кандидатів та мастер версії). Додати RestAPI Optimistic locking headers до ендпоінтів `/versions/candidates/{versionCandidateId}/data-model/tables`.
+- Connect XML lemminx LS. Extend ddm-language-server to work with the /xml websocket endpoint.
+//- Підключити XML lemminx LS. Розширити ddm-language-server для роботи з /xml websocket endpoint.
+- Add the information about changes in the database structure of the data model to the `/versions/candidates/{versionCandidateId}/changes` RestAPI endpoint.
+//- Додати інформацію про зміни структури БД моделі даних в `/versions/candidates/{versionCandidateId}/changes` RestAPI ендпоінт.
+- Publish http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.5.xsd[dbchangelog-4.5.xsd] on platform nexus.
+//- Опублікувати http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.5.xsd[dbchangelog-4.5.xsd] в платформенний nexus.
+
+=== Frontend
+- Create a perspective view of the data model state and a perspective view for editing data model tables.
+//- Створити перспективу перегляду стану моделі даних та перспективу редагування таблиць моделі даних.
+- Integrate monaco editor into the perspective for editing data model tables. Configure interaction with XML LS.
+//- Інтегрувати monaco editor в перспективу редагування таблиць моделі даних. Налаштувати взаємодію з XML LS.
+- Provide for displaying and storage of liquibase configuration of data model tables (integration with the `/versions/candidates/{versionCandidateId}/data-model/tables` endpoints). Provide for working with the RestAPI Optimistic Locking mechanism.
+//- Забезпечити відображення та збереження liquibase конфігурації структури таблиць моделі даних (інтеграція з `/versions/candidates/{versionCandidateId}/data-model/tables` ендпоінтами). Забезпечити роботи з RestAPI Optimistic Locking механізмом.
+- Add the display of information about changes in the data model table structure to the candidate version overview.
+//- Додати відображення інформації про зміни с структурі таблиць моделі даних в огляд версії-кандидату.
+
+=== One TeamLead or One QALead
+- Develop migration instructions for existing registries. Publish instructions, organize knowledge transfer with the DevOps command.
+//- Створити інструкцію міграції існуючих реєстрів. Опублікувати інструкцію, провести KT з DevOps командою.
