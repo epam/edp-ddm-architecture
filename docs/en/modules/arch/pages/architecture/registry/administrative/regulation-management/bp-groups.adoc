@@ -1,0 +1,371 @@
+//:imagesdir: ..\..\..\images\
+//:includedir: ..\..\..\partials\
+
+= Categorizing available services in the user portal
+include::platform:ROOT:partial$templates/document-attributes/arch-set-en.adoc[]
+
+include::platform:ROOT:partial$admonitions/language-en.adoc[]
+
+== General description
+
+The user portal displays all services in one list, which can be inconvenient for registers with many available services.
+
+It is suggested to implement the ability to categorize services using groups and control the order of their display, improving the user experience.
+
+== Actors and user roles
+
+* Citizens
+
+* Officers
+
+* Registry regulations developer
+
+== General principles and provisions
+//== Загальні принципи та положення
+* A business process cannot be bound to two or more groups.
+//* Бізнес-процес не може бути прив'язаний до двох чи більше груп.
+* A group is optional. Business processes that are not bound to a group are displayed outside the group. If you do not configure groups, no workflow is considered to be bound to the group.
+//* Група не є обов'язковою. Бізнес-процеси не прив'язані до групи відображаються поза групою. При відсутності налаштувань груп, вважається, що жоден бізнес-процес не прив'язаний до групи.
+* Groups containing no business process available to a user are not displayed on the user portal. The administrative portal interface displays all groups.
+//* Групи в яких нема жодного бізнес-процесу доступного користувачу не відображаються в кабінеті користувача. В інтерфейсі адміністративного порталу відображаються всі групи.
+* Nesting of groups is not supported.
+//* Вкладеність груп не підтримується.
+* Implementation of internationalization for group names is not considered of this document.
+//* Реалізація інтернаціоналізації для назв груп поза межами цього документу.
+
+== Functional scenarios
+//== Функціональні сценарії
+* Setting up the grouping and sorting of business processes by a regulations developer using the web interface of the administrative portal.
+//* Налаштування групування та сортування бізнес-процесів розробником регламенту через вебінтерфейс адміністративного порталу.
+
+* Validating changes to business process grouping and sorting settings when publishing regulations
+
+* Viewing a list of business processes divided into groups and ordered according to the settings using the web interface of the user portal.
+//* Перегляд списку бізнес-процесів з розділенням на групи та впорядкованих згідно з налаштуваннями через вебінтерфейс кабінету користувача.
+
+== Configuration management design
+//== Дизайн управління налаштуваннями
+image::architecture/registry/administrative/regulation-management/bp-groups/bp-groups-configuration.drawio.svg[bp-groups-configuration,700]
+
+To save the grouping and sorting settings, a new registry regulations element is created -- the _bp-grouping.yaml_ configuration file, which is stored in the _bp-grouping_ folder.
+//Для збереження налаштувань групування та сортування, створюється новий елемент регламенту реєстру - файл налаштувань _bp-grouping.yaml_, який зберігається у папці _bp-grouping_
+
+The configuration file has the following structure:
+//Файл налаштувань має наступну структуру:
+|===
+|Name|Type|Description
+//|Ім'я|Тип|Опис
+
+|groups
+|[]object
+|List of groups
+//|Список груп
+
+|groups[index]
+|object
+|Group
+//|Група
+
+|groups[index].name
+|string
+|Group name
+//|Ім'я групи
+
+|groups[index].processDefinitions
+|[]string
+| Business processes in a group
+//|Бізнес-процеси в групі
+
+|groups[index].processDefinitions[index]
+|string
+|processDefinitionId of a business process
+//|processDefinitionId бізнес-процесу
+
+|ungrouped
+|[]string
+| Business processes outside groups
+//|Бізнес-процеси поза групами
+
+|ungrouped[index]
+|string
+|processDefinitionId of a business process
+//|processDefinitionId бізнес-процесу
+
+|===
+
+[NOTE]
+The order of groups and business processes displaying on the user interface is determined by the order in the configuration file.
+//Порядок відображення груп та бізнес-процесів на інтерфейсі користувача визначається порядком у файлі налаштувань.
+
+The registry administrator creates or edits the configuration using the web interface of the administrative portal, or manually changes the configuration file. As a result, the settings get into the registry regulations.
+//Адміністратор реєстру створює або редагує налаштування через вебінтерфейс адміністративного порталу, або вручну міняє файл налаштувань. В результаті чого налаштування потрапляють в регламент реєстру.
+
+When publishing the registry regulations, the regulations publication pipeline propagates settings to the user business process management service.
+//При публікації регламенту реєстру, пайплайн публікації регламенту пропагує налаштування у сервіс управління бізнес-процесами користувача.
+
+Based on the settings, the user business process management service returns in its response the grouped and ordered services available for a user.
+//На основі налаштувань, сервіс управління бізнес-процесами користувача повертає згруповані та впорядковані послуги доступні користувачу у своїй відповіді.
+
+The portal user sees the services divided into groups on the page with available services in the order determined by the administrator.
+//Користувач кабінету бачить послуги розділені на групи на сторінці доступних послуг у порядку що визначив адміністратор.
+
+
+=== Administrative portal
+//=== Адміністративний портал
+=== Display in portals
+//==== Відображення в кабінетах
+The _Display in portals_ section has to be added to the web interface of the administrative portal, in accordance with the agreed layout. This section should enable:
+//До вебінтерфейсу адміністративного порталу має бути доданий розділ _Відображення в кабінетах_, відповідно до узгодженого макета.  Цей розділ має надавати можливість:
+
+* View business processes in groups.
+//* переглядати бізнес-процеси у групах
+* Create groups.
+//* створювати групу
+* Change group name.
+//* змінювати ім'я групи
+* Delete groups.
+//* видаляти групу
+* Add business processes to a group.
+//* додавати бізнес-процеси у групу
+* Delete business processes from a group.
+//* видаляти бізнес-процеси із групи
+* Change the display order of groups.
+//* змінювати порядок відображення груп
+* Change the order of business processes displayed in groups and outside groups.
+//* змінювати порядок відображення бізнес-процесі у групах та поза групами
+
+[IMPORTANT]
+When you delete a group, only the group is deleted. Business processes that were tied to it go to the ungrouped category.
+//При видаленні групи видаляється тільки група. Бізнес-процеси, які були до неї прив'язані, переходять в категорію не згрупованих.
+
+==== Version overview
+//==== Огляд версії
+The _Changes_ section on the _Version overview_ page has to display the status of changes made to the _bp-grouping.yaml_ file, the same as it is done for the form files and business processes.
+//Розділ _Внесені зміни_ на сторінці _Огляд версії_ має бути доповнений можливістю відображення статусу змін файлу _bp-grouping.yaml_, так само як це зроблено для файлів форм та бізнес-процесів.
+
+==== REST API
+The API of the service for providing the configuration of the registry regulations must be supplemented with methods that support the functionality of the web interface.
+//API сервісу надання конфігурації регламенту реєстру має бути доповнений методами які забезпечують функціональність вебінтерфейс.
+
+.OpenAPI Specification (xref:attachment$architecture/registry/administrative/regulation-management/bp-groups/rrm-swagger.yml[Load])
+//.OpenAPI Specification (xref:attachment$architecture/registry/administrative/regulation-management/bp-groups/rrm-swagger.yml[Завантажити])
+[%collapsible]
+====
+swagger::{attachmentsdir}/architecture/registry/administrative/regulation-management/bp-groups/rrm-swagger.yml[]
+====
+
+To ensure backward compatibility with the existing registry regulations, and to simplify the logic of working with the configuration file, requests must be processed taking into account the following rules:
+//Для забезпечення зворотної сумісності з наявними регламентами реєстрів, та спрощення логіки роботи с файлом налаштувань, обробка запитів має відбуватися з урахуванням наступних правил:
+
+* When generating a response:
+//* При формуванні відповіді:
+** Groups and business processes in the response must be organized in the same way as in the configuration file.
+//** Групи та бізнес-процеси у відповіді мають бути впорядковані так само як і у файлі налаштувань.
+** If the _bp-grouping.yaml_ configuration file does not exist, the response must contain all available business processes in the _ungrouped_ section, ordered alphabetically by name.
+//** Якщо файлу налаштувань _bp-grouping.yaml_ не існує, відповідь повинна містити всі наявні бізнес-процеси в розділі _ungrouped_, впорядковані по назві за алфавітом.
+** Existing business processes that are not in the _bp-grouping.yaml_ configuration file must be added in the response to the end of the _ungrouped_ section, ordered alphabetically by name.
+//** Наявні бізнес-процеси, які відсутні у файлі налаштувань  _bp-grouping.yaml_, мають бути додані у відповідь в кінець розділу _ungrouped_, впорядковані по назві за алфавітом.
+* * If the _bp-grouping.yaml_ configuration file does not match <<validation, validation rules>>, return error `422`.
+//** Якщо файл налаштувань _bp-grouping.yaml_ не відповідає <<validation, правилам валідації>> повертати помилку `422`
+
+* When receiving a request to change the _bp-grouping.yaml_ configuration file:
+//* При отриманні запиту на зміну файлу налаштувань _bp-grouping.yaml_:
+* * If the _bp-grouping.yaml_ configuration file does not exist in the regulations, then it has to be created.
+//** Якщо файлу налаштувань _bp-grouping.yaml_ не існує в регламенті то він створюється.
+** If the _bp-grouping.yaml_ configuration file exists, then its contents are completely replaced by the data received in the body of the request.
+//** Якщо файл налаштувань _bp-grouping.yaml_ існує, то його вміст повністю замінюється на дані отримані в тілі запиту.
+** If the contents of the request body do not match <<validation, validation rules>>, return error `422`.
+//** Якщо зміст тіла запиту не відповідає  <<validation, правилам валідації>> повертати помилку `422`
+
+* When the `DELETE /versions/candidates/{versionCandidateId}/business-processes/{businessProcessName}` request to delete a business process is sent, its processDefinitionId from the _bp-grouping.yaml_ file also has to be deleted.
+//* При запиті на видалення бізнес-процесу `DELETE /versions/candidates/{versionCandidateId}/business-processes/{businessProcessName}` також має бути видалений його processDefinitionId з файлу _bp-grouping.yaml_.
+
+=== User portal
+//=== Кабінети користувача
+The _Available services_ page of the user portal web interface (officer and citizen portals) must be supplemented, in accordance with the agreed layouts, with the ability to view business processes in groups. The order of displaying groups and business processes must match the order in the REST API response.
+//Сторінка _Доступні послуги_ вебінтерфейс кабінетів користувача (officer та citizen portals) має бути доповнена, відповідно до узгоджених макетів,  можливістю переглядати бізнес-процеси у групах. Порядок відображення груп та бізнес-процесів має відповідати порядку у відповіді REST API.
+
+==== REST API
+In the API of the user business process management service, the response to the endpoint that returns the list of business processes must be supplemented with information about grouping and display order.
+//В API сервісу управління бізнес-процесами користувача, відповідь ендпоінту, що повертає список бізнес процесів має бути доповнена інформацією про групування та порядок відображення.
+
+.OpenAPI Specification (xref:attachment$architecture/registry/administrative/regulation-management/bp-groups/upm-swagger.yml[Download])
+//.OpenAPI Specification (xref:attachment$architecture/registry/administrative/regulation-management/bp-groups/upm-swagger.yml[Завантажити])
+[%collapsible]
+====
+swagger::{attachmentsdir}/architecture/registry/administrative/regulation-management/bp-groups/upm-swagger.yml[]
+====
+
+To ensure backward compatibility with the existing register regulations, and to simplify the logics of working with the configuration file, the following rules must be taken into account when generating the response:
+//Для забезпечення зворотної сумісності з наявними регламентами реєстрів, та спрощення логіки роботи с файлом налаштувань, при формуванні відповіді мають бути враховані наступні правила:
+
+* Groups and business processes in the response must be ordered in the same way as in the configuration file.
+//* Групи та бізнес-процеси у відповіді мають бути впорядковані так само як і у файлі налаштувань.
+* If there is no business process in a group available to the user, such a group must not be included in the response.
+//* Якщо в групі немає жодного бізнес-процесу доступного користувачу, така група не повинна потрапляти у відповідь.
+* If the _bp-grouping.yaml_ configuration file does not exist or is empty, the response must contain all available business processes in the _ungrouped_ section, ordered alphabetically by name.
+//* Якщо файлу налаштувань _bp-grouping.yaml_ не існує чи він порожній, відповідь повинна містити всі доступні бізнеси процеси в розділі _ungrouped_, впорядковані по назві за алфавітом.
+* The available business processes that are not in the _bp-grouping.yaml_ configuration file must be added in the response to the end of the _ungrouped_ section, ordered alphabetically by name.
+//* Доступні бізнес-процеси, які відсутні у файлі налаштувань  _bp-grouping.yaml_, мають бути додані у відповідь в кінець розділу _ungrouped_, впорядковані по назві за алфавітом.
+
+=== System components and their designation in the solution design
+//=== Компоненти системи та їх призначення в рамках дизайну рішення
+This section includes a list of system components that are involved or require changes/creation during implementation of the functional requirements according to the technical design of the solution.
+//У даному розділі наведено перелік компонент системи, які залучені або потребують змін/створення в рамках реалізації функціональних вимог згідно з технічним дизайном рішення.
+
+|===
+|Component|Official name|Designation / Changes
+//|Компонент|Службова назва|Призначення / Суть змін
+
+|Registry regulations
+//|Регламент реєстру
+|registry-regulation
+| Extension of the regulations with the _bp-grouping_ setting
+//|Розширення регламенту налаштуванням _bp-grouping_
+
+|Regulations publication pipeline
+//|Пайплайн публікації регламенту
+|registry-jenkins
+|Propagation of the _bp-grouping.yaml_ settings to the user-process-management service
+//|Пропагування налаштувань _bp-grouping.yaml_ в сервіс user-process-management
+
+|CLI-utility for validation of regulations integrity
+//|CLI-утиліта валідації цілісності регламенту
+|registry-regulations-validator-cli
+|Validation of bp-grouping.yaml
+//|Валідація bp-grouping.yaml
+
+|User business process management service
+//|Сервіс управління бізнес-процесами користувача
+|user-process-management
+|Enrichment of the list of business processes with information about the groups to which they belong
+//|Збагачення списку бізнес-процесів інформацією про групи до якої вони належать
+
+|Service for managing configuration of registry regulations
+//|Сервіс надання конфігурації регламенту реєстру
+|registry-regulation-management
+|Adding methods to create, edit, and remove groups, and methods to add and remove business processes from groups
+//|Додавання методів для створення, редагування і видалення груп, а також методів для додавання бізнес-процесів у групи та видалення їх із груп
+
+|Web components and portals
+//|Веб компоненти та портали
+|common-web-app
+|Add UI elements to manage and view groups
+//|Додавання UI елементів для управління та перегляду груп
+
+|===
+
+== Modeling of the registry regulations
+//== Моделювання регламенту реєстру
+=== Structure of the registry configuration procedure
+//=== Структура регламенту налаштувань реєстру
+As part of the task of extending the settings, it is necessary to extend the corresponding default registry configuration in the _empty_regulation_template_ template of the regulation repository. By default, the _bp-grouping.yaml_ grouping settings are empty.
+//В рамках задачі по розширенню налаштувань, необхідно розширити відповідну конфігурацію реєстру за замовчуванням у шаблоні репозиторію регламенту _empty_regulation_template_. За замовчанням налаштування групування _bp-grouping.yaml_ пусті.
+
+.Structure of the registry regulations
+//.Структура регламенту реєстру
+[plantuml, registry-settings-regulation-structure, svg]
+----
+@startsalt
+{
+{T
++ <&folder> registry-regulation
+++ <&folder> <b>bp-grouping</b>
++++ <&file> <b>bp-grouping.yaml</b>
+++ <&folder> bpmn
+++ <&folder> dmn
+++ ...
+}
+}
+@endsalt
+----
+
+.Example of the _bp-grouping/bp-grouping.yaml_ registry configuration
+//.Приклад конфігурації реєстру _bp-grouping/bp-grouping.yaml_
+[source, yaml]
+----
+groups:
+  - name: First group
+    processDefinitions:
+      - bp-1-process_definition_id
+      - bp-2-process_definition_id
+  - name: Second group
+    processDefinitions:
+      - bp-3-process_definition_id
+  - name: Third group
+ungrouped:
+  - bp-4-process_definition_id
+  - bp-5-process_definition_id
+----
+
+=== Validation of the registry regulations [[validation]]
+//=== Валідація регламенту реєстру [[validation]]
+As part of implementation of the solution, it is necessary to extend the _registry-regulations-validator-cli_ CLI utility for validating the regulations with additional rules:
+//В рамках реалізації рішення, необхідно розширити CLI-утиліту валідації регламенту _registry-regulations-validator-cli_ додатковими правилами:
+
+* Group names are unique.
+//* Назви груп унікальні.
+* Business processes in the processDefinitions and ungrouped arrays occur no more than once. That is, a business process cannot be tied to different groups at the same time, or more than one time to one group.
+//* Бізнес-процеси в масивах processDefinitions та ungrouped зустрічаються не більше одного разу. Тобто бізнес-процес не може бути прив'язаний до різних груп одночасно, чи більше чим один раз до однієї групи.
+* Business processes specified in the processDefinitions and ungrouped arrays exist in the regulations (bpmn folder).
+//* Бізнес-процеси вказані в масивах processDefinitions та ungrouped існують в регламенті (папці bpmn).
+
+=== Publication of changes to the registry regulations
+//=== Публікація змін до регламенту реєстру
+The _bp-grouping.yaml_ configuration is mounted as ConfigMap to the user business process management service (_user-process-management_). The regulations publication pipeline must update the content of ConfigMap _bp-grouping.yaml_ in accordance with the content of the published registry regulations.
+//Налаштування _bp-grouping.yaml_ монтується як ConfigMap до сервісу управління бізнес-процесами користувача (_user-process-management_). Пайплайн публікації регламенту повинен оновлювати вміст ConfigMap _bp-grouping.yaml_ відповідно до змісту регламенту реєстру що публікується.
+
+== High level development plan
+//== Високорівневий план розробки
+=== Technical expertise
+//=== Технічні експертизи
+* _BE_
+* _FE_
+* _DevOps_
+
+=== Development Plan
+//=== План розробки
+* Extend the default registry configuration in the regulations repository template.
+//* Розширення конфігурацію реєстру за замовчуванням у шаблоні репозиторію регламенту.
+* Extensions _ Pipeline Publications Regulations _ logic promotion settings _bp-grouping.yaml_ in the service user-process-management.
+//* Розширення _Пайплайну Публікації Регламенту_ логікою пропагування налаштувань _bp-grouping.yaml_ в сервіс user-process-management.
+* Create the _JSON_ validation scheme for grouping settings and validation according to the rules.
+//* Створити _JSON_-схему валідації налаштувань групування  та валідацію згідно з правилами.
+* Extend the API service with user-process-management.
+//* Розширення API сервісу user-process-management.
+* Extend the API service with registry-regulation-management.
+//* Розширення API сервісу registry-regulation-management.
+* Extend the administrative portal web interface for configuring business processes with the ability to manage groups and sorting.
+//* Розширення вебінтерфейс налаштування бізнес-процесів адміністративного порталу можливістю керувати групами та сортуванням.
+* Extend the user portal web interface for viewing business processes with the ability to display groups and business processes in groups organized according to the settings.
+//* Розширення вебінтерфейс перегляду бізнес-процесів кабінетів користувача можливістю відображення груп та бізнес-процесів у групах впорядкованих згідно з налаштуваннями.
+* Develop instructions for the regulations developer and reference examples.
+//* Розробка інструкцій для розробника регламенту та референтних прикладів.
+
+== Security
+//== Безпека
+
+=== Business data
+//=== Бізнес Дані
+|===
+|Data Category|Description|Privacy|Integrity|Accessibility
+//|Категорія Даних|Опис|Конфіденційність|Цілісність|Доступність
+|Registry data containing open information|Information in the format that allows its automated processing using electronic devices, free and gratuitous access to it, as well as its further reuse|None|High|High
+//|Дані реєстру, що містять відкриту інформацію | Інформація у форматі, що дозволяє її автоматизоване оброблення електронними засобами, вільний та безоплатний доступ до неї, а також її подальше використання |Відсутня|Висока|Висока
+|===
+=== Simplified threat model
+//=== Спрощена модель загроз
+
+image::architecture/registry/administrative/regulation-management/bp-groups/bp_grouping_TM.drawio.svg[]
+
+=== Security risk countermeasures and compliance with security requirements
+//=== Механізми протидії ризикам безпеки та відповідність вимогам безпеки
+
+|===
+| Risk | Security controls | Implementation | Priority
+//| Ризик | Засоби контролю безпеки | Реалізація | Пріоритет
+
+| The risk of exploiting a Gerrit web vulnerability due to incorrect typing in new API endpoints. The versionCandidateId parameter is typed as a string, but is an identifier that is then passed directly to Gerrit as a merge request number that can potentially lead to the web vulnerability | It is necessary to change the type of expected data from string to int that, in the case of transmitting incorrect data, results in a common error that can be safely processed | Not taken into account in the original design | Low |
+//| Ризик експлуатація веб вразливості на Gerrit через некоректну типізацію на нових API-ендпоінтах. Параметр versionCandidateId типізований як string, але є ідентифікатором, який надалі передається напряму в gerrit як номер мердж реквесту що потенційно може призвести до вебуразливості | Необхідно змінити тип очікуваних даних з string на int що у випадку передачі некоректних даних призведе до звичайної помилки яка буде безпечно опрацьована | Не враховано в початковому дизайні | Низький |
+
+|===
