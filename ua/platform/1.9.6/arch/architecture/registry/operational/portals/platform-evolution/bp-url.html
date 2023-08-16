@@ -3156,9 +3156,6 @@
 <div class="paragraph">
 <p>Пряме посилання на бізнес-процес — посилання для запуску бізнес-процесу через <em>GET</em> запит та можливості передачі даних стартової форми у посиланні.<br></p>
 </div>
-<div class="paragraph">
-<p>Спеціальний вхід — (окремий випадок використання прямих посилань) процес при якому під час переходу за окремим посиланням автоматично відбувається запуск бізнес-процесу який змінює права доступу/ролі для користувача.<br></p>
-</div>
 </div>
 </div>
 <div class="sect1">
@@ -3170,19 +3167,19 @@
 <p>Надання ролей відбувається за допомогою бізнес-процесу.</p>
 </li>
 <li>
-<p>Бізнес-процес зі стартовою формою можу бути стартований відповідним кабінетом при переході за посиланням.</p>
+<p>Задля запобігання безконтрольного запуску бізнес-процесів, автоматичний старт не відбувається, а відбувається перехід на стартову форму з можливістю їх предзаповнення.</p>
 </li>
 <li>
 <p>Створення користувача для надавачів послуг при першому вході налаштовується окремо за допомогою наявного механізму.</p>
 </li>
 <li>
-<p>Бізнес-процеси для спеціального входу рекомендовано розробляти ідемпотентними.</p>
+<p>Бізнес-процеси для зміни ролей рекомендовано розробляти ідемпотентними.</p>
 </li>
 <li>
 <p>Доступність бізнес-процесу для виклику регулюється наявними механізмами.</p>
 </li>
 <li>
-<p>Спеціальний вхід та <em>онбордінг</em> процес можуть використовуватись незалежно так і разом в рамках реєстру, доки задовільняються чинні обмеження використння <em>онбордінг</em> процесу.</p>
+<p>Використання прямих посилань та <em>онбордінг</em> процес можуть використовуватись незалежно так і разом в рамках реєстру, доки задовільняються чинні обмеження використння <em>онбордінг</em> процесу.</p>
 </li>
 <li>
 <p>Прямі посилання можуть бути побудовано до будь-якого доступного для користувача бізнес-процесу.</p>
@@ -3195,18 +3192,21 @@
 <h2 id="_високорівневий_дизайн_рішення"><a class="anchor" href="#_високорівневий_дизайн_рішення"></a>Високорівневий дизайн рішення</h2>
 <div class="sectionbody">
 <div class="paragraph">
+<p>В порталах при переході на стартову форму бізнес-процесу за посиланням для не автентифікованих користувачів, після автентифікації користувач перенаправляється на стартову форму.</p>
+</div>
+<div class="paragraph">
 <p>В порталах існує окремий шлях (<em>route</em>) через який можна передати ідентифікатор БП через параметр в посиланні (<em>path parameters</em>) та передати дані стартової форми при наявності через параметри запиту (<em>query parameters</em>).</p>
 </div>
 <div class="listingblock">
 <div class="title">Загальний шаблон побудови прямого посилання до бізнес-процесу для надавачів послуг</div>
 <div class="content">
-<pre class="highlightjs highlight"><code class="language-httprequest hljs" data-lang="httprequest">https://officer-portl.base-url/officer/setup/${business-process-id}?data=${data}</code></pre>
+<pre class="highlightjs highlight"><code class="language-httprequest hljs" data-lang="httprequest">https://officer-portl.base-url/officer/process-list/${business-process-key}/start-form?data=${data}</code></pre>
 </div>
 </div>
 <div class="listingblock">
 <div class="title">Загальний шаблон побудови прямого посилання до бізнес-процесу для отримувачів послуг</div>
 <div class="content">
-<pre class="highlightjs highlight"><code class="language-httprequest hljs" data-lang="httprequest">https://citizen-portl.base-url/setup/${business-process-id}?data=${data}</code></pre>
+<pre class="highlightjs highlight"><code class="language-httprequest hljs" data-lang="httprequest">https://citizen-portl.base-url/process-list/${business-process-key}/start-form?data=${data}</code></pre>
 </div>
 </div>
 <table class="tableblock frame-all grid-all stretch">
@@ -3222,7 +3222,7 @@
 </thead>
 <tbody>
 <tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">business-process-id</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">business-process-key</p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock">Рядок, унікальний ідентифікатор бізнес-процесу (ОБОВ&#8217;ЯЗКОВИЙ)</p></td>
 </tr>
 <tr>
@@ -3238,13 +3238,13 @@
 <i class="fa icon-note" title="Note"></i>
 </td>
 <td class="content">
-Відмінності у поведінці між кабінетами нема, єдина відмінність це різні шляхи для побудови посилань спеціального входу. Тому далі в дизайні розглядається все на прикладі спеціального входу для надавачів послуг.
+Відмінності у поведінці між кабінетами нема, єдина відмінність це різні шляхи для побудови прямих посилань. Тому далі в дизайні розглядається все на прикладі надавачів послуг.
 </td>
 </tr>
 </table>
 </div>
 <div class="paragraph">
-<p>При переході за таким посиланням буде стартовано автоматично бізнес-процес через <em>Сервіс управління процесами користувача</em> за допомогою наявних точок інтеграції <code>/{key}/start</code> або <code>/{key}/start-with-form</code></p>
+<p>При переході за таким посиланням користувача буде перенаправлено на стартову форму з можливістю її предзаповнення.</p>
 </div>
 <div class="imageblock">
 <div class="content">
@@ -3269,18 +3269,10 @@
 <p>В поточній реалізації після успішної автентифікації користувач завжди перенаправляється на стартову сторінку і у випадку якщо користувач використав посилання на внутрішній захищений ресурс, то ця інформація не зберігається.</p>
 </div>
 <div class="sect2">
-<h3 id="_використання_сесійного_сховища_для_зберігання_стану"><a class="anchor" href="#_використання_сесійного_сховища_для_зберігання_стану"></a>Використання сесійного сховища для зберігання стану</h3>
+<h3 id="_розширення_api_для_сторінки_home_опційним_параметром_rewrite_redirect_url"><a class="anchor" href="#_розширення_api_для_сторінки_home_опційним_параметром_rewrite_redirect_url"></a>Розширення API для сторінки /home опційним параметром rewrite_redirect_url</h3>
 <div class="imageblock kroki">
 <div class="content">
-<img src="https://kroki.io/plantuml/svg/eNqNVctu2lAQ3fMVV6iLRCpiU3WB1FbKtkvUHRuHOMRqsC3bqIsqEgSStFLV7IhUqYv-ASGkQADzC3P_qGeubXxtDHRhMPcxZ-acM4PRDBxPlOk3jWiCZ0wjeSdoTaHs0UL26aksDF845-dW0_RKruEFVtNyDTsQ5RPP-eKbnjpwGr1nD3x07Jba_YyX7Bb9AtijHNKKnuV1w8a3lgCNtlNwHS8wLnNR_uB2l8ZyKHsCJ9f4wSEWKvBK3gu1FMpbnOtha0kzQS9Y6NJM9uQ17sSADfuogwIqruc0Td8XbcM2WmbbtINjBd9x2_uKK8UMicr7hIuaAOQawLfIZoScfnCxSWEzWmAxSrJhi4sgcP1atfrq66nhm5-8y6tqHLHqm0HH5Q23Yp1dfTgzAuPdCQ69fVMPPAvYMR5DRyTVhMLt4rkB9kTQNGVUA6ZlKbogKnraOP0YXae_eBIiwVNXUQjBZBdxxwKKLXhvLG8opIns45WrBtnYn6t68cqbYxD-HT-P6mDXcmxRh_HA8HGs_ZSFEMoSU2WKXkY72X8tlD84m2ECzBJyWvhkhFA-CDlQ6kJonRfWKGVFGaYLHwAQdsFtVInPmRwAHsssmbwv8a0sNQowVNWvDt1_SBNAiFjNohApew17jw8unZZlF_oMYVaIsN6EY9F3l5-YArTnsmEBpxwB-6y94nW5P60Lp22WPHjUswtq2462g5VEtlHmguwXN9YAvM9pwZUv5E81MNgVkUdD7rU96rPdNpMiNTjTQU98W5lpBTLy7BwmYmOZpBNln6cA7PAtAtjnt6QZt_tYc2ymvUJOONdiWhgMrZrWJAm1az6s3pIIet9Vsn230VYvZEZzNVSwwMsveczCvDkNResOgPhAfruAFVSqsuXJneiX895seyGZVps2iLpuFwBPm9QeHCU1adTgbO9Dcoy08GnD_l8nRn-J8k4Oq_rfoW7tTQPFgoZQkp2tDe4CzXlO5tj5Bx4zkPQ=" alt="Diagram">
-</div>
-</div>
-</div>
-<div class="sect2">
-<h3 id="_розширення_api_для_сторінки_home_опційним_параметром_redirect_url"><a class="anchor" href="#_розширення_api_для_сторінки_home_опційним_параметром_redirect_url"></a>Розширення API для сторінки /home опційним параметром redirect_url</h3>
-<div class="imageblock kroki">
-<div class="content">
-<img src="https://kroki.io/plantuml/svg/eNqNVctu2kAU3fMVo6iLRCqwqbpASiJl2yXqDqlywCFWwLbGRl1UkSCQpJWqZkekSv0Hh5ACBdu_MPNHPXdsgw3GycJ4mMc955577lhruhZnB-KP8MQUz0R48p6JUARyIJZyKJ4PmOYw6-LCaOq8ZGvcNZqGrZkuOzjj1ldH52rDeTTObvhkmW21eoVBdkn8BtiTHAtfvMibhol3ioDwdinYFne1TjZKwzzsAbVsc6upOw7raqbW1ru66R6pMz27W8SoFKfFyidJAjUG0BCc7sDNA_xPYpiwmYslJn3hywfWMNml69pOrVp99-1cc_TPvHNdjSNWHd3t2bRgl43W9WlLc7XjM2z6-KHucgPYMR5BR5nVmMLt47kF9pSJ2UaGFLBYlaIDrJymjd1P0XHxF0_EEac9THliRSrLPuJOGGRe0tpE3opATOUQQ8r6RQ6wvlD5YkiLEzGXP_D3sA51DctkdbgFCh_FBZtRuZiq40xVcgBIAAbyToUbvmeqqMRmnABj_oZo4ZcQAvnI5AivPljO07pQjTaqgO8Y738ECJvgNLLE71yOAI9pKpl8KNGprDQKMFDZ-6-df9wQQIi4mnkhNuo1zAIfdKy2Yeb6DGF8RAjX4ajob7EFhN_iQyWcUQysU_WVsqtiYpdWVy9xuJSbOdntRtujS1I4L3NADvNbawTlF2JJuS_lL9Xn5IvIpQF1W0H9yXChcvME3bC2OMkhnum0spMPMbbVeVWIU663DK433S893jmuVCqxi7aLUFyCuK9miucQHaVmU81RzjbHuo9P6KKqpRojETOklNSIrIIkC8Ml1SToEF7-jm1zscgw2sbM6a6IhhJyD0C8ge1NZ60aLhDFlu70pGJbbpvvTiRKro0fdVoKYNNFb2uO6OMi7-W4mv6wpN229nSseACpyWyp2zSnKHR5bdH_Dx9gF4Y=" alt="Diagram">
+<img src="https://kroki.io/plantuml/svg/eNqVVMtuGjEU3c9XWKiLdgFsqi4ipZGy7bLqDimaEENGgZmRxyiqqkg8knRTlR2RKnXRP6AEwiS8fuH6j3quZ4AhUNIuBuxr33PPOde2W9aBEjn6SX0a4htQ33wVtKC5adHEdOg-J9xIBJWKV5bKCV2lvbIXur4WuWMVXEZS2Q2nyXhzw4fAr9rVCww2l-gHiv02PZrRyLRLPv4zBKi_TSEMlHZrz1B-IbtJA9MzLYGdC0wYYmKBZ6YrbGhubrGvhaUpxYKeEGhSbFqmjZy0YMl_3YCAfKiCsowiUXd9tyrr0tdvbPlGWN8nzkkdEvn3Sy8ObHHTRdHRUk5ME7BIqJV8ca51GB0Ui6--nLqR_KRqV8UUp5jyyNe8SPN6I_J8ni_jF_LzVTHSYJSvBKp-dOZq9_AYKO_eftTKA6WUBjNKvGNC1q-RuYFBQ0HjtdEZZjR1ssmsb51qzW7CQ2TCatNGaIbf2FwDE2Fziw1dh7NEPusG-83O2968kH-3JgCI1JNdEANzQ3Mamg7s3ONmLah6_u4ePQFqDnVLOHbmX7zDgX3GByRozBhYpwc-1wCe7id2HtSlo6RuKH-Hum20v_hybY_0NJGwSjCdnZKxu0-PNGHtE_PdXjfTY4F9viyIfdvTf76oq3tm5_aesR10z9n4Boh1ttx50YgjJS-Vp-WJkmeekmV90lC1w0KhkJ6m_24GSI55DRL5lIEBhxOd_BiwR9gvdtV1klobVRlwkehbKV95j5dlaK9QzJNMeuY9sLnMPJPPtEHI9ncArLsMZLYPq26nLZ7j_WQZD-smJAu2ih3NErjNcxX_AcC1NQc=" alt="Diagram">
 </div>
 </div>
 <div class="listingblock">
