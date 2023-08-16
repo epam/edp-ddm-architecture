@@ -1,0 +1,150 @@
+= Asynchronous messaging subsystem
+
+include::platform:ROOT:partial$templates/document-attributes/arch-set-en.adoc[]
+
+include::platform:ROOT:partial$admonitions/language-en.adoc[]
+
+== Overview
+
+//Підсистема, призначення якої є забезпечення асинхронної взаємодії між компонентами реєстру з наданням гарантій по зберіганню, обробці та доставленню повідомлень.
+The _Asynchronous messaging subsystem_ ensures asynchronous interaction between the registry components with guaranteed message storage, processing, and delivery.
+
+== Subsystem functions
+
+//* Асинхронний обмін повідомленнями
+//* Забезпечення гарантій по доставці повідомлень
+//* Довгострокове зберігання повідомлень
+* Asynchronous message exchange.
+* Ensuring message delivery guarantees.
+* Long-term message storage.
+
+== Technical design
+
+image::architecture/registry/operational/messaging/messsaging-overview.drawio.svg[float="center",align="center"]
+
+//_Підсистема асинхронного обміну повідомленнями_ побудована на основі https://kafka.apache.org/[Apache Kafka] - розподіленої платформи для потокової обробки та розподіленого зберігання повідомлень. Kafka використовує модель публікації-підписки, де виробник (публікуюча сторона) надсилає повідомлення до теми, а споживачі (підписники) підписуються на теми та отримують ці повідомлення.
+The _Asynchronous messaging subsystem_ is built on https://kafka.apache.org/[Apache Kafka], a stream processing and distributed message storage platform. Kafka employs a publish/subscribe model, also known as pub/sub, where a publisher sends messages to topics, and users subscribe to topics to receive those messages.
+
+//Для керування та розгортання кластерів Apache Kafka на платформі використовується https://strimzi.io/[Strimzi Cluster Operator]. Він забезпечує автоматизований спосіб налаштування, масштабування та керування Kafka-кластерами в середовищі OpenShift.
+Apache Kafka clusters are managed and deployed on the Platform using https://strimzi.io/[Strimzi Cluster Operator]. This tool provides an automated way to configure, scale, and manage Kafka clusters in an OpenShift environment.
+
+//== Складові підсистеми
+== Subsystem components
+
+=== Registry
+|===
+//|Назва компоненти|Представлення на оточенні|Походження|Призначення
+|Component name |Environment representation |Source |Function
+
+|Kafka broker
+|`kafka-cluster-kafka`
+|3rd-party
+//|Основний компонент Apache Kafka, який виконує роль посередника для обміну повідомленнями між виробниками та споживачами даних. Він є центральною частиною архітектури Kafka і відповідає за збереження та обробку потоків даних.
+|The main component of Apache Kafka that acts as an intermediary for message exchange between publishers and subscribers. It is the central part of the Kafka architecture responsible for storing and processing data streams.
+
+|ZooKeeper
+|`kafka-cluster-zookeeper`
+|3rd-party
+//|Централізована служба, яка забезпечує розподілену координацію та синхронізацію для розподілених систем. Брокери Kafka використовують ZooKeeper для координації та управління своїм кластером.
+|A centralized service that provides coordination and synchronization for distributed systems. Kafka brokers use ZooKeeper to coordinate and manage their clusters.
+
+|Entity Operator
+|`kafka-cluster-entity-operator`
+|3rd-party
+//|Складається з Topic Operator та User Operator. Topic Operator надає засіб керування темами в кластері Kafka за допомогою ресурсів Kubernetes. User Operator надає засіб керування користувачами Kafka за допомогою ресурсів Kubernetes.
+|This component consists of the Topic Operator and User Operator. The Topic Operator manages topics in a Kafka cluster using Kubernetes resources. The User Operator manages Kafka users using Kubernetes resources.
+
+|Kafka Exporter
+|`kafka-cluster-kafka-exporter`
+|3rd-party
+//|Публікує метрики кластеру Kafka для _Підсистема моніторингу подій та сповіщення_
+|A tool that publishes Kafka cluster metrics for the _Event monitoring and notification subsystem_.
+|===
+
+=== Platform
+
+|===
+//|Назва компоненти|Namespace|Представлення на оточенні|Походження|Репозиторій|Призначення
+|Component name |Namespace |Environment representation |Source |Repository |Function
+
+|Strimzi Cluster Operator
+|kafka-operator
+|`strimzi-cluster-operator`
+|3rd-party
+.2+|https://github.com/epam/edp-ddm-strimzi-kafka-operator[github:/epam/edp-ddm-strimzi-kafka-operator]
+//|Забезпечує автоматизований спосіб налаштування, масштабування та керування Kafka-кластерами в середовищі OpenShift.
+|This tool provides an automated way to configure, scale, and manage Kafka clusters in an OpenShift environment.
+
+|Strimzi Drain Cleaner
+|kafka-operator
+|`strimzi-drain-cleaner`
+|3rd-party
+//|Бере на себе управління поетапним оновленням під час процесу переносу подів Kafka кластеру між вузлами кластера OpenShift, забезпечуючи переміщення відповідних подів Kafka по одному зі збереженням бажаного рівня реплікації та доступності.
+|This tool takes over the staged upgrade management during the migration process of Kafka cluster pods between OpenShift cluster nodes, ensuring that the respective Kafka pods are migrated one at a time while maintaining the desired level of replication and availability.
+|===
+
+//== Технологічний стек
+== Technological stack
+
+//При проектуванні та розробці підсистеми, були використані наступні технології:
+The following technologies were used when designing and developing the subsystem:
+
+* xref:arch:architecture/platform-technologies.adoc#strimzi-operator[Strimzi Cluster Operator]
+* xref:arch:architecture/platform-technologies.adoc#kafka[Apache Kafka]
+
+//== Атрибути якості підсистеми
+== Subsystem quality attributes
+
+=== _Scalability_
+
+//_Підсистема асинхронного обміну повідомленнями_ може масштабуватися горизонтально, дозволяючи розподілене зберігання повідомлень та обробку великого обсягу даних. Вона може працювати на кластері з багатьма брокерами, що дозволяє розподіляти навантаження та забезпечувати високу доступність.
+The _Asynchronous messaging subsystem_ scales horizontally, enabling the distributed message storage and processing of large volumes of data. It can operate in a cluster with multiple brokers, enabling load distribution and ensuring high availability.
+
+=== _Performance_
+
+//Kafka підтримує обробку повідомлень у реальному часі та аналіз потокових даних. Він дозволяє писати, читати та обробляти великі обсяги даних у режимі реального часу.
+Kafka supports real-time message processing and streaming data analysis. It enables writing, reading, and processing large amounts of data in real time.
+
+=== _Security_
+
+//Комунікація завжди шифрується за допомогою TLS для взаємодії між:
+Communication between the following components is always encrypted using TLS:
+
+//* Брокерами Kafka
+* Kafka brokers
+//* Вузлами ZooKeeper
+* ZooKeeper nodes
+//* Операторами та брокерами Kafka
+* Kafka brokers and operators
+//* Операторами та вузлами ZooKeeper
+* ZooKeeper operators and nodes
+//* Експортером Kafka
+* Kafka Exporter
+
+//Також можна налаштувати шифрування TLS між брокерами Kafka та клієнтами.
+Additionally, TLS encryption can be configured between Kafka brokers and clients.
+
+//Kafka використовує аутентифікацію для забезпечення безпечного підключення клієнта до кластеру Kafka. Також кластери Kafka використовують авторизацію для контролю дозволених операцій на брокерах Kafka конкретними клієнтами або користувачами.
+Kafka uses authentication to ensure a secure client connection to the Kafka cluster. Kafka clusters also use authorization to control which operations are allowed on Kafka brokers by individual clients or users.
+
+=== _Observability_
+
+//_Підсистема асинхронного обміну повідомленнями_ підтримує журналювання вхідних запитів та збір метрик продуктивності для подальшого аналізу через веб-інтерфейси відповідних підсистем Платформи.
+The _Asynchronous messaging subsystem_ logs incoming requests and collects performance metrics for analysis through the web interfaces of respective Platform subsystems.
+
+[TIP]
+--
+//Детальніше з дизайном підсистем можна ознайомитись у відповідних розділах:
+For details on the subsystem design, see:
+
+* xref:arch:architecture/platform/operational/logging/overview.adoc[]
+* xref:arch:architecture/platform/operational/monitoring/overview.adoc[]
+--
+
+=== _Reliability_
+
+//Kafka забезпечує надійну доставку повідомлень, зберігаючи їх на диску та реплікуючи на кілька брокерів. Це дозволяє уникнути втрати даних навіть при відмовах окремих компонентів системи.
+Kafka ensures reliable message delivery by saving messages on disk and replicating them across multiple brokers. This prevents data loss even when individual components of the system fail.
+
+//xref:architecture/platform/operational/backup-recovery/overview.adoc[Підсистема резервного копіювання та відновлення] включає у себе резервне копіювання файлових систем брокерів Kafka.
+The xref:architecture/platform/operational/backup-recovery/overview.adoc[_Backup and restore subsystem_] handles backing up Kafka broker file systems.
