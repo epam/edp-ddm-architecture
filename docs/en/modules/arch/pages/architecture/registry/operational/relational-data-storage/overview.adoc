@@ -1,0 +1,221 @@
+= Relational database management subsystem
+
+include::platform:ROOT:partial$templates/document-attributes/arch-set-en.adoc[]
+
+include::platform:ROOT:partial$admonitions/language-en.adoc[]
+
+== Overview
+
+//_Підсистема управління реляційними базами_ даних надає надійне та масштабоване зберігання даних для сервісів реєстру. Підсистема використовує _Crunchy PGO_ для управління кластерами _PostgreSQL_.
+The _Relational database management subsystem_ provides reliable and scalable data storage for registry services. The subsystem uses _Crunchy PGO_ to manage _PostgreSQL_ clusters.
+
+//Підсистема забезпечує управління користувачами та схемами, за підтримки _Liquibase_ для контролю версій схем баз даних. Крім того, підсистема підтримує географічні об'єкти та геолокаційні запити з використанням _PostGIS_, що дозволяє аналізувати та візуалізувати геопросторові дані.
+The subsystem provides user and schema management, supported by _Liquibase_'s database schema version control. In addition, the subsystem supports geographic objects and geolocation queries using _PostGIS_, which enables analyzing and visualizing geospatial data.
+
+//Підсистема розроблена з врахуванням вимог до масштабування, дозволяючи горизонтально масштабувати кластери _PostgreSQL_, щоб задовольнити змінні потреби. На випадок втрати даних або їх пошкодження, підсистема включає потужні функції резервного копіювання та відновлення, з автоматичними графіками резервного копіювання та можливістю відновлення на певний момент у часі.
+The subsystem is designed to with scaling requirements in mind, allowing _PostgreSQL_ clusters to scale horizontally to meet changing needs. In the event of data loss or corruption, the subsystem includes powerful backup and recovery features, with scheduled automatic backups and point-in-time recovery.
+
+//Для забезпечення надійності та продуктивності підсистеми вона має вбудовані можливості моніторингу та логування, з метриками в реальному часі через _Prometheus_ та _Grafana_.
+The subsystem has built-in monitoring and logging capabilities, with real-time metrics via _Prometheus_ and _Grafana_.
+
+//Сервіси реєстру використовують дану підсистему для зберігання своїх службових даних та даних реєстру.
+Registry services use this subsystem to store their service data and registry data.
+
+== Subsystem functions
+
+////
+* Зберігання даних реєстру
+** Зберігання бізнес-даних
+** Зберігання історії змін бізнес-даних
+** Зберігання журналу подій аудиту
+** Зберігання глобальних налаштувань
+** Зберігання персональних налаштувань користувачів
+** Зберігання стану виконання бізнес-процесів
+* Контроль цілісності даних
+* Підтримка географічних об'єктів та геолокаційних запитів
+* Забезпечення механізмів контролю доступу до даних, автентифікації та авторизації
+* Резервне копіювання та відновлення, в тому числі відновлення на момент часу (PITR)
+* Підтримка горизонтального масштабування
+* Підтримка комплексної аналітики та звітності
+////
+* Storage of registry data, including:
+** Business data
+** Business data change history
+** Audit event logs
+** Global settings
+** User-specific settings
+** Business process execution state
+* Data integrity control
+* Support for geographic objects and geolocation queries
+* Data access control, authentication, and authorization
+* Backup and recovery, including point-in-time recovery (PITR)
+* Horizontal scaling
+* Comprehensive analytics and reporting
+
+== Technical design
+
+image::architecture/registry/operational/relational-data-storage/registry-rdbms.svg[float="center",align="center",width=500]
+
+//_Підсистема управління реляційними базами даних_ складається з двох екземплярів СКБД _(Систем керування базами даних)_, а саме операційного (_Operational Instance_) та аналітичного (_Analytical Instance_). Операційний екземпляр містить БД сервісів і БД реєстру, тоді як аналітичний екземпляр містить аналітичну БД реєстру яка наповнюється за допомогою реплікації з БД реєстру операційного екземпляру.
+The _Relational database management subsystem_ consists of two database management system (DBMS) instances: _Operational Instance_ and _Analytical Instance_. The Operational Instance contains services and registry databases, while the Analytical Instance contains the registry analytical database populated by replicating the Operational Instance's registry database.
+
+//Процес реплікації реалізовано за допомогою логічної реплікації _Postgres_, яка керується та налаштовується підсистемою розгортання реєстру.
+The replication process is implemented using _Postgres_ logical replication, which is managed and configured by the _Registry deployment subsystem_.
+
+//Нарешті, аналітичний екземпляр в основному використовується підсистемою аналітичної звітності реєстру для комплексної аналітики та звітності щодо даних, що зберігаються в БД реєстру.
+The Analytical Instance is primarily used by the _Registry analytical reporting subsystem_ for comprehensive analytics and reporting on the registry database data.
+
+//Кожен екземпляр складається з компонентів представлених на наступній діаграмі:
+Each instance consists of the components presented in the following diagram:
+
+image::architecture/registry/operational/relational-data-storage/rdbms-component-architecture.svg[float="center",align="center",width=700]
+
+//* Компонент _PostgresCluster_ instance представляє собою кластер _PostgreSQL_, який керується _Crunchy Postgres_ оператором. Цей оператор відповідає за керування такими ресурсами:
+* The _PostgresCluster_ instance component represents a _PostgreSQL_ cluster managed by the _Crunchy Postgres_ operator. This operator is responsible for managing the following resources:
+//** _PostgreSQL Primary_ под: Основний (primary) под бази даних _PostgreSQL_, який використовується для запису даних та виконання транзакцій.
+** _PostgreSQL_ primary pod: The primary _PostgreSQL_ database pod used to write data and perform transactions.
+//** _PostgreSQL Replica_ поди: Додаткові (replica), доступні лише на читання, поди бази даних _PostgreSQL_, які створюються лише у випадку, коли налаштовано масштабування на 2 або більше поди.
+** _PostgreSQL_ replica pods: Additional _PostgreSQL_ database read-only replica pods. Created only when scaling to two or more pods.
+//** Сервіси екземпляру _PostgresCluster_: Сервіси _Kubernetes_ що забезпечують балансування навантаження та надання стабільної IP-адреси та доменного імені.
+** _PostgresCluster_ instance services: _Kubernetes_ services that provide load balancing and a stable IP address and domain name.
+//** Налаштування резервного копіювання: Конфігураційні параметри, які визначають політику резервного копіювання та зберігання резервних копій бази даних.
+** Backup settings: Configuration options that define the database backup process and storage policy.
+//** Налаштування експорту метрик для моніторингу: Конфігураційні параметри, які визначають, які метрики бази даних експортуються для моніторингу та аналізу.
+** Metrics export settings: Configuration options that determine which database metrics to export for monitoring and analysis.
+//* Компонент _PgPool II_ виконує роль проміжного рівня між додатками та кластером _PostgreSQL_. Він забезпечує прозоре та автоматичне розділення запитів на читання та запис з перенаправленням їх на відповідні сервіси екземпляру _PostgresCluster_. Цей компонент і його сервіс керуються безпосередньо, без допомоги оператора.
+* The _PgPool II_ component is an intermediate layer between applications and the _PostgreSQL_ cluster. It provides transparent and automatic separation of read and write requests, redirecting them to the corresponding services of the _PostgresCluster_ instance. This component and its service are managed directly without the help of an operator.
+
+//NOTE: Для економії ресурсів под _PgPool II_ та сервіс _pool_ не створюються на _аналітичному екземплярі СКБД_, оскільки жоден сервіс що працює з ним не потребує автоматичного розділення запитів на читання та запитів на запис
+NOTE: To save resources, the _PgPool II_ pod and the _pool_ service are not created for the _Analytical Instance_ of the DBMS since none of the services working with it require automatic separation of read and write requests.
+
+//Доступ до екземпляру СКБД надається через 4 сервіси які виконують наступні функції:
+Access to the DBMS instance is provided through the following services:
+
+//* _Primary_ - направляє запити на primary под, який дає можливість читання та запису БД. Використовується для підключення до БД службовими додатками які вносять зміни у БД але не потребують балансування навантаження, наприклад _Задачею керування об’єктами БД_
+* _Primary_: Directs requests to the primary pod, which handles database reads and writes. Service applications that need to make changes to the database but don't require load balancing use this service to connect to the database -- for example, the _Database object management task_.
+//* _Replica_ - балансує запити між replica подами, які дають тільки можливість читання БД. Наразі використовується тільки PgPool II для автоматичного перенаправлення запитів на читання
+* _Replica_: Balances requests between replica pods, which provide read-only access to the database. Currently, only PgPool II is used to automatically redirect read requests.
+//* _Pods_ - балансує запити між всіма подами, primary і replica. Використовується додатками які здійснюють тільки читання БД, наприклад _Підсистемою аналітичної звітності реєстру_
+* _Pods_: Balances requests between all pods, primary and replica. It is used by applications that only perform database reads -- for example, the _Registry analytical reporting subsystem_.
+//* _Pool_ - направляє запити на PgPool II, який автоматично балансує запити на читання між всіма подами, а запити на запис направляє на primary под. Використовується додатками які здійснюють як читання так і запис БД та потребують балансування навантаження, тобто переважною більшістю додатків реєстру.
+* _Pool_: Directs requests to PgPool II, which automatically balances read requests between all pods and directs write requests to the primary pod. It is used by applications that perform both database reads and writes and require load balancing, which includes most of the registry applications.
+
+//NOTE: На розгорнутому оточенні імена ресурсів доповнюються префіксом з іменем екземпляра СКБД. Наприклад `operational-pool` чи `analytical-pods`.
+NOTE: In a deployed environment, resource names are prefixed with the name of the DBMS instance -- for example, `operational-pool` or `analytical-pods`.
+
+//== Компоненти підсистеми
+== Subsystem components
+//TODO: Do we need the Repository column for en version?
+
+[options="header",cols="a,a,a,a,a"]
+|===
+//|Назва компоненти|Представлення в платформі|Походження|Репозиторій|Призначення
+|Component name |Registry representation |Source |Repository |Function
+
+//|_Операційний екземпляр СКБД_
+|_Operational DBMS Instance_
+|`operational` +
+`operational-pool`
+|3rd-party
+.4+|https://github.com/epam/edp-ddm-registry-postgres[github:/epam/edp-ddm-registry-postgres]
+//|Екземпляр СКБД що обробляє операційні запити сервісів. Містить операційні бази сервісів та операційну базу реєстру.
+|A DBMS instance that processes operational service requests. Contains the services and registry operational databases.
+
+//|_Аналітичний екземпляр СКБД_
+|_Analytical DBMS Instance_
+|`analytical`
+|3rd-party
+//|Екземпляр СКБД що обробляє аналітичні запити підсистеми аналітичної звітності. Містить аналітичну базу реєстру.
+|A DBMS instance that processes analytical requests of the analytical reporting subsystem. Contains the registry analytical database.
+
+//|_Задача керування об'єктами БД_
+|_Database object management task_
+|`run-db-scripts-job`
+|origin
+//|Відповідальна за створення та оновлення баз даних, користувачів та службових схем БД
+|A component responsible for creating and updating databases, users, and DB service schemas.
+
+|_Crunchy Postgres Operator_
+|`pgo` +
+`pgo-upgrade`
+|3rd-party
+//|Відповідальний за розгортання та конфігурацію екземплярів кластерів _PostgreSQL_
+|A tool responsible for deploying and configuring _PostgreSQL_ cluster instances.
+|===
+
+== Technological stack
+
+//При проектуванні та розробці підсистеми, були використані наступні технології:
+The following technologies were used when designing and developing the subsystem:
+
+* xref:arch:architecture/platform-technologies.adoc#postgresql[PostgreSQL]
+* xref:arch:architecture/platform-technologies.adoc#crunchy-operator[CrunchyData Postgres Operator]
+* xref:arch:architecture/platform-technologies.adoc#pgpool[Pgpool]
+* xref:arch:architecture/platform-technologies.adoc#postgis[PostGIS]
+* xref:arch:architecture/platform-technologies.adoc#pgbackrest[pgBackRest]
+
+//== Атрибути якості підсистеми
+== Subsystem quality attributes
+
+=== _Scalability_
+
+//_Підсистема управління реляційними базами даних_ підтримує вертикальне та горизонтальне масштабування у разі збільшення навантаження шляхом виділення додаткових ресурсів для подів підсистеми або використання механізмів описаних у розділі xref:arch:architecture/registry/operational/relational-data-storage/rdbms-horizontal-scaling.adoc[Горизонтальне масштабування].
+The _Relational database management subsystem_ supports vertical and horizontal scaling in case of increased load by allocating additional resources for subsystem pods or using the xref:arch:architecture/registry/operational/relational-data-storage/rdbms-horizontal-scaling.adoc[horizontal scaling] mechanisms.
+
+=== _Security_
+
+//_Підсистема управління реляційними базами даних_ забезпечує захист каналу інформаційної взаємодії між сервісами підсистеми за допомогою _SSL/TLS_ шифрування трафіку. Також вона надає можливість _SSL/TLS_ шифрування трафіку при взаємодії з іншими підсистемами.
+The _Relational database management subsystem_ protects the cross-service communication channel using _SSL/TLS_ traffic encryption. It also supports _SSL/TLS_ traffic encryption when interacting with other subsystems.
+
+//Для підсистеми налаштовані мережеві політики які дозволяють мережеву взаємодію тільки з сервісами внесеними у білий список.
+Network policies configured for the subsystem allow network interaction only with the whitelisted services.
+
+//Для кожного сервісу створені окремі користувачі БД. Їм видані мінімальні привілеями необхідні для роботи.
+Separate database users are created for each service. They are given the minimal privileges required for work.
+
+//Дані зберігаються у _Підсистемі розподіленого зберігання файлів_ та використовують її можливості забезпечення безпеки.
+//TODO: Підсистема розподіленого зберігання ДАНИХ, а не файлів, чи це дві окремі підсистеми?
+Data is stored in the _Distributed data storage subsystem_ using its security capabilities.
+
+=== _Performance_
+
+//Висока продуктивність _Підсистеми управління реляційними базами даних_ досягається завдяки:
+High performance of the subsystem is achieved through the following:
+
+//* Використання найкращих практик при моделюванні БД.
+//* Відокремленню бази даних для аналітичних робочих навантажень.
+//* Використанню механізму xref:arch:architecture/registry/operational/relational-data-storage/rdbms-horizontal-scaling.adoc[горизонтального масштабування].
+* Utilizing best practices in database modeling.
+* Using a separate database for analytical workloads.
+* xref:arch:architecture/registry/operational/relational-data-storage/rdbms-horizontal-scaling.adoc[Horizontal scaling].
+
+=== _Observability_
+
+//_Підсистема управління реляційними базами даних_ підтримує журналювання вхідних запитів та збір метрик продуктивності для подальшого аналізу через веб-інтерфейси відповідних підсистем Платформи.
+The _Relational database management subsystem_ logs incoming requests and collects performance metrics for analysis through the web interfaces of respective Platform subsystems.
+
+//Архітектура містить в собі використання _Postgres exporter_ та xref:architecture/platform/operational/monitoring/overview.adoc[підсистеми моніторингу подій та сповіщення] для моніторингу та візуалізації метрик з баз даних _PostgreSQL_.
+The architecture includes the use of _Postgres exporter_ and the xref:architecture/platform/operational/monitoring/overview.adoc[_Event monitoring and notification subsystem_] for monitoring and visualizing _PostgreSQL_ database metrics.
+
+//_Postgres exporter_ - це інструмент, який збирає метрики з сервера PostgreSQL та викладає їх у форматі, який може бути зібраний сервісом _Prometheus_ _підсистеми моніторингу подій та сповіщення_.
+_Postgres exporter_ is a tool that collects metrics from the PostgreSQL server and outputs them in a format usable by the _Prometheus_ service of the _Event monitoring and notification subsystem_.
+
+//_Postgres exporter_ встановлено на сервері _PostgreSQL_ та налаштовано для збору необхідних метрик з бази даних. А в  _підсистемі моніторингу подій та сповіщення_ встановлено інформаційні панелі які візуалізують ці метрики.
+_Postgres exporter_ is installed on the _PostgreSQL_ server and configured to collect the database metrics. In turn, the _Event monitoring and notification subsystem_ has dashboards that visualize these metrics.
+
+[TIP]
+--
+//Детальніше з дизайном підсистем можна ознайомитись у відповідних розділах:
+For details on the subsystem design, see:
+
+* xref:arch:architecture/platform/operational/logging/overview.adoc[]
+* xref:arch:architecture/platform/operational/monitoring/overview.adoc[]
+--
+
+=== _Reliability_
+
+//Надійність _Підсистеми управління реляційними базами даних_ забезпечується вбудованими функціями xref:arch:architecture/registry/operational/relational-data-storage/rdbms-backup-recovery.adoc[резервного копіювання та відновлення], з автоматичними графіками резервного копіювання та можливістю відновлення на певний момент у часі.
+Reliability of the _Relational database management subsystem_ is ensured by built-in xref:arch:architecture/registry/operational/relational-data-storage/rdbms-backup-recovery.adoc[backup and recovery] features, with automatic backup schedules and point-in-time recovery.
+
+//Додатково до внутрішніх механізмів резервного копіювання, xref:architecture/platform/operational/backup-recovery/overview.adoc[підсистема резервного копіювання та відновлення] включає у себе резервне копіювання файлових систем БД.
+In addition to internal backup mechanisms, the xref:architecture/platform/operational/backup-recovery/overview.adoc[_Backup and restore subsystem_] includes database file system backups.
