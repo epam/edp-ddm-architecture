@@ -1,0 +1,254 @@
+//= Проміжне збереження даних, внесених через UI-форми задач бізнес-процесів
+= Interim data saving for the data entered through the UI task forms
+
+//TODO: Is the "interim" translation of the word "проміжний" correct in this context? It seems more relevant than "intermediate".
+
+include::platform:ROOT:partial$templates/document-attributes/arch-set-en.adoc[]
+
+include::platform:ROOT:partial$admonitions/language-en.adoc[]
+
+//== Функціональні сценарії
+== Functional scenarios
+
+//- Збереження даних, внесених через UI-форму користувачем, без завершення виконання задачі [_Необхідно реалізувати_]
+//- Відображення попередньо збережених даних на UI-формі при поверненні до виконання задачі [_Підтримується_]
+- Saving data entered by the user through a UI form without task completion [_To be implemented_]
+- Displaying previously saved data on the UI form upon returning to task execution [_Supported_]
+
+//== Базові принципи
+== Basic principles
+
+//- Проміжне збереження доступне тільки для даних, які вносяться через UI-форми задач (_UserTask_) в рамках ініційованого бізнес-процесу
+- Interim saving is only available for data entered through UI task forms (_UserTask_) within an initiated business process
+//- Функція проміжного збереження не доступна для даних, які були внесені через _стартову форму_ бізнес-процесу без фактичного ініціювання його виконання
+- The interim saving function is not available for data entered through the _initial form_ of the business process without the actual initiation of its execution
+//- Функція проміжного збереження не доступна для задач підпису даних (_CitizenSignTask_ та _OfficerSignTask_)
+- The interim saving function is not available for data signature tasks (_CitizenSignTask_ and _OfficerSignTask_).
+//- Проміжне збереження є системною функцією, яка доступна безумовно для вищезазначених UI-форм та не потребує окремого налаштування адміністратором
+-  Interim saving is a system function that is unconditionally available for the aforementioned UI forms and does not require separate configuration by the administrator
+//- Ініціювання проміжного збереження даних, внесених через UI-форму задачі у виконанні є свідомим вибором користувача в залежності від обставин через виклик системної функції на UI-формі
+- Initiating interim data saving for data entered through a UI task form during execution is a conscious choice by the user, depending on the circumstances, through invoking a system function on the UI form
+//- Проміжне збереження даних не є автоматичним / періодичним процесом для UI-форми у процесі внесення даних користувачем
+- Interim data saving is not an automatic or periodic process for the UI form during user data entry
+//- Проміжне збереження даних доступне тільки за умови, що дані відповідають налаштованим правилам валідації на відповідній UI-формі
+- Interim data saving is only possible if the data conforms to the configured validation rules on the respective UI form
+//- При поверненні до виконання задачі бізнес-процесу, для якої було ініційовано виклик системної функції збереження даних, внесених користувачем через відповідну UI-форму, система забезпечує автоматичне заповнення збереженими даними для продовження роботи
+- Upon returning to the execution of a business process task for which the system function for saving user-entered data through the corresponding UI form was initiated, the system automatically populates the work with the saved data to continue
+
+//== Технічний дизайн
+== Technical design
+
+//На даній діаграмі зображено залучені для реалізації вимог сервіси платформи та взаємодію між ними. Додатково зображено важливі особливості, які необхідно брати до уваги в рамках реалізації.
+The diagram depicts the services of the platform involved in fulfilling the requirements and their interactions. Additionally, important features to consider within the implementation are illustrated.
+
+image::architecture/registry/operational/bpms/bpm-interim-save-load-form-data.svg[bpm-interim-save-load-form-data, 800]
+
+//=== Компоненти системи та їх призначення в рамках дизайну рішення
+=== System components and their roles in solution design
+
+//У даному розділі наведено перелік компонент системи, які задіяні або потребують змін/створення в рамках реалізації функціональних вимог згідно технічного дизайну рішення.
+This section lists the components of the system that are involved or require modification/creation as part of implementing the functional requirements according to the technical solution design.
+
+|===
+//|Компонент|Службова назва|Сценарії використання
+|Component|Service name|Usage scenarios
+
+//|_Кабінети посадової особи та громадянина_
+|_Officer and Citizen portals_
+|- *officer-portal*
+
+- *citizen-portal*
+//|- Безумовне відображення системної функції проміжного збереження даних для UI-форм задач бізнес-процесів [_Необхідно реалізувати_]
+
+//- Ініціювання системної функції проміжного збереження даних для UI-форм задач бізнес-процесів [_Необхідно реалізувати_]
+
+//- Відображення збережених даних на UI-формі при поверненні до виконання задачі [_Підтримується_]
+
+|- Unconditional display of the system function for interim data saving on UI forms of business process tasks [_To be implemented_]
+
+- Initiating the system function for interim data saving on UI forms of business process tasks [_To be implemented_]
+
+- Displaying saved data on the UI form upon returning to task execution [_Supported_]
+
+
+//|_Сервіс управління задачами користувачів_
+|_User tasks management service_
+|*user-task-management*
+//|- Обробка запитів на проміжне збереження даних в рамках роботи над задачами користувачів [_Необхідно реалізувати_]
+
+//- Обробка запитів на отримання тимчасово збережених даних UI-форми задачі для подальшого відображення [_Підтримується_]
+|- Handling requests for interim data saving within user task operations [_To be implemented_]
+
+- Handling requests for retrieving temporarily saved data of a task's UI form for subsequent display [_Supported_]
+
+//|_Сервіс валідації даних UI-форм_
+|_UI form data validation service_
+|*form-submission-validation*
+//|Валідація даних, внесених користувачем через UI-форми задач бізнес-процесів на відповідність налаштованим правилам
+|Validation of data entered by the user through UI task forms for conformity to configured rules
+
+//|_Розподілене in-memory сховище даних_
+|_Distributed in-memory data storage_
+|*redis*
+//|Зберігання проміжних даних на час виконання бізнес-процесів
+|Storing interim data during the execution of business processes
+
+|===
+
+//=== Взаємодія компонентів системи
+=== System component interaction
+
+//==== Збереження даних, внесених через UI-форму користувачем, без завершення виконання задачі
+==== Saving data entered through user interface (UI) form without task completion
+
+[plantuml, bpm-save-interim-form-submission, svg]
+----
+include::partial$architecture/registry/operational/bpms/bpm-save-interim-form-submission.puml[]
+----
+
+//==== Відображення попередньо збережених даних на UI-формі при поверненні до виконання задачі
+==== Displaying previously saved data on UI form upon returning to task execution
+
+[plantuml, bpm-populate-interim-form-submission, svg]
+----
+include::partial$architecture/registry/operational/bpms/bpm-populate-interim-form-submission.puml[]
+----
+
+//=== Розширення API системи для реалізації сценаріїв
+=== System API extension for scenario implementation
+
+//==== Збереження проміжних даних UI-форми задачі
+==== Saving interim data of UI task form
+
+[WARNING]
+//Отримання доступу до API можливе лише в рамках виконання запиту автентифікованого користувача в системі.
+//Даний API-роут має бути опублікованим для зовнішнього доступу через окремий _Kong Route_.
+Access to the API is possible only within the context of a request executed by an authenticated user in the system. This API route should be exposed for external access through a separate _Kong Route_.
+
+_POST /api/task/{id}/save_
+
+|===
+//|Параметр|Тип|Частина запиту|Опис
+|Parameter|Type|Request part|Description
+
+|*X-Access-Token*
+|JWT
+//|HTTP заголовок
+|HTTP header
+//|Токен доступу користувача
+|User access token
+
+|*id*
+//|Текстовий
+|Text
+//|Параметр запиту
+|Request parameter
+//|Унікальний ідентифікатор задачі у виконанні
+|Unique identifier of the task in execution
+|===
+
+//.Приклад тіла запиту
+.Example request body
+[source, json]
+----
+{
+  "data": {
+    ...
+  }
+}
+----
+
+//.Коди помилок
+.Error codes
+|===
+//|Код|Опис
+|Code|Description
+
+a|[green]#200#
+//|OK з поверненням результату у вигляді збережених даних
+|OK with the result in the form of saved data
+a|[red]#400#
+//|Некоректно сформований запит
+|Malformed request
+a|[yellow]#401#
+//|Помилка автентифікації (відсутній токен доступу)
+|Authentication error (access token missing)
+a|[red]#422#
+//|Помилка валідації даних відносно схеми UI-форми задачі
+|Data validation error regarding the UI task form schema
+a|[red]#500#
+//|Серверна помилка обробки запиту
+|Server error processing the request
+|===
+
+//==== Отримання попередньо збережених даних UI-форми задачі БП
+==== Retrieving previously saved data of UI task form in business process
+
+[WARNING]
+//Отримання доступу до API можливе лише в рамках виконання запиту автентифікованого користувача в системі.
+//Даний API-роут має бути опублікованим для зовнішнього доступу через окремий _Kong Route_.
+Access to the API is possible only within the context of a request executed by an authenticated user in the system. This API route should be exposed for external access through a separate _Kong Route_.
+
+_GET /api/task/{id}_
+
+|===
+//|Параметр|Тип|Частина запиту|Опис
+|Parameter|Type|Request part|Description
+
+|*X-Access-Token*
+|JWT
+//|HTTP заголовок
+|HTTP header
+//|Токен доступу користувача
+|User access token
+
+|*id*
+//|Текстовий
+|Text
+//|Параметр запиту
+|Request parameter
+//|Унікальний ідентифікатор задачі у виконанні
+|Unique identifier of the task in execution
+|===
+
+//.Приклад відповіді на запит
+.Example response to request
+[source, json]
+----
+{
+  "id": "",
+  "taskDefinitionKey": "",
+  "formKey": "",
+  "name": "",
+  "assignee": "",
+  "data": {
+    ...
+  }
+}
+----
+
+//.Коди помилок
+.Error codes
+|===
+//|Код|Опис
+|Code|Description
+
+a|[green]#200#
+//|OK з поверненням результату у вигляді мета-даних задачі та збережених даних
+|OK with the result in the form of task metadata and saved data
+a|[red]#400#
+//|Некоректно сформований запит
+|Malformed request
+a|[yellow]#401#
+//|Помилка автентифікації
+|Authentication error
+a|[yellow]#403#
+//|Помилка авторизації
+|Authorization error
+a|[yellow]#404#
+//|Задача за вказаним _{id}_ відсутня
+|Task with specified {id} is absent
+a|[red]#500#
+//|Серверна помилка обробки запиту
+|Server error processing the request
+|===
