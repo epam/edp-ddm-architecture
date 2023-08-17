@@ -1,0 +1,172 @@
+= Non-relational database management subsystem
+
+include::platform:ROOT:partial$templates/document-attributes/arch-set-en.adoc[]
+
+include::platform:ROOT:partial$admonitions/language-en.adoc[]
+
+== Overview
+
+//Підсистема, призначенням якої є зберігання складових регламенту реєстру та проміжних даних, які продукуються системою у процесі взаємодії користувача з системою.
+The _Non-relational database management subsystem_ stores the registry regulations components and intermediate data produced by the system in the process of user interactions.
+
+== Subsystem functions
+
+//* Довготривале зберігання схем UI-форм бізнес-процесів
+//* Короткострокове зберігання проміжних даних бізнес-процесів
+//* Короткострокове зберігання JWT-токенів аутентифікованих користувачів
+* Long-term storage of business process UI form schemas.
+* Short-term storage of business process intermediate data.
+* Short-term storage of JWT tokens of authenticated users.
+
+== Technical design
+
+image::architecture/registry/operational/nonrelational-data-storage/redis.svg[float="center",align="center"]
+
+//_Підсистема управління нереляційними базами даних_ використовує  _Redis_ в якості key-value сховища, а відмовостійкість забезпечується за допомогою механізму _Redis Sentinel_.
+The _Non-relational database management subsystem_ uses _Redis_ as a key-value store, while the _Redis Sentinel_ mechanism ensures fault tolerance.
+
+//Для автоматизації розгортання та управління кластером _Redis_ з _Redis Sentinel_ використовується _Kubernetes_-оператор https://github.com/spotahome/redis-operator[Redis Operator by Spotahome].
+The _Kubernetes_ operator https://github.com/spotahome/redis-operator[Redis Operator by Spotahome] is used to automate the deployment and management of the _Redis_ cluster with _Redis Sentinel_.
+
+//_Redis Sentinel_ є розподіленою системою, яка складається з декількох екземплярів _Sentinel_ процесів, які взаємодіють один з одним.
+_Redis Sentinel_ is a distributed system consisting of multiple instances of _Sentinel_ processes that interact with each other.
+
+//_Redis Sentinel_ має наступні особливості:
+_Redis Sentinel_ has the following features:
+
+//- факт відмови мастер вузла підтверджується декількома екземплярами _Sentinel_, які формують кворум, що зменшує кількість хибних спрацювань
+//- _Sentinel_ сам по собі є відмовостійкою системою, яка може виконувати свої функції навіть у разі, якщо частина _Sentinel_ екземплярів не працюють.
+* Master node failure is confirmed by several _Sentinel_ instances forming a quorum, reducing the chances of false triggers.
+* _Sentinel_ is a fault-tolerant system that can perform its functions even when some _Sentinel_ instances are not operational.
+
+//_Redis Sentinel_ надає наступні можливості:
+_Redis Sentinel_ provides the following capabilities:
+
+//- _Моніторинг_ - _Sentinel_ слідкує за тим, щоб екземпляри _Redis-мастера_ та _реплік_ працювали коректно
+* *Monitoring*: _Sentinel_ ensures that _Redis master_ and _replica_ instances are working correctly.
+//- _Алертинг_ - _Sentinel_ надає можливості відправки повідомлень адміністратору у разі ідентифікації збоїв екземплярів _Redis_
+* *Alerting*: _Sentinel_ can notify administrators when a _Redis_ instance failure is identified.
+//- _Автоматичне відновлення_ - У разі, якщо екземпляр _Redis-мастер_ починає працювати некоректно, _Sentinel_ ініціює процес визначення нового _Redis-мастер_ екземпляру та реконфігурації інших _Redis-реплік_ на взаємодію з новим _мастером_.
+* *Automatic recovery* - If a _Redis master_ instance stops working, _Sentinel_ initiates the process of determining a new _Redis master_ instance and reconfiguring other _Redis replicas_ to interact with the new _master_.
+
+[TIP]
+--
+//Детальну інформацію можно знайти в офіційній технічній документації https://redis.io/docs/manual/sentinel/[Redis Sentinel].
+For details, refer to https://redis.io/docs/manual/sentinel/[Redis Sentinel documentation].
+--
+
+//== Складові підсистеми
+== Subsystem components
+//TODO: Do we need the Repository column for en version?
+
+[options="header",cols="a,a,a,a,a"]
+|===
+//|Назва компоненти|Представлення в реєстрі|Походження|Репозиторій|Призначення
+|Component name |Registry representation |Source |Repository |Function
+
+|_Sentinel service_
+|`rfs-redis-sentinel`
+|3rd-party
+|https://gerrit-mdtu-ddm-edp-cicd.apps.cicd2.mdtu-ddm.projects.epam.com/admin/repos/mdtu-ddm/infrastructure/redis-sentinel[gerrit:/mdtu-ddm/infrastructure/redis-sentinel]
+//|Керування високою доступністю та автоматичним переключенням між серверами Redis
+|Managing high availability and automatic failover between Redis servers.
+
+|_Redis key-value store_
+|`rfr-redis-sentinel`
+|3rd-party
+|https://github.com/redis/redis[github:/redis/redis]
+//|Збереження даних у пам'яті у форматі ключ-значення
+|Storing data in memory in key-value format.
+
+|_Kubernetes operator for Redis_
+|`redis-operator`
+|3rd-party
+|https://github.com/epam/edp-ddm-redis-operator[github:/epam/edp-ddm-redis-operator]
+//|Розгортання та конфігурація ресурсів Redis Sentinel
+|Deploying and configuring Redis Sentinel resources.
+|===
+
+//== Класифікація даних, що зберігаються у _Redis_
+== Classification of data stored in Redis
+
+|===
+//|Простір імен|Підсистема власник|Опис
+|Namespace |Owner subsystem |Description
+
+|xref:arch:architecture/registry/operational/ext-api-management/redis-storage.adoc#_sessions[sessions]
+|xref:arch:architecture/registry/operational/ext-api-management/overview.adoc[External traffic management subsystem of the registry operational zone]
+|User JWT tokens.
+
+|xref:arch:architecture/registry/administrative/ext-api-management/redis-storage.adoc#_sessions_admin_tools[sessions_admin_tools]
+|xref:arch:architecture/registry/administrative/ext-api-management/overview.adoc[External traffic management subsystem of the registry administrative zone]
+|User JWT tokens.
+
+|xref:arch:architecture/registry/operational/bpms/redis-storage.adoc#_bpm_form_submissions[bpm-form-submissions]
+.4+.^|xref:arch:architecture/registry/operational/bpms/overview.adoc[Business process management subsystem]
+|Data received through UI forms.
+|xref:arch:architecture/registry/operational/bpms/redis-storage.adoc#_bpm_message_payloads[bpm-message-payloads]
+|Data generated as a result of cross-process interaction.
+|xref:arch:architecture/registry/operational/bpms/redis-storage.adoc#_bpm_form_schemas[bpm-form-schemas]
+|UI form schemas.
+|xref:arch:architecture/registry/operational/bpms/redis-storage.adoc#_bpm_form_scripts[bpm-form-scripts]
+|External scripts for UI forms.
+
+|xref:arch:architecture/registry/operational/user-settings/redis-storage.adoc#_channel_verification_codes[channel-verification-codes]
+|xref:arch:architecture/registry/operational/user-settings/overview.adoc[User settings management subsystem]
+|OTP codes to confirm the user communication channel.
+|===
+
+== Technological stack
+
+//При проектуванні та розробці підсистеми, були використані наступні технології:
+The following technologies were used when designing and developing the subsystem:
+
+* xref:arch:architecture/platform-technologies.adoc#redis[Redis]
+* xref:arch:architecture/platform-technologies.adoc#redis-sentinel[Redis Sentinel]
+* xref:arch:architecture/platform-technologies.adoc#redis-operator[Redis Operator]
+
+//== Атрибути якості підсистеми
+== Subsystem quality attributes
+
+=== _Scalability_
+
+//_Підсистема управління нереляційними базами даних_ підтримує вертикальне масштабування у разі збільшення навантаження шляхом виділення додаткових ресурсів для подів підсистеми.
+The _Non-relational database management subsystem_ supports vertical scaling in case of increased load by allocating additional resources for subsystem pods.
+
+//Також підсистема підтримує горизонтальне масштабування шляхом додавання реплік та можливість балансування читання між ними.
+The subsystem also supports horizontal scaling by adding replicas and balancing reads between them.
+
+=== _Security_
+
+//_Підсистема управління нереляційними базами даних_ забезпечує захист каналу інформаційної взаємодії між сервісами підсистеми за допомогою _SSL/TLS_ шифрування трафіку.
+The _Non-relational database management subsystem_ protects the cross-service communication channel using _SSL/TLS_ traffic encryption.
+
+//Взаємодія з сервісами підсистеми потребує аутентифікації клієнтів.
+Interaction with subsystem services requires client authentication.
+
+//Дані зберігаються у _Підсистемі розподіленого зберігання файлів_ та використовують її можливості забезпечення безпеки.
+//TODO: Підсистема розподіленого зберігання ДАНИХ, а не файлів, чи це дві окремі підсистеми?
+Data is stored in the _Distributed data storage subsystem_ using its security capabilities.
+
+=== _Availability_
+
+//_Підсистема управління нереляційними базами даних_ сконфігурована для роботи у режимі високої доступності за допомогою _Redis Sentinel_
+The _Non-relational database management subsystem_ is configured for high availability with _Redis Sentinel_.
+
+=== _Observability_
+
+//_Підсистема управління нереляційними базами даних_ підтримує журналювання вхідних запитів та збір метрик продуктивності для подальшого аналізу через веб-інтерфейси відповідних підсистем Платформи.
+The _Non-relational database management subsystem_ logs incoming requests and collects performance metrics for analysis through the web interfaces of respective Platform subsystems.
+
+[TIP]
+--
+//Детальніше з дизайном підсистем можна ознайомитись у відповідних розділах:
+For details on the subsystem design, see:
+
+* xref:arch:architecture/platform/operational/logging/overview.adoc[]
+* xref:arch:architecture/platform/operational/monitoring/overview.adoc[]
+--
+
+===  _Reliability_
+//Надійність _Підсистеми управління нереляційними базами даних_ забезпечується xref:architecture/platform/operational/backup-recovery/overview.adoc[підсистемою резервного копіювання та відновлення] яка включає у себе резервне копіювання файлових систем сховища Redis.
+Reliability of the _Non-relational database management subsystem_ is ensured by the xref:architecture/platform/operational/backup-recovery/overview.adoc[_Backup and restore subsystem_], which includes backing up Redis storage file systems.
