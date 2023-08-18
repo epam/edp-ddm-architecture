@@ -1,24 +1,10 @@
-= Автоматичне розгортання компонентів Minio та Vault
-:toc-title: ЗМІСТ
-:toc: auto
-:toclevels: 5
-:experimental:
-:important-caption:     ВАЖЛИВО
-:note-caption:          ПРИМІТКА
-:tip-caption:           ПІДКАЗКА
-:warning-caption:       ПОПЕРЕДЖЕННЯ
-:caution-caption:       УВАГА
-:example-caption:           Приклад
-:figure-caption:            Зображення
-:table-caption:             Таблиця
-:appendix-caption:          Додаток
-:sectnums:
-:sectnumlevels: 5
-:sectanchors:
-:sectlinks:
-:partnums:
+= Автоматичне розгортання компонентів MinIO та Vault
 
-== Розгортання кластера платформи з нуля у середовищі vSphere
+//Секції 1 та 2 актуалізовані і використовуються у docs/ua/modules/admin/pages/installation/platform-deployment/platform-vsphere-deployment.adoc; решта контенту не оновлена.
+
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+== Розгортання кластера Платформи з нуля у середовищі vSphere
 
 === Передумови
 
@@ -32,7 +18,7 @@ NOTE: Переконайтеся, що встановлено необхідні
 [source,shellscript]
 ----
 сd /tmp
-wget -O mdtu-ddm-platform-<version>.zip https://nexus-public-mdtu-ddm-edp-cicd.apps.cicd2.mdtu-ddm.projects.epam.com/repository/edp-maven-releases/ua/gov/mdtu/ddm/infrastructure/mdtu-ddm-platform/<version>/mdtu-ddm-platform-<version>.zip
+wget -O mdtu-ddm-platform-<version>.zip https://nexus-public-mdtu-ddm-edp-cicd.apps.cicd2.mdtu-ddm.projects.epam.com/nexus/repository/edp-maven-releases/ua/gov/mdtu/ddm/infrastructure/mdtu-ddm-platform/<version>/mdtu-ddm-platform-<version>.zip
 ----
 
 . Розпакуйте архів у домашній директорії.
@@ -48,21 +34,28 @@ unzip /tmp/mdtu-ddm-platform-<version>.zip -d /home/<user>/workdir/installer-<ve
 +
 [source,shellscript]
 ----
+cd /home/<user>/workdir/installer-<version>
 cp /path/to/kubeconfig ./
+----
+
+. Перенесіть папку _certificates_ для DSO:
+
++
+[source,shellscript]
+----
+cp /path/to/folder/certificates ./
 ----
 
 === Додавання окремого конфігураційного файлу для розгортання в середовищі vSphere
 
 . Відредагуйте _exports.list_ для vSphere.
 +
-Усі значення необхідно взяти після інсталяції кластера.
+Усі значення необхідно взяти після інсталяції кластера. Також необхідно уточнити актуальні значенння для `idgovuaClientId` та `idgovuaClientSecret`.
 
 +
 [source,shellscript]
 ----
 vi exports.list
-
-export KUBECONFIG="/home/<user>/workdir/installer-<version>/kubeconfig"
 
 ### vSphere Credentials ###
 export VSPHERE_SERVER=""
@@ -73,7 +66,7 @@ export VSPHERE_DATASTORE=""
 export VSPHERE_DATACENTER=""
 export VSPHERE_NETWORK=""
 export VSPHERE_NETWORK_GATEWAY=""
-export VSPHERE_RESOURCE_POOL=""
+export VSPHERE_RESOURCE_POOL="" #якщо не використовується, ставимо "/"
 export VSPHERE_FOLDER=""
 
 ### Minio and Vault IPs ###
@@ -85,7 +78,7 @@ export idgovuaClientId=""
 export idgovuaClientSecret=""
 ----
 
-. Відредагуйте _install.sh_, а саме після `source ./functions.sh` додайте `source ./exports.list` для vSphere.
+. Відредагуйте _install.sh_, а саме після `source ./functions.sh` додайте `source ./exports.list`.
 
 +
 [source,shellscript]
@@ -105,7 +98,7 @@ source ./functions.sh
 source ./exports.list
 ----
 
-=== Розгортання інсталера
+=== Розгортання інсталятора
 
 . Виконайте наступні команди:
 +
@@ -113,17 +106,19 @@ source ./exports.list
 ----
 IMAGE_CHECKSUM=$(sudo docker load -i control-plane-installer.img | sed -r "s#.*sha256:(.*)#\\1#" | tr -d '\n');
 echo $IMAGE_CHECKSUM
-sudo docker tag $\{IMAGE_CHECKSUM} control-plane-installer:<version>;
+sudo docker tag ${IMAGE_CHECKSUM} control-plane-installer:<version>;
 ----
 
-. Розгорніть нову версію платформи з образами з нуля.
+. Розгорніть нову версію Платформи з образами з нуля:
 +
 [source,shellscript]
 ----
-sudo docker run --rm --name control-plane-installer-*(version)* --user root:$(id -g) --net host -v $(pwd):/tmp/installer --env KUBECONFIG=/tmp/installer/kubeconfig --env idgovuaClientId=f90ab33dc272f047dc330c88e5663b75 --env idgovuaClientSecret=cba49c104faac8c718e6daf3253bc55f2bf11d9e --env CUSTOM_INGRESS_CIDRS="['0.0.0.0/0', '85.223.209.0/24']" --entrypoint "/bin/sh" control-plane-installer:*(version)* -c "./install.sh -i"
+sudo docker run --rm --name control-plane-installer-<version> --user root:$(id -g) --net host -v $(pwd):/tmp/installer --env KUBECONFIG=/tmp/installer/kubeconfig --env idgovuaClientId=mock --env idgovuaClientSecret=mock --env CUSTOM_INGRESS_CIDRS="['0.0.0.0/0', '85.223.209.0/24']" --env deploymentMode=development --entrypoint "/bin/bash" control-plane-installer:<version> -c "./install.sh -i"
 ----
++
+* Де `deploymentMode` може бути `development` чи `production`.
 
-== Оновлення кластера платформи у середовищі vSphere
+== Оновлення кластера Платформи у середовищі vSphere
 
 === Передумови
 
@@ -137,7 +132,7 @@ NOTE: Переконайтеся, що встановлено необхідні
 [source,shellscript]
 ----
 сd /tmp
-wget -O mdtu-ddm-platform-<version>.zip https://nexus-public-mdtu-ddm-edp-cicd.apps.cicd2.mdtu-ddm.projects.epam.com/repository/edp-maven-releases/ua/gov/mdtu/ddm/infrastructure/mdtu-ddm-platform/<version>/mdtu-ddm-platform-<version>.zip
+wget -O mdtu-ddm-platform-<version>.zip https://nexus-public-mdtu-ddm-edp-cicd.apps.cicd2.mdtu-ddm.projects.epam.com/nexus/repository/edp-maven-releases/ua/gov/mdtu/ddm/infrastructure/mdtu-ddm-platform/<version>/mdtu-ddm-platform-<version>.zip
 ----
 
 . Розпакуйте архів у домашній директорії.
@@ -153,7 +148,18 @@ unzip /tmp/mdtu-ddm-platform-<version>.zip -d /home/<user>/workdir/installer-<ve
 +
 [source,shellscript]
 ----
+cd /home/<user>/workdir/installer-<version>
 cp /path/to/kubeconfig ./
+----
+
+. Перенесіть папку _certificates_ для DSO.
++
+NOTE: Якщо сертифікати не змінювалися, даний крок можна пропустити.
+
++
+[source,shellscript]
+----
+cp /path/to/folder/certificates ./
 ----
 
 === Додавання окремого конфігураційного файлу для розгортання в середовищі vSphere
@@ -163,13 +169,34 @@ cp /path/to/kubeconfig ./
 +
 [source,shellscript]
 ----
-cd /home/<user>/workdir/installer-<version>
 cp /home/<user>/workdir/installer-<previous_version>/exports.list ./
 ----
++
+Також необхідно уточнити актуальні значенння для `idgovuaClientId` та `idgovuaClientSecret`.
 
-=== Налаштування компонента Minio при оновленні кластера у середовищі vSphere
+. Відредагуйте _install.sh_, а саме після `source ./functions.sh` додайте `source ./exports.list`.
 
-. Перенесіть tfstate minio з минулого релізу для vSphere.
++
+[source,shellscript]
+----
+vi install.sh
+----
++
+Це виглядатиме наступним чином:
+
++
+[source,shellscript]
+----
+#!/usr/bin/env bash
+set -e
+#Include function file
+source ./functions.sh
+source ./exports.list
+----
+
+=== Налаштування компонента MinIO при оновленні кластера у середовищі vSphere
+
+. Перенесіть tfstate MinIO з минулого релізу для vSphere.
 
 +
 [source,shellscript]
@@ -177,8 +204,7 @@ cp /home/<user>/workdir/installer-<previous_version>/exports.list ./
 cp /home/<user>/workdir/installer-<version>/terraform/minio/vsphere/terraform.tfstate ./terraform/minio/vsphere/
 ----
 
-
-. Перенесіть tfstate minio (packer) з минулого релізу для vSphere.
+. Перенесіть tfstate MinIO (Packer) з минулого релізу для vSphere.
 
 +
 [source,shellscript]
@@ -188,7 +214,7 @@ cp /home/<user>/workdir/installer-<version>/terraform/minio/vsphere/terraform.tf
 
 === Налаштування компонента Vault при оновленні кластера у середовищі vSphere
 
-. Перенесіть tfstate vault з минулого релізу.
+. Перенесіть tfstate Vault з минулого релізу.
 
 +
 [source,shellscript]
@@ -196,15 +222,15 @@ cp /home/<user>/workdir/installer-<version>/terraform/minio/vsphere/terraform.tf
 cp /home/<user>/workdir/installer-<version>/terraform/vault/vsphere/terraform.tfstate ./terraform/vault/vsphere/
 ----
 
-. Перенесіть tfstate vault (packer) з минулого релізу.
+. Перенесіть tfstate Vault (Packer) з минулого релізу.
 
 +
 [source,shellscript]
 ----
-сp /home/<user>/workdir/installer-<version>*/terraform/vault/vsphere/packer/terraform.tfstate ./terraform/vault/vsphere/packer/
+сp /home/<user>/workdir/installer-<version>/terraform/vault/vsphere/packer/terraform.tfstate ./terraform/vault/vsphere/packer/
 ----
 
-=== Розгортання інсталера
+=== Розгортання інсталятора
 
 . Виконайте наступні команди:
 +
@@ -212,15 +238,17 @@ cp /home/<user>/workdir/installer-<version>/terraform/vault/vsphere/terraform.tf
 ----
 IMAGE_CHECKSUM=$(sudo docker load -i control-plane-installer.img | sed -r "s#.*sha256:(.*)#\\1#" | tr -d '\n');
 echo $IMAGE_CHECKSUM
-sudo docker tag $\{IMAGE_CHECKSUM} control-plane-installer:<version>;
+sudo docker tag ${IMAGE_CHECKSUM} control-plane-installer:<version>;
 ----
 
-. Оновіть версію платформи з образами оновлення.
+. Оновіть версію Платформи з образами оновлення.
 +
 [source,shellscript]
 ----
-sudo docker run --rm --name control-plane-installer-*(version)* --user root:$(id -g) --net host -v $(pwd):/tmp/installer --env KUBECONFIG=/tmp/installer/kubeconfig --env idgovuaClientId=f90ab33dc272f047dc330c88e5663b75 --env idgovuaClientSecret=cba49c104faac8c718e6daf3253bc55f2bf11d9e --env CUSTOM_INGRESS_CIDRS="['0.0.0.0/0', '85.223.209.0/24']" --entrypoint "/bin/sh" control-plane-installer:*(version)* -c "./install.sh -u"
+sudo docker run --rm --name control-plane-installer-<version> --user root:$(id -g) --net host -v $(pwd):/tmp/installer --env KUBECONFIG=/tmp/installer/kubeconfig --env idgovuaClientId=mock --env idgovuaClientSecret=mock --env CUSTOM_INGRESS_CIDRS="['0.0.0.0/0', '85.223.209.0/24']" --env deploymentMode=development --entrypoint "/bin/bash" control-plane-installer:<version> -c "./install.sh -u"
 ----
++
+* Де `deploymentMode` може бути `development` чи `production` в залежності від минулого запуску.
 
 == Розгортання кластера платформи з нуля у середовищі AWS
 
