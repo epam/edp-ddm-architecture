@@ -1,0 +1,176 @@
+= Registry audit events logging subsystem
+
+include::platform:ROOT:partial$templates/document-attributes/arch-set-en.adoc[]
+
+include::platform:ROOT:partial$admonitions/language-en.adoc[]
+
+== Overview
+
+//Підсистема, призначенням якої є отримання та обробка повідомлень про виникнення значущих подій в системі з їх послідуючою гарантованою фіксацією в журналі аудиту для довготривалого зберігання та аналізу.
+The _Registry audit events logging subsystem_ receives and processes messages about significant system events and ensures they are recorded in the audit log for long-term storage and analysis.
+
+//== Функції підсистеми
+== Subsystem functions
+
+//* Фіксація подій операцій над даними реєстру, ініційованих користувачем в рамках виконання бізнес-процесу
+//* Фіксація подій, важливих для забезпечення захисту системи
+//* Фіксація загальних подій рівня системи
+The subsystem logs the following events:
+
+* Operations on registry data initiated by the users while executing business processes.
+* Events critical for ensuring system security.
+* General system-level events.
+
+//== Технічний дизайн підсистеми
+== Technical design
+
+//На даній діаграмі зображено компоненти, які входять в _Підсистему журналювання подій аудиту_ та їх взаємодію з іншими підсистемами в рамках реалізації функціональних сценаріїв.
+The following diagram presents the _Registry audit events logging subsystem's_ components and their interactions with other subsystems in the scope of the implementation of functional scenarios.
+
+image::architecture/registry/operational/audit/audit-overview.svg[float="center",align="center",width=600]
+
+//_Підсистема журналювання подій аудиту_ надає асинхронний _API_ у вигляді _Kafka_-топіка `audit-events` для публікації повідомлень про події аудиту цільовими підсистемами згідно визначеної схеми та використовує для зберігання даних в _Операційну БД подій аудиту_ механізм, який базується на https://kafka.apache.org/documentation.html#connect[Kafka Connect API] для забезпечення `exactly once` семантики обробки повідомлень.
+The _Registry audit events logging subsystem_ provides an asynchronous _API_ in the form of the _Kafka_ `audit-events` topic for publishing audit event messages by the target subsystems according to a predefined scheme. The subsystem saves data to the _Audit events operational database_ using https://kafka.apache.org/documentation.html#connect[Kafka Connect API] to support _exactly-once_ semantics for message processing.
+
+//Функції перегляду журналу аудиту доступні адміністраторам через веб-інтерфейс _Підсистеми аналітичної звітності_ у вигляді набору службових дашбордів, які створюються під час розгортання реєстру  xref:arch:architecture/platform/administrative/overview.adoc[Підсистемою розгортання та налаштування Платформи та реєстрів].
+Administrators can view audit logs through the _Registry analytical reporting subsystem's_ web interface as a set of service dashboards created during registry deployment by the xref:arch:architecture/platform/administrative/overview.adoc [_Platform and registries deployment and configuration subsystem_].
+
+[TIP]
+--
+//Детальніше з дизайном _Підсистеми аналітичної звітності_ можна ознайомитись у відповідному xref:arch:architecture/registry/operational/reporting/overview.adoc[розділі].
+For details on the _Registry analytical reporting subsystem's_ design, see xref:arch:architecture/registry/operational/reporting/overview.adoc[].
+--
+
+//== Складові підсистеми
+== Subsystem components
+//TODO: Do we need the Repository column for en version?
+
+|===
+//|Назва компоненти|Представлення в реєстрі|Походження|Репозиторій|Призначення
+|Component name |Registry representation |Source |Repository |Function
+
+//|_Сервіс збереження схем повідомлень подій аудиту_
+|_Audit event message schema storage service_
+|`kafka-schema-registry`
+|3rd-party
+|https://gerrit-mdtu-ddm-edp-cicd.apps.cicd2.mdtu-ddm.projects.epam.com/admin/repos/mdtu-ddm/data-architecture/devops-application/kafka-schema-registry[gerrit:/mdtu-ddm/data-architecture/devops-application/kafka-schema-registry]
+//|Перевірка відповідності структури повідомлення поточній схемі
+|Validation of message structure against the current schema.
+
+//|_Сервіс збереження подій аудиту_
+|_Audit event storage service_
+|`kafka-connect-cluster-connect`
+|3rd-party
+|https://gerrit-mdtu-ddm-edp-cicd.apps.cicd2.mdtu-ddm.projects.epam.com/admin/repos/mdtu-ddm/data-architecture/devops-application/strimzi-kafka-operator[gerrit:/mdtu-ddm/data-architecture/devops-application/strimzi-kafka-operator]
+//|Збереження повідомлень в базу даних
+|Saving messages to the database.
+
+|_xref:arch:architecture/registry/operational/audit/audit-db.adoc[Audit events operational database]_
+|`operational:audit`
+|origin
+|https://github.com/epam/edp-ddm-registry-postgres/tree/main/platform-db/changesets/audit[github:/epam/edp-ddm-registry-postgres/tree/main/platform-db/changesets/audit]
+//|Відокремлена БД для збереження аудиту подій
+|A separate database for audit events.
+
+|===
+
+//== Перелік сервісів, які підлягають аудиту
+== List of services subject to audit
+//TODO: Усі посилання на підсистеми в цій таблиці ведуть на якір #_аудит_та_журналювання_подій, який здебільшого under development. Тому я залишаю посилання без якоря - коли ці секції будуть додані, лінки можна буде проапдейтити.
+
+|===
+//|Підсистема власник|Назва компоненти|Представлення в реєстрі
+|Owner subsystem |Component name |Registry representation
+
+.2+.^|xref:arch:architecture/registry/operational/registry-management/overview.adoc[Registry data management subsystem]
+//|_Сервіс синхронного управління даними реєстру_
+|_Synchronous registry data management service_
+|*registry-rest-api*
+
+//|_Сервіс асинхронного управління даними реєстру_
+|_Asynchronous registry data management service_
+|*registry-kafka-api*
+
+.2+.^|xref:arch:architecture/registry/operational/bpms/overview.adoc[Business process management subsystem]
+//|_Сервіс доступу до історичних даних БП_
+|_Business process history access service_
+|*process-history-service-api*
+
+//|_Сервіс фіксації історичних подій БП_
+|_Business process history logging service_
+|*process-history-service-persistence*
+
+|xref:arch:architecture/registry/operational/user-settings/overview.adoc[User settings management subsystem]
+//|_Сервіс управління налаштуваннями користувачів_
+|_User settings management service_
+|*user-settings*
+
+|xref:arch:architecture/registry/operational/notifications/overview.adoc[User notification subsystem]
+//|_Сервіс нотифікацій користувачів_
+|_User notification service_
+|*ddm-notification-service*
+
+.4+|xref:arch:architecture/registry/operational/excerpts/overview.adoc[Registry excerpt generation subsystem]
+//|_Сервіс управління витягами_
+|_Excerpt management service_
+|*excerpt-service-api*
+.3+|_Excerpt generation services_
+|*excerpt-worker*
+|*excerpt-worker-csv*
+|*excerpt-worker-docx*
+
+|===
+
+//== Технологічний стек
+== Technological stack
+
+//При проектуванні та розробці підсистеми, були використані наступні технології:
+The following technologies were used when designing and developing the subsystem:
+
+* xref:arch:architecture/platform-technologies.adoc#kafka[Kafka]
+* xref:arch:architecture/platform-technologies.adoc#kafka-schema-registry[Kafka Schema Registry]
+* xref:arch:architecture/platform-technologies.adoc#strimzi-operator[Strimzi]
+
+//== Атрибути якості підсистеми
+== Subsystem quality attributes
+
+//TODO: Not sure we need this note.
+[NOTE]
+--
+//Секція потребує допрацювання...
+This section is under development.
+--
+
+=== _Security_
+
+//Використання автентифікації за допомогою TLS для підключення до брокера повідомлень з боку додатка, унеможливлює здійснення атак типу `людина посередині` (`Man in the middle`).
+//Всі дані в русі також шифруються за допомогою TLS.
+Using TLS authentication to connect the application to the message broker prevents man-in-the-middle attacks. All transit data is also encrypted using TLS.
+
+=== _Reliability_
+
+//Загальна надійність системи забезпечується переліком механізмів реалізованих в компонентах які використовуються підсистемою.
+The overall system reliability is ensured by a number of mechanisms implemented in the subsystem's components.
+
+* Kafka (`Replication`, `Fault Tolerance`, `Message Persistence`, `Message immutability`, `Acknowledgment Mechanism`).
+* Crunchy PostgreSQL (`Replication and Failover`, `High Availability`).
+
+=== _Scalability_
+
+//Можливість паралельної обробки повідомлень та відсутність зберігання стану в додатку забезпечує горизонтальне масштабування.
+Parallel processing of messages and the absence of state storage in the application ensures horizontal scaling.
+
+=== _Performance_
+
+//Події сервісу створюються як асинхронні події (`Applicaton Events`) і таким чином не вносять значний вплив на швидкодію сценаріїв в середині сервісів.
+Service events are created as asynchronous events (`Application Events`) and do not significantly affect the performance of service scenarios.
+
+=== _Data Integrity_
+
+//Цілісність та незмінність даних гарантована незмінністю повідомлень Kafka та обмеженням доступу на операції запису до БД.
+The integrity and immutability of data is guaranteed by the immutability of Kafka messages and access restrictions to database write operations.
+
+=== _Data Retention and Archiving_
+
+//Політики збереження та архівування реалізовано за рахунок налаштувань вбудованих механізмів збереження даних повідомлень Kafka та бекапування БД.
+The retention and archiving policies are implemented by configuring the settings of the built-in Kafka message data retention and database backup tools.
