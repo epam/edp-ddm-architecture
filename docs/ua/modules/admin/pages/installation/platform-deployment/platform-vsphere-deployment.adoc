@@ -1,25 +1,7 @@
-:toc-title: ЗМІСТ
-:toc: auto
-:toclevels: 5
-:experimental:
-:important-caption:     ВАЖЛИВО
-:note-caption:          ПРИМІТКА
-:tip-caption:           ПІДКАЗКА
-:warning-caption:       ПОПЕРЕДЖЕННЯ
-:caution-caption:       УВАГА
-:example-caption:           Приклад
-:figure-caption:            Зображення
-:table-caption:             Таблиця
-:appendix-caption:          Додаток
-:sectnums:
-:sectnumlevels: 5
-:sectanchors:
-:sectlinks:
-:partnums:
+= Розгортання Платформи з нуля у приватному хмарному середовищі _vSphere_
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
 
-= Розгортання Платформи в цільовому ЦОД на базі приватної хмари vSphere
-
-== Підготовка інфраструктури vSphere для встановлення OKDfootnote:[**OKD** - це дистрибутив Kubernetes, оптимізований для неперервної розробки додатків та розгортання декількох екземплярів ізольованого контейнерного середовища (в нашому випадку - екземплярів реєстру). За детальною інформацією зверніться до https://docs.okd.io/[офіційного джерела].]
+== Підготовка інфраструктури vSphere для встановлення OKDfootnote:[**OKD** - це дистрибутив Kubernetes, оптимізований для неперервної розробки додатків та розгортання декількох екземплярів ізольованого контейнерного середовища (у нашому випадку -- екземплярів реєстру). За детальною інформацією зверніться до https://docs.okd.io/[офіційного джерела].]
 
 === Налаштування довіреного інтерфейсу vCenter API
 
@@ -379,8 +361,9 @@ $ oc patch ingresscontroller default -n openshift-ingress-operator --type=merge 
 
 Для розгортання Платформи необхідно створити MachineSet для системи зберігання даних https://ceph.io/en/[Ceph]. Для цього необхідно використати конфігураційний файл `machine-set-ceph.yaml`, в якому необхідно змінити назву кластера.
 
-=== Приклад конфігураційного файлу machine-set-ceph.yaml
-
+._Приклад конфігураційного файлу machine-set-ceph.yaml_
+[%collapsible]
+====
 [source, yaml]
 ----
 kind: MachineSet
@@ -436,39 +419,37 @@ spec:
           template: mdtuddm-b86zw-rhcos
           apiVersion: vsphereprovider.openshift.io/v1beta1
 ----
+====
 
 Після редагування файлу відповідно до назви кластера, необхідно виконати команду, що створить необхідний MachineSet та відповідну кількість нод для розгортання сховища даних Ceph.
 
-TIP: В нашому випадку назва кластера визначена в YAML-файлі як `mdtuddm-b86zw`.
+TIP: У нашому випадку назва кластера визначена в _.yaml_-файлі як `mdtuddm-b86zw`.
 
-== Підготовка та запуск Інсталераfootnote:[**Інсталер** - набір команд (скрипт) для розгортання Платформи.] для розгортання Платформи у цільовому кластері
+== Підготовка та запуск Інсталераfootnote:[_Інсталер_ -- набір команд (скрипт) для розгортання Платформи.] для розгортання Платформи на цільовому OKD-кластері
 
 Для запуску Інсталера, необхідно виконати ряд умов з підготовки робочої станції, з якої запускатиметься Інсталер. Нижче розглянуто приклад такої підготовки на базі Ubuntu 20.04 LTS.
 
 === Передумови
 
-Перед запуском скрипта з інсталювання Платформи необхідно виконати наступні кроки:
+Перед запуском скрипка з інсталювання Платформи необхідно виконати наступні кроки:
 
-* Завантажити Інсталер відповідної версії та порівняти чексуми, щоб впевнитись, що Інсталер завантажився коректно:
+* Завантажте Інсталер відповідної версії та порівняйте чексуми, щоб упевнитися, що Інсталер завантажився коректно:
 
 [source, bash]
 ----
 $ echo "$(cat [INSTALLER_NAME].zip.sha256) [INSTALLER_NAME].zip" | sha256sum --check
 ----
 
-* Встановити докер (див. інструкцію нижче):
-https://docs.docker.com/engine/install/
+* Встановіть Docker:
+https://docs.docker.com/engine/install/[].
 
-=== Розгортання Платформи
+=== Розгортання та оновлення Платформи
 
-==== Розгортання кластера Платформи з нуля у середовищі vSphere
+==== Розгортання Платформи з нуля
 
 ===== Передумови
 
 NOTE: Переконайтеся, що встановлено необхідні пакети: `docker`, `wget`, `unzip`.
-
-[prerequisites-plan]
-===== План
 
 . Завантажте необхідну версію інсталера.
 +
@@ -503,7 +484,7 @@ cp /path/to/kubeconfig ./
 cp /path/to/folder/certificates ./
 ----
 
-===== Додавання окремого конфігураційного файлу для розгортання в середовищі vSphere
+===== Додавання окремого конфігураційного файлу для розгортання у середовищі vSphere
 
 . Відредагуйте _exports.list_ для vSphere.
 +
@@ -555,7 +536,7 @@ source ./functions.sh
 source ./exports.list
 ----
 
-===== Розгортання інсталятора
+===== Розгортання Інсталера
 
 . Виконайте наступні команди:
 +
@@ -573,16 +554,13 @@ sudo docker tag ${IMAGE_CHECKSUM} control-plane-installer:<version>;
 sudo docker run --rm --name control-plane-installer-<version> --user root:$(id -g) --net host -v $(pwd):/tmp/installer --env KUBECONFIG=/tmp/installer/kubeconfig --env idgovuaClientId=mock --env idgovuaClientSecret=mock --env CUSTOM_INGRESS_CIDRS="['0.0.0.0/0', '85.223.209.0/24']" --env deploymentMode=development --entrypoint "/bin/bash" control-plane-installer:<version> -c "./install.sh -i"
 ----
 +
-* Де `deploymentMode` може бути `development` чи `production`.
+* де `deploymentMode` може бути `development` чи `production`.
 
-==== Оновлення кластера Платформи у середовищі vSphere
+==== Оновлення Платформи
 
 ===== Передумови
 
 NOTE: Переконайтеся, що встановлено необхідні пакети: `docker`, `wget`, `unzip`.
-
-[prerequisites-plan]
-===== План
 
 . Завантажте необхідну версію інсталера.
 +
@@ -619,7 +597,7 @@ NOTE: Якщо сертифікати не змінювалися, даний к
 cp /path/to/folder/certificates ./
 ----
 
-===== Додавання окремого конфігураційного файлу для розгортання в середовищі vSphere
+===== Додавання окремого конфігураційного файлу для розгортання у середовищі vSphere
 
 . Перенесіть _exports.list_ з минулого релізу.
 
@@ -687,7 +665,7 @@ cp /home/<user>/workdir/installer-<version>/terraform/vault/vsphere/terraform.tf
 сp /home/<user>/workdir/installer-<version>/terraform/vault/vsphere/packer/terraform.tfstate ./terraform/vault/vsphere/packer/
 ----
 
-===== Розгортання інсталятора
+===== Розгортання Інсталера
 
 . Виконайте наступні команди:
 +
@@ -705,4 +683,26 @@ sudo docker tag ${IMAGE_CHECKSUM} control-plane-installer:<version>;
 sudo docker run --rm --name control-plane-installer-<version> --user root:$(id -g) --net host -v $(pwd):/tmp/installer --env KUBECONFIG=/tmp/installer/kubeconfig --env idgovuaClientId=mock --env idgovuaClientSecret=mock --env CUSTOM_INGRESS_CIDRS="['0.0.0.0/0', '85.223.209.0/24']" --env deploymentMode=development --entrypoint "/bin/bash" control-plane-installer:<version> -c "./install.sh -u"
 ----
 +
-* Де `deploymentMode` може бути `development` чи `production` в залежності від минулого запуску.
+TIP: де `deploymentMode` може бути `development` чи `production`, залежно від попереднього запуску.
+
+== Управління налаштуваннями Платформи
+
+Управління кластером відбувається за методологією https://about.gitlab.com/topics/gitops/[GitOps]. Це означає, що будь-які зміни в конфігурації кластера, компонентів кластера та компонентів Платформи відбувається через зміну конфігурації кластера в git-гілці відповідного компонента.
+
+Метадані усіх компонентів, для яких реалізовано управління через GitOps-підхід, зберігаються в компоненті `cluster-mgmt`.
+
+Нижче представлено список компонентів, для яких наразі імплементований GitOps-підхід:
+
+- `catalog-source`
+- `monitoring`
+- `storage`
+- `logging`
+- `service-mesh`
+- `backup-management`
+- `user-management`
+- `control-plane-nexus`
+- `external-integration-mocks`
+- `cluster-kafka-operator`
+- `smtp-server`
+- `redis-operator`
+- `postgres-operator`
