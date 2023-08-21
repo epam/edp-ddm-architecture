@@ -1,0 +1,164 @@
+@startuml
+skinparam shadowing false
+skinparam DatabaseBackgroundColor white
+skinparam DatabaseBorderColor #2688d4
+skinparam QueueBackgroundColor white
+skinparam QueueBorderColor #2688d4
+skinparam NoteBackgroundColor white
+skinparam NoteBorderColor #2688d4
+skinparam sequence {
+    ArrowColor #2688d4
+    ActorBorderColor #2688d4
+    LifeLineBorderColor #2688d4
+    ParticipantBorderColor #2688d4
+    ParticipantBackgroundColor white
+    BoxBorderColor #2688d4
+    BoxBackgroundColor white
+}
+
+queue "'user-notifications'\n Kafka Topic" as user_notifications_kafka_topic
+
+box "Notification service"
+  participant "Notification \nEvent Subscriber" as notification_kafka_subscriber
+  participant "Notification \nService" as notification_service
+  participant "Channel Notification \nValidators" as notification_channel_validators
+  participant "Channel Notification \nProducers" as notification_channel_producers
+  participant "Notification \nTemplate Service" as notification_template_service
+  participant "Channel Notification \nPublishers" as channel_notification_publishers
+end box
+
+participant "User \nsettings service" as user_settings_service
+participant "User \nmanagement service " as keycloak
+participant "Logging service" as logging_service
+database "Storage of \ntemplates" as template_db
+
+queue "'user-notifications.DLT'\n Kafka Topic" as user_notifications_dlt_kafka_topic
+queue "'*-channel-notification'\n Kafka Topic" as channel_notification_topics
+
+== Sending notifications based on user preferences ==
+alt Sending notifications
+notification_kafka_subscriber -> user_notifications_kafka_topic: Reading the event
+    note left
+      {
+        "context": {
+          "system": "Low-code Platform",
+          "application": "<bpms.app.name>",
+          "businessProcess": "<optional>",
+          "businessProcessDefinitionId": "<optional>",
+          "businessProcessInstanceId": "<optional>",
+          "businessActivity": "<optional>",
+          "businessActivityInstanceId": "<optional>"
+        },
+        "notification": {
+          "templateName": "<notification template unique name>"
+        },
+        "recipients": [
+          {
+            "id": "<user id>",
+            "parameters": [
+              {
+                  "key": "<key>",
+                  "value": "<value>"
+              }
+            ]
+          }
+        ]
+      }
+    end note
+activate notification_kafka_subscriber
+notification_kafka_subscriber -> notification_service: Sending notifications to \nuser <recipient>
+activate notification_service
+  notification_service -> user_settings_service: Reading user settings \n(**username = <recipient>**)
+  user_settings_service --> notification_service: Selected communication channels with their settings
+  notification_service -> keycloak: Reading user attributes
+  keycloak --> notification_service: User`s attributes: User's taxpayer code, etc.
+  notification_service -> notification_service: Definition of communication channels (**channel**)
+  loop Notification processing for each communication channel
+  notification_service -> notification_channel_validators: Validation of notification
+  alt Error of validation
+    notification_channel_validators -> logging_service: Error logging
+  end
+  notification_channel_validators --> notification_service
+  notification_service -> notification_template_service: Request to receive a template for a communication channel \n(for diia case - template creation)
+  notification_template_service -> template_db: Getting a template
+  template_db --> notification_template_service
+  notification_template_service --> notification_service
+  notification_service -> notification_channel_producers: Creating a notification for a communication channel
+  notification_channel_producers --> notification_service: Notification for communication channels
+  alt Error creating notification from template and model
+    notification_service -> logging_service: Error logging
+  end
+  end
+  notification_service -> channel_notification_publishers: Request to send notifications to communication channels
+  channel_notification_publishers -> channel_notification_topics: Publication in the topic of the communication channel
+  notification_kafka_subscriber --> user_notifications_kafka_topic: The event has been processed
+else The notification has not been processed
+  notification_service -> logging_service: Error logging
+  notification_service -> user_notifications_dlt_kafka_topic: Save notification to Dead-Letter Topic
+  user_notifications_dlt_kafka_topic --> notification_service
+  notification_kafka_subscriber --> user_notifications_kafka_topic: The event has been processed
+end
+deactivate notification_service
+deactivate notification_kafka_subscriber
+
+== Sending the notifications via the specified channel ==
+
+alt Sending the notifications
+notification_kafka_subscriber -> user_notifications_kafka_topic: Reading the event
+    note left
+     {
+       "context": {
+         "system": "Low-code Platform",
+         "application": "<upstream-service>",
+       },
+       "notification": {
+         "templateName": "{notificationTemplate}"
+       },
+       "recipients": [
+         {
+            "id": "<user id - optional>",
+            "channels": [
+              {
+                "channel": "email",
+                "email": "< User email>"
+              }
+            ],
+            "parameters": [
+              {
+                  "key": "<key>",
+                  "value": "<value>"
+              }
+            ]
+         }
+       ]
+     }
+    end note
+activate notification_kafka_subscriber
+notification_kafka_subscriber -> notification_service: Sending a notification to the user \naccording to information from **channel**
+activate notification_service
+  notification_service -> notification_channel_validators: Validation of notification
+  notification_channel_validators --> notification_service
+    alt In case of channel validation error
+      notification_channel_validators --> logging_service
+    end
+  notification_service -> notification_template_service: Receiving a template for a communication channel \n(for diia case - template creation)
+  notification_template_service -> template_db: Receiving a template (for diia -\nsaving + receiving)
+  template_db --> notification_template_service
+  notification_template_service --> notification_service
+  notification_service -> notification_channel_producers: Creating a notification for a communication channel
+  notification_channel_producers --> notification_service: Notification for the communication channel
+    alt n case of an error when creating a notification from a template
+      notification_service --> logging_service
+    end
+  notification_service -> channel_notification_publishers: Request to send a bnotification to the communication channel
+  channel_notification_publishers -> channel_notification_topics: Publication in the topic of the communication channel
+  notification_kafka_subscriber --> user_notifications_kafka_topic: The event has been processed
+else The notification has not been processed
+  notification_service -> logging_service: Error logging
+  notification_service -> user_notifications_dlt_kafka_topic: Save notification to Dead-Letter Topic
+  user_notifications_dlt_kafka_topic --> notification_service
+  notification_kafka_subscriber --> user_notifications_kafka_topic: The event has been processed
+end
+deactivate notification_service
+deactivate notification_kafka_subscriber
+@enduml
