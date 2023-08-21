@@ -1,0 +1,237 @@
+= Working with digital signatures
+include::platform:ROOT:partial$templates/document-attributes/arch-set-en.adoc[]
+
+include::platform:ROOT:partial$admonitions/language-en.adoc[]
+
+== Main scenarios
+
+=== Validating digital signatures applied by an officer
+
+Signature validation sequence diagram:
+//Діаграма послідовності перевірки підпису:
+[plantuml]
+----
+include::arch:partial$architecture/registry/operational/digital-signatures/services/verify-sign-officer.puml[]
+----
+
+The validation chain is implemented in the following classes:
+//Ланцюг валідаційних перевірок реалізовано в наступних классах:
+[plantuml]
+----
+include::arch:partial$architecture/registry/operational/digital-signatures/services/signature-validator-class-diagram-officer.puml[]
+----
+
+The service performs the following checks of the officer's signature:
+//Сервісом здійснюються наступні перевірки підпису чиновника:
+
+* EDS is valid.
+//* ЕЦП дійсний
+* EDS contains a time stamp.
+//* ЕЦП містить мітку часу
+* The time difference between the moment of putting the signature and the current time does not exceed the value specified in the timeout-ms parameter, by default it is 2 minutes (120,000 ms).
+//* різниця в часі між моментом накладання підпису та поточним часом не перевищує значення заданого в timeout-ms параметрі, за замовчуванням 2 хвилини (120 000 ms)
+* The data integrity is not compromised (the hash value from the signature corresponds to the hash calculated by the service based on the received data).
+//* цілісність даних непорушена (Значення хеша з підпису відповідає хешу порахованому сервісом на основі отриманих даних)
+* The document was signed using a key that belongs to the authenticated user using it. The user data from the EDS corresponds to the data in the JWT access token and contains the full name, RNOKPP, EDRPOU.
+//* документ був підписаний ключем, який належить автентифікованому користувачу що його використовує. Дані користувача з ЕЦП відповідають даним в JWT токені доступу та містять ПІБ, РНОКПП, ЄДРПОУ.
+
+Request:
+//Запит:
+[source]
+----
+POST /api/esignature/officer/verify --header 'X-Access-Token: token'
+----
+
+Request body:
+//Тіло запиту:
+[source, json]
+----
+{
+    "signature": "string",
+    "data": "string"
+}
+----
+
+Responses:
+//Відповіді:
+
+* 200 OK: Signature is valid
+//* 200 OK Підпис валідний
+
+Response body:
+//Тіло відповіді:
+[source, json]
+----
+{
+    "isValid": true,
+    "error": null
+}
+----
+
+* 200 OK: Signature validation error
+//* 200 OK Помилка перевірки підпису
+
+Response body:
+//Тіло відповіді:
+[source, json]
+----
+{
+    "isValid": false,
+    "error": {
+        "code": "ERROR_EMPTY_EDRPOU",
+        "message": "Signature does not contain EDRPOU",
+        "localizedMessage": "Підпис не містить ЄДРПОУ код"
+    }
+}
+----
+* 400 Bad request: Invalid request
+//* 400 Bad request Невалідний запит
+
+Response body:
+//Тіло відповіді:
+[source, json]
+----
+{
+    "code": "string",
+    "message": "string",
+    "localizedMessage": "string"
+}
+----
+
+=== Validation of the digital signature added by a citizen
+//=== Перевірка цифрового підпису накладеного громадянином
+Signature validation sequence diagram:
+//Діаграма послідовності перевірки підпису:
+[plantuml]
+----
+include::arch:partial$architecture/registry/operational/digital-signatures/services/verify-sign-citizen.puml[]
+----
+
+The validation check chain is implemented in the following classes:
+//Ланцюг валідаційних перевірок реалізовано в наступних классах:
+[plantuml]
+----
+include::arch:partial$architecture/registry/operational/digital-signatures/services/signature-validator-class-diagram-citizen.puml[]
+----
+
+The service performs the following checks of the citizen's signature:
+//Сервісом здійснюються наступні перевірки підпису громадянина:
+
+* EDS is valid.
+//* ЕЦП дійсний
+* EDS contains a time stamp.
+//* ЕЦП містить мітку часу
+* EDS belongs to an individual, contains Full name and RNOKPP and does not contain EDRPOU.
+//* ЕЦП належить фізичній особі - містить ПІБ і РНОКПП та не містить ЄДРПОУ
+* JWT token belongs to an individual, contains name and RNOKPP and does not contain USREOU.
+//* JWT токен належить фізичній особі, містить ПІБ і РНОКПП та не містить ЄДРПОУ
+* The time difference between the moment of putting the signature and the current time does not exceed the value specified in the timeout-ms parameter, by default it is 2 minutes (120,000 ms).
+//* різниця в часі між моментом накладання підпису та поточним часом не перевищує значення заданого в timeout-ms параметрі, за замовчуванням 2 хвилини (120 000 ms)
+* The data integrity is not compromised (the hash value from the signature corresponds to the hash calculated by the service based on the received data).
+//* цілісність даних непорушена (Значення хеша з підпису відповідає хешу порахованому сервісом на основі отриманих даних)
+* The document was signed using a key that belongs to the authenticated user using it. The user data from the EDS corresponds to the data in the JWT access token.
+//* документ був підписаний ключем, який належить автентифікованому користувачу що його використовує  (дані користувача з ЕЦП відповідають даним в JWT токені доступу)
+
+Request:
+//Запит:
+[source]
+----
+POST /api/esignature/citizen/verify --header 'X-Access-Token: token'
+----
+
+Request body:
+//Тіло запиту:
+[source, json]
+----
+{
+  "allowedSubjects": ["CITIZEN"],
+  "signature": "string",
+  "data": "string"
+}
+----
+allowedSubjects: The package of validation rules for signature verification, may contain [CITIZEN, ENTREPRENEUR, LEGAL]. In the case of using several rules, the signature is valid if it passes at least one of the checks. In case of failed checks for any of the packages, the first found error is returned. Verification for ENTREPRENEUR and LEGAL takes place using the same validator as for the officer.
+//allowedSubjects - пакет валідаційних правил для перевірки підпису, може містити [ CITIZEN, ENTREPRENEUR, LEGAL ]. У разі використання декількох правил підпис є валідним, якщо пройшла хоч одна з перевірок. В разі непрохдження перевірок по жодному з пакетів, повертається перша знайдена помилка. Перевірка для ENTREPRENEUR та LEGAL відбувається за допомогою валідатора того ж що й для чиновника.
+
+Responses:
+//Відповіді:
+
+* 200 OK: Signature is valid
+//* 200 OK Підпис валідний
+
+Response body:
+//Тіло відповіді:
+[source, json]
+----
+{
+    "isValid": true,
+    "error": null
+}
+----
+
+* 200 OK: Signature validation error
+//* 200 OK Помилка перевірки підпису
+
+Response body:
+//Тіло відповіді:
+[source, json]
+----
+{
+    "isValid": false,
+    "error": {
+        "code": "ERROR_SIGNATURE_NAME_MISMATCH",
+        "message": "Signature and current user full name mismatch",
+        "localizedMessage": "The full name in the signature differs from the full name of the user"
+    }
+}
+----
+* 400 Bad request: Invalid request
+//* 400 Bad request Невалідний запит
+
+Response body:
+//Тіло відповіді:
+[source, json]
+----
+{
+    "code": "string",
+    "message": "string",
+    "localizedMessage": "string"
+}
+----
+
+=== Getting the signature owner information
+//=== Отримання данних про власника підпису
+Getting the information about who out the signature is done by checking the validity of the signature, taking into account the allowed time interval specified in the sign.auth.timeout-ms parameter, by default 1 minute (60,000 ms).
+//Отримання інформації, ким було накладено підпис відбувається шляхом перевірки чинності підпису з урахуванням дозволеного проміжку часу заданого в sign.auth.timeout-ms параметрі, за замовчуванням 1 хвилина (60 000 ms)
+Request:
+//Запит:
+[source]
+----
+POST /api/esignature/owner --header 'X-Access-Token: token'
+----
+
+Request body:
+//Тіло запиту:
+[source, json]
+----
+{
+  "signature": "string",
+  "data": "string"
+}
+----
+
+Responses:
+//Відповіді:
+
+* 200 OK: Signature validated and signatory data received
+//* 200 OK Підпис перевірено та отримано дані про підписуючого
+
+Response body:
+//Тіло відповіді:
+[source, json]
+----
+{
+  "fullName": "string",
+  "drfo": "string",
+  "edrpou": "string"
+}
+----

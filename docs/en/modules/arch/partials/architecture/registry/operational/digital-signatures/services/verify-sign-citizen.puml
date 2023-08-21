@@ -1,0 +1,41 @@
+@startuml
+participant "Platform service" as client  order 10
+participant "QES service" as digital_ops  order 20
+participant "AKCC" as ca  order 30
+skinparam responseMessageBelowArrow true
+
+title Validate citizen signature
+  client -> digital_ops: Form data, signature
+    activate digital_ops
+    digital_ops -> digital_ops: Data hash calculation
+    opt Get the certificate if it is not in the signature
+    digital_ops -> ca: Certificate request
+    activate ca
+    digital_ops <-- ca: Signature certificate
+    deactivate ca
+    end
+    digital_ops -> digital_ops: Validate signature and obtain signatory information
+    digital_ops -> digital_ops: Check for the presence of the required Full name/RNOKPP fields and absence of EDRPOU in the token
+    alt Validation error
+    client <-- digital_ops: Check for the absence of Full name/RNOKPP and presence of EDRPOU in the token
+    end
+    digital_ops -> digital_ops: Check for the presence of the required Full name/RNOKPP fields and absence of EDRPOU in the signature
+    alt Validation error
+    client <-- digital_ops: Check for the absence of Full name/RNOKPP or presence of EDRPOU in the signature
+    end
+    digital_ops -> digital_ops: Check that the EDS user data match with the data in JWT token (Full name/RNOKPP)
+    alt Validation error
+    client <-- digital_ops: Non-compliance error: the EDS user data does not match with the data in JWT token
+    end
+    digital_ops -> digital_ops: Check for timestamp
+    alt Validation error
+    client <-- digital_ops: Error: Timestamp not available
+    end
+    digital_ops -> digital_ops: Error: Timestamp does not match the allowed interval
+    alt Validation error
+    client <-- digital_ops: Error: Time interval exceeded
+    end
+    digital_ops -> client: Response
+    deactivate digital_ops
+
+@enduml
