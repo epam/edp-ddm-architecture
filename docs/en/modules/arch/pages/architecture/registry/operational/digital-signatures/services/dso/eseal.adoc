@@ -1,0 +1,156 @@
+= Working with electronic seals
+include::platform:ROOT:partial$templates/document-attributes/arch-set-en.adoc[]
+
+include::platform:ROOT:partial$admonitions/language-en.adoc[]
+
+== Main scenarios
+
+=== Signing data using the system's electronic signature (electronic seal)
+
+Sequence diagram of putting the system signature:
+//Діаграма послідовності накладання системного підпису:
+[plantuml]
+----
+include::arch:partial$architecture/registry/operational/digital-signatures/services/sign-document.puml[]
+----
+
+It calculates the hash value for the data transmitted to the service using the corresponding hash function and puts the electronic seal of the organization with a time stamp on the resulting hash. It also adds the electronic signature certificate to the signature.
+//Обраховує значення хеша для даних що передані в сервіс з допомогою відповідної хеш функції та накладає цифрову печатку організації з міткою часу на отриманий хеш. Також добавляє до підпису цифровий сертифікат підпису.
+
+Request:
+//Запит:
+[source]
+----
+POST /api/eseal/sign --header 'X-Access-Token: token'
+----
+
+Request body:
+//Тіло запиту:
+[source, json]
+----
+{
+  "data": "string"
+}
+----
+
+Responses:
+//Відповіді:
+
+* 200 OK: Document signed
+//* 200 OK Документ підписано
+
+Response body:
+//Тіло відповіді:
+[source, json]
+----
+{
+  "signature": "string"
+}
+----
+
+* 400 Bad request: Invalid request
+//* 400 Bad request Невалідний запит
+
+Request body:
+//Тіло відповіді:
+[source, json]
+----
+{
+    "code": "string",
+    "message": "string",
+    "localizedMessage": "string"
+}
+----
+
+=== Validating the system's electronic seal and data
+//=== Перевірка системної цифрової печатки та даних
+
+Sequence diagram of the system signature verification:
+//Діаграма послідовності перевірки системного підпису:
+[plantuml]
+----
+include::arch:partial$architecture/registry/operational/digital-signatures/services/verify-seal.puml[]
+----
+
+The chain of validation checks is implemented in the following classes:
+//Ланцюг валідаційних перевірок реалізовано в наступних классах:
+[plantuml]
+----
+include::arch:partial$architecture/registry/operational/digital-signatures/services/seal-validator-class-diagram.puml[]
+----
+
+The service validates the following:
+//Сервісом здійснюються наступні перевірки:
+
+* EDS is valid.
+//* ЕЦП дійсний
+* EDS contains the time stamp.
+//* ЕЦП містить мітку часу.
+* Data integrity is not compromised (the hash value from the signature corresponds to the hash calculated by the service based on the data received).
+//* цілісність даних непорушена (Значення хеша з підпису відповідає хешу порахованому сервісом на основі отриманих даних)
+* The document was signed using the system key (issuer and serial attributes from EDS are in the list of allowed system electronic seals).
+//* документ був підписаний системним ключем (issuer та serial атрибути з ЕЦП містяться в списку дозволених системних цифрових печаток)
+
+Request:
+//Запит:
+[source]
+----
+POST /api/eseal/verify --header 'X-Access-Token: token'
+----
+
+Request body:
+//Тіло запиту:
+[source, json]
+----
+    {
+        "signature": "string",
+        "data": "string"
+    }
+----
+
+Responses:
+//Відповіді:
+
+* 200 OK: Seal is valid
+//* 200 OK Печатка валідна
+
+Response body:
+//Тіло відповіді:
+[source, json]
+----
+{
+    "isValid": true,
+    "error": null
+}
+----
+
+* 200 OK: Seal validation error
+//* 200 OK Помилка перевірки печатки
+
+Response body:
+//Тіло відповіді:
+[source, json]
+----
+{
+    "isValid": false,
+    "error": {
+        "code": "ERROR_UNKNOWN_ESEAL",
+        "message": "Signature key is not allowed",
+        "localizedMessage": "Печатка не авторизована для накладання підпису"
+    }
+}
+----
+* 400 Bad request: Invalid request
+//* 400 Bad request Невалідний запит
+
+Respones body:
+//Тіло відповіді:
+[source, json]
+----
+{
+    "code": "string",
+    "message": "string",
+    "localizedMessage": "string"
+}
+----
+
