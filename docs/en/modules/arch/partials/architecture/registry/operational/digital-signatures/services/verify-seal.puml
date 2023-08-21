@@ -1,0 +1,29 @@
+@startuml
+participant "Platform service" as client  order 10
+participant "QES service" as digital_ops  order 20
+participant "AKCC" as ca  order 30
+skinparam responseMessageBelowArrow true
+
+title System signature validation
+  client -> digital_ops: Data, signature
+    activate digital_ops
+    digital_ops -> digital_ops: Data hash calculation
+        opt Get the certificate if it is not in the signature
+        digital_ops -> ca: Request certificate
+        activate ca
+        digital_ops <-- ca: Signature certificate
+        deactivate ca
+        end
+    digital_ops -> digital_ops: Validate the signature and get the seal data
+    digital_ops -> digital_ops: Check timestamp availability
+    alt Validation error
+    client <-- digital_ops: Error: No timestamp
+    end
+    digital_ops -> digital_ops: Check for availability of the seal in the list of the system allowed
+    alt Validation error
+    client <-- digital_ops: Error: Unauthorized seal
+    end
+    digital_ops -> client: Response
+    deactivate digital_ops
+
+@enduml
