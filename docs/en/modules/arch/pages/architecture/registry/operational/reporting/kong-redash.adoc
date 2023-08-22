@@ -1,0 +1,108 @@
+= Placing the Redash analytical reporting service downstream of Kong
+include::platform:ROOT:partial$templates/document-attributes/arch-set-en.adoc[]
+
+include::ROOT:partial$admonitions/language-en.adoc[]
+
+== General description
+
+In the current version of the Platform, Redash is publicly accessed through OpenShift HAProxy. This approach causes two issues:
+
+* Potential vulnerability of the Redash publishing service when it is located outside the dedicated API gateway for external traffic.
+
+* When configuring your xref:admin:registry-management/control-plane-custom-dns.adoc[DNS name for the portals], there is a need to configure a separate name for the Redash analytical report publishing service.
+
+Placing the Redash downstream of Kong can resolve those issues.
+
+== User roles
+
+* Officer
+
+== General provisions
+
+Repositioning applies only to the Redash analytical report publishing service (redash-viewer).
+//* Винесення стосується тільки сервісу публікування аналітичної звітності Redash (redash-viewer)
+* The traffic to Redash must go through main Kong using the officer portal root with the `/reports` path.
+//* Трафік до Redash повинен йти через основний Kong, використовуючи роут кабінету чиновника зі шляхом `/reports`
+* Kong has to check the availability of the JWT token, and in case of its absence, redirect the user to the Keycloak users and roles management subsystem for authorization.
+//* Конг повинен перевіряти наявніть JWT-токену та у випадку відсутності переадресовувати користувача на підсистему управління користувачами та ролями (Keycloak) для авторизації.
+
+== Functional scenarios
+//== Функціональні сценарії
+
+.Network traffic flow to Redash
+//.Потік мережевого трафіку до Redash
+[plantuml, flow, svg]
+----
+@startuml
+autoactivate on
+
+actor user as "Officer"
+participant browser as "Browser"
+participant haproxy as "Ingress HAProxy"
+participant istio as "Istio ingress gateway"
+participant kong as "API gateway Kong"
+participant redash as "Redash Viewer"
+
+user -> browser: officer portal address /reports
+browser -> haproxy: redirect to "istio ingress"
+haproxy -> istio: redirect to "istio ingress"
+istio -> kong: redirect to "API gateway Kong"
+kong -> redash: redirect to service
+redash --> kong: home page
+kong --> istio
+istio --> haproxy
+haproxy --> browser
+browser --> user: home page
+@enduml
+----
+
+.Deployment diagram
+//.Діаграма розгортання
+[plantuml, flow, svg]
+image::architecture/registry/operational/reporting/kong-redash/deployment-diagram-redash.svg[redash,350]
+
+== Development plan
+//== План розробки
+
+=== Technical expertise
+//=== Технічні експертизи
+
+* _BE_
+* _Frontend_
+* _DevOps_
+
+=== Development plan
+//=== План розробки
+
+* Change the context path in Redash.
+//* Змінити контекстний шлях у Redash
+* * Change the context path from root in all components where a URL is found in Redash, namely _registry-regulation-publication-pipeline_, _registry-configuration_, _redash_chart_.
+//* Змінити контекстний шлях з рутового у всіх компонентах де зустрічається URL на Redash, а саме _registry-regulation-publication-pipeline_, _registry-configu._chart_
+* Position Redash downstream Kong by applying the required configuration in the Kong resources.
+//* Внести Redash за Kong шляхом створення необхідних налаштувань в Kong ресурсах
+* Change the URI in the officer portal to a new one.
+//* Змінити URI в кабінеті чиновника на новий
+* Allow traffic from Kong to Redash Viewer.
+//* Дозволити трафік з Kong на Redash Viewer
+* Delete the hidden DNS configuration fields for Redash in the admin portal code, and the custom DNS configuration for Redash in common-web-app.
+//* Видалити в коді адмін-консолі приховані поля налаштування DNS для Redash та в common-web-app налаштування custom DNS для Redash
+
+== Security
+//== Безпека
+
+== Glossary and acronyms
+//== Глосарій та акроніми
+
+[cols="3,6"]
+|===
+|Term|Description
+//|Термін|Опис
+
+|_Kong_
+|API gateway for external traffic
+//|API шлюз для зовнішнього трафіку
+|_URI_
+|A Uniform Resource Identifier (URI) is a unique sequence of characters that identifies a logical or physical resource used by web technologies.
+//|Уніфікований ідентифікатор ресурсів (англ. Uniform Resource Identifier, URI) — компактний рядок літер, який однозначно ідентифікує окремий ресурс в інтернеті.
+
+|===
