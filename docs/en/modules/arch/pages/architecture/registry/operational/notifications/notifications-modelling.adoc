@@ -1,0 +1,438 @@
+//= Моделювання регламенту
+= Regulations modeling
+include::platform:ROOT:partial$templates/document-attributes/arch-set-en.adoc[]
+
+include::platform:ROOT:partial$admonitions/language-en.adoc[]
+
+//== Моделювання шаблонів повідомлень
+== Message template modeling
+
+//=== Структура репозиторію регламенту
+=== Regulations repository structure
+
+//Для забезпечення вимог по підтримці відправлення повідомлень користувачам, структуру регламенту розширено додатковою директорією _<registry-regulation>/notifications_:
+To meet the requirements for supporting message delivery to users, the regulations structure has been expanded with an additional directory _<registry-regulation>/notifications_:
+
+[plantuml, notification-regulation-structure, svg]
+----
+include::partial$architecture/registry/operational/notifications/general/notification-regulation-structure.puml[]
+----
+
+//Регламент нотифікацій реалізує наступні аспекти адміністрування:
+The notification regulation encompasses the following administration aspects:
+
+//- _notifications/_ - Налаштування шаблонів для генерації повідомлення на рівні окремих визначених каналів
+- _notifications/_ - Configuration of templates for message generation at the level of individual designated channels
+
+//=== Шаблони повідомлень на рівні окремих каналів зв'язку
+== Channel-specific message templates
+
+[NOTE]
+//Для забезпечення можливостей створення та кастомізації шаблонів повідомлень, як технологію шаблонізації обрано https://freemarker.apache.org/[Apache FreeMarker] (розширення файлів "_*.ftlh_" та "_*.ftl_" для HTML та текстових документів відповідно).
+To facilitate the creation and customization of message templates, https://freemarker.apache.org/[Apache FreeMarker] has been chosen as the templating technology (using "_.ftlh_" and "_.ftl_" extensions for HTML and text documents, respectively).
+
+//З ціллю подальшого розвитку, в структуру регламенту нотифікацій закладено підтримку шаблонів повідомлень в залежності від наступних каналів зв'язку:
+With the aim of further development, the regulations notification structure incorporates support for message templates depending on the following communication channels:
+
+//- _inbox_ - Відправка повідомлень у текстовому вигляді у кабінет громадянина
+//- _email_ - Відправка повідомлень у HTML-вигляді електронною поштою
+//- _diia_ - Відправка повідомлень у текстовому вигляді через мобільний додаток _Дія_
+- _inbox_ - Sending text-based messages to the citizen portal
+- _email_ - Sending HTML-formatted messages via email
+- _diia_ - Sending text-based messages through the mobile application "Diia" (Ukrainian citizen-facing solution, UA-specific)
+
+//=== Структура шаблону in-app повідомлення
+=== In-app notification template structure
+
+//Типовий шаблон push-повідомлення має наступну структуру:
+A typical push notification template has the following structure:
+
+[plantuml, inbox-notification-structure, svg]
+----
+include::partial$architecture/registry/operational/notifications/inbox/inbox-notification-structure.puml[]
+----
+
+//- _<template-directory>_ - Директорія з ресурсами шаблону, яка має унікальне ім'я для заданого каналу зв'язку (_email_ у даному разі)
+- _<template-directory>_ - Directory containing template resources with a unique name for the specified communication channel (_email_ in this case)
+//- _<template-directory>/notification.yml_ - Мета-дані повідомлення (заголовок повідомлення, тощо.)
+- _<template-directory>/notification.yml_ - Message metadata (message title, etc.)
+//- _<template-directory>/notification.ftl_ - Текстовий _Freemarker_-шаблон для генерації тіла повідомлення
+- _<template-directory>/notification.ftl_ - Textual _Freemarker_ template for generating the message body
+
+//.Приклад файлу мета-даних _notification.yml_
+.Example _notification.yml_ metadata file:
+//title: "<Заголовок повідомлення>"
+[source, yaml]
+----
+title: "<Message title>"
+----
+
+//Приклад шаблону _notification.ftl_:
+Example _notification.ftl_ template:
+include::ROOT:partial$admonitions/ua-specific.adoc[]
+////
+"У кредитну історію надійшла інформація про новий кредитний договір:\n
+дата відкриття - ${dateCredOpen},\nкредитор - ${creditor}.\n
+📥 Отримати кредитну історію можна на сайті Українського бюро кредитних історій - ubki.ua.\n
+⛔️ У разі виявлення шахрайських дій щодо вас або помилки кредитора - оскаржіть дані у кредитній історії."
+////
+[source, text]
+----
+"Information about a new credit agreement has been added to your credit history:\n
+Opening date - ${dateCredOpen},\nCreditor - ${creditor}.\n
+📥 You can obtain your credit history on the website of the Ukrainian Credit Bureau - ubki.ua.\n
+⛔️ In case of fraudulent actions concerning you or creditor errors - "
+----
+
+//=== Структура шаблону поштового повідомлення
+=== Email message template structure
+
+//Типовий шаблон поштового повідомлення має наступну структуру:
+A typical email message template follows this structure:
+
+[plantuml, email-notification-structure, svg]
+----
+include::partial$architecture/registry/operational/notifications/email/email-notification-structure.puml[]
+----
+
+//- _<template-directory>_ - Директорія з ресурсами шаблону, яка має унікальне ім'я для заданого каналу зв'язку (_email_ у даному разі)
+- _<template-directory>_ - Directory containing template resources with a unique name for the specified communication channel (_email_ in this case)
+//- _<template-directory>/notification.yml_ - Мета-дані повідомлення (заголовок повідомлення, тощо.)
+- _<template-directory>/notification.yml_ - Message metadata (message title, etc.)
+//- _<template-directory>/notification.ftlh_ - HTML-документ Freemarker-шаблону для  генерації тіла повідомлення
+- _<template-directory>/notification.ftlh_ - HTML document Freemarker template for generating the message body
+//- _<template-directory>/css/style.css_ - "Єдиний CSS-файл стилів, які використовуються в HTML-документі (Приклад: _<link rel="stylesheet" href="css/style.css">_)
+- _<template-directory>/css/style.css_ - Single CSS style file used in the HTML document (Example: _<link rel="stylesheet" href="css/style.css">_)
+//- _<template-directory>/images/*.*_ - Перелік файлів зображень, які використовуються в HTML-документі (Приклад: _<img src="images/image.jpg">_)
+- _<template-directory>/images/*.*_ - List of image files used in the HTML document (Example: _<img src="images/image.jpg">_)
+
+//.Приклад файлу мета-даних _notification.yml_
+.Example _notification.yml_ metadata file:
+//title: "<Заголовок повідомлення>"
+[source, yaml]
+----
+title: "<Message title>"
+----
+
+//.Приклад шаблону _notification.ftlh_:
+.Example _notification.ftlh_ template:
+
+////
+<!DOCTYPE html>
+<html>
+<head>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="center">
+<img src="images/image.jpg" class="trinity"/>
+</div>
+<p>
+дата відкриття - ${dateCredOpen}, кредитор - ${creditor}.
+</p>
+</body>
+</html>
+////
+
+[source, html]
+----
+<!DOCTYPE html>
+<html>
+<head>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="center">
+        <img src="images/image.jpg" class="trinity"/>
+    </div>
+    <p>
+      opening date - ${dateCredOpen}, creditor - ${creditor}.
+    </p>
+</body>
+</html>
+----
+
+////
+=== Структура шаблону push-повідомлення у мобільний додаток Дія
+
+Типовий шаблон push-повідомлення має наступну структуру:
+
+[plantuml, diia-notification-structure, svg]
+----
+include::partial$architecture/registry/operational/notifications/diia/diia-notification-structure.puml[]
+----
+
+- _<template-directory>_ - Директорія з ресурсами шаблону, яка має унікальне ім'я для заданого каналу зв'язку (_email_ у даному разі)
+- _<template-directory>/notification.yml_ - Мета-дані повідомлення (заголовок повідомлення, тип повідомлення, тощо.)
+- _<template-directory>/notification.diia_ - Текстовий шаблон для генерації тіла повідомлення
+
+.Приклад файлу мета-даних _notification.yml_
+[source, yaml]
+----
+title: "<Заголовок повідомлення>"
+attributes:
+  actionType: "<action-type: message>"
+  templateType: "<template-type: attention>"
+  shortText : "<Короткий опис повідомлення>"
+----
+
+.Приклад шаблону _notification.diia_:
+[source, text]
+----
+"У кредитну історію надійшла інформація про новий кредитний договір:\n
+дата відкриття - {dateCredOpen},\nкредитор - {creditor}.\n
+📥 Отримати кредитну історію можна на сайті Українського бюро кредитних історій - ubki.ua.\n
+⛔️ У разі виявлення шахрайських дій щодо вас або помилки кредитора - оскаржіть дані у кредитній історії."
+----
+////
+
+//=== Валідація змін до регламенту шаблонів повідомлень
+=== Validation of changes to message template regulations
+
+//В рамках реалізації рішення, необхідно розширити CLI-утиліту _registry-regulations-validator-cli_ валідації регламенту додатковими правилами:
+As part of the solution implementation, it's necessary to enhance the _registry-regulations-validator-cli_ CLI utility for validating regulations with additional rules:
+
+//- Валідація відповідності структури шаблону згідно правил окремого каналу зв'язку
+//- Перевірка файлів мета-даних шаблонів _notification.yml_ на відповідність JSON-схемі
+- Validation of template structure conformity according to specific communication channel rules.
+- Checking _notification.yml_ metadata files for compliance with JSON schema
+
+//.JSON-схема для валідації шаблону для каналу зв'язку _inbox_
+.JSON schema for validating templates for the _inbox_ communication channel:
+[source, json]
+----
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "title"
+  ]
+}
+----
+
+//.JSON-схема для валідації шаблону для каналу зв'язку _email_
+.JSON schema for validating template for the email communication channel:
+[source, json]
+----
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "title"
+  ]
+}
+----
+
+.JSON-схема для валідації шаблону для каналу зв'язку _diia_
+.JSON schema for validating template for the _diia_ (Ukrainian citizen-facing solution, UA-specific) communication channel:
+[source, json]
+----
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "attributes": {
+      "type": "object",
+      "properties": {
+        "actionType": {
+          "type": "string",
+          "enum": [
+            "message"
+          ]
+        },
+        "templateType": {
+          "type": "string",
+          "enum": [
+            "attention"
+          ]
+        },
+        "shortText": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "actionType", "templateType", "shortText"
+      ]
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "title"
+  ]
+}
+----
+
+//=== Публікація змін до регламенту шаблонів повідомлень
+=== Publishing changes to the message template regulations
+
+//Для завантаження зформованих/відкорегованих адміністратором шаблонів повідомлень, необхідно розширити пайплайн публікації регламенту етапом '_publish-notification-templates_' з викликом утиліти _notification-template-publisher_ на кшталт:
+To upload the generated/adjusted message templates by the administrator, it's necessary to expand the publication pipeline of regulations with the '_publish-notification-templates_' stage, calling the _notification-template-publisher_ utility as follows:
+
+[source, bash]
+----
+java -jar
+  -NOTIFICATION_SERVICE_URL=<notification-service.url>
+  /home/jenkins/notification-template-publisher/notification-template-publisher.jar --notification_templates=notifications/templates
+----
+
+//На даній діаграмі послідовності зображено деталі реалізації кроку завантаження змін та публікації шаблонів повідомлень:
+The sequence diagram illustrates the implementation details of the step for uploading changes and publishing message templates:
+[plantuml, notification-template-publication, svg]
+----
+include::partial$architecture/registry/operational/notifications/general/notification-template-publication.puml[]
+----
+
+//== Моделювання бізнес-процесів з відправленням повідомлень користувачам
+== Modeling business processes with user message sending
+
+//Задля спрощення використання можливостей відправки повідомлень користувачам у межах виконання бізнес-процесів, платформа надає _Адміністратору регламенту_ окреме типове розширення "_Send User Notification_" у каталозі моделювальника.
+For simplifying the utilization of user message sending capabilities within business process execution, the platform provides the Regulations administrator with a distinct default extension named "_Send User Notification_" in the modeler catalog.
+
+[NOTE]
+//Канал зв'язку, який буде використано для відправки повідомлення залежить від налаштувань користувача.
+The communication channel used for sending the message depends on user settings.
+
+image::architecture/registry/operational/notifications/bpm/send-notification-element-template.png[send-notification-element-template, 300]
+
+//=== Конфігурація типового розширення відправки повідомлення користувачу "_Send User Notification_"
+=== Configuration of the default "_Send User Notification_" extension
+
+//*Службова назва делегата*: _SendUserNotificationDelegate_
+
+//*Назва типового розширення*: '_Відправка повідомлення користувачу_'
+
+*Delegate technical name*: _SendUserNotificationDelegate_
+
+*Default extension name*: '_Send User Notification_'
+
+|===
+//|Конфігураційний параметр|Вхідний/Вихідний|Службова назва|Тип|Опис
+|Configuration parameter|Input/Output|Technical name|Type|Description
+
+//|*Отримувач повідомлення (_Recipient_)*
+|*Notification recipient (_Recipient_)*
+|in
+|notificationRecipient
+|_string_
+//|Унікальний ідентифікатор _<username>_ отримувача повідомлення
+|Unique identifier _<username>_ of the message recipient
+
+//|*Шаблон повідомлення (_Notification message template_)*
+|*Notification message template (_Notification message template_)*
+|in
+|notificationTemplate
+|_string_
+//|Унікальна назва _FreeMarker_-шаблону для формування тіла повідомлення, яка відповідає назві директорії шаблону згідно структури _<registry-regulation>/notifications/<channel>/<template_name>/*.*_
+|Unique name of the _FreeMarker_ template used to generate the message body. It corresponds to the template directory name within the structure _<registry-regulation>/notifications/<channel>/<template_name>/*.*_
+
+//|*Вхідні дані для генерації тіла повідомлення (_Notification template model_)*
+|*Input data for message body generation (_Notification template model_)*
+|in
+|notificationTemplateModel
+|_map<string, object>_
+//|Набір даних для генерації тіла повідомлення на базі шаблона
+|Dataset used to generate the message body based on the template
+|===
+
+[NOTE]
+//Для визначення отримувача повідомлення _notificationRecipient_ платформа надає можливість використання службових _JUEL_-функцій: ${_completer_('<user-task-id>')._userName_} або ${_initiator_()._userName_}.
+To define the _notificationRecipient_, the platform offers the use of built-in _JUEL_ functions: ${_completer_('<user-task-id>')._userName_} або ${_initiator_()._userName_}.
+
+//=== Референтні бізнес-процеси з використанням типового розширення відправки повідомлення
+=== Reference business processes using the default extension for sending a message
+
+//У якості референтних, розглядаються два сценарії моделювання відправки повідомлень у межах виконання бізнес-процесу:
+Two modeling scenarios involving message sending within a business process execution are considered as references:
+
+//- Відправка повідомлення користувачу
+- Sending a notification to a user
+
+image::architecture/registry/operational/notifications/bpm/send-single-notification.png[send-single-notification,300]
+
+//- Відправка повідомлення _N_ користувачам
+- Sending a Message to _N_ Users
+
+image::architecture/registry/operational/notifications/bpm/send-multi-notifications.png[send-multi-notifications,500]
+
+//=== Код опису типового розширення відправки повідомлення користувачу "_Send User Notification_"
+=== Code description of the standard "_Send User Notification_" extension
+
+[source, json]
+----
+{
+  "$schema": "https://unpkg.com/@camunda/element-templates-json-schema/resources/schema.json",
+  "name": "Send User Notification",
+  "id": "sendUserNotification",
+  "appliesTo": [
+    "bpmn:SendTask"
+  ],
+  "properties": [
+    {
+      "label": "Implementation Type",
+      "type": "Hidden",
+      "value": "${sendUserNotificationDelegate}",
+      "editable": false,
+      "binding": {
+        "type": "property",
+        "name": "camunda:delegateExpression"
+      }
+    },
+    {
+      "label": "Recipient",
+      "description": "Notification recipient username <br/>(${initiator().userName or completer('taskDefinitionId').userName})",
+      "type": "String",
+      "binding": {
+        "type": "camunda:inputParameter",
+        "name": "notificationRecipient"
+      },
+      "constraints": {
+        "notEmpty": true
+      }
+    },
+    {
+      "label": "Notification message template",
+      "description": "Notification message template <br/>(<registry-regulation>/notifications/<channel>/<template_name>/*.*)",
+      "type": "String",
+      "binding": {
+        "type": "camunda:inputParameter",
+        "name": "notificationTemplate"
+      },
+      "constraints": {
+        "notEmpty": true
+      }
+    },
+    {
+      "label": "Notification template model",
+      "description": "Notification template model <br/>(${templateModel} variable to be used for template processing)",
+      "type": "String",
+      "binding": {
+        "type": "camunda:inputParameter",
+        "name": "notificationTemplateModel"
+      },
+      "constraints": {
+        "notEmpty": true
+      }
+    }
+  ]
+}
+----

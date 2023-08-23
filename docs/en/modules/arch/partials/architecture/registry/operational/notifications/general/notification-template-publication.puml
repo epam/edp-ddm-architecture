@@ -1,0 +1,175 @@
+@startuml
+skinparam shadowing false
+skinparam DatabaseBackgroundColor white
+skinparam DatabaseBorderColor #2688d4
+skinparam QueueBackgroundColor white
+skinparam QueueBorderColor #2688d4
+skinparam NoteBackgroundColor white
+skinparam NoteBorderColor #2688d4
+skinparam ActorBackgroundColor white
+skinparam ControlBackgroundColor white
+skinparam ControlBorderColor #2688d4
+skinparam sequence {
+    ArrowColor #2688d4
+    ActorBorderColor #2688d4
+    LifeLineBorderColor #2688d4
+    ParticipantBorderColor #2688d4
+    ParticipantBackgroundColor white
+    BoxBorderColor #2688d4
+    BoxBackgroundColor white
+}
+
+actor "Registry \nadministrator" as registry_admin
+participant "Regulations change \nreview and inspection \nservice (**gerrit**)" as gerrit
+database "Regulation \nrepository \n(**git**)" as regulation_repository
+box Registry Jenkins
+control "Publication pipeline \nfor regulations changes" as publication_pipeline
+end box
+participant "Template \npublisher utility \n(**notification-template-publisher**)" as template_publisher
+participant "User notifications \ndelivery service\n(**notification-service**)" as notification_service
+participant "Diia notification \nTemplate Service" as diia_template_service
+participant "Diia \nnotification gateway\n(**diia-notification-service**)" as diia_notification_service
+database "Template repository \n(**citus**)" as template_database
+
+registry_admin -> gerrit: Request for Changes \nto templates
+activate gerrit
+  gerrit -> gerrit: Review changes
+  gerrit -> regulation_repository: Integrate changes \ninto main branch
+  regulation_repository --> gerrit
+  gerrit --> registry_admin
+deactivate gerrit
+
+publication_pipeline -> regulation_repository: Track changes \n in '**/notifications/**'
+activate publication_pipeline
+  publication_pipeline -> publication_pipeline: Identify new/modified templates
+  publication_pipeline -> template_publisher: Publish new/modified templates \n**[email|diia|inbox]**
+  activate template_publisher
+    loop For each new/modified template
+      template_publisher -> template_publisher: Load template metadata \n**<channel>/<template_name>/notification.yml**
+      template_publisher -> template_publisher: Load template and associated resources \nfrom template directory \n**<channel>/<template_name>**
+      alt channel=email
+        template_publisher -> template_publisher: Build object model \nfor HTML template document \nbased on "template.ftlh" file
+        template_publisher -> template_publisher: Integrate external image resources \ninto single HTML template document \n(data:image/jpeg;base64)
+        template_publisher -> template_publisher: Integrate styles (css/style.css) \ninto single HTML template document
+        template_publisher -> template_publisher: Generate resulting \nHTML template document
+      end
+      template_publisher -> template_publisher: Build request depending on \npresence of additional template attributes \nfrom "notification.yml" file
+
+      template_publisher -> notification_service: Create or update template \n**PUT /api/notifications/{channel}:{name}**
+      note left
+        {
+          "title": "{title}",
+          "content": "{template content}",
+          "attributes": // Example section for "diia" channel
+            {
+              "name": "actionType",
+              "value": "message"
+            },
+            {
+              "name": "templateType",
+              "value": "attention"
+            },
+            {
+              "name": "shortText",
+              "value": "{shortText}"
+            }
+          ]
+        }
+      end note
+      activate notification_service
+        notification_service -> notification_service: Validate template creation/update request
+
+        alt Validation failed
+          notification_service --> template_publisher: 400 - Validation error
+        end
+
+        notification_service -> notification_service: Calculate SHA-256 checksum \non template content
+        notification_service -> template_database: Retrieve template record \nbased on criteria (**channel, name**)
+        template_database --> notification_service: Template record
+        note left
+          {
+              "id": "{UUID}",
+              "name": "{template_name}",
+              "title": "{title}",
+              "channel:": "{channel}",
+              "content:": "{content}",
+              "checksum": "{sha256-hash}",
+              "createdAt": "{timestamp}",
+              "updatedAt": "{timestamp}",
+              "externalTemplateId": "{external_id}",
+              "externallyPublishedAt": "{timestamp}",
+              "attributes": [
+                {
+                  "name": "{attr_name}",
+                  "name": "{attr_value}"
+                }
+              ]
+          }
+        end note
+        alt Template record not found
+          notification_service -> notification_service: Build new template record \nfor Storage \nbased on request body
+
+          alt channel=diia
+            notification_service -> diia_template_service: Partner authentication
+            diia_template_service -> diia_notification_service: Partner authentication: \n**GET /api/v1/auth/partner/{partnerToken}**
+            diia_notification_service --> diia_template_service: Access token
+            note right
+              {
+                "token": "<authorization token>"
+              }
+            end note
+            diia_template_service --> notification_service: Access token
+            notification_service -> diia_template_service: Create template
+            diia_template_service -> diia_notification_service: Create template \n**POST /api/v1/notification/template**
+            note left
+              {
+                "actionType": ""{attributes['actionType']}"",
+                "templateType": ""{attributes['templateType']}"",
+                "title" : "{content}",
+                "shortText" : "{attributes['shortText']}",
+                "fullText" : "{content}"
+              }
+            end note
+            diia_notification_service --> diia_template_service: Template identifier
+            note right
+              {
+                "templateId": "<external template id>"
+              }
+            end note
+            diia_template_service --> notification_service: Template identifier
+            notification_service -> notification_service: Set 'externalTemplateId' value for record
+            notification_service -> notification_service: -Set 'externallyPublishedAt' value for record
+          end
+          notification_service -> template_database: Save new template record
+          template_database --> notification_service
+          notification_service --> template_publisher
+        else Запис знайдено
+          notification_service -> notification_service: Check complete match of titles \nbetween existing template and request
+          notification_service -> notification_service: Check sha-256 checksum match \nbetween existing template content and request
+          notification_service -> notification_service: Check complete match of attribute set \nbetween existing template and request
+          alt Titles, checksums, or attributes do not match
+            notification_service -> notification_service: Build modified template record for storage \nbased on request body
+            alt channel=diia
+              notification_service -> diia_template_service: Partner authentication
+              diia_template_service -> diia_notification_service: Partner authentication: \n**GET /api/v1/auth/partner/{partnerToken}**
+              diia_notification_service --> diia_template_service: Access token
+              diia_template_service --> notification_service: Access token
+              notification_service -> diia_template_service: Create template
+              diia_template_service -> diia_notification_service: Create template \n**POST /api/v1/notification/template**
+              diia_notification_service --> diia_template_service: Template identifier
+              diia_notification_service --> notification_service: Template identifier
+              notification_service -> notification_service: Set value \n'externalTemplateId' for record
+              notification_service -> notification_service: Set value \n'externallyPublishedAt' for record
+            end
+            notification_service -> template_database: Save modified template record
+            template_database --> notification_service
+            notification_service --> template_publisher
+          else Titles, checksums, and attributes match
+            notification_service --> template_publisher
+          end
+        end
+      end
+    template_publisher --> publication_pipeline: Templates published
+  deactivate template_publisher
+deactivate publication_pipeline
+@enduml
