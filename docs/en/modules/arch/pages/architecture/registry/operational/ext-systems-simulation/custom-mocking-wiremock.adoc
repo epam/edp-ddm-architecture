@@ -1,0 +1,416 @@
+= Declarative configuration of system emulators: simplified testing of external registry integrations
+include::platform:ROOT:partial$templates/document-attributes/arch-set-en.adoc[]
+
+include::platform:ROOT:partial$admonitions/language-en.adoc[]
+
+//== Загальний опис
+== General overview
+
+//Існує проблема, що поточне рішення для мокування виконується за допомогою SoapUI та сервіси моку інтеграційних точок поставляється разом з платформою. Це призводить до того що не можливо швидко додати новий мок інтеграційної точки або змінити вже існуючий без надання апдейту платформи.
+
+There is a problem that the current mocking solution is done with SoapUI and the integration point mocking services come with the platform. This leads to the fact that it is not possible to quickly add a new integration point mock or change an existing one without providing a platform update.
+
+//Для вирішення цієї проблеми необхідно замістити поточний підхід для створення моків на реалізацію нової унифікованої стратегії яка дає можливість конфігурувати власні моки для інтеграційниї точок в режимі реального часу без постачання нової версії платформи.
+
+To solve this problem, it is necessary to replace the current approach for creating mocks with the implementation of a new unified strategy that makes it possible to configure custom mocks for integration points in real time without delivering a new version of the platform.
+
+//== Актори та ролі користувачів
+== Actors and user roles
+////
+* Розробник реєстрів
+* Розробник платформи
+////
+* Registry developer
+* Platform developer
+
+//== Глосарій
+== Glossary
+
+- WM - WireMock
+- WMS - WireMock Studio
+- Mocks - integration point stubs
+- Control Plane Console - platform admin console
+
+//== Поточна робота мокування інтеграційних точок
+== Current work of mocking integration points
+
+image::arch:architecture/registry/operational/ext-systems-simulation/mocking/current-mocking-solution.svg[]
+
+//На даній діаграмі можна побачити, що для оновлення/додавання моку треба:
+In this diagram you can see that to update/add moku you need:
+////
+* Розробник платформи створює мок у SOAP UI
+* Розробник платформи додає зміну у інсталлер
+* Розробник реєстру може використовувати загальний мок після оновлення платформи
+////
+
+* The platform developer creates a mock in the SOAP UI
+* The platform developer adds a change to the installer
+* Registry developer can use shared mock after platform upgrade
+
+//Також варто зазначити, що мок знаходиться на рівні платформи, а не реєстру, тобто він загальній на усі реєстри які є на кластері.
+It is also worth noting that the mock is at the platform level, not the registry, that is, it is common to all registries on the cluster.
+
+//=== Недоліки поточного рішення
+=== Disadvantages of the current solution
+////
+* Моки постачаються разом з платформою що унеможливлює зміни розробником регламенту
+* Немає можливості швидко інтегруватися з новою зовнішньою системою адміністратору реєстру без допомоги розробника платформи
+* Немає можливості персонизувати мок інтеграційної точки для реєстру
+////
+
+* Mocks are delivered together with the platform, which makes it impossible to change the regulations by the developer
+* There is no way to quickly integrate with a new external registry admin system without the help of a platform developer
+* There is no way to customize the integration point mock for the registry
+
+== Technical solution design
+
+=== Mocks settings via Control Plane
+
+.Setting up the mock configuration of the external integration point
+image::arch:architecture/registry/operational/ext-systems-simulation/mocking/enable-mocking-flow.svg[]
+
+//Важливо відзначити, що після збереження конфігурації відбувається виконнаня флоу яке описане в рамках дизайну
+It is important to note that after the configuration is saved, the flow described in the design is executed
+xref:arch:architecture/platform/administrative/control-plane/registry-regulation-secrets.adoc#_технічний_дизайн_рішення[Management of settings and secrets of external integrations] including the following remarks:
+
+////
+* [#required-changes]#Якщо користувач хоче замокувати зовнішню REST систему (не Трембіту) яка була створена - необхідно видалити service entry для неї#
+* Якщо користувач хоче додати мок зовнішньої REST системи - необхідно створити секрет без service entry
+////
+
+* [#required-changes]#If the user wants to lock the external REST system that was created - it is necessary to delete the service entry for it#
+* If the user wants to add a mock of an external REST system, it is necessary to create a secret without a service entry
+
+//==== Порядок дій для розгортання власного моку інтеграційної точки
+==== Steps to deploy your own mock of integration point
+
+////
+* Адміністратор платформи додає зовнішню інтеграцію для dev реєстру з <<trembita-link, Трембіта>> або <<external-system, іншою зовнішньою системою>>
+
+* У герріті Control Plane Console оновився файл конфігурації для інтеграції з зовнішньою системою
+
+.control-plane-gerrit:<registry>.git/deployment-templates/values.yaml
+[source,yaml]
+----
+////
+
+.Configuring registry integration with an external API mock
+[plantuml,enable-mocking-flow, svg]
+----
+include::partial$architecture/registry/operational/ext-systems-simulation/mocking/enable-mocking-for-registry.puml[enable-mocking-flow, align="center"]
+----
+
+* Platform administrator adds external integration for registry dev with <<trembita-link, Trembita>> (Secure exchange gateway) or <<external-system, another external system>>
+
+* In Gerrit Control Plane Console, the configuration file has been updated to integrate with the external system
+
+.control-plane-gerrit:<registry>.git/deployment-templates/values.yaml
+[source,yaml]
+----
+#Ukrainian specific implementation
+trembita:
+#SOAP external systems integration
+  registries:
+    edr-registry:
+      #Link on registry wiremock
+      url: "http://wiremock:9021/"
+      mock: true
+      ...
+    dracs-registry:
+      #Link on registry wiremock
+      url: "http://wiremock:9021/"
+      mock: true
+      ...
+    idp-exchange-service-registry:
+      #Link on registry wiremock
+      url: "http://wiremock:9021/"
+      mock: true
+      ...
+external-systems:
+#REST external systems integration
+  #Ukrainian specific implementation
+  diia:
+    #Link on registry wiremock
+    url: "http://wiremock:9021/"
+    mock: true
+    ...
+  http-bin:
+    #Link on registry wiremock
+    url: "http://wiremock:9021/"
+    mock: true
+    ...
+  secured-service:
+    #Link on registry wiremock
+    url: "http://wiremock:9021/"
+    mock: true
+    ...
+----
+
+[IMPORTANT]
+The link changes only for the selected system to the registry WM, which is accessed via the service address
+(http://wiremock:9021/).
+
+If mocking is selected for the external system, a flag is stored in the file that allows you to identify the system that refers to the mock.
+
+//==== Управління конфігурацїєю мокування
+==== Mocking configuration management
+
+include::ROOT:partial$admonitions/ua-specific.adoc[]
+
+//.[#trembita-link]#Налаштування взаємодії реєстру через Тримбіту для dev реєстру#
+.[#trembita-link]#Setting up the registry interaction via Trembita for registry dev#
+image::arch:architecture/registry/operational/ext-systems-simulation/mocking/mock_trembita.png[registry-integrations-management, 200, align="center"]
+
+//.Налаштування взаємодії з моком інтеграційних точок Трембіта для dev реєстру
+.Setting up the interaction with mock of Trembita integration points for dev registry
+image::arch:architecture/registry/operational/ext-systems-simulation/mocking/enable_mock_trembita.png[registry-integrations-management, 200, align="center"]
+
+//.[#external-system]#Налаштування взаємодії реєстру з зовнішньою системою#
+.[#external-system]#Setting up the interaction of the registry with an external system#
+image::arch:architecture/registry/operational/ext-systems-simulation/mocking/mock_rest_system.png[registry-integrations-management, 200, align="center"]
+
+//.Налаштування взаємодії реєстру з моком інтеграційних точок зовнішніх систем
+.Setting up the interaction of the registry with the mock of the integration points of external systems
+image::arch:architecture/registry/operational/ext-systems-simulation/mocking/enable_mock_rest_system.png[registry-integrations-management, 200, align="center"]
+
+//==== Інтеграційні сценарії
+==== Integration scenarios
+////
+|===
+|Назва системи|Рівень|Протокол|Вид інтеграції
+
+|*diia*
+|Реєстр
+|REST
+|Зовнішня інтеграція
+
+|*trembita*
+|Реєстр
+|SOAP
+|Зовнішня інтеграція
+
+
+|*<Інші зовнішні системи>*
+|Реєстр
+|REST/SOAP
+|Зовнішня інтеграція
+|===
+////
+
+|===
+|System name|Level|Protocol|Integration type
+
+|*diia* (Citizen-facing solution)
+|Registry
+|REST
+|External integration
+
+|*trembita* (Secure exchange gateway)
+|Registry
+|SOAP
+|External integration
+
+
+|*<Other external systems>*
+|Registry
+|REST/SOAP
+|External integration
+|===
+
+//=== Додавання моку зовнішньої точки інтеграції
+=== Mocking of external integration point
+
+//Для мокування інтеграційних точок пропонується використовувати WM. За даним підходом можливо мокуватия як REST так і SOAP API.
+It is suggested to use WM for mocking integration points. With this approach, it is possible to mock both REST and SOAP APIs.
+
+//.Застосування власних моків для реєстру
+.Using custom mocks for the registry
+image::arch:architecture/registry/operational/ext-systems-simulation/mocking/import-mapping-flow.svg[align="center"]
+
+//.Додавання власного моку для використання у реєстрі
+.Add custom mock for registry using
+[plantuml,import-user-mocking-flow, svg]
+----
+include::partial$architecture/registry/operational/ext-systems-simulation/mocking/import-user-mock.puml[import-user-mocking-flow, align="center"]
+----
+
+//=== Доступи з сервісів
+=== Access from services
+
+//Для певних реєстрових та платформених сервісів необхідо дати можливість взаємодіяти з реєстровим WM сервісом за портом 9021.
+For certain registry and platform services, it is necessary to enable interaction with the registry WM service on port 9021.
+
+//* Нетворк полісі які необхідні для взаємодії з сервісом мокування зовнішньої інтеграцій на рівні реєстру
+* Network policies that are necessary for interaction with the mocking service of external integrations at the registry level
+|===
+|Service name| Service label
+
+|admin-tools-jenkins
+|__app=jenkins__
+
+|bpms
+|__app=bpms__
+
+|ddm-notification-service
+|__app.kubernetes.io/instance = ddm-notification-service__
+
+|===
+
+//* Істіо полісі які необхідні для взаємодії з сервісом мокування зовнішньої інтеграції на рівні платформи
+* Istio policies that are necessary for interaction with the external integration mocking service at the platform level
+
+|===
+|Service name| Service label
+
+|keycloak-manag
+|__app.kubernetes.io/name=keycloak__
+|===
+
+
+//== Моделювання регламенту
+== Modeling of regulations
+
+//=== Додавання мапінгу
+//Для збереження мапінгів у реєстровому репозиторії необхідно слідувати структурі. Файл з мапінгом зберігає і відповідь яку надає мок зовнішньої точки інтеграції
+To save mappings in the registry repository, it is necessary to follow the structure. The mapping file also stores the response provided by the mock of the external integration point
+
+.Example of setting _mock-integrations_
+[plantuml, mock-integrations-regulation-structure, svg]
+----
+@startsalt
+{
+{T
++ <&folder> registry-regulation
+++ <&folder> <b>mock-integrations</b>
++++ <&file> <external_system_name>.json
++++ <&file> ...
+++ ...
+}
+}
+@endsalt
+----
+
+//==== Приклад файлів мапінгів та обробки респонсу
+==== Example of mapping files and response processing
+//WM підтримує як SOAP так і REST запити тому нижче наведено приклад обробки обох типів запитів
+WM supports both SOAP and REST requests, so below is an example of processing both types of requests
+
+.File with mappings for EDR mock __edr-registry.json__ (xref:attachment$architecture/registry/operational/external-integrations/mocking/edr.json[Download])
+[%collapsible, json]
+====
+----
+include::attachment$architecture/registry/operational/external-integrations/mocking/edr.json[json]
+----
+====
+
+.Formatted response __mock-integration/edr-registry.json__ (xref:attachment$architecture/registry/operational/external-integrations/mocking/edr-response.xml[Download])
+[%collapsible, xml]
+====
+----
+include::attachment$architecture/registry/operational/external-integrations/mocking/edr-response.xml[xml]
+----
+====
+
+.File with mappings __diia.json__  (Citizen-facing solution)(xref:attachment$architecture/registry/operational/external-integrations/mocking/diia.json[Download])
+[%collapsible, json]
+====
+----
+include::attachment$architecture/registry/operational/external-integrations/mocking/diia.json[json]
+----
+====
+
+[IMPORTANT]
+//Користувач після додавання моку зможе піти за адресою http:registry-wiremock/mockEdr щоб отримати замокану відповідь
+After adding the mock, the user will be able to go to the address http:registry-wiremock/mockEdr to get a mocked response
+
+[TIP]
+//https://wiremock.org/docs/stubbing/[Посилання на документацію за якою треба створювати власні мапінги]
+https://wiremock.org/docs/stubbing/[Link to the documentation according to which you need to create your own mappings]
+
+//* Під час виконання пайплайну registry-regulations-management при наявності мапінгів виконується запит
+* During the execution of the registry-regulations-management pipeline, if mappings are available, a query is executed
+[source, bash]
+----
+curl -v -d @mapping.json http://wiremock:9021/__admin/mappings/import
+----
+[IMPORTANT]
+//Мапінги можуть зберігатись у декількох файлах, тому треба імпортувати за допомогою API усі файли з мапінгами
+Mappings can be stored in several files, so you need to import all files with mappings using the API
+
+
+//=== План міграції поточних рішень для мокування
+=== Migration plan for current mocking solutions
+////
+* Створити мапінгів моків поточних зовнішнії систем
+* Додати імпорт мапінгів до post-upgrade скриптів
+* Оновити інструкції користувача для викроистання нових моків за бажанням користувача
+* Відмітити існуючі моки як ті компоненти які будуть замінені у наступних релізах
+////
+* Create mock mappings of current external systems
+* Add mapping import to post-upgrade scripts
+* Update the user instructions to create new mocks at the user's request
+* Mark existing mochas as those components that will be replaced in future releases
+
+//=== Приклад створення власного моку WMS
+=== An example of creating your own WMS mock
+
+//Мапінг для імпорту можна створити у WMS, для цього треба:
+Mapping for import can be created in WMS, for this you need:
+
+//* Перейти до WMS та натиснути Mock API кнопку
+* Go to WMS and click the Mock API button
+
+image::arch:architecture/registry/operational/ext-systems-simulation/mocking/mock-api.png[align="center", 500, 500]
+
+//* Обрати пустий шаблон та заповнити назву
+* Choose an empty template and fill in the name
+
+image::arch:architecture/registry/operational/ext-systems-simulation/mocking/create-new-mock.png[align="center", 500, 500]
+
+//* Перейти до вкладки Stubs
+* Go to the Stubs tab
+
+image::arch:architecture/registry/operational/ext-systems-simulation/mocking/stubs.png[align="center", 500, 500]
+
+//* Натиснути кнопку New
+* Press the New button
+
+image::arch:architecture/registry/operational/ext-systems-simulation/mocking/new-stub.png[align="center", 500, 500]
+
+//* Заповнити налаштування мапінгу та зберегти його
+* Fill in the mapping settings and save it
+
+image::arch:architecture/registry/operational/ext-systems-simulation/mocking/save-stub.png[align="center", 500, 500]
+
+//* Експортувати файл для завантаження його у реєстровий герріт
+* Export the file to upload it to the Registry Gerrit
+
+image::arch:architecture/registry/operational/ext-systems-simulation/mocking/export-mock.png[align="center", 500, 500]
+
+
+//== Високорівневий план розробки
+== High-level development plan
+
+//=== Технічні експертизи
+=== Technical examinations
+
+* _DevOps_
+* _Dev_
+
+//=== План розробки
+=== Development plan
+////
+* Деплой WM виконується тільки під час розгортання dev реєстрів та для нього відсутній роут
+* Оновлення Control Plane Console під нову функціональність
+* Оновити Control Plane Jenkins пайплайн для розгортання реєстру з урахуванням <<required_changes, описаних змін>>
+* Додавання стейджу у registry-regulations пайплайну для імпорту мапінгів
+* Розробити WM мапінги поточних рішень та мапінги для Diia і додати їх до демо реєстру
+* Розробка інструкцій користувачів з вказівками як розробити, додати, оновити мапінги з посиланням на демо реєстр
+////
+* WM deployment is performed only during the deployment of dev registers and there is no root for it
+* Updating the Control Plane Console with new functionality
+* Update the Control Plane Jenkins pipeline for registry deployment to account for <<required_changes, described changes>>
+* Adding a stage to the registry-regulations pipeline for importing mappings
+* Develop WM mappings of current solutions and mappings for Diia and add them to the demo registry
+* Development of user instructions with instructions on how to develop, add, update mappings with a link to the demo registry
