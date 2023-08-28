@@ -1,0 +1,615 @@
+= Saving UI form schemes and validating user data
+include::ROOT:partial$templates/document-attributes/arch-set-en.adoc[]
+
+include::ROOT:partial$admonitions/language-en.adoc[]
+
+== Functional scenarios
+
+- Getting the data schemes of UI forms to display in the citizen portals.
+//- Отримання даних схем UI-форм для відображення у кабінетах користувачів
+- Validation of data entered by users using the UI forms of tasks according to the configured rules.
+//- Валідація даних, внесених користувачами через UI-форми задач згідно налаштованих правил
+- Validation of files uploaded by users using the UI forms of tasks according to the configured rules.
+//- Валідація файлів, завантажених користувачами через UI-форми задач згідно налаштованих правил
+- Validation of data used as input parameters to initiate business processes by external systems.
+//- Валідація даних, які використовуються як вхідні параметри для ініціювання бізнес-процесів зовнішніми системами
+
+== Basic principles and motivation for redesigning
+
+- Providing for a unified approach to the implementation of _cross-cutting_ requirements imposed on the registry _Edge_ services with a publicly available API, through the use of a single technology stack and, as a result, the reuse of a standard set of techniques, libraries, etc.
+//- Забезпечення єдиного підходу до реалізації _cross-cutting_ вимог, які накладаються на _Edge_-сервіси реєстру з публічно доступним API, завдяки використанню єдиного технологічного стеку та, як результат, повторне використання стандартного набору технік, бібліотек, тощо.
+- Ensuring a high level of _сohesion_ in the design of the platform services.
+//- Забезпечення високого рівня _сohesion_ при дизайні сервісів платформи
+- Standardization of types of data storages operated by the Platform.
+//- Стандартизація типів сховищ для даних, якими оперує Платформа
+- The data storage type must meet non-functional requirements for operations with this data.
+//- Тип сховища для даних має відповідати нефункціональним вимогам, які виставляються до операцій над цими даними
+
+== Scope of services redesigning
+//== Обсяг редизайну сервісів
+
+As part of the redesign, the following new components must be introduced to implement the functional scenarios:
+//В рамках редизайну, для реалізації функціональних сценаріїв необхідно ввести наступні нові компоненти:
+
+- _UI form provider service_ (*form-schema-provider*)
+//- _Сервіс постачання UI-форм_ (*form-schema-provider*)
+- _UI form data validation service_ (*form-submission-validation*)
+//- _Сервіс валідації даних UI-форм_ (*form-submission-validation*)
+
+[NOTE]
+Each component must be integrated into the registry ecosystems and fully comply with all the _cross-cutting_ requirements.
+//Кожен компонент має бути інтегрованим в екосистеми реєстру та реалізовувати повною мірою усі _cross-cutting_ вимоги.
+
+Components to be changed:
+//Компоненти, які підлягають змінам:
+
+- _User processes management service_ (*user-process-management*).
+//- _Сервіс управління процесами користувачів_ (*user-process-management*)
+- _User tasks management service_ (*user-task-management*).
+//- _Сервіс управління задачами користувачів_ (*user-task-management*)
+- _Digital documents service_ (*digital-documents*).
+//- _Сервіс цифрових документів_ (*digital-documents*)
+- _Regulations publication pipeline_ (*jenkins*).
+//- _Пайплайн публікації регламенту_ (*jenkins*)
+
+Components to be replaced/removed after data migration:
+//Компоненти, які підлягають заміщенню / видаленню з виконанням міграції даних:
+
+- _UI forms provider service_ (*form-management-provider*).
+//- _Сервіс постачання UI-форм_ (*form-management-provider*)
+- _UI form scheme data storage_ (*form-management-provider-db*)
+//- _Сховище даних схем UI-форм_ (*form-management-provider-db*)
+
+== Target system design
+//== Цільовий дизайн системи
+
+The following diagram shows the target state of the platform services and the interaction between them. In addition, it shows essential features that need to be taken into account as part of the implementation.
+//На даній діаграмі зображено цільовий стан сервісів платформи та взаємодію між ними. Додатково зображено важливі особливості, які необхідно брати до уваги в рамках реалізації.
+
+image::architecture/registry/operational/bpms/bpm-form-schema.svg[form-schema-provider, 800]
+
+=== System components and their designation in the target design
+//=== Компоненти системи та їх призначення в рамках цільового дизайну
+
+|===
+|Component|Name| Use cases
+//|Компонент|Службова назва| Сценарії використання
+
+|_UI form data validation service_
+//|_Сервіс валідації даних UI-форм_
+|*form-submission-validation*
+|Validation of data and files, entered by users using the UI form of business process tasks, for compliance with the configured rules
+//|Валідація даних та файлів, внесених користувачем через UI-форми задач бізнес-процесів на відповідність налаштованим правилам
+
+|_UI forms provider service_
+//|_Сервіс постачання UI-форм_
+|*form-schema-provider*
+| Processing requests for UI form schemes from user portals
+//|Обробка запитів на отримання схем UI-форм з боку кабінетів користувачів
+
+|_User tasks management service_
+//|_Сервіс управління задачами користувачів_
+|*user-task-management*
+|Storage of the user data and signatures obtained during the execution of business processes and validation for compliance with configured rules
+//|Збереження даних користувача та підпису, отриманих у процесі виконання задач бізнес-процесів та проведення валідації на відповідність налаштованим правилам
+
+|_User processes management service_
+//|_Сервіс управління процесами користувачів_
+|*user-process-management*
+|Storage of the input data received from the user using the initial UI form of the business process and validation for compliance with configured rules
+//|Збереження вхідних даних, отриманих від користувача через стартову UI-форму бізнес-процесу та проведення валідації на відповідність налаштованим правилам
+
+|_Gateway service for integration with external systems_
+//|_Сервіс-шлюз для інтеграції з зовнішніми системами_
+|*bp-webservice-gateway*
+|Storage of the input data required to initiate a business process when called by external systems
+//|Збереження вхідних даних, необхідних для ініціювання бізнес-процесу у разі виклику зовнішніми системами
+
+|_Digital documents service_
+//|_Сервіс цифрових документів_
+|*digital-documents*
+|Storage and validation of files uploaded by users
+//|Зберігання та валідація файлів, завантажених користувачами
+
+|_Regulations publication pipeline_
+//|_Пайплайн публікації регламенту_
+|*jenkins*
+| Publication of changes in the UI form schemes of business process tasks to the target registry environment
+//|Публікація змін схем UI-форм задач бізнес-процесів до цільового оточення реєстру
+
+|_Distributed in-memory data warehouse_
+//|_Розподілене in-memory сховище даних_
+|*redis*
+| Storing/caching UI form scheme data
+//|Зберігання / Кешування даних схем UI форм
+
+|===
+
+=== Configuration of inter-service policies
+//=== Налаштування політик міжсервісної взаємодії
+
+As part of the requirements implementation, it is required to add the appropriate _NetworkPolicy_ policies that allow interoperability for the following components:
+//В рамках реалізації вимог, необхідно додати відповідні мережеві політики _NetworkPolicy_, які дозволяють взаємодію для наступних компонентів:
+
+- *kong* -> *form-schema-provider*
+- *form-submission-validation* -> *form-schema-provider*
+- *user-process-management* -> *form-submission-validation*
+- *user-task-management* -> *form-submission-validation*
+- *digital-documents* -> *form-submission-validation*
+- *form-schema-provider* -> *redis*
+
+=== UI form schemes provider service
+//=== Сервіс постачання схем UI-форм
+
+This _Java_-servіs is responsible for processing requests for getting the UI form schemes for business process tasks. _Redis Sentinel_ is used as the data store.
+//Даний _Java_-сервіс відповідає за обробку запитів на отримання схем UI-форм для задач бізнес-процесів. У якості сховища даних використовується _Redis Sentinel_.
+
+[TIP]
+You can find more information about _Redis Sentinel_ in the xref:architecture/registry/operational/bpms/bpm-interim-data-storage.adoc#key-value-storage-redis-sentinel[Fault-tolerant key-value data storage based on Redis Sentinel] section.
+//Детальніше з описом _Redis Sentinel_ можно ознайомитись у розділі xref:architecture/registry/operational/bpms/bpm-interim-data-storage.adoc#_відмовостійке_key_value_сховище_даних_на_базі_redis_sentinel[Відмовостійке key-value сховище даних на базі Redis Sentinel].
+
+==== Storing data of UI forms
+//==== Зберігання даних UI-форм
+
+UI forms are stored using the _Redis Hash_ structure with the object segregation approach using the _Keyspaces_ prefixes (_<keyspace>:<key>_).
+//UI-форми зберігаються за допомогою _Redis Hash_-структури з використанням підходу сегрегації об'єктів через _Keyspaces_-префікси (_<keyspace>:<key>_).
+
+*bpm-form-schemas* _keyspace_ is used for the UI form schema objects.
+//Для об'єктів схем UI-форм використовується *bpm-form-schemas* _keyspace_.
+
+.Example of the key generation pattern for writing/reading an object:
+//.Приклад паттерну генерації ключа для запису / читання об'єкту:
+[source]
+----
+bpm-form-schemas:{form-key}
+----
+
+==== API to access UI form schemes
+//==== API доступу до схем UI-форм
+
+[WARNING]
+Access to the API is possible only under a request from an authenticated user in the system.
+//Отримання доступу до API можливе лише в рамках виконання запиту автентифікованого користувача в системі
+
+===== Receiving UI-form scheme using ID [_Public_]
+//===== Отримання схеми UI-форми за ідентифікатором [_Публічний_]
+
+[NOTE]
+This API route is public and must be published for external access via a separate _Kong Route_.
+//Данний API-роут є публічним та має бути опублікованим для зовнішнього доступу через окремий _Kong Route_.
+
+_GET /api/forms/{form-key}_
+
+|===
+|Parameter|Type|Request part|Description
+//|Параметр|Тип|Частина запиту|Опис
+
+|*X-Access-Token*
+|JWT
+|HTTP header
+//|HTTP заголовок
+|User access token
+//|Токен доступу користувача
+
+|*form-key*
+|Text
+//|Текстовий
+|Request parameter
+//|Параметр запиту
+|Unique identifier of the UI form scheme
+//|Унікальний ідентифікатор схеми UI-форми
+|===
+
+.Response example
+//.Приклад відповіді
+[source, json]
+----
+{
+  "type": "form",
+  "display": "form",
+  "title": "Task form name",
+  "name": "form-key",
+  "path": "form-key",
+  "components": [
+  ]
+}
+----
+
+.Error codes
+//.Коди помилок
+|===
+|Code|Description
+//|Код|Опис
+
+a|[green]#200#
+| OK, returning the result of the UI-form scheme data
+//|OK з поверненням результату даних схеми UI-форми
+a|[red]#400#
+|Incorrectly generated request
+//|Некоректно сформований запит
+a|[yellow]#401#
+|Authentication error (no access token)
+//|Помилка автентифікації (відсутній токен доступу)
+a|[yellow]#404#
+|No UI form scheme for the specified {form-key}
+//|Схема UI-форми за вказаним {form-key} відсутня
+a|[red]#500#
+|Server request processing error
+//|Серверна помилка обробки запиту
+|===
+
+===== Creating a new UI form scheme [_Internal_]
+//===== Створення нової схеми UI-форми [_Внутрішній_]
+
+[WARNING]
+The purpose of the API rout is the service use by the _Regulations publication pipeline_ to inform the data storage of the UI form schemes with data (*redis*). The rout is not available for external access via _Kong_.
+//Призначенням API-роута є службове використання _Пайплайном публікації регламенту_ для наповнення даними сховища даних схем UI-форм (*redis*). Роут не доступний для зовнішнього доступу через _Kong_.
+
+_POST /api/forms/_
+
+|===
+|Parameter|Type|Request part|Description
+//|Параметр|Тип|Частина запиту|Опис
+
+|*X-Access-Token*
+|JWT
+|HTTP header
+//|HTTP заголовок
+|User access token
+//|Токен доступу користувача
+|===
+
+.Example of the request body
+//.Приклад тіла запиту
+[source, json]
+----
+{
+  "type": "form",
+  "display": "form",
+  "title": "Task form name",
+  "name": "form-key",
+  "path": "form-key",
+  "components": [
+  ]
+}
+----
+
+.Error codes
+//.Коди помилок
+|===
+|Code|Description
+//|Код|Опис
+
+a|[green]#201#
+| Created, returning the result of the UI form scheme data
+//|Created з поверненням результату даних схеми UI-форми
+a|[red]#400#
+|Incorrectly generated request
+//|Некоректно сформований запит
+a|[yellow]#401#
+|Authentication error (no access token)
+//|Помилка автентифікації (відсутній токен доступу)
+a|[red]#500#
+|Server request processing error
+//|Серверна помилка обробки запиту
+|===
+
+===== Making changes to an existing UI form scheme [_Internal_]
+//===== Внесення змін до існуючої схеми UI-форми [_Внутрішній_]
+
+[WARNING]
+The purpose of the API rout is the service use by the _Regulations publication pipeline_ to inform the data storage of the UI form schemes with data (*redis*). The rout is not available for external access via _Kong_.
+//Призначенням API-роута є службове використання _Пайплайном публікації регламенту_ для наповнення даними сховища даних схем UI-форм (*redis*). Роут не доступний для зовнішнього доступу через _Kong_.
+
+_PUT /api/forms/{form-key}_
+
+|===
+|Parameter|Type|Request part|Description
+//|Параметр|Тип|Частина запиту|Опис
+
+|*X-Access-Token*
+|JWT
+|HTTP header
+//|HTTP заголовок
+|User access token
+//|Токен доступу користувача
+
+|*form-key*
+|Text
+//|Текстовий
+|Request parameter
+//|Параметр запиту
+|Unique identifier of the UI form scheme
+//|Унікальний ідентифікатор схеми UI-форми
+|===
+
+.Example of the request body
+//.Приклад тіла запиту
+[source, json]
+----
+{
+  "type": "form",
+  "display": "form",
+  "title": "Task form name",
+  "name": "form-key",
+  "path": "form-key",
+  "components": [
+  ]
+}
+----
+
+.Error codes
+//.Коди помилок
+|===
+|Code|Description
+//|Код|Опис
+
+a|[green]#200#
+|OK, returning the result of the UI-form scheme data
+//|OK з поверненням результату даних схеми UI-форми
+a|[red]#400#
+|Incorrectly generated request
+//|Некоректно сформований запит
+a|[yellow]#401#
+|Authentication error (no access token)
+//|Помилка автентифікації (відсутній токен доступу)
+a|[yellow]#404#
+|No UI form scheme for the specified {form-key}
+//|Схема UI-форми за вказаним {form-key} відсутня
+a|[red]#500#
+|Server request processing error
+//|Серверна помилка обробки запиту
+|===
+
+=== UI form data validation service
+//=== Сервіс валідації даних UI-форм
+
+This _NodeJS_ service is responsible for data validation based on the rules defined in the UI form scheme using the _formio.js_ library.
+//Даний _NodeJS_-сервіс відповідає за валідацію даних згідно правил, визначених у схемі UI-форми за допомогою бібліотеки _formio.js_.
+
+In addition, it supports server validation for the files uploaded by users.
+//Додатково реалізує підтримку серверної валідації для файлів, завантажених користувачами.
+
+[NOTE]
+You can find out more details in the Form.IO documentation by following https://github.com/formio/formio.js/[this link].
+//Детальніше з документацією бібліотеки Form.IO можна ознайомитись https://github.com/formio/formio.js/[за посиланням].
+
+==== UI form data validation API
+//==== API валідації даних UI-форм
+
+[WARNING]
+Access to the API is possible only as part of execution of a request by an authenticated user in the system. API routs are not available for external access via _Kong_ and are used only by the internal registry services.
+//Отримання доступу до API можливе лише в рамках виконання запиту автентифікованого користувача в системі. API-роути не доступні для зовнішнього доступу через _Kong_ та використовуються лише внутрішніми сервісами реєстру.
+
+==== Data validation according to the rules defined in the UI form scheme (_Internal_)
+//===== Валідація даних згідно визначених у схемі UI-форми правил (_Внутрішній_)
+
+_POST /api/form-submissions/{form-key}/validate_
+
+|===
+|Parameter|Type|Request part|Description
+//|Параметр|Тип|Частина запиту|Опис
+
+|*X-Access-Token*
+|JWT
+|HTTP header
+//|HTTP заголовок
+|User access token
+//|Токен доступу користувача
+
+|*form-key*
+|Text
+//|Текстовий
+|Request parameter
+//|Параметр запиту
+| Unique identifier of the UI form scheme for which data validation is required
+//|Унікальний ідентифікатор схеми UI-форми, відносно якої необхідно провести валідацію даних
+|===
+
+.Example of the request form containing the UI form data
+//.Приклад тіла запиту з даними UI-форми
+[source, json]
+----
+{
+  "data": {
+    "field-key1": "Joe",
+    "field-key2": "joe@example.com",
+    "field-key3": "123123123"
+  }
+}
+----
+
+. Example of a response in case of data validation errors
+//.Приклад відповіді у разі помилок валідації даних
+[source, json]
+----
+{
+  "name": "ValidationError",
+  "details": [
+    {
+      "message": "Name is required",
+      "level": "error",
+      "path": [
+        "name"
+      ],
+      "context": {
+        "validator": "required",
+        "setting": true,
+        "key": "name",
+        "label": "Name",
+        "value": ""
+      }
+    },
+    {
+      "message": "Edrpou must have at least 2 characters.",
+      "level": "error",
+      "path": [
+        "edrpou"
+      ],
+      "context": {
+        "validator": "minLength",
+        "setting": 2,
+        "key": "edrpou",
+        "label": "Edrpou",
+        "value": "1"
+      }
+    }
+  ]
+}
+----
+
+.Error codes
+//.Коди помилок
+|===
+|Code|Description
+//|Код|Опис
+
+a|[green]#200#
+|OK
+a|[red]#400#
+|Incorrectly generated request
+//|Некоректно сформований запит
+a|[yellow]#401#
+|Authentication error (no access token)
+//|Помилка автентифікації (відсутній токен доступу)
+a|[red]#422#
+| Error of UI form scheme data validation
+//|Помилка валідації даних відносно схеми UI-форми
+a|[red]#500#
+|Server request processing error
+//|Серверна помилка обробки запиту
+|===
+
+[IMPORTANT]
+After the redesign of services, it is necessary to redesign the validation API to ensure consistency of contracts on returning validation errors.
+//Після виконання редизайну сервісів, необхідно провести редизайн API валідації задля забезпечення консистентності контрактів по поверненню помилок валідації.
+
+==== Data validation of individual fields according to the rules defined in the UI form scheme (_Internal_)
+//===== Валідація даних окремого поля згідно визначених у схемі UI-форми правил (_Внутрішній_)
+
+_POST /api/form-submissions/{form-key}/fields/{field-key}/validate_
+
+[NOTE]
+Currently only the file field validation is supported. If _{field-key}_ belongs to a field of another type, the system must return *501* _(NOT_IMPLEMENTED)_.
+//На даний момент підтримується лише валідація файлових полів. У разі, якщо _{field-key}_ належить полю іншого типу, система повинна повернути *501* _(NOT_IMPLEMENTED)_.
+
+|===
+|Parameter|Type|Request part|Description
+//|Параметр|Тип|Частина запиту|Опис
+
+|*X-Access-Token*
+|JWT
+|HTTP header
+//|HTTP заголовок
+|User access token
+//|Токен доступу користувача
+
+|*form-key*
+|Text
+//|Текстовий
+|Request parameter
+//|Параметр запиту
+|Unique identifier of the UI form scheme
+//|Унікальний ідентифікатор схеми UI-форми
+
+|*field-key*
+|Text
+//|Текстовий
+|Request parameter
+//|Параметр запиту
+| Unique field identifier within the UI form
+//|Унікальний ідентифікатор поля в межах UI-форми
+|===
+
+.Example of the request body with the data on the downloaded UI form file for validation
+//.Приклад тіла запиту з даними про завантажений файл UI-форми для валідації
+[source, json]
+----
+{
+  "documentKey": "",
+  "filename": "",
+  "contentType": "",
+  "size": 0
+}
+----
+
+.Example of a response for validation of file fields
+//.Приклад відповіді для валідації файлових полів
+[source, json]
+----
+{
+  "traceId": "<trace-id>",
+  "code": 422,
+  "message": "The type of the downloaded file is not supported.",
+  "details": []
+}
+----
+
+.Error codes
+//.Коди помилок
+|===
+|Code|Description
+//|Код|Опис
+
+a|[green]#200#
+|OK, returning the result of the UI form scheme data
+//|OK з поверненням результату даних схеми UI-форми
+a|[red]#400#
+|Incorrectly generated request
+//|Некоректно сформований запит
+a|[yellow]#401#
+|Authentication error (no access token)
+//|Помилка автентифікації (відсутній токен доступу)
+a|[yellow]#404#
+|No UI form schema for the specified {form-key}
+//|Схема UI-форми за вказаним _{form-key}_ відсутня
+a|[red]#500#
+|Server request processing error
+//|Серверна помилка обробки запиту
+a|[red]#501#
+|System does not support this operation
+//|Операція не підтримується системою
+|===
+
+=== Regulations publication pipeline
+//=== Пайплайн публікації регламенту
+
+To fill the new *bpm-form-schemas* _Redis keyspace_ repository of UI forms with data in the framework of the regulations publication, it is necessary to make changes to -_Stage_ *upload-form-changes* using the internal API of the newly created _UI forms provider service_ (*form-schema-provider*).
+//Для наповнення даними нового сховища схем UI-форм *bpm-form-schemas* _Redis keyspace_ в рамках публікації регламенту, необхідно внести зміни у _Stage_ *upload-form-changes* з використанням внутрішнього API новоствореного сервісу _Сервісу постачання UI-форм_ (*form-schema-provider*).
+
+== Backing up and restoration of the UI form scheme data
+//== Бекапування та відновлення даних схем UI-форм
+
+Backing up and restoration of the data stored in the _Redis_ storage is performed according to the general procedure using a secure backup storage.
+//Створення резервної копії та відновлення даних, які зберігаються у сховищі  _Redis_ виконується згідно до загальної процедури з використанням захищеного сховища бекапів.
+
+[TIP]
+For details, see xref:admin:backup-restore/control-plane-backup-restore.adoc[Registry backing up and restoration].
+//Детальніше можно ознайомитись у розділі xref:admin:backup-restore/control-plane-backup-restore.adoc[Бекап та відновлення реєстру].
+
+== Migration _of the UI form scheme data_
+//== Міграція _даних схем UI-форм_
+
+Currently, the registry UI form schemes are stored in the _MongoDB_ *form-management-provider-db* repository.
+//На данний момент, схеми UI-форм реєстру зберігаються у сховищі _MongoDB_ *form-management-provider-db*.
+
+As part of the transition to the new version, it is required to fill the new *bpm-form-schemas* _Redis keyspace_ storage with data for each registry.
+//В рамках переходу до нової версії, необхідно провести наповнення даними нового сховища *bpm-form-schemas* _Redis keyspace_ для кожного реєстру.
+
+=== Migration procedure, option # 1:
+//=== Процедура міграції опція №1:
+
+- Get all files of the registry regulations UI forms schemes from the *<registry-regulation>/forms* directory.
+//- Отримання усіх файлів схем UI-форм регламенту реєстру з *<registry-regulation>/forms* директорії
+- Create corresponding records of the UI form schemes through the internal API of the _UI forms provider service_ using the algorithm defined in _UploadFormChanges.groovy_ of the corresponding step of the _Regulations publication pipeline_.
+//- Створення відповідних записів схем UI-форм через внутрішній API _Сервісу постачання UI-форм_ з використанням алгоритму, визначеного у _UploadFormChanges.groovy_ відповідного кроку _Пайплайну публікації регламенту_
+
+=== Migration procedure, option # 2:
+//=== Процедура міграції опція №2:
+
+- Generate _Gerrit MR_ with type changes: _touch <<registry-regulation>/forms/*.json>_
+//- Сформувати _Gerrit MR_ зі змінами типу: _touch <<registry-regulation>/forms/*.json>_
+- Integrate _Gerrit MR_ into the _master_ branch, thus initiate the launch of the "Regulations publication pipeline"
+//- Інтегрувати _Gerrit MR_ у _master_ гілку, таким чином ініціювати запуск "Пайплайну публікації регламенту"
+- Wait for completion of the *upload-form-changes* step and check for entries in *bpm-form-schemas* _Redis keyspace_
+//- Дочекатися проходження кроку *upload-form-changes* та перевірити наявність записів у *bpm-form-schemas* _Redis keyspace_
