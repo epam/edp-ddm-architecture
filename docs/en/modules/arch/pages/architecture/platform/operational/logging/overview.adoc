@@ -1,0 +1,164 @@
+= Event logging subsystem
+include::platform:ROOT:partial$templates/document-attributes/arch-set-en.adoc[]
+
+include::platform:ROOT:partial$admonitions/language-en.adoc[]
+
+== General description
+
+This subsystem provides centralized storage of technical logs for logging platform components and the registry in a unified form, full-text search, and building information and analytical representations through specialized web interfaces.
+
+== Subsystem functions
+
+* Saving event logs of the platform applications.
+//* Збереження журналів подій застосунків Платформи.
+* Saving the OpenShift container orchestration platform event logs.
+//* Збереження журналів подій платформи оркестрації контейнерів OpenShift.
+* Processing event logs and saving them to the search server.
+//* Обробка журналів подій та збереження їх до пошукового сервера.
+* Visualization of the event log data via web interfaces.
+//* Візуалізація даних журналів подій через вебінтерфейси.
+
+== Subsystem technical design
+//== Технічний дизайн підсистеми
+The logging subsystem collects information about events from the entire cluster, both platform and registry, and stores them in the special `Elasticsearch` repository.
+//Підсистема журналювання збирає інформацію про події з усього кластера, як платформні, так і реєстрові, та зберігає їх у спеціальному сховищі `Elasticsearch`.
+The `Kibana` web interface is used for data visualization.
+//Для візуалізації даних використовується веб-інтерфейс `Kibana`.
+
+The event logging subsystem aggregates the following types of logs:
+//Підсистема журналювання подій агрегує такі типи журналів:
+
+* Registry components: Container logs that make up the registry.
+//* Реєстрові компоненти: журнали контейнерів, що складають собою реєстр.
+* Infrastructure: The logs created by the infrastructure containers running on the OpenShift container orchestration platform.
+//* Інфраструктура: журнали, створені контейнерами інфраструктури, які працюють на платформі оркестрації контейнерів OpenShift.
++
+TIP: Infrastructure components are containers that work in the `openshift*`, `kube*` or `default` projects.
+//TIP: Інфраструктурні компоненти — це контейнери, які працюють у проєктах `openshift*`, `kube*` або `default`.
+
+* Audit of virtual machines: The logs created by `auditd` -- the OpenShift auditing system of virtual machines, which are stored in the `/var/log/audit/audit.log` file, and the Kubernetes APIServer and OpenShift APIServer audit logs.
+//* Аудит віртуальних машин: журнали, створені `auditd`, системою аудиту віртуальних машин OpenShift, які зберігаються у файлі `/var/log/audit/audit.log`, та аудиторські журнали Kubernetes APIServer та OpenShift APIServer.
++
+TIP: By default, the logging subsystem does not store audit logs in the `Elasticsearch` repository.
+If necessary, you can configure this for viewing them, for example, in `Kibana`.
+//TIP: За замовчуванням, підсистема журналювання не зберігає журнали аудиту в сховищі `Elasticsearch`.
+//За потребою можливо налаштувати це, щоб, наприклад, переглядати їх у `Kibana`.
+
+The components of the event logging subsystem contain the following main components:
+//Компоненти підсистеми журналювання подій містить наступні основні компоненти:
+
+* Exporters: They collect, aggregate logs from the Platform components and registries, format them and send to the log repository. The current implementation is `Fluentd`.
+//* Експортери — збирають, агрегують журнали з компонентів Платформи та реєстрів, форматують їх та пересилають до сховища журналів. Поточна реалізація — `Fluentd`.
+* Log Store: It stores the component logs. The current implementation is `Elasticsearch`, which is optimized for short-term storing.
+//* Сховище журналів — зберігає журнали компонентів. Поточна реалізація — `Elasticsearch`, що оптимізований для короткотривалого зберігання.
+* Visualization is the user interface used to view logs and dashboards. The current implementation is `Kibana`.
+//* Візуалізація — це інтерфейс користувача, що використовується для перегляду журналів та інформаційних панелей. Поточна реалізація - `Kibana`.
+
+This diagram shows the components that are the part of the _Event logging subsystem_ and their interaction with other subsystems.
+//На даній діаграмі зображено компоненти, які входять в _Підсистему журналювання подій_ та їх взаємодію з іншими підсистемами.
+
+.Component diagram _Event logging subsystems_
+//.Компонентна діаграма _Підсистеми журналювання подій_
+image::architecture/platform/operational/logging/logging-subsystem.drawio.svg[width=800,float="center",align="center"]
+
+== Subsystem components
+//== Складові підсистеми
+
+|===
+|Component|Namespace|Deployment|Origin|Repository|Designation
+//|Назва компоненти|Namespace|Deployment|Походження|Репозиторій|Призначення
+
+| _Web interface for viewing the Platform's event logs_
+//|_Веб-інтерфейс перегляду журналу подій Платформи_
+|`openshift-logging`
+|`kibana`
+|3rd-party
+.4+|https://github.com/epam/edp-ddm-logging[github:/epam/edp-ddm-logging]
+| Web interface for accessing, searching and displaying technical event logs in the Platform.
+//|Веб-інтерфейс для доступу, пошуку та відображення технічних журналів подій в Платформі.
+
+| _Platform log repository_
+//|_Сховище журналів Платформи_
+|`openshift-logging`
+|`elasticsearch-cdm`
+|3rd-party
+|Serves as a repository of logs, where all data collected by exporters is stored. Elasticsearch allows you to quickly and efficiently search and analyze the aggregated data from logs.
+//|Виконує роль сховища журналів, де зберігаються всі зібрані експортерами дані. Elasticsearch дозволяє швидко та ефективно проводити пошук та аналіз агрегованих даних з журналів.
+
+|_Operator of the event logging subsystem_
+//|_Оператор підсистеми журналювання подій_
+|`openshift-logging`
+|`cluster-logging-operator`
+|3rd-party
+|Supports configuration, deployment and maintenance of the event logging subsystem in OpenShift.
+//|Забезпечення налаштування, розгортання та обслуговування підсистеми журналювання подій в OpenShift.
+
+|_Log storage operator_
+//|_Оператор сховища журналів_
+|`openshift-operators-redhat`
+|`elasticsearch-operator`
+|3rd-party
+|Supports configuring, deployment, and maintainance of the Elasticsearch event log repository in OpenShift.
+//|Забезпечення налаштування, розгортання та обслуговування сховища журналів подій Elasticsearch в OpenShift.
+
+|===
+
+== Kibana dashboards
+//== Інформаційні панелі Kibana
+The dashboards below are manually installed by following the appropriate instructions for administrators.
+//Наведені нижче інформаційні панелі встановлюються вручну за відповідними інструкціями для адміністраторів.
+
+|===
+|Dashboard|Technical name|Designation|Link
+//|Інформаційна панель|Технічна назва|Призначення|Посилання
+
+|Request dashboard
+//|Інформаційна панель запитів
+|`request-dashboard`
+| Provides overview information on the registry operation, in particular the status of external requests execution.
+//|Надає оглядову інформацію про роботу реєстру, зокрема статуси виконання зовнішніх запитів.
+|Dashboard: https://raw.githubusercontent.com/epam/edp-ddm-logging/main/dashboards/kibana/request-dashboard.json[github:/epam/edp-ddm-logging/main/dashboards/kibana/request-dashboard.json]
+//|Інформаційна панель: https://raw.githubusercontent.com/epam/edp-ddm-logging/main/dashboards/kibana/request-dashboard.json[github:/epam/edp-ddm-logging/main/dashboards/kibana/request-dashboard.json]
+
+Setup instructions: xref:platform:registry-develop:registry-admin/openshift-logging/kibana-request-dashboard.adoc[Visualization of the request states in Kibana during registry operation]
+//Інструкція по налаштуванню: xref:platform:registry-develop:registry-admin/openshift-logging/kibana-request-dashboard.adoc[Візуалізація стану запитів у Kibana при роботі реєстру]
+
+|Event logs dashboard
+//|Інформаційна панель журналів подій
+|`kibana-logs-dashboard`
+|Provides consolidated information from all collected event logs.
+//|Надає консолідовану інформацію з усіх зібраних журналів подій.
+|https://raw.githubusercontent.com/epam/edp-ddm-logging/main/dashboards/kibana/request-dashboard.json[github:/epam/edp-ddm-logging/main/dashboards/kibana/request-dashboard.json]
+
+Setup instructions: xref:platform:registry-develop:registry-admin/openshift-logging/kibana.adoc[Working with event logs in the Kibana application interface]
+//Інструкція по налаштуванню: xref:platform:registry-develop:registry-admin/openshift-logging/kibana.adoc[Робота із журналами подій в інтерфейсі застосунку Kibana]
+
+|===
+
+== Technological stack
+//== Технологічний стек
+The following technologies were used in the design and development of the subsystem:
+//При проєктуванні та розробці підсистеми, були використані наступні технології:
+
+* xref:arch:architecture/platform-technologies.adoc#elasticsearch[Elasticsearch]
+* xref:arch:architecture/platform-technologies.adoc#kibana[Kibana]
+* xref:arch:architecture/platform-technologies.adoc#fluentd[Fluentd]
+* xref:arch:architecture/platform-technologies.adoc#okd[OKD]
+
+== Subsystem quality attributes
+//== Атрибути якості підсистеми
+=== _Scalability_
+The _Event logging subsystem_ is deployed in the High Availability mode with several instances of key components, which allows effective processing of the event logs even if there are many deployed registries in the Platform.
+//_Підсистема журналювання подій_ розгортнута в High Availability режимі з декількома екземплярами ключових компонентів, що дозволяє ефективно опрацьовувати журнали подій навіть при наявності великої кількості розгорнутих реєстрів на Платформі.
+
+=== _Performance_
+The _Event logging subsystem_ provides fast full-text search and analysis of data from event logs due to the optimized Elasticsearch repository and Lucene search syntax.
+//_Підсистема журналювання подій_ забезпечує швидкий повнотекстовий пошук та аналіз даних з журналів подій завдяки оптимізованому сховищу Elasticsearch та пошуковому синтаксису Lucene.
+
+=== _Reliability_
+The _Event logging subsystem_ can operate reliably and continue to log events even if its individual components or virtual machines fail.
+//_Підсистема журналювання подій_ може працювати надійно та продовжувати реєструвати події навіть при відмові в роботі окремих компонентів чи віртуальних машин.
+
+=== _Observability_
+The _Event logging subsystem_ records and provides detailed information about events in the Platform in order to facilitate the identification and resolution of possible failures and issues by the Platform administrators when the Platform operates in the production environment.
+//_Підсистема журналювання подій_ фіксує та надає детальну інформацію про події в Платформі з метою спрощення ідентифікації та розв'язання можливих збоїв та проблем адміністраторами Платформи при промисловій експлуатації Платформи.
