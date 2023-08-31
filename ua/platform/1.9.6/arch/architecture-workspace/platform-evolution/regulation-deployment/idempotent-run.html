@@ -3221,6 +3221,9 @@
 <li>
 <p>Збереження стану регламенту в секрет.</p>
 </li>
+<li>
+<p>Розгортання регламенту з примусовим викликом всіх кроків (<em>FULL_DEPLOY</em>)</p>
+</li>
 </ul>
 </div>
 </div>
@@ -3243,13 +3246,16 @@
 <div class="ulist">
 <ul>
 <li>
-<p>Для визначення чи необхідно виконувати той чи інший крок, відбувається перевірка поточного стану регламенту з станом регламенту на момент останнього успішного виконання кроку.</p>
+<p>Для визначення чи необхідно виконувати той, чи інший крок, відбувається перевірка поточного стану регламенту з станом регламенту на момент останнього успішного виконання кроку.</p>
 </li>
 <li>
-<p>Перевірка залежних файлів відбувається для кожного кроку окремо і фіксується лише для конкретного кроку, таким чином при обробці файлів які використовуються у декільках кроках не буде хибних записів про успішність опрацювання цих файлів.</p>
+<p>Перевірка залежних файлів відбувається для кожного кроку окремо і фіксується лише для конкретного кроку, таким чином при обробці файлів які використовуються у декількох кроках не буде хибних записів про успішність опрацювання цих файлів.</p>
 </li>
 <li>
-<p>Чексуми по кроках зберігаються в секреті як <code>JSON</code></p>
+<p>Чек-суми по кроках зберігаються в секреті як <code>JSON</code></p>
+</li>
+<li>
+<p>Управління секретом відбувається за допомогою <em>k8s API</em></p>
 </li>
 </ul>
 </div>
@@ -3259,21 +3265,40 @@
 <h2 id="_високорівневий_дизайн_рішення"><a class="anchor" href="#_високорівневий_дизайн_рішення"></a>Високорівневий дизайн рішення</h2>
 <div class="sectionbody">
 <div class="paragraph">
-<p>Розширення утіліти командного рядка <code>registry-regulations-validator-cli</code> двома командами
-<code>save ${stepName} -f %{dir1} %{dir2/subDir1} ${fileName}</code> для підрахунку чек-сум всіх перелічених файлів та збереження значень у секрет <code>k8s</code> і
-<code>plan %{stepName}</code> для перевірки стану і необхідності запуску кроку розгортання.</p>
+<p>Розширення застосунку командного рядка <code>registry-regulations-cli</code> двома командами
+<code>save</code> для підрахунку чек-сум всіх перелічених файлів та збереження значень у секрет <code>k8s</code> і <code>plan</code> для перевірки стану і необхідності запуску кроку розгортання.</p>
 </div>
 </div>
 </div>
 <div class="sect1">
 <h2 id="_низькорівневий_дизайн_сервісів"><a class="anchor" href="#_низькорівневий_дизайн_сервісів"></a>Низькорівневий дизайн сервісів</h2>
 <div class="sectionbody">
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-shell hljs" data-lang="shell">registry-regulations-cli [command] [options]
+
+COMMANDS:
+    validate - валідація регламенту на наявність помилок
+    plan - перевірка чи необхідні якісь дії для приведення реєстру до стану описаному в регламенті, в рамках окремої бізнес операції.
+    save - збереження чек-суми частини регламенту повязаної з бізнес операцією до k8s секрету.</code></pre>
+</div>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-shell hljs" data-lang="shell">registry-regulations-cli [plan|save] [parameter] [options]
+
+Приймає як параметер, назву бізнес операції.
+
+OPTIONS:
+    -f --file - перелік папок і файлів [Обовʼязковий]</code></pre>
+</div>
+</div>
 <div class="sect2">
 <h3 id="_перевірка_стану_регламенту_і_необхідності_запуску_кроку_розгортання"><a class="anchor" href="#_перевірка_стану_регламенту_і_необхідності_запуску_кроку_розгортання"></a>Перевірка стану регламенту і необхідності запуску кроку розгортання</h3>
 <div class="listingblock">
 <div class="title">Приклад використання на пайплайні розгортання</div>
 <div class="content">
-<pre class="highlightjs highlight"><code class="language-bash hljs" data-lang="bash">registry-regulations-validator-cli plan create-redash-roles</code></pre>
+<pre class="highlightjs highlight"><code class="language-bash hljs" data-lang="bash">registry-regulations-cli plan update-data-model -f registry-regulations/data-model/ registry-regulations/settings.yaml</code></pre>
 </div>
 </div>
 <div class="paragraph">
@@ -3288,10 +3313,10 @@
 <p>В секреті відсутній крок з таким ім&#8217;ям</p>
 </li>
 <li>
-<p>Чексума для хоча б одного з перелічених файлів відрізняється від чексуми збереженої в секреті.</p>
+<p>Чек-сума для хоча б одного з перелічених файлів відрізняється від чек-суми збереженої в секреті.</p>
 </li>
 <li>
-<p>Інформація про чексуму файла відсутня у секреті.</p>
+<p>Інформація про чек-суму файла відсутня у секреті.</p>
 </li>
 </ul>
 </div>
@@ -3301,35 +3326,125 @@
 <div class="listingblock">
 <div class="title">Формат виклику команди збереження стану файлів для кроку розгортання регламенту.</div>
 <div class="content">
-<pre class="highlightjs highlight"><code class="language-bash hljs" data-lang="bash">save ${stepName} -f %{dir1} %{dir2/subDir1} ${fileName}</code></pre>
+<pre class="highlightjs highlight"><code class="language-bash hljs" data-lang="bash">registry-regulations-cli save ${business-operation} -f %{dir1} %{dir2/subDir1} ${fileName}</code></pre>
 </div>
 </div>
 <div class="listingblock">
 <div class="title">Приклад</div>
 <div class="content">
-<pre class="highlightjs highlight"><code class="language-bash hljs" data-lang="bash">save create-trembita-business-process -f %{dir1} %{dir2/subDir1} ${fileName}</code></pre>
+<pre class="highlightjs highlight"><code class="language-bash hljs" data-lang="bash">registry-regulations-cli save  update-data-model -f registry-regulations/data-model/ registry-regulations/settings.yaml</code></pre>
 </div>
 </div>
 <div class="paragraph">
 <p>у разі успішного виконання кроку стан зберігається в секреті <code>registry-regulation-steps-state</code></p>
 </div>
 <div class="listingblock">
-<div class="title">Структура збереження стану регламенту в серкреті</div>
+<div class="title">Структура збереження стану регламенту в секреті.</div>
 <div class="content">
 <pre class="highlightjs highlight"><code class="language-json hljs" data-lang="json">{
-  "create-trembita-business-process": {
-    "global-vars": "....:SHA256",
-    "bp-auth": "....:SHA256",
-    "bp-trembita": "....:SHA256"
+  "registry-regulations-validation": {
+    "registry-regulations": "...:SHA256"
   },
-  "upload-global-vars-changes": {
-    "global-vars": "....:SHA256"
+  "create-redash-roles": {
+    "registry-regulations/roles": "...:SHA256"
+  },
+  "create-keycloak-roles": {
+    "registry-regulations/roles": "...:SHA256"
+  },
+  "update-data-model": {
+    "registry-regulations/data-model": "...:SHA256",
+    "registry-regulations/settings.yaml": "...:SHA256"
+  },
+  "apply-reports": {
+    "registry-regulations/reports": "...:SHA256"
+  },
+  "apply-notifications": {
+    "registry-regulations/notifications": "...:SHA256"
+  },
+  "apply-excerpts": {
+    "registry-regulations/excerpts-csv": "...:SHA256",
+    "registry-regulations/excerpts-docx": "...:SHA256",
+    "registry-regulations/excerpts": "...:SHA256"
+  },
+  "apply-bp-grouping": {
+    "registry-regulations/bp-grouping": "...:SHA256"
+  },
+  "update-geoserver-configuration": {
+    "registry-regulations/data-model": "...:SHA256"
+  },
+  "apply-web-forms": {
+    "registry-regulations/forms": "...:SHA256"
+  },
+  "set-global-vars": {
+    "registry-regulations/global-vars": "...:SHA256"
+  },
+  "apply-theme": {
+    "registry-regulations/global-vars": "...:SHA256"
+  },
+  "configure-trembita-integrations": {
+    "registry-regulations/bp-trembita": "...:SHA256"
+  },
+  "bpms-rollout": {
+    "registry-regulations/bpmn": "...:SHA256"
+  },
+  "update-bp": {
+    "registry-regulations/bpmn": "...:SHA256",
+    "registry-regulations/dmn": "...:SHA256"
+  },
+  "update-bp-permission": {
+    "registry-regulations/bp-auth": "...:SHA256"
+  },
+  "apply-autotests": {
+    "registry-regulations/autotests": "...:SHA256"
+  },
+  "update-registry-settings": {
+    "registry-regulations/settings": "...:SHA256"
   }
 }</code></pre>
 </div>
 </div>
 <div class="paragraph">
 <p>Для підрахунку чексуми файлів використовується алгоритм <em>SHA256</em> <code>MessageDigest digest = MessageDigest.getInstance("SHA-256");</code></p>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_високорівневий_план_розробки"><a class="anchor" href="#_високорівневий_план_розробки"></a>Високорівневий план розробки</h2>
+<div class="sectionbody">
+<div class="sect2">
+<h3 id="_технічні_експертизи"><a class="anchor" href="#_технічні_експертизи"></a>Технічні експертизи</h3>
+<div class="ulist">
+<ul>
+<li>
+<p>BE</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_план_розробки"><a class="anchor" href="#_план_розробки"></a>План розробки</h3>
+<div class="ulist">
+<ul>
+<li>
+<p>Перейменування репозиторію застосунку для валідації.</p>
+</li>
+<li>
+<p>Винесення операції для валідації в окрему команду <em>validate</em>.</p>
+</li>
+<li>
+<p>Додавання команди для збереження стану регламенту в секрет.</p>
+</li>
+<li>
+<p>Додавання команди для перевірки стану регламенту зі збереженим станом.</p>
+</li>
+<li>
+<p>Зміна команд валідації регламенту.</p>
+</li>
+<li>
+<p>Зміна перевірки на необхідність запускання всіх кроків пайплайну розгортання регламенту.</p>
+</li>
+</ul>
 </div>
 </div>
 </div>
