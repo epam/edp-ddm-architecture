@@ -1,0 +1,220 @@
+//= Застосування правил RLS до модуля ГІС
+= Applying RLS rules to GIS module
+
+//== Загальний опис
+== Overview
+
+//xref:arch:architecture/registry/operational/geo/gis.adoc[Модуль ГІС] є однією з підсистем через які відбувається доступ до даних реєстру. В регламенті реєстру доступ до даних реєстру може бути обмежений зокрема xref:registry-develop:registry-admin/hierarchical-model.adoc#_визначення_правил_read_rls_для_пошуку_обєктів_за_катоттг[rls правилами читання]. Наразі модуль ГІС ігнорує ці правила.
+
+The xref:arch:architecture/registry/operational/geo/gis.adoc[GIS module] is one of the subsystems that provide access to Registry data. In Registry regulations, the access to Registry data can be restricted, among other ways, with  xref:registry-develop:registry-admin/hierarchical-model.adoc#_визначення_правил_read_rls_для_пошуку_обєктів_за_катоттг[RLS read rules]. Currently, the GIS module ignores these rules.
+
+//Для усунення цього недоліку пропонується додавати правила фільтрації для проксі сервера envoy, побудовані на основі налаштувань rls правил читання регламенту реєстру.
+To fix this drawback, it is recommended to add filtering rules for the envoy proxy server, based on RLS Registry regulations read rule configuration.
+
+
+//== Актори та ролі користувачів
+== Actors and user roles
+//* Посадові особи
+* Officers
+
+//== Функціональні сценарії
+== Functional scenarios
+
+//* Перегляд та пошук гео-даних обмежених правилами RLS
+* Viewing and searching for geodata, restricted by RLS rules
+
+//== Цільовий дизайн
+== Target design
+
+image::architecture/registry/operational/geo/geoserver-rls/gis-rls-deployment.drawio.svg[gis-rls-deployment,700]
+
+//За допомогою https://istio.io/latest/docs/reference/config/networking/envoy-filter/[Istio EnvoyFilter] налаштовується конфігурація Envoy, створеного Istio Pilot для гео-серверу.
+The configuration of envoy created by Istrio Pilot for the GeoServer is performed using https://istio.io/latest/docs/reference/config/networking/envoy-filter/[Istio EnvoyFilter].
+
+//Сконфігурований envoy-фільтр перехоплює запити до шарів (layers) для джерел даних яких налаштовано RLS на читання. В такі запити envoy додає умови фільтру RLS на основі атрибутів автентифікованого користувача отриманих з jwt.
+The configured envoy-filter intercepts requests to the layers with data sources that have configured RLS read rules for. Envoy adds RLS filter conditions to these requests, based on authenticated user attributes, received from jwt.
+
+//На гео-сервер запит надходить вже з фільтром та гео-сервер повертає лише ті дані на які є права у користувача.
+The GeoServer receives filtered requests and returns only the data that the user is authorized to view.
+
+//Налаштування EnvoyFilter створюються сервіс генератором на основі метаданих RLS та встановлюються чи оновлюються при розгортанні регламенту.
+EnvoyFilter settings are created by service generator, based on RLS metadata, and are set or updated on regulations deployment.
+
+//=== Сервіс генератор
+=== Service generator
+//В сервіс генератор необхідно додати нове значення для параметру module `--module=geoserver-rls`
+A new value must be added to the `module` parameter in service generator: `--module=geoserver-rls`.
+
+//При отриманні такого параметру cервіс генератор має згенерувати https://istio.io/latest/docs/reference/config/networking/envoy-filter/[Istio EnvoyFilter], який, для запитів на яких необхідно перевіряти RLS, бере ключ RLS з JWT-токену і додає створений на його основі CQL_FILTER до параметрів запиту.
+On receiving this parameter the service generator will generate https://istio.io/latest/docs/reference/config/networking/envoy-filter/[Istio EnvoyFilter] that takes RLS key from the JWT-token, and adds a CQL_FILTER based on that key to the request parameters, for all requests that require RLS check.
+
+//NOTE: Докладний робочий приклад envoy фільтру який додає атрибут з jwt в заголовок запиту -  https://stackoverflow.com/a/71101808[how to extract jwt in envoy]
+NOTE: A detailed example of envoy filter that adds the attribute from jwt to the request heading can be found here -  https://stackoverflow.com/a/71101808[how to extract jwt in envoy].
+
+//При генерації в першу чергу потрібно знайти всі правила RLS на читання для таблиць та представлень які використовуються в гео-сервері. Правила зберігаються в таблиці xref:arch:architecture/registry/operational/registry-management/registry-db.adoc#_ddm_rls_metadata[ddm_rls_metadata]. З них потрібно вибрати ті в яких `type = read` та `check_table` містить назву таблиці чи представлення в якій є колонки типу `geometry`.
+First, on generation it is necessary to find all the RLS read rules for tables and representations used on GeoServer. These rules are stored in the xref:arch:architecture/registry/operational/registry-management/registry-db.adoc#_ddm_rls_metadata[ddm_rls_metadata] table. Out of this table, rules where `type = read` and `check_table` contain the name of a table or a representation that has `geometry` type columns.
+
+//Для кожного такого правила потрібно згенерувати код Envoy Filter який його буде застосовувати. В прикладі приведено псевдокод описуючий логіку згідно з якою повинна відбуватись перевірка
+For every such rule, it is necessary to generate Envoy Filter code that will apply it. The following example shows pseudocode that describes the logic of the check.
+        
+
+////
+.Приклад псевдокоду
+[source, sql]
+----
+--Наступні плейсхолдери замінюються на значення з відповідних
+--колонок налаштування RLS з таблиці ddm_rls_metadata
+--${jwtAttribute} 
+--${checkTable}  
+--${checkColumn}
+
+--Якщо це запит на читання з таблиці або view на якому налаштовано rls починається обробка 
+if request_params("service") = "WFS" 
+    and request_params("request") = "getFeature" 
+    and request_params("typeName") = "registry:"+${checkTable} then
+
+    --Отримати значення ${jwtAttribute} із токену
+    jwtRLSattribute = get_jwt_payload(${jwtAttribute})
+
+    if jwtRLSattribute is not null then
+        --Якщо jwtAttribute не пустий формується фільтр rlscolumn like 'jwtAttrValue%'
+        --jwtAttribute може містити масив значень, для
+        --кожного значення додається умова через or
+        for i in jwtRLSattribute loop
+            if i !=0  
+                rls_filter =rls_filter + "or"
+            end
+            rls_filter =rls_filter + "${checkColumn} like '"+jwtRLSattribute[i]+"%25'"
+        end
+        rls_filter ="("+rls_filter +")"
+    else
+        --Якщо jwtAttribute пустий формується фільтр який не поверне жодного запису 
+        rls_filter = "1=0"
+    end
+
+    if exists request_params("CQL_FILTER") then
+        --Якщо в запиті вже був cql фільтр, загортаємо його у дужки і додаємо умову RLS фільтру
+        --та заміняємо CQL_FILTER на сформований фільтр в параметрах запиту
+        request_params("CQL_FILTER") = "("+request_params("CQL_FILTER")+") and "+rls_filter
+    else
+        --Якщо в запиті не було cql фільтру просто додаємо свій RLS фільтр у параметри запиту
+        request_params("CQL_FILTER") = rls_filter
+    end
+end
+
+----
+////
+
+.Pseudocode example
+[source, sql]
+----
+--The following placeholders are qreplaced by values from the
+--corresponding RLS configuration columns from the ddm_rls_metadata table
+--${jwtAttribute}
+--${checkTable}
+--${checkColumn}
+
+--If it is a table read request or view that has RLS configured for, the processing starts
+if request_params("service") = "WFS"
+    and request_params("request") = "getFeature"
+    and request_params("typeName") = "registry:"+${checkTable} then
+
+    --Get value ${jwtAttribute} from token
+    jwtRLSattribute = get_jwt_payload(${jwtAttribute})
+
+    if jwtRLSattribute is not null then
+        --If jwtAttribute is not empty, rlscolumn filter is formed, like 'jwtAttrValue%'
+        --jwtAttribute may contain a data array,
+        --a condition is added for each value using or
+        for i in jwtRLSattribute loop
+            if i !=0
+                rls_filter =rls_filter + "or"
+            end
+            rls_filter =rls_filter + "${checkColumn} like '"+jwtRLSattribute[i]+"%25'"
+        end
+        rls_filter ="("+rls_filter +")"
+    else
+        --If jwtAttribute is empty, then a response filter without any value is formed
+        rls_filter = "1=0"
+    end
+
+    if exists request_params("CQL_FILTER") then
+        --If the request already had a cql фільтр, take it into parentheses, add RLS filter
+        --conditions and replace CQL_FILTER with the filter formed in request parameters
+        request_params("CQL_FILTER") = "("+request_params("CQL_FILTER")+") and "+rls_filter
+    else
+        --If the request didn't have a cql filter, just add your RLS filter into request parameters
+        request_params("CQL_FILTER") = rls_filter
+    end
+end
+
+----
+
+//=== Публікація регламенту
+=== Regulations publication
+
+//Якщо реєстр розгорнутий з модулем ГІС, пайплайн публікації регламенту повинен викликати сервіс-генератор з опцією генерації правил RLS до модуля ГІС. Отриманий в результаті генерації ресурс Istio EnvoyFilter повинен бути встановлений або оновлений в оточенні реєстру.
+If the Registry is deployed with the GIS module, the regulations publication pipeline must call the service generator with an option of RLS rule generation for the GIS module. The generated Istio EnvoyFilter resource must be installed or updated in the Registry environment.
+
+//Якщо правила RLS відсутні, то потрібно передбачити видалення Istio EnvoyFilter який міг бути створений в попередніх версіях регламенту.
+If there are no RLS rules, delete Istio EnvoyFilter that could be created in the previous regulations versions.
+
+//=== Компоненти системи та їх призначення в рамках дизайну рішення
+=== System components and their function within the solution design
+//У даному розділі наведено перелік компонент системи, які залучені або потребують змін/створення в рамках реалізації функціональних вимог згідно з технічним дизайном рішення.
+This section lists system components that are involved, or need to be changed/created within the realization of functional requirements according to the technical solution design.
+
+
+////
+|===
+|Компонент|Службова назва|Призначення / Суть змін
+
+|Сервіс Генератор
+|service-generation-utility 
+|Генерація EnvoyFilter на основі шаблону та налаштувань RLS регламенту
+
+|Пайплайн публікації регламенту реєстру
+|registry-regulations-publication-pipeline
+|Застосуванням згенерованого EnvoyFilter
+
+|===
+////
+
+
+|===
+|Component|Service name|Function / Changes brief
+
+|Service generator
+|service-generation-utility
+|EnvoyFilter generation based on regulations template and RLS configuration
+
+|Registry regulations publication pipeline
+|registry-regulations-publication-pipeline
+|Application of the generated EnvoyFilter
+
+|===
+
+//=== Міграція
+=== Migration
+//Оскільки в існуючіх реєстрах правила RLS не використовуються для критеріїв пошуку гео-сервера, механізм сворення EnvoyFilter для існуючих правил RLS при оновленні реєстру не потрібен.
+As RLS rules are not used in existing Registries for GeoServer search conditions, the mechanism of EnvoyFilter generation for the existing RLS rules is not required for Registry update.
+
+//При першому розгортанні регламенту після оновлення, EnvoyFilter буде створений, якщо існуують правила RLS.
+On the first regulations deployment after an update, the EnvoyFilter will be generated if RLS rules exist.
+
+//== Високорівневий план розробки
+== High-level development plan
+//=== Технічні експертизи
+=== Technical expertise
+* _BE_
+* _DEVOPS_
+
+//=== План розробки
+=== Development plan
+//* Розробка шаблону EnvoyFilter
+* EnvoyFilter template development
+//* Розширення сервіс генератору можливістю генерувати EnvoyFilter на основі шаблону та налаштувань RLS регламенту.
+* Extension of service generator with the capabilities for EnvoyFilter generation, based on template and RLS configuration of the regulations
+//* Розширення пайплайну публікації регламенту застосуванням згенерованого EnvoyFilter
+* Extension of regulations publication pipeline using the generated EnvoyFilter
+

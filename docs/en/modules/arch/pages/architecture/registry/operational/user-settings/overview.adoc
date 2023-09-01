@@ -1,0 +1,165 @@
+//= via Підсистема управління налаштуваннями користувачів
+= User settings management subsystem
+
+//== Загальний опис
+== Overview
+
+//Підсистема, яка забезпечує можливості управління персональними налаштуваннями через кабінет користувача.
+The subsystem that provides user settings management capabilities via user portal.
+
+//== Функції підсистеми
+== Subsystem functions
+
+//- Отримання налаштувань користувача
+- Receiving user settings
+//- Активація каналу зв'язку шляхом введення / оновлення даних атрибутів каналу (наприклад: поштова адреса)
+- Communication channel activation via entering/updating channel attribute data (for example: email address)
+//- Підтвердження каналу зв'язку шляхом відправлення повідомлень зі згенерованими OTP-кодами
+- Communication channel confirmation via sending messages with OTP codes
+//- Деактивація каналу зв'язку
+- Communication channel deactivation
+//- Валідація введених налаштувань користувача (за патерном email, відсутністю в blacklist тощо)
+- Validation of the entered user settings (by email pattern, non-presence in blacklists, etc.)
+
+//== Технічний дизайн підсистеми
+== Subsystem technical design
+
+image::arch:architecture/registry/operational/user-settings/user-settings-overview.drawio.svg[float="center",align="center"]
+
+//Для отримання налаштувань користувача з бізнес процесу підсистема надає метод
+To receive user settings from a business process, the subsystem provides the following method:
+
+//* _Отримання налаштувань користувача за ідентифікатором_: використовується для змоги надсилати повідомлення користувачам на обрані ними канали зв'язку.
+* _Receiving user settings by ID_: used for the ability to send messages to the users via their selected communication channels.
+
+//Цей метод доступний лише зсередини операційної зони реєстру для _Підсистеми виконання бізнес процесів_.
+This method is only available inside the Registry operational zone for _Business process execution subsystem_.
+
+//Для роботи з налаштуваннями через кабінет користувача надаються наступні методи:
+To manage user settings via user portal, the following methods are provided:
+
+//* _Отримання налаштувань_: повертає налаштування поточного користувача, який виконав вхід у систему.
+* _Settings receiving_: returns user settings of the user that is currently logged in.
+//* _Валідація email_: валідує email, внесений у якості адреси для каналу зв'язку, за встановленим набором правил, таких як валідація за regexp, перевірка унікальності, перевірка на входження до blacklist та ін.
+* _Email validation_: validates the email entered as the communication channel address, using a set of rules, like validation by regexp, uniqueness, blacklist check, etc.
+//* _Верифікація каналу зв'язку_: генерує та зберігає код підтвердження (OTP) та ініціює його відправлення підсистемою нотифікації користувачів за вказаним каналом зв'язку.
+* _Communication channel verification_: generates the OTP confirmation code and initiates sending it by the user notification subsystem via the selected communication channel.
+//* _Активація каналу зв'язку_: перевіряє вказаний користувачем код OTP та активує канал зв'язку користувача або створює нове налаштування для каналу, якщо його ще не існує.
+* _Communication channel activation_: checks the OTP code entered by the user, and activates the user's communication channel, or creates new configuration for the channel, if it doesn't exist.
+//* _Деактивація каналу зв'язку_: деактивує канал зв'язку.
+* _Communication channel deactivation_: deactivates a communication channel.
+
+//Ці методи роботи з налаштуваннями доступні через Підсистему управління зовнішнім трафіком, та вимагають автентифікації користувача. Робота з налаштуваннями виконується лише для поточного користувача, який виконав вхід у систему. Зміна налаштувань іншого користувача неможлива за дизайном.
+These settings management methods are available via the external traffic management subsystem, and require user authentication. Settings management is performed only for the current user that is logged into the system. Changing settings for another user is not available by design.
+
+//=== Аудит та журналювання подій
+=== Audit and event logging
+
+//Події активації/деактивації каналів зв'язку фіксуються у журналі аудиту з повним контекстом. Використовуються наступні назви подій:
+Communication channel activation/deactivation events are recorded in the audit log with full context. The following event names are used:
+
+//* _USER_NOTIFICATION_CHANNEL_ACTIVATION_: Активація каналу зв'язку
+*_USER_NOTIFICATION_CHANNEL_ACTIVATION_: Communication channel activation
+//* _USER_NOTIFICATION_CHANNEL_DEACTIVATION_: Деактивація каналу зв'язку
+* _USER_NOTIFICATION_CHANNEL_DEACTIVATION_: Communication channel deactivation
+
+
+////
+[NOTE]
+Детальніше з дизайном _Підсистеми журналювання подій аудиту_ можна ознайомитися
+xref:arch:architecture/registry/operational/audit/overview.adoc[за посиланням]
+////
+[NOTE]
+You can learn more about audit events logging subsystem xref:arch:architecture/registry/operational/audit/overview.adoc[here]
+
+
+//== Складові підсистеми
+== Subsystem components
+
+
+////
+|===
+|Назва компоненти|Представлення в реєстрі|Походження|Репозиторій|Призначення
+
+|_Сервіс управління налаштуваннями користувачів_
+|`user-settings-service-api-deployment`
+|origin
+|https://github.com/epam/edp-ddm-user-settings-service-api[github:/epam/edp-ddm-user-settings-service-api]
+|Надає API для управління налаштуваннями користувачів
+
+|_xref:arch:architecture/registry/operational/user-settings/settings-db.adoc[Операційна БД налаштувань користувачів]_
+|`operational:settings`
+|origin
+|https://github.com/epam/edp-ddm-registry-postgres/tree/main/platform-db/changesets/settings[github:/epam/edp-ddm-registry-postgres/tree/main/platform-db/changesets/settings]
+|Зберігає налаштування користувачів
+
+|xref:arch:architecture/registry/operational/user-settings/redis-storage.adoc#_channel_verification_codes[__Тимчасове сховище OTP__]
+|`redis:channel-verification-codes`
+|origin
+|-
+|Зберігає тимчасові коди підтвердження
+|===
+////
+
+|===
+|Component name|Representation in Registry|Source|Repository|Function
+
+|_User settings management service_
+|`user-settings-service-api-deployment`
+|origin
+|https://github.com/epam/edp-ddm-user-settings-service-api[github:/epam/edp-ddm-user-settings-service-api]
+|Provides API for user settings management
+
+|_xref:arch:architecture/registry/operational/user-settings/settings-db.adoc[User settings operational DB]_
+|`operational:settings`
+|origin
+|https://github.com/epam/edp-ddm-registry-postgres/tree/main/platform-db/changesets/settings[github:/epam/edp-ddm-registry-postgres/tree/main/platform-db/changesets/settings]
+|Stores user settings
+
+|xref:arch:architecture/registry/operational/user-settings/redis-storage.adoc#_channel_verification_codes[__OTP temporary storage__]
+|`redis:channel-verification-codes`
+|origin
+|-
+|Stores OTP codes
+|===
+
+//== Технологічний стек
+== Technology stack
+
+//При проектуванні та розробці підсистеми, були використані наступні технології:
+The following technologies were used in system design and development:
+
+* xref:arch:architecture/platform-technologies.adoc#java[Java]
+* xref:arch:architecture/platform-technologies.adoc#spring[Spring]
+* xref:arch:architecture/platform-technologies.adoc#spring-boot[Spring Boot]
+* xref:arch:architecture/platform-technologies.adoc#spring-cloud[Spring Cloud]
+* xref:arch:architecture/platform-technologies.adoc#postgresql[PostgreSQL]
+* xref:arch:architecture/platform-technologies.adoc#redis[Redis]
+* xref:arch:architecture/platform-technologies.adoc#kafka[Kafka]
+
+//== Атрибути якості підсистеми
+== Subsystem quality attributes
+
+=== _Observability_
+
+//_Підсистема управління налаштуваннями користувачів_ підтримує журналювання та збір метрик продуктивності для подальшого аналізу через веб-інтерфейси відповідних підсистем Платформи.
+_User settings management subsystem_ supports performance metrics logging for further analysis via the corresponding Platform subsystems web-interfaces.
+
+[TIP]
+--
+//Детальніше з дизайном підсистем можна ознайомитись у відповідних розділах:
+You can learn more about subsystems design in the corresponding sections:
+
+* xref:arch:architecture/platform/operational/logging/overview.adoc[]
+* xref:arch:architecture/platform/operational/monitoring/overview.adoc[]
+--
+
+=== _Auditability_
+
+//_Підсистема управління налаштуваннями користувачів_ фіксує значимі технічні та бізнес події, пов'язані з експлуатацією системи кінцевими користувачами використовуючи xref:arch:architecture/registry/operational/audit/overview.adoc[_Підсистему журналювання подій аудиту_].
+_User settings management subsystem_ records important technical and business events, concerning system operation by end user via xref:arch:architecture/registry/operational/audit/overview.adoc[_Audit event logging subsystem_].
+
+=== _Security_
+
+//_Підсистема управління налаштуваннями користувачів_ доступна лише через _Підсистему управління зовнішнім трафіком_ або бізнес процес, та вимагає автентифікації користувача. Зміна налаштувань виконується лише для поточного користувача, який виконав вхід у систему. Зміна налаштувань іншого користувача неможлива за дизайном.
+_User settings management subsystem_ is accessible exclusively via _External traffic management subsystem_ or business process, and requires user authentication. Settings management is performed only for the current user that is logged into the system. Changing settings for another user is not available by design.
