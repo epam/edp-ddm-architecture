@@ -1,0 +1,153 @@
+//= Підсистема управління зовнішнім трафіком
+= External traffic management subsystem
+
+//== Загальний опис підсистеми
+== Overview
+
+//Підсистема представлена інтегрованою в _OpenShift_ платформу програмною компонентою _OpenShift Router_, яка використовує _HAProxy_ у якості зворотного проксі-сервера / балансувальника та забезпечує надійну та захищену взаємодію зовнішніх клієнтів з сервісами Платформи.
+The subsystem is represented by _OpenShift Router_ component, which is integrated into _OpenShift_, and uses _HAProxy_ as a reverse proxy-server / balancer, and provides reliable and secure interaction of external clients with Platform services.
+
+//Підсистема є центральною точкою входу зовнішнього трафіку до _OpenShift_-кластера та відіграє роль шлюза з функцією перенаправлення вхідного трафіку до сервісів Платформи та реєстрів, які на ній розгорнуті.
+The subsystem is the entry point for external traffic to the _OpenShift_-cluster and acts as a gateway with the function to redirect incoming traffic to the Platform services, and Registries deployed on it.
+
+//Підсистема використовує домен з кластерної _OpenShift_ конфігурації як домен для зовнішнього _API_-шлюзу за замовчуванням. Цей домен також використовується при генерації доменного імені за замовчуванням для ресурсу _OpenShift Route_, якщо явно не вказане інше доменне ім'я.
+The subsystem uses the domain from cluster _OpenShift_ configuration as the domain for the external _API_-gateway by default. This domain is also used during the generation of default domain name for _OpenShift Route_ resource, if another domain name isn't stated.
+
+//== Функції підсистеми
+== Subsystem functions
+
+//* Перенаправлення вхідного зовнішнього трафіку на внутрішні сервіси згідно з налаштованими правилами маршрутизації
+* Redirection of incoming external traffic to the internal services according to the configured routing rules
+//* Відслідковування змін налаштувань сервісів та актуалізація правил маршрутизації
+* Ongoing update of services configurations and routing rules
+//* Моніторинг стану сервісів та розподілення трафіку на екземпляри, які доступні для обробки запитів
+* Service state monitoring and division of traffic into instances available for request processing
+//* Управління доступом по IP та мережам до підсистем Платформи та реєстрів
+* IP- and network-based access management to Platform and Registries subsystems
+//* Балансування навантаження через розподілення вхідного трафіку між сервісами
+* Workload balancing through distribution of incoming traffic between services
+//* Шифрування зовнішнього трафіку та дешифрування перед перенаправленням на внутрішні сервіси (_SSL/TLS Termination_)
+* External traffic encryption and decryption before redirection to internal services (_SSL/TLS Termination_)
+//* Збір даних метрик продуктивності для моніторингу
+* Performance metrics data gathering for monitoring
+//* Журналювання вхідних запитів
+* Incoming requests logging
+
+//== Технічний дизайн підсистеми
+== Subsystem technical design
+
+image::architecture/platform/operational/external-traffic-management/external-traffic-subsystem.drawio.svg[width=600,float="center",align="center"]
+
+//== Компоненти підсистеми
+== Subsystem components
+
+
+////
+|===
+|Назва компоненти|Представлення в платформі|Походження|Репозиторій|Призначення
+
+|_Зовнішній API-шлюз операційної зони_
+|`router-default`
+|3rd-party
+|-
+|_OpenShift Ingress Controller_ (також відомий як _OpenShift Router_) - це компонент, що керує маршрутизацією вхідного трафіку в _OpenShift_ кластері.
+
+|_Оператор зовнішнього API-шлюзу операційної зони_
+|`ingress-operator`
+|3rd-party
+|https://github.com/openshift/cluster-ingress-operator[github:/openshift/cluster-ingress-operator]
+|Відповідальний за розгортання та конфігурацію зовнішнього _API_-шлюзу операційної зони
+|===
+////
+
+|===
+|Component name|Representation in Platform|Source|Repository|Function
+
+|_Operational zone external API-gateway_
+|`router-default`
+|3rd-party
+|-
+|_OpenShift Ingress Controller_ (also known as _OpenShift Router_) - a component that manages incoming traffic routing in _OpenShift_ cluster.
+
+|_Operational zone external API-gateway operator_
+|`ingress-operator`
+|3rd-party
+|https://github.com/openshift/cluster-ingress-operator[github:/openshift/cluster-ingress-operator]
+|A component that is responsible for the deployment and configuring of the Operational zone external _API_-gateway
+|===
+
+
+//== Технологічний стек
+== Technological stack
+
+//При проектуванні та розробці підсистеми, були використані наступні технології:
+The following technologies were used in system design and development:
+
+* xref:arch:architecture/platform-technologies.adoc#okd[OKD]
+* xref:arch:architecture/platform-technologies.adoc#haproxy[HAProxy]
+
+//== Атрибути якості підсистеми
+== Subsystem qiality attributes
+
+=== _Scalability_
+
+//_Підсистема управління зовнішнім трафіком_ підтримує вертикальне та горизонтальне масштабування для обробки запитів у разі збільшення об'єму зовнішнього трафіку шляхом виділення додаткових ресурсів для _OpenShift Router_ поди або збільшення кількості _OpenShift Router_ под відповідно. Горизонтальне масштабування забезпечується механізмом _Horizontal Pod Autoscaler_ (_HPA_), який, базуючись на даних моніторингу метрик кількості запитів або використанню ресурсів, автоматично збільшує або зменшує кількість реплік _Router_ відповідно поточному навантаженню та цільовим показникам.
+_External traffic management subsystem_ supports vertical and horizontal scaling for request processing in case of growing incoming traffic, by using additional resources for _OpenShift Router_ pods, or increasing the number of _OpenShift Router_ pods, accordingly. Horizontal scaling is performed via _Horizontal Pod Autoscaler_ (_HPA_), which automatically increases or decreases the number of _Router_ replicas, according to the current workload and target workload. The _HPA_ operation is based on the monitoring of requests amount and resource usage values.
+
+[TIP]
+--
+//Детальніше можна ознайомитись у відповідних розділах:
+You can find more details in the corresponding sections:
+
+* xref:architecture/container-platform/container-platform.adoc[]
+--
+
+=== _Availability_
+
+//_Підсистема управління зовнішнім трафіком_ підтримує розгортання в режимі високої доступності для забезпечення обробки вхідного трафіку у разі відмов. Висока доступність забезпечується завдяки застосуванню горизонтального масштабування та розгортанню дублюючих реплік _OpenShift Router_ под. Це дозволяє розподіляти зовнішній трафік по реплікам та гарантувати, що у разі відмови  _OpenShift Router_ поди, трафік буде перенаправлено на репліку.
+_External traffic management subsystem_ supports deployment in high-availability mode to provide incoming traffic processing in case of failure. High availability is achieved by using horizontal scaling to deploy redundant _OpenShift Router_ pod replicas. This allows for the distribution of external traffic across the replicas, and guarantee that in case of an _OpenShift Router_ pod failure, , the traffic will be redirected to a replica.
+
+[TIP]
+--
+//Детальніше можна ознайомитись у відповідних розділах:
+You can find more details in the corresponding sections:
+
+* xref:architecture/container-platform/container-platform.adoc[]
+--
+
+=== _Security_
+
+//_Підсистема управління зовнішнім трафіком_ надає гнучкий та широкий функціонал контролю та обмеження вхідного мережевого трафіку.
+_External traffic management subsystem_ provides flexible and vast incoming traffic restriction and control functionality.
+
+//Забезпечує цілісність та конфеденційність даних в каналі передачі інформації між клієнтами та сервісами платформи.
+It maintains data integrity and confidentiality in the information transfer channel between the clients and Platform services.
+
+//Підсистема не логує та не зберігає конфіденційну інформацію.
+The subsystem does not log or store confidential information.
+
+=== _Performance_
+
+//Висока продуктивність _Підсистеми управління зовнішнім трафіком_ досягається завдяки декільком чинникам:
+_External traffic management subsystem_ high performance is achieved thanks to several factors:
+
+//* використанню високопродуктивного зворотнього проксі-сервера _HAProxy_.
+* usage of high-performance _HAProxy_ reverse proxy-server.
+//* рівномірності розподілення трафіку між репліками _OpenShift Router_ под.
+* traffic distribution balance across _OpenShift Router_ pod replicas.
+//* автоматичному горизонтальному масштабуванню для досягнення цільових показників при збільшенні об'єму зовнішнього трафіку.
+* automated horizontal scaling to achieve target performance values during an increase in external traffic.
+
+=== _Observability_
+
+//_Підсистема управління зовнішнім трафіком_ підтримує журналювання вхідних запитів та збір метрик продуктивності для подальшого аналізу через веб-інтерфейси відповідних підсистем Платформи.
+_External traffic management subsystem_ supports incoming requests logging, and performance metrics gathering for further analysis via the corresponding Platform subsystems web-interfaces.
+
+[TIP]
+--
+//Детальніше з дизайном підсистем можна ознайомитись у відповідних розділах:
+You can find more details in the corresponding sections:
+
+* xref:arch:architecture/platform/operational/logging/overview.adoc[]
+* xref:arch:architecture/platform/operational/monitoring/overview.adoc[]
+--
