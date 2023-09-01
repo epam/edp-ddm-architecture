@@ -57,7 +57,7 @@ NOTE: Усі SQL-запити виконуються на поді `operational-
 Отримання переліку ідентифікаторів процесів, які не виконували операції внесення даних в реєстр та знаходяться на початкових задачах користувача (результат виконання запита у вкладенні) -- `camunda`.
 +
 //TODO: Прибрати про е-shelter?
-NOTE: Безпечний спосіб, за умови правильності конфігурування реєстру. Для e-shelter-prod використовуємо запит №3.
+NOTE: Безпечний спосіб, за умови правильності конфігурування реєстру. Для test-registry використовуємо запит №3.
 +
 ._Скрипт_
 [%collapsible]
@@ -74,18 +74,18 @@ COPY
     where e.parent_id_ is null -- top-level process instances only
         and h.start_time_ < '2022-09-26 00:00:00.000' -- time window for process instances to be terminated safely
         and (
-            (p.key_ like 'e-shelter-vpo-to-address-registration-bp' and task_def_key_ in ('searchUserForm', 'officerConnectVpoToAddress')) or
-            (p.key_ like 'e-shelter-housing-registration-bp' and task_def_key_ in ('searchUserForm', 'officerHousingRegistration')) or
-            (p.key_ like 'e-shelter-compensation-application-bp' and task_def_key_ in ('searchUserForm', 'sharedSearchPropertyForm')) or
-            (p.key_ like 'e-shelter-user-registration-bp' and task_def_key_ in ('userRegistrationForm')) or
+            (p.key_ like 'test-registry-vpo-to-address-registration-bp' and task_def_key_ in ('searchUserForm', 'officerConnectVpoToAddress')) or
+            (p.key_ like 'test-registry-housing-registration-bp' and task_def_key_ in ('searchUserForm', 'officerHousingRegistration')) or
+            (p.key_ like 'test-registry-compensation-application-bp' and task_def_key_ in ('searchUserForm', 'sharedSearchPropertyForm')) or
+            (p.key_ like 'test-registry-user-registration-bp' and task_def_key_ in ('userRegistrationForm')) or
             (p.key_ like 'create-vpo' and task_def_key_ in ('createVpoForm')) or
-            (p.key_ like 'e-shelter-reimbursement-costs-bp' and task_def_key_ in ('filterForm', 'reimbursementGridForm')) or
-            (p.key_ like 'e-shelter-housing-edit-bp' and task_def_key_ in ('housingEditForm', 'officerEditHousingForm')) or
-            (p.key_ like 'e-shelter-set-vpo-date-finish-bp' and task_def_key_ in ('officerSetVpoDateFinishSelectDateForm', 'officerSetVpoDateFinishGridForm')) or
-            (p.key_ like 'e-shelter-edit-user-registration-bp' and task_def_key_ in ('searchUserForm', 'editUserForm')) or
-            (p.key_ like 'e-shelter-completion-data-processing-bp' and task_def_key_ in ('completionDataProcessingFirstForm', 'completionDataProcessingReportForm')) or
+            (p.key_ like 'test-registry-reimbursement-costs-bp' and task_def_key_ in ('filterForm', 'reimbursementGridForm')) or
+            (p.key_ like 'test-registry-housing-edit-bp' and task_def_key_ in ('housingEditForm', 'officerEditHousingForm')) or
+            (p.key_ like 'test-registry-set-vpo-date-finish-bp' and task_def_key_ in ('officerSetVpoDateFinishSelectDateForm', 'officerSetVpoDateFinishGridForm')) or
+            (p.key_ like 'test-registry-edit-user-registration-bp' and task_def_key_ in ('searchUserForm', 'editUserForm')) or
+            (p.key_ like 'test-registry-completion-data-processing-bp' and task_def_key_ in ('completionDataProcessingFirstForm', 'completionDataProcessingReportForm')) or
             (p.key_ like 'link-shelter-owner' and task_def_key_ in ('lsoSearchPropertyForm')) or
-            (p.key_ like 'e-shelter-compensation-sum-bp' and task_def_key_ in ('changeCompensationSumForm'))
+            (p.key_ like 'test-registry-compensation-sum-bp' and task_def_key_ in ('changeCompensationSumForm'))
         )
 ) TO '/var/tmp/process_instance_ids.csv' csv header;
 ----
@@ -106,14 +106,14 @@ select distinct ae.source_business_process_instance_id--ae.*,context::json ->>'t
     where context::json ->>'action'='INSERT INTO TABLE'
         and context::json ->>'step' = 'AFTER'
         and ae.source_business_process_instance_id in (select proc_inst_id_ from dblink('dbname=camunda','SELECT proc_inst_id_ FROM act_ru_execution') as arec(proc_inst_id_ text) )
-        and source_business_process not in('e-shelter-vpo-to-address-registration-bp','e-shelter-compensation-application-bp')
+        and source_business_process not in('test-registry-vpo-to-address-registration-bp','test-registry-compensation-application-bp')
 union all
 select ae.source_business_process_instance_id--ae.*,context::json ->>'tablename'
     from audit_event ae
     where context::json ->>'action'='INSERT INTO TABLE'
         and context::json ->>'step' = 'AFTER'
         and ae.source_business_process_instance_id in (select proc_inst_id_ from dblink('dbname=camunda','SELECT proc_inst_id_ FROM act_ru_execution') as arec(proc_inst_id_ text) )
-        and source_business_process  in('e-shelter-compensation-application-bp')
+        and source_business_process  in('test-registry-compensation-application-bp')
     group by ae.source_business_process_instance_id
     having max (context::json ->>'tablename')<> min (context::json ->>'tablename');
 
@@ -217,7 +217,7 @@ done
 ====
 
 ////
-Інструкція для e-shelter:
+Інструкція для test-registry:
 
 [NOTE]
 ====
@@ -241,7 +241,7 @@ kind: Deployment
 apiVersion: apps/v1
 metadata:
   name: rk-curl
-  namespace: e-shelter
+  namespace: test-registry
   labels:
     app: rk-curl
 spec:
@@ -289,7 +289,7 @@ NOTE: Непотрібно, якщо NetworkPolicy для реєстру при�
 kubectl cp ./file rk-curl-pod:/tmp/file
 ----
 
-. Отримати авторизаційний токен доступу до bpms для jenkins-deployer системного користувача клієнта відповідного "<registry>-admin" Keycloak-рілму за секретом (Приклад запиту у Postman-колекції) (враховувати що TTL токена = 5 хв, якщо 5хв не вистачає - змініть у Keycloak Access Token Lifespan в реалмі e-shelter-admin до 1 години)
+. Отримати авторизаційний токен доступу до bpms для jenkins-deployer системного користувача клієнта відповідного "<registry>-admin" Keycloak-рілму за секретом (Приклад запиту у Postman-колекції) (враховувати що TTL токена = 5 хв, якщо 5хв не вистачає - змініть у Keycloak Access Token Lifespan в реалмі test-registry-admin до 1 години)
 
 . Запустити bash-скрипт та параметризувати. (Приклад: ./script.sh file.csv "$(cat file.txt з токеном)")
 
