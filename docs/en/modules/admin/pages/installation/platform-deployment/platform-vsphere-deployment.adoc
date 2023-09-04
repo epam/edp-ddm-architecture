@@ -1,0 +1,841 @@
+//= Розгортання Платформи з нуля у приватному хмарному середовищі _vSphere_
+= Deployment of the Platform from scratch in a private _vSphere_ cloud environment
+include::platform:ROOT:partial$templates/document-attributes/default-set-en.adoc[]
+
+include::platform:ROOT:partial$admonitions/language-en.adoc[]
+
+//== Підготовка інфраструктури vSphere для встановлення OKDfootnote:[**OKD** - це дистрибутив Kubernetes, оптимізований для неперервної розробки додатків та розгортання декількох екземплярів ізольованого контейнерного середовища (у нашому випадку -- екземплярів реєстру). За детальною інформацією зверніться до https://docs.okd.io/[офіційного джерела].]
+== Preparing the vSphere infrastructure for OKD installationfootnote:[**OKD** - is a Kubernetes distribution optimized for continuous application development and the deployment of multiple instances of isolated container environments (in our case, instances of a registry). For detailed information, please refer to the https://docs.okd.io/[official source].]
+
+//TODO: The numeration of footnotes in the headre looks a bit weird with the first bracket being small and the second being big, and it applies to all the three footnotes. Please take a look if you can remedy this.
+
+//=== Налаштування довіреного інтерфейсу vCenter API
+=== Configuring the trusted vCenter API interface
+
+//Інсталер вимагає доступу до довіреного інтерфейсу vCenter API, який надає можливість завантажити довірені кореневі сертифікати CA vCenter.
+The installer requires access to the trusted vCenter API interface, which allows for the retrieval of trusted vCenter root CA certificates.
+
+//Перед підключенням до API, сертифікати vCenter root CA повинні бути додані до системи, з якої запускатиметься OKD-інсталер.
+Before connecting to the API, vCenter root CA certificates must be added to the system from which the OKD installer will be launched.
+
+//=== Завантаження CA-сертифікатів
+=== Downloading CA Certificates
+
+//Сертифікати можуть бути завантажені з домашньої сторінки vCenter.
+Certificates can be downloaded from the vCenter homepage.
+
+//За замовчуванням сертифікати зберігаються за посиланням `<vCenter>/certs/download.zip`. Після завантаження і розархівування буде створено директорію, що містить сертифікати для ОС Linux, MacOS та Windows.
+By default, certificates are stored at `<vCenter>/certs/download.zip`. After downloading and unpacking, a directory containing certificates for Linux, MacOS, and Windows operating systems will be created.
+
+//==== Приклад перегляду структури
+==== Example of directory structure viewing
+
+//Структуру директорій із розміщеними в ній сертифікатами можна переглянути за допомогою команди:
+The directory structure with the certificates can be viewed using the following command:
+
+[source,bash]
+----
+$ tree certs
+----
+
+//В результаті буде зображено наступну структуру:
+The resulting structure will be as follows:
+
+[source,bash]
+----
+certs
+
+├── lin
+
+│   ├── 108f4d17.0
+
+│   ├── 108f4d17.r1
+
+│   ├── 7e757f6a.0
+
+│   ├── 8e4f8471.0
+
+│   └── 8e4f8471.r0
+
+├── mac
+
+│   ├── 108f4d17.0
+
+│   ├── 108f4d17.r1
+
+│   ├── 7e757f6a.0
+
+│   ├── 8e4f8471.0
+
+│   └── 8e4f8471.r0
+
+└── win
+
+    ├── 108f4d17.0.crt
+
+    ├── 108f4d17.r1.crl
+
+    ├── 7e757f6a.0.crt
+
+    ├── 8e4f8471.0.crt
+
+    └── 8e4f8471.r0.crl
+
+
+3 directories, 15 files
+----
+
+//==== Приклад додавання сертифікатів
+==== Example of adding certificates
+
+//Необхідно додати відповідні сертифікати для вашої операційної системи.
+You need to add the relevant certificates for your operating system.
+
+//**Приклад для ОС Fedora**:
+*Example for Fedora OS*:
+
+[source, bash]
+----
+$ sudo cp certs/lin/* /etc/pki/ca-trust/source/anchors
+
+$ sudo update-ca-trust extract
+----
+
+//=== Ресурси стандартної інсталяції
+=== Standard installation resources
+
+//Стандартна інсталяція (Installer-Provisioned Infrastructure) створює наступні ресурси інфраструктури:
+The standard installation (Installer-Provisioned Infrastructure) creates the following infrastructure resources:
+
+//* одну папку (1 Folder)
+//* одну тег-категорію (1 Tag Category)
+//* 1 тег (1 Tag)
+//* віртуальні машини (Virtual machines):
+//    - один шаблон (1 template)
+//    - одну тимчасову ноду bootstrap (1 temporary bootstrap node)
+//    - три ноди консолі для управління Платформою (3 control-plane nodes)
+//    - три обчислювальні машини (3 compute machines)
+* one folder (1 Folder)
+* one tag category (1 Tag Category)
+* one tag (1 Tag)
+* virtual machines (Virtual machines):
+    - one template (1 template)
+    - one temporary bootstrap node (1 temporary bootstrap node)
+    - three control plane nodes for Platform management (3 control-plane nodes)
+    - three compute machines (3 compute machines)
+
+//==== Необхідні вимоги до ресурсів
+==== Resource requirements
+
+//===== Сховище даних
+===== Data storage
+
+//Разом із ресурсами, описаними вище, стандартне розгортання OKD вимагає мінімум 800 Гб простору для сховища даних.
+Alongside the resources described above, the standard OKD deployment requires a minimum of 800 GB of storage space for data storage.
+
+===== DHCP
+
+//Розгортання вимагає налаштування DHCP-сервера для конфігурації мережі.
+The deployment requires configuring a DHCP server for network configuration.
+
+//== Розгортання та налаштування DNS і DHCP-компонентів
+== Deploying and configuring DNS and DHCP components
+
+//=== IP-адреси
+=== IP addresses
+
+//Розгортання інфраструктури vSphere (Іnstaller-provisioned vSphere) вимагає двох статичних IP-адрес:
+Deployment of the vSphere infrastructure (Installer-provisioned vSphere) requires two static IP addresses:
+
+//* **Адреса програмного інтерфейсу (API)** - використовується для доступу до API-кластера.
+* *Program interface address (API)* -- used for accessing the cluster's API.
+
+//* **Вхідна IP-адреса (Ingress)** - використовується для вхідного трафіку кластера.
+* *Incoming IP address (Ingress)* -- used for cluster ingress traffic.
+
+//Віртуальні ІР-адреси для кожного з них повинні бути визначені у файлі
+Virtual IP addresses for each of them must be defined in the
+xref:create-install-config-yml[`install-config.yaml`] file.
+
+//=== DNS-записи
+=== DNS records
+
+//DNS-записи (DNS records) повинні бути створені для двох ІР-адрес на будь-якому DNS-сервері, призначеному для середовища. Записи повинні містити значення, описані в таблиці:
+DNS records must be created for the two IP addresses on any DNS server designated for the environment. The records should contain the values described in the table:
+
+[options="header"]
+|================================================
+//|Назва| Значення
+|Name| Value
+|`api.${cluster-name}.${base-domain}`|API VIP
+|`*.apps.${cluster-name}.${base-domain}``|Ingress VIP
+|================================================
+
+//NOTE: `${cluster-name}` та `${base-domain}` - це змінні, що взято із відповідних значень, вказаних у файлі xref:create-install-config-yml[`install-config.yaml`].
+NOTE: ${cluster-name} and ${base-domain} are variables taken from the respective values specified in the xref:create-install-config-yml[`install-config.yaml`] file.
+
+[#create-install-config-yml]
+//== Створення конфігураційного файлу install-config.yaml
+== Creating the install-config.yaml configuration file
+
+[WARNING]
+====
+//Передумови ::
+Prerequisites ::
+//. Увійдіть у свій обліковий запис Red Hat. Якщо у вас немає облікового запису, вам потрібно створити його.
+. Log in to your Red Hat account. If you don't have one, you need to create it.
+//. Придбайте платну підписку на DockerHub, якщо у вас її немає.
+. Purchase a paid subscription for DockerHub should you not have one.
+//. Згенеруйте та додайте ssh-ключ до вашого конфігураційного файлу. Це необхідно для доступу до консолей ваших нод.
+. Generate and add an SSH key to your configuration file. This is necessary for accessing your node consoles.
+====
+
+//Створення файлу `install-config.yaml`, необхідного для розгортання OKD кластеру, виконується наступною командою:
+To create the `install-config.yaml` file required for deploying the OKD cluster, use the following command:
+
+[source,bash]
+$ openshift-installer create install-config
+
+//Після створення файлу потрібно заповнити необхідні параметри, які будуть представлені в контекстному меню. Створений конфігураційний файл включає лише необхідні параметри для мінімального розгортання кластера. Для кастомізації налаштувань можна звернутись до офіційної документації.
+After creating the file, you need to fill in the necessary parameters, which will be presented in the context menu. The created configuration file includes only the required parameters for a minimal cluster deployment. For customization, refer to the official documentation.
+
+//._Конфігурація install-config.yaml_
+.The _install-config.yaml_ configuration:
+[%collapsible]
+====
+[source,yaml]
+----
+apiVersion: v1
+baseDomain: eua.gov.ua
+compute:
+- architecture: amd64
+  hyperthreading: Enabled
+  name: worker
+  platform: {}
+  replicas: 3
+controlPlane:
+  architecture: amd64
+  hyperthreading: Enabled
+  name: master
+  platform: {}
+  replicas: 3
+metadata:
+  creationTimestamp: null
+  name: mdtuddm
+networking:
+  clusterNetwork:
+  - cidr: 10.128.0.0/14
+    hostPrefix: 23
+  machineNetwork:
+  - cidr: 10.0.0.0/16
+  networkType: OVNKubernetes
+  serviceNetwork:
+  - 172.30.0.0/16
+platform:
+  vsphere:
+    apiVIP: 10.9.1.110
+    cluster: HX-02
+    datacenter: HXDP-02
+    defaultDatastore: NCR_Data2
+    ingressVIP: 10.9.1.111
+    network: EPAM_OKD_Vlan9_EPG
+    password: <password>
+    username: epam_dev1@vsphere.local
+    vCenter: vcsa.ncr.loc
+publish: External
+pullSecret: '{"auths":{"fake":{"auth":"aWQ6cGFzcwo="}}}'
+sshKey: |
+  <ssh_key>
+----
+====
+
+[NOTE]
+====
+//* Під час створення конфігураційного файлу замініть *`<password>`* на ваш пароль, а *`<ssh_key>`* -- на ваш згенерований ssh-ключ.
+* During the creation of the configuration file, replace *`<password>`* with your password and *`<ssh_key`*> with your generated SSH key.
+//* Також скопіюйте параметри автентифікації з облікового запису Red Hat та підставте у поле *`pullSecret`*.
+* Also, copy the authentication parameters from your Red Hat account and insert them into the *`pullSecret`* field.
+//* Зверніть увагу, що деякі параметри, можливо, доведеться змінити, щоб вони відповідали вашій інфраструктурі та потребам.
+* Please note that you may need to adjust some parameters to match your infrastructure and requirements.
+====
+
+//== Запуск OKD4-інсталера та розгортання порожнього кластера OKD4
+== Running the OKD4 installer and deploying an empty OKD4 cluster
+
+//Після створення файлу `install-config.yaml`, для розгортання OKD-кластера необхідно виконати наступну команду:
+After creating the `install-config.yaml` file, to deploy the OKD cluster, execute the following command:
+
+[source,bash]
+----
+$ openshift-installer create cluster
+----
+
+//NOTE: Процес розгортання кластера зазвичай займає до 1,5 години часу.
+NOTE: The cluster deployment process typically takes up to 1.5 hours.
+
+//При успішному розгортанні, в результаті виконання команди будуть представлені наступні параметри доступу до кластера:
+Upon successful deployment, the following cluster access parameters will be provided:
+
+//* логін;
+//* пароль;
+//* посилання на веб-консоль кластера.
+* Login;
+* Password;
+* Link to the cluster's web console.
+
+//В директорії, де виконувалася команда, буде створено ряд файлів, що зберігають статус кластера, необдхіний для його деінсталяції.
+In the directory where the command was executed, a series of files storing the cluster's status, necessary for its uninstallation, will be created.
+
+//Також в цій директорії з'явиться папка `/auth`, в якій буде збережено два файли для автентифікації для роботи з кластером через **веб-консоль** та **інтерфейс командного рядка** OKD (OKD CLI).
+Additionally, an `/auth` folder will appear in this directory, containing two authentication files for working with the cluster through the *OKD web console* and the *OKD CLI*.
+
+//NOTE: Після запуску процесу розгортання кластера, Інсталер видаляє `install-config.yaml`, тому рекомендовано виконати резервування цього файлу, якщо є потреба розгортання кількох кластерів.
+NOTE: After starting the cluster deployment process, the Installer removes the `install-config.yaml` file. Therefore, it is recommended to make a backup of this file if you plan to deploy multiple clusters.
+
+//== Заміна самопідписаних сертифікатів на довірені сертифікати
+== Replacing self-signed certificates with trusted certificates
+
+//Для заміни самопідписаних (self-signed) сертифікатів на довірені (trusted) необхідно спочатку отримати ці сертифікати.
+To replace self-signed certificates with trusted certificates, you first need to obtain these certificates.
+
+//В цьому пункті розглянуто отримання безкоштовних сертифікатів https://letsencrypt.org/[Let's Encrypt] та їх встановлення на сервер.
+In this section, we will discuss obtaining free https://letsencrypt.org/[Let's Encrypt] certificates and installing them on the server.
+
+//Отримання сертифікатів Let's Encrypt здійснено за допомогою утиліти https://github.com/acmesh-official/acme.sh[acme.sh].
+Acquiring Let's Encrypt certificates is done using the https://github.com/acmesh-official/acme.sh[acme.sh] utility.
+
+//TIP: Для отримання розширених деталей щодо використання Let's Encrypt на базі ACME-протоколу, зверніться до https://letsencrypt.org/docs/client-options/[офіційного джерела].
+TIP: For detailed information on using Let's Encrypt based on the ACME protocol, refer to the https://letsencrypt.org/docs/client-options/[official source].
+
+//=== Підготовка
+=== Preparation
+//Необхідно клонувати утиліту acme.sh із репозиторію GitHub:
+Clone the acme.sh utility from the GitHub repository:
+
+[source,bash]
+----
+$ cd $HOME
+$ git clone https://github.com/neilpang/acme.sh
+$ cd acme.sh
+----
+
+//=== Запит на отримання сертифікатів
+=== Certificate request
+
+//1) Для того, щоб полегшити процес отримання сертифікатів, необхідно задати дві змінні середовища. Перша змінна повинна вказувати на API Endpoint. Переконайтесь, що ви увійшли до OKD як `system:admin` і використовуєте CLI-консоль Openshift, щоб знайти API Endpoint URL.
+1) To simplify the certificate acquisition process, set two environment variables. The first variable should point to the API Endpoint. Make sure you are logged in to OKD as `system:admin` and use the Openshift CLI console to find the API Endpoint URL:
+
+[source,bash]
+----
+$ oc whoami --show-server
+----
+
+//**Приклад отриманої відповіді**:
+*Example response:*
+----
+https://api.e954.ocp4.opentlc.com:6443
+----
+
+//2) Тепер встановіть змінну `LE_API` для повністю визначеного доменного імені API:
+2) Now set the `LE_API` variable for the fully qualified API domain:
+
+[source,bash]
+----
+$ export LE_API=$(oc whoami --show-server | cut -f 2 -d ':' | cut -f 3 -d '/' | sed 's/-api././')
+----
+
+//3) Встановіть другу змінну `LE_WILDCARD` для вашого Wildcard Domain:
+3) Set the `LE_WILDCARD` variable for your Wildcard Domain:
+
+[source,bash]
+----
+$ export LE_WILDCARD=$(oc get ingresscontroller default -n openshift-ingress-operator -o jsonpath='{.status.domain}')
+----
+
+//4) Запускаємо скрипт acme.sh:
+4) Run the acme.sh script:
+
+[source,bash]
+----
+$ ${HOME}/acme.sh/acme.sh --issue -d ${LE_API} -d *.${LE_WILDCARD} --dns
+----
+
+//**Приклад отриманої відповіді**:
+*Example response:*
+
+[source, bash]
+----
+$  ./acme.sh --issue -d  ${LE_API} -d \*.${LE_WILDCARD} --dns --yes-I-know-dns-manual-mode-enough-go-ahead-please
+[Wed Jul 28 18:37:33 EEST 2021] Using CA: https://acme-v02.api.letsencrypt.org/directory
+[Wed Jul 28 18:37:33 EEST 2021] Creating domain key
+[Wed Jul 28 18:37:33 EEST 2021] The domain key is here: $HOME/.acme.sh/api.e954.ocp4.opentlc.com/api.e954.ocp4.opentlc.com.key
+[Wed Jul 28 18:37:33 EEST 2021] Multi domain='DNS:api.e954.ocp4.opentlc.com,DNS:*.apps.e954.ocp4.opentlc.com'
+[Wed Jul 28 18:37:33 EEST 2021] Getting domain auth token for each domain
+[Wed Jul 28 18:37:37 EEST 2021] Getting webroot for domain='cluster-e954-api.e954.ocp4.opentlc.com'
+[Wed Jul 28 18:37:37 EEST 2021] Getting webroot for domain=‘*.apps.cluster-e954-api.e954.ocp4.opentlc.com’
+[Wed Jul 28 18:37:38 EEST 2021] Add the following TXT record:
+[Wed Jul 28 18:37:38 EEST 2021] Domain: '_acme-challenge.api.e954.ocp4.opentlc.com'
+[Wed Jul 28 18:37:38 EEST 2021] TXT value: 'VZ2z3XUe4cdNLwYF7UplBj7ZTD8lO9Een0yTD7m_Bbo'
+[Wed Jul 28 18:37:38 EEST 2021] Please be aware that you prepend _acme-challenge. before your domain
+[Wed Jul 28 18:37:38 EEST 2021] so the resulting subdomain will be: _acme-challenge.api.e954.ocp4.opentlc.com
+[Wed Jul 28 18:37:38 EEST 2021] Add the following TXT record:
+[Wed Jul 28 18:37:38 EEST 2021] Domain: '_acme-challenge.apps.e954.ocp4.opentlc.com'
+[Wed Jul 28 18:37:38 EEST 2021] TXT value: 'f4KeyXkpSissmiLbIIoDHm5BJ6tOBTA0D8DyK5sl46g'
+[Wed Jul 28 18:37:38 EEST 2021] Please be aware that you prepend _acme-challenge. before your domain
+[Wed Jul 28 18:37:38 EEST 2021] so the resulting subdomain will be: _acme-challenge.apps.e954.ocp4.opentlc.com
+[Wed Jul 28 18:37:38 EEST 2021] Please add the TXT records to the domains, and re-run with --renew.
+[Wed Jul 28 18:37:38 EEST 2021] Please add '--debug' or '--log' to check more details.
+----
+
+//CAUTION: DNS-записи з попередньої відповіді необхідно додати на DNS-сервері, що відповідає за зону `e954.ocp4.opentlc.com` (**значення зони тут є прикладом**). Таким чином, TXT-записи повинні мати наступний вигляд:
+CAUTION: DNS records as mentioned in the previous response should be added to the DNS server responsible for the `e954.ocp4.opentlc.com` zone (*the zone value here is just an example*). The TXT records should have the following format:
+
+//**TXT-запис 1**
+*TXT record 1*
+
+[source,bash]
+----
+_acme-challenge.api.e954.ocp4.opentlc.com TXT value: 'VZ2z3XUe4cdNLwYF7UplBj7ZTD8lO9Een0yTD7m_Bbo'
+----
+
+//**TXT-запис 2**
+*TXT record 2*
+[source,bash]
+----
+_acme-challenge.apps.e954.ocp4.opentlc.com TXT value: 'f4KeyXkpSissmiLbIIoDHm5BJ6tOBTA0D8DyK5sl46g'
+----
+
+//6) Після цього необхідно повторно запустити команду `acme.sh`:
+5) After this step, you need to run the `acme.sh` command again:
+//TODO: Changed the numeration of the list item above, since the previous item was numbered "4".
+
+[source,bash]
+----
+$ acme.sh --renew -d e954.ocp4.opentlc.com --yes-I-know-dns-manual-mode-enough-go-ahead-please
+----
+
+//7) Після успішного виконання попередніх пунктів необхідно запустити наступні команди.
+6) Upon successful completion of the previous steps, run the following commands.
+
+//Зазвичай, хорошим підходом є перенесення сертифікатів із шляху acme.sh за замовчуванням (default path) до більш зручної директорії. Для цього можна використати `—install-cert`-ключ скрипта `acme.sh` для копіювання сертифікатів до `$HOME/certificates`, для прикладу:
+Usually, a good approach is to move certificates from the default acme.sh path to a more convenient directory. You can use the `—install-cert` key of the `acme.sh` script to copy certificates to `$HOME/certificates`, for example:
+
+
+[source,bash]
+----
+$ export CERTDIR=$HOME/certificates
+
+$ mkdir -p ${CERTDIR} ${HOME}/acme.sh/acme.sh --install-cert -d ${LE_API} -d *.${LE_WILDCARD} --cert-file ${CERTDIR}/cert.pem --key-file ${CERTDIR}/key.pem --fullchain-file ${CERTDIR}/fullchain.pem --ca-file ${CERTDIR}/ca.cer
+----
+
+//==== Встановлення сертифікатів для Router
+====  Installing certificates for Router
+//* Необхідно створити секрет. Для цього виконайте наступну команду:
+* You need to create a secret for this. Execute the following command:
+
+[source,bash]
+----
+$ oc create secret tls router-certs --cert=${CERTDIR}/fullchain.pem --key=${CERTDIR}/key.pem -n openshift-ingress
+----
+
+//* Після виконання попередніх кроків, необхідно оновити Custom Resource:
+* After completing the previous steps, you need to update the Custom Resource:
+
+[source,bash]
+----
+$ oc patch ingresscontroller default -n openshift-ingress-operator --type=merge --patch='{"spec": 	{ "defaultCertificate": { "name": "router-certs" }}}'
+----
+
+//== Створення MachineSetfootnote:[**Ресурси MachineSet** - це групи машин. Набори машин призначені для машин як набори копій (реплік) для Pods, в яких розгорнуто контейнери. Якщо вам потрібно більше машин або, навпаки, необхідно зменшити їх кількість, можна змінити значенням поля реплік на рівні MachineSet, щоб задовольнити ваші обчислювальні потреби. Для детальної інформації щодо створення MachineSet зверніться до https://docs.openshift.com/container-platform/4.6/machine_management/creating_machinesets/creating-machineset-vsphere.html[офіційного джерела.]] для інфраструктури Ceph
+== Creating a MachineSetfootnote:[*MachineSet resources* are groups of machines. MachineSets are intended for machines as sets of replicas for Pods where containers are deployed. If you need more machines or, conversely, need to reduce their quantity, you can adjust the replica field at the MachineSet level to meet your computational needs. For detailed information on creating MachineSets, please refer to the https://docs.openshift.com/container-platform/4.6/machine_management/creating_machinesets/creating-machineset-vsphere.html[official source.]] for Ceph Infrastructure
+
+//Для розгортання Платформи необхідно створити MachineSet для системи зберігання даних https://ceph.io/en/[Ceph]. Для цього необхідно використати конфігураційний файл `machine-set-ceph.yaml`, в якому необхідно змінити назву кластера.
+To deploy the Platform, you need to create a MachineSet for the https://ceph.io/en/[Ceph] data storage system. To do this, use the `machine-set-ceph.yaml` configuration file and modify the cluster name accordingly.
+
+//._Приклад конфігураційного файлу machine-set-ceph.yaml_
+._Example machine-set-ceph.yaml configuration file_
+[%collapsible]
+====
+[source, yaml]
+----
+kind: MachineSet
+metadata:
+  name: mdtuddm-b86zw-ceph
+  namespace: openshift-machine-api
+  labels:
+    machine.openshift.io/cluster-api-cluster: mdtuddm-b86zw
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      machine.openshift.io/cluster-api-cluster: mdtuddm-b86zw
+      machine.openshift.io/cluster-api-machineset: mdtuddm-b86zw-ceph
+  template:
+    metadata:
+      labels:
+        machine.openshift.io/cluster-api-cluster: mdtuddm-b86zw
+        machine.openshift.io/cluster-api-machine-role: worker
+        machine.openshift.io/cluster-api-machine-type: worker
+        machine.openshift.io/cluster-api-machineset: mdtuddm-b86zw-ceph
+    spec:
+      taints:
+        - effect: NoSchedule
+          key: node.ocs.openshift.io/storage
+          value: 'true'
+      metadata:
+        labels:
+          cluster.ocs.openshift.io/openshift-storage: ''
+      providerSpec:
+        value:
+          numCoresPerSocket: 1
+          diskGiB: 120
+          snapshot: ''
+          userDataSecret:
+            name: worker-user-data
+          memoryMiB: 73728
+          credentialsSecret:
+            name: vsphere-cloud-credentials
+          network:
+            devices:
+              - networkName: EPAM_OKD_Vlan9_EPG
+          metadata:
+            creationTimestamp: null
+          numCPUs: 16
+          kind: VSphereMachineProviderSpec
+          workspace:
+            datacenter: HXDP-02
+            datastore: NCR_Data2
+            folder: /HXDP-02/vm/mdtuddm-b86zw
+            resourcePool: /HXDP-02/host/HX-02/Resources
+            server: vcsa.ncr.loc
+          template: mdtuddm-b86zw-rhcos
+          apiVersion: vsphereprovider.openshift.io/v1beta1
+----
+====
+
+//Після редагування файлу відповідно до назви кластера, необхідно виконати команду, що створить необхідний MachineSet та відповідну кількість нод для розгортання сховища даних Ceph.
+After editing the file according to the cluster name, execute the command to create the necessary MachineSet and the corresponding number of nodes for deploying the Ceph data storage.
+
+//TIP: У нашому випадку назва кластера визначена в _.yaml_-файлі як `mdtuddm-b86zw`.
+TIP: In our case, the cluster name is defined in the _.yaml_ file as `mdtuddm-b86zw`.
+
+//== Підготовка та запуск Інсталераfootnote:[_Інсталер_ -- набір команд (скрипт) для розгортання Платформи.] для розгортання Платформи на цільовому OKD-кластері
+== Preparing and running the Installerfootnote:[_Installer_ -- is a set of commands or a script used for deploying the Platform] for Platform deployment on the target OKD cluster
+
+//Для запуску Інсталера, необхідно виконати ряд умов з підготовки робочої станції, з якої запускатиметься Інсталер. Нижче розглянуто приклад такої підготовки на базі Ubuntu 20.04 LTS.
+To run the Installer, you need to meet several conditions for preparing the workstation from which the Installer will be launched. Below is an example of such preparation on Ubuntu 20.04 LTS.
+
+//=== Передумови
+=== Prerequisites
+
+//Встановіть Docker з офіційного джерела: https://docs.docker.com/engine/install/[].
+Install Docker from the official source: https://docs.docker.com/engine/install/[].
+
+//=== Розгортання та оновлення Платформи
+=== Deploying and updating the Platform
+
+//==== Розгортання Платформи з нуля
+==== Deploying the Platform from scratch
+
+//===== Передумови
+===== Prerequisites
+
+//NOTE: Переконайтеся, що встановлено необхідні пакети: `docker`, `wget`, `unzip`.
+NOTE: Ensure that the required packages are installed: `docker`, `wget`, `unzip`.
+
+//. Завантажте необхідну версію інсталера.
+. Download the necessary version of the installer.
++
+[source,shellscript]
+----
+сd /tmp
+wget -O mdtu-ddm-platform-<version>.zip https://nexus-public-mdtu-ddm-edp-cicd.apps.cicd2.mdtu-ddm.projects.epam.com/nexus/repository/edp-maven-releases/ua/gov/mdtu/ddm/infrastructure/mdtu-ddm-platform/<version>/mdtu-ddm-platform-<version>.zip
+----
++
+//. Розпакуйте архів у домашній директорії.
+. Unpack the archive in the home directory.
+
++
+[source,shellscript]
+----
+unzip /tmp/mdtu-ddm-platform-<version>.zip -d /home/<user>/workdir/installer-<version>
+----
++
+//. Перенесіть _kubeconfig_ після встановлення кластера:
+. Move the _kubeconfig_ file after cluster installation:
+
++
+[source,shellscript]
+----
+cd /home/<user>/workdir/installer-<version>
+cp /path/to/kubeconfig ./
+----
++
+//. Перенесіть папку _certificates_ для DSO:
+. Move the _certificates_ folder for DSO:
+
++
+[source,shellscript]
+----
+cp /path/to/folder/certificates ./
+----
+
+//===== Додавання окремого конфігураційного файлу для розгортання у середовищі vSphere
+===== Adding a separate configuration file for deployment in the vSphere environment
+
+
+//. Відредагуйте _exports.list_ для vSphere.
+. Edit _exports.list_ for vSphere.
++
+//Усі значення необхідно взяти після інсталяції кластера. Також необхідно уточнити актуальні значенння для `idgovuaClientId` та `idgovuaClientSecret`.
+All values should be taken after the cluster installation. Also, ensure that you have up-to-date values for `idgovuaClientId` and `idgovuaClientSecret`.
+
++
+[source,shellscript]
+----
+vi exports.list
+
+### vSphere Credentials ###
+export VSPHERE_SERVER=""
+export VSPHERE_USER=""
+export VSPHERE_PASSWORD=""
+export VSPHERE_CLUSTER=""
+export VSPHERE_DATASTORE=""
+export VSPHERE_DATACENTER=""
+export VSPHERE_NETWORK=""
+export VSPHERE_NETWORK_GATEWAY=""
+export VSPHERE_RESOURCE_POOL="" #якщо не використовується, ставимо "/"
+export VSPHERE_FOLDER=""
+
+### Minio and Vault IPs ###
+export VSPHERE_VAULT_INSTANCE_IP=""
+export VSPHERE_MINIO_INSTANCE_IP=""
+
+### id.gov.ua ###
+export idgovuaClientId=""
+export idgovuaClientSecret=""
+----
++
+//. Відредагуйте _install.sh_, а саме після `source ./functions.sh` додайте `source ./exports.list`.
+. Edit _install.sh_, specifically after `source ./functions.sh`, add `source ./exports.list`.
+
++
+[source,shellscript]
+----
+vi install.sh
+----
++
+//Це виглядатиме наступним чином:
+It should look like this:
+
++
+[source,shellscript]
+----
+#!/usr/bin/env bash
+set -e
+#Include function file
+source ./functions.sh
+source ./exports.list
+----
+
+//===== Розгортання Інсталера
+===== Deploying the Installer
+
+//. Виконайте наступні команди:
+. Execute the following commands:
++
+[source,shellscript]
+----
+IMAGE_CHECKSUM=$(sudo docker load -i control-plane-installer.img | sed -r "s#.*sha256:(.*)#\\1#" | tr -d '\n');
+echo $IMAGE_CHECKSUM
+sudo docker tag ${IMAGE_CHECKSUM} control-plane-installer:<version>;
+----
++
+//. Розгорніть нову версію Платформи з образами з нуля:
+. Deploy a new version of the Platform with images from scratch:
++
+[source,shellscript]
+----
+sudo docker run --rm --name control-plane-installer-<version> --user root:$(id -g) --net host -v $(pwd):/tmp/installer --env KUBECONFIG=/tmp/installer/kubeconfig --env idgovuaClientId=mock --env idgovuaClientSecret=mock --env CUSTOM_INGRESS_CIDRS="['0.0.0.0/0', '85.223.209.0/24']" --env deploymentMode=development --entrypoint "/bin/bash" control-plane-installer:<version> -c "./install.sh -i"
+----
++
+//* де `deploymentMode` може бути `development` чи `production`.
+* where `deploymentMode` can be either `development` or `production`.
+
+//==== Оновлення Платформи
+==== Updating the Platform
+
+//===== Передумови
+===== Prerequisites
+
+//NOTE: Переконайтеся, що встановлено необхідні пакети: `docker`, `wget`, `unzip`.
+NOTE: Ensure that the required packages are installed: `docker`, `wget`, `unzip`.
+
+//. Завантажте необхідну версію інсталера.
+. Download the necessary version of the installer.
++
+[source,shellscript]
+----
+сd /tmp
+wget -O mdtu-ddm-platform-<version>.zip https://nexus-public-mdtu-ddm-edp-cicd.apps.cicd2.mdtu-ddm.projects.epam.com/nexus/repository/edp-maven-releases/ua/gov/mdtu/ddm/infrastructure/mdtu-ddm-platform/<version>/mdtu-ddm-platform-<version>.zip
+----
++
+//. Розпакуйте архів у домашній директорії.
+. Unpack the archive in the home directory.
+
++
+[source,shellscript]
+----
+unzip /tmp/mdtu-ddm-platform-<version>.zip -d /home/<user>/workdir/installer-<version>
+----
++
+//. Перенесіть _kubeconfig_ після встановлення кластера:
+. Move the _kubeconfig_ file after cluster installation:
+
++
+[source,shellscript]
+----
+cd /home/<user>/workdir/installer-<version>
+cp /path/to/kubeconfig ./
+----
++
+//. Перенесіть папку _certificates_ для DSO.
+. Move the _certificates_ folder for DSO.
++
+//NOTE: Якщо сертифікати не змінювалися, даний крок можна пропустити.
+NOTE: If the certificates haven't changed, you can skip this step.
+
++
+[source,shellscript]
+----
+cp /path/to/folder/certificates ./
+----
+
+//===== Додавання окремого конфігураційного файлу для розгортання у середовищі vSphere
+===== Adding a separate configuration file for deployment in the vSphere environment
+
+//. Перенесіть _exports.list_ з минулого релізу.
+. Move _exports.list_ from the previous release.
+
++
+[source,shellscript]
+----
+cp /home/<user>/workdir/installer-<previous_version>/exports.list ./
+----
++
+//Також необхідно уточнити актуальні значенння для `idgovuaClientId` та `idgovuaClientSecret`.
+Also, ensure that you have up-to-date values for `idgovuaClientId` and `idgovuaClientSecret`.
++
+//. Відредагуйте _install.sh_, а саме після `source ./functions.sh` додайте `source ./exports.list`.
+. Edit _install.sh_, specifically after `source ./functions.sh`, add `source ./exports.list`.
+
++
+[source,shellscript]
+----
+vi install.sh
+----
++
+//Це виглядатиме наступним чином:
+It should look as follows:
+
++
+[source,shellscript]
+----
+#!/usr/bin/env bash
+set -e
+#Include function file
+source ./functions.sh
+source ./exports.list
+----
+
+//===== Налаштування компонента MinIO при оновленні кластера у середовищі vSphere
+===== Configuring the MinIO component during cluster update in the vSphere environment
+
+//. Перенесіть tfstate MinIO з минулого релізу для vSphere.
+. Transfer the tfstate for MinIO from the previous release for vSphere.
+
++
+[source,shellscript]
+----
+cp /home/<user>/workdir/installer-<version>/terraform/minio/vsphere/terraform.tfstate ./terraform/minio/vsphere/
+----
++
+//. Перенесіть tfstate MinIO (Packer) з минулого релізу для vSphere.
+. Transfer the tfstate for MinIO (Packer) from the previous release for vSphere.
+
++
+[source,shellscript]
+----
+сp /home/<user>/workdir/installer-<version>/terraform/minio/vsphere/packer/terraform.tfstate ./terraform/minio/vsphere/packer/
+----
+
+//===== Налаштування компонента Vault при оновленні кластера у середовищі vSphere
+===== Configuring the vault component during cluster update in the vSphere environment
+
+//. Перенесіть tfstate Vault з минулого релізу.
+. Transfer the tfstate for Vault from the previous release.
+
++
+[source,shellscript]
+----
+cp /home/<user>/workdir/installer-<version>/terraform/vault/vsphere/terraform.tfstate ./terraform/vault/vsphere/
+----
++
+//. Перенесіть tfstate Vault (Packer) з минулого релізу.
+. Transfer the tfstate for Vault (Packer) from the previous release.
+
++
+[source,shellscript]
+----
+сp /home/<user>/workdir/installer-<version>/terraform/vault/vsphere/packer/terraform.tfstate ./terraform/vault/vsphere/packer/
+----
+
+//===== Розгортання Інсталера
+===== Deploying the Installer
+
+//. Виконайте наступні команди:
+. Execute the following commands:
++
+[source,shellscript]
+----
+IMAGE_CHECKSUM=$(sudo docker load -i control-plane-installer.img | sed -r "s#.*sha256:(.*)#\\1#" | tr -d '\n');
+echo $IMAGE_CHECKSUM
+sudo docker tag ${IMAGE_CHECKSUM} control-plane-installer:<version>;
+----
++
+//. Оновіть версію Платформи з образами оновлення.
+. Update the Platform version with update images.
++
+[source,shellscript]
+----
+sudo docker run --rm --name control-plane-installer-<version> --user root:$(id -g) --net host -v $(pwd):/tmp/installer --env KUBECONFIG=/tmp/installer/kubeconfig --env idgovuaClientId=mock --env idgovuaClientSecret=mock --env CUSTOM_INGRESS_CIDRS="['0.0.0.0/0', '85.223.209.0/24']" --env deploymentMode=development --entrypoint "/bin/bash" control-plane-installer:<version> -c "./install.sh -u"
+----
++
+//TIP: де `deploymentMode` може бути `development` чи `production`, залежно від попереднього запуску.
+TIP: Where `deploymentMode` can be either `development` or `production`, depending on the previous run.
+
+//== Управління налаштуваннями Платформи
+== Managing Platform configuration
+
+//Управління кластером відбувається за методологією https://about.gitlab.com/topics/gitops/[GitOps]. Це означає, що будь-які зміни в конфігурації кластера, компонентів кластера та компонентів Платформи відбувається через зміну конфігурації кластера в git-гілці відповідного компонента.
+Cluster management follows the https://about.gitlab.com/topics/gitops/[GitOps] methodology. This means that any changes in the cluster configuration, cluster components, and Platform components are made through modifying the cluster configuration in the git branch of the corresponding component.
+
+//Метадані усіх компонентів, для яких реалізовано управління через GitOps-підхід, зберігаються в компоненті `cluster-mgmt`.
+Metadata for all components managed through the GitOps approach is stored in the `cluster-mgmt` component.
+
+//Нижче представлено список компонентів, для яких наразі імплементований GitOps-підхід:
+Below is a list of components for which GitOps management is currently implemented:
+
+- `catalog-source`
+- `monitoring`
+- `storage`
+- `logging`
+- `service-mesh`
+- `backup-management`
+- `user-management`
+- `control-plane-nexus`
+- `external-integration-mocks`
+- `cluster-kafka-operator`
+- `smtp-server`
+- `redis-operator`
+- `postgres-operator`
