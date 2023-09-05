@@ -3310,6 +3310,57 @@
 <img src="../../_images/architecture-workspace/platform-evolution/reporting.drawio.svg" alt="reporting.drawio">
 </div>
 </div>
+<div class="paragraph">
+<p>Liquibase скрипти мають бути написані згідно з конвенціями описаних в README.md <code>registry-postgres</code>. Приклад створення бази</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-sql hljs" data-lang="sql">--liquibase formatted sql
+--changeset platform:create-redash-viewer-db
+CREATE DATABASE redash-viewer with owner=${redashUser};</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Скрипти для міграції бази:</p>
+</div>
+<div class="listingblock">
+<div class="title">Create Dump</div>
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-bash hljs" data-lang="bash">#!/bin/bash
+
+admin_pod=redash-admin-postgresql-0
+viewer_pod=redash-viewer-postgresql-0
+pg_ver=9.6
+ctr_name=redash-chart-postgresql
+
+AdminVer=$(oc exec $admin_pod -n $NAMESPACE -c $ctr_name -- bash -c 'cat $PGDATA/PG_VERSION')
+ViewerVer=$(oc exec $viewer_pod -n $NAMESPACE -c $ctr_name -- bash -c 'cat $PGDATA/PG_VERSION')
+
+# Admin PostgreSQL DB
+if oc -n $NAMESPACE get secret redash-chart-postgresql 2&gt; /dev/null &amp;&amp; [ "$AdminVer" = "$pg_ver" ]; then oc exec $admin_pod -n $NAMESPACE -c $ctr_name \
+-- bash -c 'export PGPASSWORD=$POSTGRES_PASSWORD; pg_dump -Uredash redash -c -f /bitnami/postgresql/redash96dump.sql &amp;&amp; mv /bitnami/postgresql/data /bitnami/postgresql/data96'
+fi
+
+# Viewer PostgreSQL DB
+if oc -n $NAMESPACE get secret redash-chart-postgresql 2&gt; /dev/null &amp;&amp; [ "$ViewerVer" = "$pg_ver" ]; then oc exec $viewer_pod -n $NAMESPACE -c $ctr_name \
+-- bash -c 'export PGPASSWORD=$POSTGRES_PASSWORD; pg_dump -Uredash redash -c -f /bitnami/postgresql/redash96dump.sql &amp;&amp; mv /bitnami/postgresql/data /bitnami/postgresql/data96'
+fi</code></pre>
+</div>
+</div>
+<div class="listingblock">
+<div class="title">Load Dump</div>
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-bash hljs" data-lang="bash">#!/bin/sh
+export PGPASSWORD=$POSTGRES_PASSWORD
+if test -f /bitnami/postgresql/redash96dump.sql; then
+echo "Load Dump"
+psql -Uredash redash -f /bitnami/postgresql/redash96dump.sql
+rm -rf /bitnami/postgresql/redash96dump.sql /bitnami/postgresql/data96
+else
+echo "Dump file not exist, skip and run Postgresql"
+fi</code></pre>
+</div>
+</div>
 </div>
 </div>
 <div class="sect1">
