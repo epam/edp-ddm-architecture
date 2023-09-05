@@ -1,0 +1,480 @@
+= External integration emulator settings
+include::platform:ROOT:partial$templates/document-attributes/default-set-en.adoc[]
+
+include::platform:ROOT:partial$admonitions/language-en.adoc[]
+
+== General overview
+
+//Ви можете налаштувати емулятори (моки) для інтеграцій із зовнішніми системами через SOAP або REST в адміністративній панелі Control Plane за допомогою https://wiremock.org/[WireMock].
+You can configure mock integrations with external systems via SOAP or REST in the Control Plane administrative panel https://wiremock.org/[WireMock].
+
+image:release-notes:wn-1-9-5/whats-new-1-9-5-2.png[]
+
+Key features: ::
+
+//* [*] 🔄 Підтримка *SOAP* та *REST*: емуляції можуть бути створені для обох протоколів -- SOAP і REST, що дає більшу гнучкість при роботі з різними зовнішніми системами.
+* [*] 🔄 Support of *SOAP* and *REST*:Mock integrations can be created for both protocols -- SOAP and REST, which provides greater flexibility when working with different external systems.
+
+//* [*] 🔧 Керування через *Control Plane*: активація та керування моками здійснюється через адміністративну панель Control Plane в рамках *`-dev`*-шаблонів реєстру.
+* [*] 🔧 Management via  *Control Plane*: аActivation and management of mocks is done through the Control Plane administrative panel within the *_dev_* registry templates.
+
+//* [*] 🛠️ *WireMock* -- потужний інструмент для тестування: WireMock є симулятором HTTP-серверів, який дозволяє створювати моки HTTP-взаємодій. Це зручний інструмент для імітації роботи зовнішніх API та сервісів.
+
+* [*] 🛠️ *WireMock* -- powerful testing tool: WireMock is an HTTP server simulator that allows creating mock HTTP interactions. This is a convenient tool for simulating the work of external APIs and services.
+
+//* [*] 📁 Кастомізація моків через *_mock-integrations_*: ви можете задати структуру моків на рівні регламенту реєстру, використовуючи директорію _mock-integrations_.
+* [*] 📁 Customization of mocks via *_mock-integrations_*: You can define the structure of mock integrations at the registry policy level using the mock-integrations directory _mock-integrations_.
+
+Use cases: ::
+
+//* [*] 🧪 Тестування: створюйте модульні (unit) та інтеграційні тести з використанням WireMock для емуляції зовнішніх API й сервісів.
+* [*] 🧪 Testing: Create unit and integration tests using WireMock to emulate external APIs and services.
+
+//* [*] 💻 Розробка: якщо реальний сервіс ще не готовий або тимчасово недоступний, WireMock допоможе імітувати його поведінку, що дозволить продовжувати розробку без перерв.
+* [*] 💻 Development: If a real service is not yet ready or temporarily unavailable, WireMock will help simulate its behavior, allowing development to continue uninterrupted.
+
+//* [*] 🔍 Відтворення помилок: використовуйте WireMock для моделювання різних станів та помилок HTTP-сервісів, що допоможе в глибшому розумінні та розв'язанні проблем.
+* [*] 🔍 Replicating errors: Use WireMock to model different states and HTTP service errors to gain deeper understanding and help resolve issues.
+
+//Функціональність призначена для поліпшення якості розробки та тестування, надаючи більше контролю та гнучкості при роботі з зовнішніми системами.
+This functionality is intended to improve development and testing quality, providing more control and flexibility when working with external systems.
+
+//== План дій з використання емуляторів зовнішніх інтеграцій
+== Action plan for using external integration emulators
+////
+[%interactive]
+* [ ] xref:admin:registry-management/control-plane-create-registry.adoc[Розгорніть реєстр] із шаблону для розробки *`-dev*`. Платформа надає декілька доступних шаблонів. Оберіть, наприклад, *`-dev-recommended*`.
+* [ ] xref:#activate-wiremock[Активуйте використання емуляторів] при налаштуванні взаємодії з іншими системами у *Control Plane*.
+* [ ] xref:registry-admin/external-integration/ext-integration-overview.adoc[Налаштуйте інтеграційну взаємодію у Control Plane].
+* [ ] xref:#wiremock-templates[Налаштуйте шаблони емуляторів у регламенті вашого реєстру].
+* [ ] xref:#create-wiremock-route[Створіть роут для сервісу WireMock та використовуйте інтерфейс для роботи із колекцією моків].
+* [ ] xref:#wiremock-testing-postman[Налаштуйте взаємодію з API WireMock через Postman].
+* [ ] xref:#bp-soap-rest-connectors[Змоделюйте взаємодію із зовнішніми системами у бізнес-процесах через інтеграційні конектори].
+////
+
+[%interactive]
+* [ ] xref:admin:registry-management/control-plane-create-registry.adoc[Deploy registry] from a development template *`-dev*`. The platform provides several available templates. Choose, for example, *`-dev-recommended*`.
+* [ ] xref:#activate-wiremock[Activate the emulators using] when configuring integration with other systems in *Control Plane*.
+* [ ] xref:registry-admin/external-integration/ext-integration-overview.adoc[Configure integration interaction in Control Plane].
+* [ ] xref:#wiremock-templates[Configure emulator templates in the policy of your registry].
+* [ ] xref:#create-wiremock-route[Create a route for the WireMock service and use the interface to work with the collection of mock integrations].
+* [ ] xref:#wiremock-testing-postman[Configure interaction with the WireMock API via Postman].
+* [ ] xref:#bp-soap-rest-connectors[Model interaction with external systems in business processes through integration connectors].
+
+
+[#activate-wiremock]
+//== Активація емуляторів зовнішніх інтеграцій
+== Activation of emulators for external integrations
+
+//Ви можете увімкнути використання емуляторів при налаштуванні зовнішніх інтеграцій в інтерфейсі адміністративної панелі Control Plane, зокрема під час:
+You can enable the use of emulators when configuring external integrations in the Control Plane administrative panel interface, specifically during:
+
+* Configuring interaction with registries via secure exchange gateway "Trembita" within SOAP protocol
+
+include::platform:ROOT:partial$admonitions/ua-specific.adoc[]
+
+* xref:registry-admin/external-integration/cp-integrate-ext-system.adoc[Configuring interaction with other systems]
+
+//Активуйте перемикач +++<b style="font-weight: 600">Використати мок зовнішньої інтеграції<b>+++ для відповідного типу взаємодії.
+Activate the toggle switch +++<b style="font-weight: 600">Use an external integration mock<b>+++ for the corresponding type of interaction.
+
+//.Увімкнення емуляторів взаємодії з реєстрами через ШБО "Трембіта"
+.Enabling emulators for interaction with registries via secure exchange gateway "Trembita" within SOAP protocol
+
+image::release-notes:wn-1-9-5/whats-new-1-9-5-2.png[]
+
+//.Увімкнення емуляторів взаємодії з іншими системами
+.Enabling emulators for interaction with other systems
+image::registry-admin/external-integration/mock-integrations/mock-integrations-1.png[]
+
+[#wiremock-templates]
+//== Визначення шаблонів емуляторів у регламенті
+== Defining templates of emulators in the policy
+
+//Налаштування шаблонів емуляцій зовнішніх інтеграцій визначається на рівні Gerrit-репозиторію регламенту вашого реєстру, у директорії *_mock-integrations_*. Шаблони мають бути визначеними згідно з конвенціями https://wiremock.org/[WireMock] у форматі *JSON*.
+
+Configuration of external integration emulator templates is defined at the Gerrit repository policy level of your registry, in the *_mock-integrations_* directory. The templates should follow the conventions outlined by https://wiremock.org/[WireMock] in *JSON* format.
+
+//.Файли налаштування шаблонів моків у структурі регламенту реєстру
+.Configuration files for the mock templates are located within the policy structure of the registry
+[plantuml, create-tables-regulation-structure, svg]
+----
+@startsalt
+{
+{T
++ <&folder> registry-regulations
+++ <&folder> bpmn
+++ <&folder> <b>data-model</b>
+++ <&folder> <b>mock-integrations</b>
++++ <&file> <b>external-service-1.json</b>
++++ <&file> <b>external-service-2.json</b>
++++ ...
+++ ...
+}
+}
+@endsalt
+----
+
+=== REST
+
+//Шаблони у WireMock можна розділити на дві основні частини:
+WireMock templates can be divided into two main parts
+
+//. *Request Matching* -- визначає, які HTTP-запити повинні бути перехоплені. Ви можете вказати URL, метод (`GET`, `POST` тощо), заголовки, тіло запита тощо.
+. *Request Matching* -- defines which HTTP requests should be intercepted. You can specify the URL, method (`GET`, `POST` etc.), headers, request body, and more.
+
+//. *Response Definition* -- визначає, як повинна виглядати відповідь, яка повертається на співставлений запит. Тут можна вказати статус код, заголовки, тіло відповіді тощо.
+. *Response Definition* -- defines how the response that is returned for a matched request should look like. You can specify the status code, headers, response body, and more.
+
+//.Приклад шаблону WireMock у форматі JSON:
+.Example of a WireMock template in JSON format:
+[source,json]
+----
+{
+  "request": {
+    "method": "GET",
+    "urlPathPattern": "/some/endpoint"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "jsonBody": {"key": "value"}
+  }
+}
+----
+
+//Цей шаблон вказує на те, що коли WireMock отримує GET запит на URL `/some/endpoint`, він повинен повернути відповідь зі статус-кодом `200`, заголовком `Content-Type` встановленим як `application/json`, та тілом відповіді у форматі `{"key":"value"}`.
+This template specifies that when WireMock receives a GET request to the URL `/some/endpoint`, it should return a response with a `200`status code, a header of `Content-Type` set to `application/json`, and a response body in the format `{"key":"value"}`.
+
+=== SOAP
+
+//WireMock також може бути використаний для мокування SOAP вебсервісів. SOAP (Simple Object Access Protocol) є протоколом для обміну повідомленнями між застосунками через HTTP, і, на відміну від REST, використовує формат *XML* для структуризації даних.
+WireMock can also be used to mock SOAP web services. SOAP (Simple Object Access Protocol) is a protocol for exchanging messages between applications over HTTP and, unlike REST, uses the *XML* format to structure data.
+
+//Коли ви мокуєте SOAP-сервіс за допомогою WireMock, ви зазвичай хочете створити моки для SOAP запитів і відповідей, які вони отримують. Ось приклад того, як може виглядати конфігураційний файл WireMock для мокування SOAP-вебсервісу:
+When mocking a SOAP service using WireMock, you would typically want to create mocks for the SOAP requests and responses they receive. Here is an example of what a WireMock configuration file could look like for mocking a SOAP web service:
+
+//.Шаблон мокування SOAP-вебсервісу
+.SOAP web service mocking template
+[source,json]
+----
+{
+  "request": {
+    "method": "POST",
+    "url": "/soap-endpoint",
+    "headers": {
+      "Content-Type": "text/xml; charset=utf-8"
+    },
+    "bodyPatterns": [
+      {
+        "matchesXPath": "//your-xpath-expression"
+      }
+    ]
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "text/xml; charset=utf-8"
+    },
+    "body": "<your-soap-response-xml>"
+  }
+}
+----
+
+//У цьому прикладі WireMock налаштований так, що коли він отримує POST-запит на URL `/soap-endpoint` з відповідними заголовками та тілом, яке відповідає заданому `XPath`-виразу, він повертає відповідь зі статус-кодом `200` та XML-вмістом як тіло відповіді.
+In this example, WireMock is configured such that when it receives a POST request to the URL `/soap-endpoint` with the appropriate headers and a body that matches the given `XPath` expression, it will return a response with a `200` status code and an XML payload as the response body.
+
+//Важливо підготувати правильний XML-вміст для тіла SOAP-відповіді й, за потреби, використовувати `XPath` для зіставлення елементів у тілі SOAP-запита.
+It is important to prepare the correct XML payload for the SOAP response body and, if necessary, use `XPath` to match elements within the SOAP request payload.
+
+[%collapsible]
+.Imitation of SOAP service behavior for requests to SearchSubjects endpoint.
+====
+
+include::platform:ROOT:partial$admonitions/ua-specific.adoc[]
+
+[source,json]
+----
+{
+  "mappings": [
+    {
+      "priority": 100,
+      "request": {
+        "method": "POST",
+        "bodyPatterns": [
+          {
+            "matchesXPath": "//*[local-name()='serviceCode'][text()='SearchSubjects']"
+          }
+        ]
+      },
+      "response": {
+        "status": 200,
+        "body": "<soap11env:Envelope xmlns:soap11env=\"http://schemas.xmlsoap.org/soap/envelope/\" xmlns:tns=\"http://nais.gov.ua/api/sevdeir/EDR\" xmlns:xroad=\"http://x-road.eu/xsd/xroad.xsd\" xmlns:id=\"http://x-road.eu/xsd/identifiers\">\n   <soap11env:Header>\n      <tns:AuthorizationToken>token</tns:AuthorizationToken>\n      <xroad:userId>MDTUDDM</xroad:userId>\n      <xroad:client id:objectType=\"SUBSYSTEM\">\n         <id:xRoadInstance>SEVDEIR-TEST</id:xRoadInstance>\n         <id:memberClass>GOV</id:memberClass>\n         <id:memberCode>43395033</id:memberCode>\n         <id:subsystemCode>IDGOV_TEST_01</id:subsystemCode>\n      </xroad:client>\n      <xroad:service id:objectType=\"SERVICE\">\n         <id:xRoadInstance>SEVDEIR-TEST</id:xRoadInstance>\n         <id:memberClass>GOV</id:memberClass>\n         <id:memberCode>00015622</id:memberCode>\n         <id:subsystemCode>2_MJU_EDR_prod</id:subsystemCode>\n         <id:serviceCode>SearchSubjects</id:serviceCode>\n      </xroad:service>\n      <xroad:protocolVersion>4.0</xroad:protocolVersion>\n      <xroad:id>MDTUDDM</xroad:id>\n      <xroad:requestHash algorithmId=\"http://www.w3.org/2001/04/xmldsig-more#gost34311\">kfkfkjkfjkjkfjkfjkjokojkkjlkjkjlkjdlkjljkdlk=</xroad:requestHash>\n   </soap11env:Header>\n   <soap11env:Body>\n      <tns:SearchSubjectsResponse>\n         <tns:SubjectList/>\n      </tns:SearchSubjectsResponse>\n   </soap11env:Body>\n</soap11env:Envelope>",
+        "headers": {
+          "Content-Type": "text/xml"
+        }
+      }
+    }
+]
+}
+----
+====
+
+//Цей шаблон створюється за допомогою WireMock та використовується для імітації вебсервісу, який обробляє SOAP-запити.
+This template is created using WireMock and is used to simulate a web service that handles SOAP requests.
+
+//Працює це наступним чином: ::
+This works as follows: ::
++
+//. *`request`* -- визначає критерії, яким SOAP-запит має відповідати, щоб бути перехопленим. У нашому прикладі шаблон шукає `POST`-запити, тіло яких відповідає такому `XPath`-виразу:
+. *`request`* -- specifies the criteria that a SOAP request must meet in order to be intercepted. In our example template, the pattern is looking for `POST` requests whose body matches the following `XPath` expression:
++
+----
+"//*[local-name()='serviceCode'][text()='SearchSubjects']"
+----
++
+//Це означає, що запит буде перехоплений, якщо він містить елемент з локальним ім'ям `'serviceCode'` та текстом `'SearchSubjects'`.
+This means that the request will be intercepted if it contains an element with the local name `'serviceCode'` and the text `'SearchSubjects'`.
+
+. *`response`* -- defines the response that WireMock will return when it finds an incoming request that matches the template. In this case, it returns an `HTTP` response with a status code of `200`, a header `Content-Type: text/xml` and a specific XML payload which is the response to the SOAP request.
+
+. *SOAP Envelope* is the top-level element of a SOAP (Simple Object Access Protocol) message and identifies that the message is a SOAP message. It contains information that needs to be conveyed between client and server applications.
++
+//SOAP-повідомлення повинно містити `Envelope` із наступною структурою:
+SOAP message must contain an Envelope with the following structure:
++
+
+.Structure of a basic SOAP message
+[source,xml]
+----
+<soap11env:Envelope
+    xmlns:soap11env="http://schemas.xmlsoap.org/soap/envelope/"
+    xmlns:tns="http://nais.gov.ua/api/sevdeir/EDR"
+    xmlns:xroad="http://x-road.eu/xsd/xroad.xsd"
+    xmlns:id="http://x-road.eu/xsd/identifiers">
+    <soap11env:Header>
+        <!-- Header -->
+    </soap11env:Header>
+    <soap11env:Body>
+        <!-- Body -->
+    </soap11env:Body>
+</soap11env:Envelope>
+----
+
+//* *`Envelope`* -- це кореневий елемент повідомлення SOAP, що обгортає усю інформацію, яка передається.
+* *`Envelope`* -- this is the root element of the SOAP message, which wraps all the information being transmitted.
+
+//* *`Header`* (Заголовок) -- необов'язковий елемент, який містить додаткову інформацію (метадані), яка може бути необхідна для обробки повідомлення. У нашому випадку заголовок містить елементи для авторизації, ідентифікації користувача, клієнта, сервісу тощо.
+* *`Header`* -- an optional element that contains additional information (metadata) that may be required to process the message. In our case, the header contains elements for authorization, user identification, client, service, etc.
+
+//* *`Body`* (Тіло) -- містить фактичні дані, які передаються. Це єдиний обов'язковий елемент SOAP Envelope. У нашому випадку тіло містить відповідь з елементом `SearchSubjectsResponse`.
+* *`Body`* -- contains the actual data being transmitted. This is the only mandatory element of the SOAP Envelope. In our case, the body contains a response with the `SearchSubjectsResponse` element.
++
+[NOTE]
+//Також слід звернути увагу на атрибути з оголошеннями просторів імен (`xmlns`), які визначають простори імен для різних частин повідомлення і використовуються для того, щоб уникнути конфліктів між елементами з однаковими іменами, але з різних джерел.
+It is also important to note the attributes with namespace declarations (xmlns), which define the namespaces for different parts of the message and are used to avoid conflicts between elements with the same name but from different sources.
+
+[#create-wiremock-route]
+//== Створення роута для сервісу та використання WireMock
+== Creating a route for the service and using WireMock
+
+//В результаті вищезазначених дій, створиться под сервісу *`wiremock`*. Тепер ви можете взаємодіяти із колекцією API WireMock двома шляхами:
+Following the steps mentioned above, a sub-service wiremock will be created. Now, you can interact with the WireMock API collection in two ways:
+
+* xref:#wiremock-testing-postman[through Postman directly];
+//* через роут до інтерфейсу WireMock в OpenShift (_див. опис нижче у цьому розділі_).
+* through a route to the WireMock interface in OpenShift (_see description below in this section_).
+
+//Створіть новий роут для цього сервісу вручну. Для цього виконайте наступні кроки:
+To create a new route for this service manually, follow these steps:
+
+. Sign in to the *OpenShift* console, go to the *Projects* section and find your registry project.
+
+. Go to *Networking* > *Routes* and create a new route by clicking the *`Create Route`* button.
+
+. Select *Configure via* > *Form view* in a new window.
+
+. In the *Name* field, provide a unique name for the route in your registry project. For example, `test-wiremock-route`.
+
+. In the *Hostname*  field, provide the hostname where the route will be deployed. For example, `test-wiremock-route.apps.1-9-6-1.mdtu-ddm.projects.epam.com`.
++
+NOTE: This is the public hostname for the route. You can leave the field empty-- and the system will generate a `hostname` automatically.
+
+. In the *Path* field, provide the path that the router uses to route traffic to the service. For example,`/`.
+
+. In the *Service* field, select the sub-service from the available list -- *`wiremock`*.
+
+. In the *Target port* field, specify the target port where the traffic should be allowed. Select the option `9021->9021 (TCP)`.
+
+. Define security settings for the connection. Routes can be secured using several types of TLS termination.
++
+[NOTE]
+====
+[%collapsible]
+.What TLS termination is?
+=====
+*TLS termination* in OpenShift refers to the process of decrypting TLS-encrypted traffic at a certain level in the structure of your service and is used to secure communication between clients and servers.
+
+//OpenShift використовує концепцію "роутів" для експонування сервісів на зовнішній мережі. Роут дозволяє вам визначати, як зовнішні запити повинні транслюватися на сервіси всередині кластера.
+In OpenShift, the concept of "routes" is used to expose services to the external network. A route allows you to define how external requests should be routed to services inside the cluster.
+
+//При створенні роута в OpenShift, ви можете вказати, де саме має відбуватися TLS-термінація:
+When creating a route in OpenShift, you can specify exactly where TLS termination should occur:
+
+//* *Edge Termination*: завершення TLS відбувається на рівні роута. Це означає, що OpenShift розшифровує трафік, перш ніж він потрапляє до вашого застосунку. Після розшифрування, трафік може бути переданий до застосунку як незашифрований або повторно зашифрований.
+* *Edge Termination*: TLS termination occurs at the route level. This means that OpenShift decrypts the traffic before it reaches your application. After decryption, the traffic can be passed to the application as either unencrypted or re-encrypted.
+
+//* *Passthrough Termination*: з OpenShift не втручається у шифрування, і TLS трафік проходить через роут без змін. Завершення TLS відбувається на рівні застосунку або сервісу.
+* *Passthrough Termination*: OpenShift does not interfere with encryption, and TLS traffic passes through the route unchanged. TLS termination occurs at the application or service level.
+
+//* *Re-encrypt Termination*: це комбінація `Edge` та `Passthrough`. Завершення TLS відбувається на роуті, а потім трафік шифрується знову перед передачею до застосунку. Це може бути корисним, якщо ви хочете використовувати різні сертифікати для зовнішньої та внутрішньої комунікації.
+* *Re-encrypt Termination*: this is a combination of `Edge` and `Passthrough`. TLS termination occurs at the route, and then the traffic is encrypted again before being passed to the application. This can be useful if you want to use different certificates for external and internal communication.
+=====
+====
+
+. In the *Insecure traffic*  field, define the policy for HTTP traffic. The available options are:
+
+* `None`
+* `Allow`
+* `Redirect`
+
+. Click *`Create`* and save the changes. As a result, the route for emulating external interaction will be added to the list of available routes in your registry project.
++
+image:registry-admin/external-integration/mock-integrations/mock-integrations-2.png[]
+
+. Follow the link to the corresponding service *`wiremock`*.
++
+image:registry-admin/external-integration/mock-integrations/mock-integrations-3.png[]
++
+[WARNING]
+====
+
+//Обов'язково додайте ендпоінт *`/__admin/webapp`* у кінці URL сервісу, щоб уникнути помилки `403 Forbidden`.
+Be sure to add the endpoint *`/__admin/webapp`* to the end of the service URL to avoid `403 Forbidden`error.
+
+image:registry-admin/external-integration/mock-integrations/mock-integrations-4.png[]
+====
++
+//Тепер ви зможете побачити усі опубліковані моки в зручному інтерфейсі, відповідно до структури вашого регламенту. Ви можете використовувати інтерфейс WireMock для роботи із колекцією моків.
+Now you can see all the published mocks in a convenient interface, according to the structure of your registry. You can use the WireMock interface to work with the collection of mocks
++
+image:registry-admin/external-integration/mock-integrations/mock-integrations-5.png[]
++
+TIP: Explore the capabilities of WireMock at https://wiremock.org/docs/[in the official product documentation].
+//Ознайомтеся із можливостями WireMock в https://wiremock.org/docs/[офіційній документації] продукту.
+
+
+[#wiremock-testing-postman]
+//== Тестування API за допомогою Postman
+== API testing using Postman
+
+//Ви можете використовувати колекцію моків через з'єднання із подом сервісу `wiremock` та використовувати API WireMock при тестуванні сценаріїв інтеграційної взаємодії.
+You can use the collection of mocks by connecting to the sub-service `wiremock` and using the WireMock API for testing integration scenarios.
+
+[NOTE]
+====
+//Для цього вам може знадобитися https://www.postman.com/downloads/[Postman] -- інструмент для розробки та тестування API. За потреби, ви можете використовувати будь-який альтернативний варіант.
+You may need https://www.postman.com/downloads/[Postman] - a tool for developing and testing APIs. If necessary, you can use any alternative option.
+
+//Також встановіть https://docs.openshift.com/container-platform/4.12/cli_reference/openshift_cli/getting-started-cli.html[OpenShift CLI] -- утиліта командного рядка, яка надає доступ до управління та взаємодії з кластером OpenShift.
+Also, install https://docs.openshift.com/container-platform/4.12/cli_reference/openshift_cli/getting-started-cli.html[OpenShift CLI] - a command-line utility that provides access to managing and interacting with the OpenShift cluster.
+====
+
+//. Увійдіть до *OpenShift*-консолі.
+. Sign in to the *OpenShift*- console
+
+. In the top right corner of the interface, click on the user -- `<your name>` , and copy the login command for logging in through `oc cli` -- *`Copy login command`*.
+//. У правому верхньому куті інтерфейсу натисніть на користувача -- `<ваше ім'я>` та скопіюйте команду для входу через `oc cli` -- *`Copy login command`*.
+
+. Click on *`Display Token`* and copy the command in the *Log in with this token*.. The command may look like this:
+//. Натисніть *`Display Token`* та скопіюйте команду у полі *Log in with this token*. Команда може виглядати так:
++
+----
+oc login --token=sha256~kjshdfhfdj_jnksdjnfksdnf-KMCZ0vMR2Y --server=https://api.1-9-6-1.mdtu-ddm.projects.epam.com:6443
+----
+
+. Open the terminal or console on your operating system and paste the copied command for logging in.
+//. Відкрийте термінал або консоль на вашій операційній системі та вставте скопійовану команду для входу.
++
+//Таким чином ви зможете взаємодіяти як адміністратор з OpenShift через `oc cli`.
+This way, you will be able to interact as an administrator with OpenShift through `oc cli`.
+
+. Configure port forwarding from the sub-service `wiremock` to your local machine. To do this, run the following command in the terminal:
+//. Налаштуйте переадресацію портів (port forwarding) із поду сервісу `wiremock` на вашу локальну машину. Для цього у терміналі виконайте наступну команду:
++
+.Port forwarding for connecting to the sub-service wiremock
+====
+----
+oc port-forward wiremock-644c996b78-5ftrx 9021:9021 -n abc-01
+----
+
+* `wiremock-644c996b78-5ftrx` -- the name of the pod with the `wiremock`service in your registry project.
+
+* `9021:9021` -- ports for forwarding.
+
+** First port (`9021` before a colon) -- this is the port on your local machine. By default, this is port `9021`. You can choose any free port.
+** Second port (`9021` after a colon) -- this is the port on the target pod (`wiremock-644c996b78-5ftrx`) in the namespace `abc-01`.
+
++
+[TIP]
+=====
+.How to check the list of open ports on the local machine?
+[%collapsible]
+======
+You can check the list of open ports on your machine using the following commands
+(for Windows):
+
+----
+netstat -ano
+----
+
+//Ця команда відобразить список усіх активних TCP-з'єднань, їх портів та PID (Process ID) процесів, що використовують ці з'єднання.
+This command will display a list of all active TCP connections, their ports, and the PID (Process ID) of the processes that use these connections.
+
+//Якщо ви хочете перевірити конкретний порт, ви можете додати його в команду `netstat` з ключем `findstr`. Наприклад, щоб перевірити, чи вільний порт `8080`, ви можете виконати наступну команду:
+If you want to check a specific port, you can add it to the `netstat` command with the `findstr` key. For example, to check if the port `8080` is available, you can run the following command:
+
+----
+netstat -ano | findstr 8080
+----
+
+//Якщо команда нічого не виводить, це означає, що порт `8080` вільний.
+If the command returns no output, it means that the port 8080 is available and not being used.
+======
+=====
+
+* `abc-01` -- name of your registry.
+====
+
++
+image:registry-admin/external-integration/mock-integrations/mock-integrations-6.png[]
+
+. Open the Postman application and create a new collection. You can name it Wiremock as an example.
+//. Відкрийте застосунок Postman та створіть нову колекцію. Ви можете назвати її Wiremock, як приклад.
+
+. Create a new GET request and send it to the endpoint `http://localhost:9021/__admin/mappings`.  This way, you will get a list of all available mocks in the wiremock service, provided by the structure of your registry.
+//. Створіть новий GET-запит та надішліть його на ендпоінт `http://localhost:9021/__admin/mappings`. Таким чином, ви отримаєте список усіх доступних моків у сервісі wiremock, передбачених структурою вашого регламенту.
++
+image:registry-admin/external-integration/mock-integrations/mock-integrations-7.png[]
+
+. Create new requests to test the rules and interaction scenarios with external services and systems specified in the mocks.
+//. Надалі створюйте нові запити для перевірки заданих у моках правил та сценаріїв взаємодії із зовнішніми сервісами та системами.
+
+[#bp-soap-rest-connectors]
+//== Використання інтеграційних конекторів у бізнес-процесах
+== Usage of integration connectors in business processes
+
+//Після активації моків у *Control Plane* та налаштування шаблонів _mock-integrations_ у регламенті, ви можете моделювати інтеграційну взаємодію у бізнес-процесах за допомогою відповідних SOAP та REST-конекторів.
+After activating the mocks in the Control Plane and configuring the mock-integrations templates in the registry, you can model integration scenarios in business processes using the corresponding SOAP and REST connectors.
+
+[TIP]
+====
+//Детальніше про інтеграційні конектори ви можете переглянути сторінках:
+You can find more detailed information about integration connectors in the following pages:
+
+* xref:bp-modeling/external-integration/api-call/connectors-external-registry.adoc[]
+* xref:bp-modeling/bp/rest-connector.adoc[]
+====
+
