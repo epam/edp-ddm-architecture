@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
-    <title>Deploying the Platform on target environments :: Platform for deployment and maintenance of state electronic registers</title>
+    <title>Deployment of the Platform from scratch in a private vSphere cloud environment :: Platform for deployment and maintenance of state electronic registers</title>
     <meta name="generator" content="Antora 3.1.1">
     <link rel="stylesheet" href="../../../../../_/css/site.css">
   </head>
@@ -54,7 +54,7 @@
   <li class="nav-item" data-depth="3">
     <a class="nav-link" href="../okd-requirements.html">Platform for state registries: requirements for OKD clusters</a>
   </li>
-  <li class="nav-item is-current-page" data-depth="3">
+  <li class="nav-item" data-depth="3">
     <button class="nav-item-toggle"></button>
     <a class="nav-link" href="platform-deployment-overview.html">Deploying the Platform on target environments</a>
 <ul class="nav-list">
@@ -1068,16 +1068,14 @@
 <nav class="breadcrumbs" aria-label="breadcrumbs">
   <ul>
     <li><a href="../../../index.html">The Registries Platform</a></li>
-    <li><a href="../../admin-overview.html">Platform administrators</a></li>
-    <li><a href="../overview.html">Installing and configuring</a></li>
-    <li><a href="platform-deployment-overview.html">Deploying the Platform on target environments</a></li>
+    <li><a href="platform-vsphere-deployment.html">Deployment of the Platform from scratch in a private <em>vSphere</em> cloud environment</a></li>
   </ul>
 </nav>
 <div class="page-languages">
     <button class="language-menu-toggle" title="Show other languages of page">English</button>
     <div class="language-menu">
-        <a class="language " href="../../../../../../ua/platform/1.9.6/admin/installation/platform-deployment/platform-deployment-overview.html">Українська</a>
-        <a class="language is-current" href="../../../../../../en/platform/1.9.6/admin/installation/platform-deployment/platform-deployment-overview.html">English</a>
+        <a class="language " href="../../../../../../ua/platform/1.9.6/admin/installation/platform-deployment/platform-vsphere-deployment.html">Українська</a>
+        <a class="language is-current" href="../../../../../../en/platform/1.9.6/admin/installation/platform-deployment/platform-vsphere-deployment.html">English</a>
     </div>
 </div></div>
     <div class="content">
@@ -1085,33 +1083,1181 @@
   <div class="toc-menu"></div>
 </aside>
             <article class="doc">
-<h1 class="page">Deploying the Platform on target environments</h1>
+<h1 class="page">Deployment of the Platform from scratch in a private <em>vSphere</em> cloud environment</h1>
+<div id="toc" class="toc">
+<div id="toctitle">On this page:</div>
+<ul class="sectlevel1">
+<li><a href="#_preparing_the_vsphere_infrastructure_for_okd_installation1">1. Preparing the vSphere infrastructure for OKD installation<sup class="footnote">[1]</sup></a>
+<ul class="sectlevel2">
+<li><a href="#_configuring_the_trusted_vcenter_api_interface">1.1. Configuring the trusted vCenter API interface</a></li>
+<li><a href="#_downloading_ca_certificates">1.2. Downloading CA Certificates</a>
+<ul class="sectlevel3">
+<li><a href="#_example_of_directory_structure_viewing">1.2.1. Example of directory structure viewing</a></li>
+<li><a href="#_example_of_adding_certificates">1.2.2. Example of adding certificates</a></li>
+</ul>
+</li>
+<li><a href="#_standard_installation_resources">1.3. Standard installation resources</a>
+<ul class="sectlevel3">
+<li><a href="#_resource_requirements">1.3.1. Resource requirements</a>
+<ul class="sectlevel4">
+<li><a href="#_data_storage">1.3.1.1. Data storage</a></li>
+<li><a href="#_dhcp">1.3.1.2. DHCP</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#_deploying_and_configuring_dns_and_dhcp_components">2. Deploying and configuring DNS and DHCP components</a>
+<ul class="sectlevel2">
+<li><a href="#_ip_addresses">2.1. IP addresses</a></li>
+<li><a href="#_dns_records">2.2. DNS records</a></li>
+</ul>
+</li>
+<li><a href="#create-install-config-yml">3. Creating the install-config.yaml configuration file</a></li>
+<li><a href="#_running_the_okd4_installer_and_deploying_an_empty_okd4_cluster">4. Running the OKD4 installer and deploying an empty OKD4 cluster</a></li>
+<li><a href="#_replacing_self_signed_certificates_with_trusted_certificates">5. Replacing self-signed certificates with trusted certificates</a>
+<ul class="sectlevel2">
+<li><a href="#_preparation">5.1. Preparation</a></li>
+<li><a href="#_certificate_request">5.2. Certificate request</a>
+<ul class="sectlevel3">
+<li><a href="#_installing_certificates_for_router">5.2.1. Installing certificates for Router</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#_creating_a_machineset2_for_ceph_infrastructure">6. Creating a MachineSet<sup class="footnote">[2]</sup> for Ceph Infrastructure</a></li>
+<li><a href="#_preparing_and_running_the_installer3_for_platform_deployment_on_the_target_okd_cluster">7. Preparing and running the Installer<sup class="footnote">[3]</sup> for Platform deployment on the target OKD cluster</a>
+<ul class="sectlevel2">
+<li><a href="#_prerequisites">7.1. Prerequisites</a></li>
+<li><a href="#_deploying_and_updating_the_platform">7.2. Deploying and updating the Platform</a>
+<ul class="sectlevel3">
+<li><a href="#_deploying_the_platform_from_scratch">7.2.1. Deploying the Platform from scratch</a>
+<ul class="sectlevel4">
+<li><a href="#_prerequisites_2">7.2.1.1. Prerequisites</a></li>
+<li><a href="#_adding_a_separate_configuration_file_for_deployment_in_the_vsphere_environment">7.2.1.2. Adding a separate configuration file for deployment in the vSphere environment</a></li>
+<li><a href="#_deploying_the_installer">7.2.1.3. Deploying the Installer</a></li>
+</ul>
+</li>
+<li><a href="#_updating_the_platform">7.2.2. Updating the Platform</a>
+<ul class="sectlevel4">
+<li><a href="#_prerequisites_3">7.2.2.1. Prerequisites</a></li>
+<li><a href="#_adding_a_separate_configuration_file_for_deployment_in_the_vsphere_environment_2">7.2.2.2. Adding a separate configuration file for deployment in the vSphere environment</a></li>
+<li><a href="#_configuring_the_minio_component_during_cluster_update_in_the_vsphere_environment">7.2.2.3. Configuring the MinIO component during cluster update in the vSphere environment</a></li>
+<li><a href="#_configuring_the_vault_component_during_cluster_update_in_the_vsphere_environment">7.2.2.4. Configuring the vault component during cluster update in the vSphere environment</a></li>
+<li><a href="#_deploying_the_installer_2">7.2.2.5. Deploying the Installer</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#_managing_platform_configuration">8. Managing Platform configuration</a></li>
+</ul>
+</div>
 <div id="preamble">
 <div class="sectionbody">
-<div class="paragraph">
-<p>The successful deployment of the Platform for state registries relies on the utilization of officially supported virtual infrastructures. At present, these infrastructures include recognized cloud services like <a href="https://aws.amazon.com/">Amazon Web Services (AWS)</a> and <a href="https://www.vmware.com/products/vsphere.html">VMWare vSphere</a>.</p>
-</div>
-<div class="paragraph">
-<p>To ensure optimal compatibility and functionality, these infrastructures should have an OKD cluster installed. The version of this cluster needs to align with the Platform&#8217;s requirements outlined in the official Platform documentation: <a href="../okd-requirements.html" class="xref page">Platform for state registries: requirements for OKD clusters</a>.</p>
-</div>
-<div class="paragraph">
-<p>Follow the guidelines in the official Platform documentation to carry out the process of installation and configuration.</p>
+<div class="admonitionblock note">
+<table>
+<tr>
+<td class="icon">
+<i class="fa icon-note" title="Note"></i>
+</td>
+<td class="content">
+🌐 This document is available in both English and Ukrainian. Use the language toggle in the top right corner to switch between versions.
+</td>
+</tr>
+</table>
 </div>
 </div>
 </div>
 <div class="sect1">
-<h2 id="_overview"><a class="anchor" href="#_overview"></a><a class="link" href="#_overview">Overview</a></h2>
+<h2 id="_preparing_the_vsphere_infrastructure_for_okd_installation1"><a class="anchor" href="#_preparing_the_vsphere_infrastructure_for_okd_installation1"></a><a class="link" href="#_preparing_the_vsphere_infrastructure_for_okd_installation1">1. Preparing the vSphere infrastructure for OKD installation<sup class="footnote">[<a id="_footnoteref_1" class="footnote" href="#_footnotedef_1" title="View footnote.">1</a>]</sup></a></h2>
 <div class="sectionbody">
+<div class="sect2">
+<h3 id="_configuring_the_trusted_vcenter_api_interface"><a class="anchor" href="#_configuring_the_trusted_vcenter_api_interface"></a><a class="link" href="#_configuring_the_trusted_vcenter_api_interface">1.1. Configuring the trusted vCenter API interface</a></h3>
+<div class="paragraph">
+<p>The installer requires access to the trusted vCenter API interface, which allows for the retrieval of trusted vCenter root CA certificates.</p>
+</div>
+<div class="paragraph">
+<p>Before connecting to the API, vCenter root CA certificates must be added to the system from which the OKD installer will be launched.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_downloading_ca_certificates"><a class="anchor" href="#_downloading_ca_certificates"></a><a class="link" href="#_downloading_ca_certificates">1.2. Downloading CA Certificates</a></h3>
+<div class="paragraph">
+<p>Certificates can be downloaded from the vCenter homepage.</p>
+</div>
+<div class="paragraph">
+<p>By default, certificates are stored at <code>&lt;vCenter&gt;/certs/download.zip</code>. After downloading and unpacking, a directory containing certificates for Linux, MacOS, and Windows operating systems will be created.</p>
+</div>
+<div class="sect3">
+<h4 id="_example_of_directory_structure_viewing"><a class="anchor" href="#_example_of_directory_structure_viewing"></a><a class="link" href="#_example_of_directory_structure_viewing">1.2.1. Example of directory structure viewing</a></h4>
+<div class="paragraph">
+<p>The directory structure with the certificates can be viewed using the following command:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-bash hljs" data-lang="bash">$ tree certs</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The resulting structure will be as follows:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-bash hljs" data-lang="bash">certs
+
+├── lin
+
+│   ├── 108f4d17.0
+
+│   ├── 108f4d17.r1
+
+│   ├── 7e757f6a.0
+
+│   ├── 8e4f8471.0
+
+│   └── 8e4f8471.r0
+
+├── mac
+
+│   ├── 108f4d17.0
+
+│   ├── 108f4d17.r1
+
+│   ├── 7e757f6a.0
+
+│   ├── 8e4f8471.0
+
+│   └── 8e4f8471.r0
+
+└── win
+
+    ├── 108f4d17.0.crt
+
+    ├── 108f4d17.r1.crl
+
+    ├── 7e757f6a.0.crt
+
+    ├── 8e4f8471.0.crt
+
+    └── 8e4f8471.r0.crl
+
+
+3 directories, 15 files</code></pre>
+</div>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_example_of_adding_certificates"><a class="anchor" href="#_example_of_adding_certificates"></a><a class="link" href="#_example_of_adding_certificates">1.2.2. Example of adding certificates</a></h4>
+<div class="paragraph">
+<p>You need to add the relevant certificates for your operating system.</p>
+</div>
+<div class="paragraph">
+<p><strong>Example for Fedora OS</strong>:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-bash hljs" data-lang="bash">$ sudo cp certs/lin/* /etc/pki/ca-trust/source/anchors
+
+$ sudo update-ca-trust extract</code></pre>
+</div>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_standard_installation_resources"><a class="anchor" href="#_standard_installation_resources"></a><a class="link" href="#_standard_installation_resources">1.3. Standard installation resources</a></h3>
+<div class="paragraph">
+<p>The standard installation (Installer-Provisioned Infrastructure) creates the following infrastructure resources:</p>
+</div>
 <div class="ulist">
 <ul>
 <li>
-<p><a href="platform-aws-deployment.html" class="xref page">Deploying the Platform in an AWS environment from scratch</a></p>
+<p>one folder (1 Folder)</p>
 </li>
 <li>
-<p><a href="platform-vsphere-deployment.html" class="xref page">Deployment of the Platform from scratch in a private <em>vSphere</em> cloud environment</a></p>
+<p>one tag category (1 Tag Category)</p>
+</li>
+<li>
+<p>one tag (1 Tag)</p>
+</li>
+<li>
+<p>virtual machines (Virtual machines):</p>
+<div class="ulist">
+<ul>
+<li>
+<p>one template (1 template)</p>
+</li>
+<li>
+<p>one temporary bootstrap node (1 temporary bootstrap node)</p>
+</li>
+<li>
+<p>three control plane nodes for Platform management (3 control-plane nodes)</p>
+</li>
+<li>
+<p>three compute machines (3 compute machines)</p>
 </li>
 </ul>
 </div>
+</li>
+</ul>
+</div>
+<div class="sect3">
+<h4 id="_resource_requirements"><a class="anchor" href="#_resource_requirements"></a><a class="link" href="#_resource_requirements">1.3.1. Resource requirements</a></h4>
+<div class="sect4">
+<h5 id="_data_storage"><a class="anchor" href="#_data_storage"></a><a class="link" href="#_data_storage">1.3.1.1. Data storage</a></h5>
+<div class="paragraph">
+<p>Alongside the resources described above, the standard OKD deployment requires a minimum of 800 GB of storage space for data storage.</p>
+</div>
+</div>
+<div class="sect4">
+<h5 id="_dhcp"><a class="anchor" href="#_dhcp"></a><a class="link" href="#_dhcp">1.3.1.2. DHCP</a></h5>
+<div class="paragraph">
+<p>The deployment requires configuring a DHCP server for network configuration.</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_deploying_and_configuring_dns_and_dhcp_components"><a class="anchor" href="#_deploying_and_configuring_dns_and_dhcp_components"></a><a class="link" href="#_deploying_and_configuring_dns_and_dhcp_components">2. Deploying and configuring DNS and DHCP components</a></h2>
+<div class="sectionbody">
+<div class="sect2">
+<h3 id="_ip_addresses"><a class="anchor" href="#_ip_addresses"></a><a class="link" href="#_ip_addresses">2.1. IP addresses</a></h3>
+<div class="paragraph">
+<p>Deployment of the vSphere infrastructure (Installer-provisioned vSphere) requires two static IP addresses:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Program interface address (API)</strong>&#8201;&#8212;&#8201;used for accessing the cluster&#8217;s API.</p>
+</li>
+</ul>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Incoming IP address (Ingress)</strong>&#8201;&#8212;&#8201;used for cluster ingress traffic.</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>Virtual IP addresses for each of them must be defined in the
+<a href="#create-install-config-yml"><code>install-config.yaml</code></a> file.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_dns_records"><a class="anchor" href="#_dns_records"></a><a class="link" href="#_dns_records">2.2. DNS records</a></h3>
+<div class="paragraph">
+<p>DNS records must be created for the two IP addresses on any DNS server designated for the environment. The records should contain the values described in the table:</p>
+</div>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 50%;">
+<col style="width: 50%;">
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Name</th>
+<th class="tableblock halign-left valign-top">Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>api.${cluster-name}.${base-domain}</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">API VIP</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>*.apps.${cluster-name}.${base-domain}`</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Ingress VIP</p></td>
+</tr>
+</tbody>
+</table>
+<div class="admonitionblock note">
+<table>
+<tr>
+<td class="icon">
+<i class="fa icon-note" title="Note"></i>
+</td>
+<td class="content">
+${cluster-name} and ${base-domain} are variables taken from the respective values specified in the <a href="#create-install-config-yml"><code>install-config.yaml</code></a> file.
+</td>
+</tr>
+</table>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="create-install-config-yml"><a class="anchor" href="#create-install-config-yml"></a><a class="link" href="#create-install-config-yml">3. Creating the install-config.yaml configuration file</a></h2>
+<div class="sectionbody">
+<div class="admonitionblock warning">
+<table>
+<tr>
+<td class="icon">
+<i class="fa icon-warning" title="Warning"></i>
+</td>
+<td class="content">
+<div class="dlist">
+<dl>
+<dt class="hdlist1">Prerequisites </dt>
+<dd>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>Log in to your Red Hat account. If you don&#8217;t have one, you need to create it.</p>
+</li>
+<li>
+<p>Purchase a paid subscription for DockerHub should you not have one.</p>
+</li>
+<li>
+<p>Generate and add an SSH key to your configuration file. This is necessary for accessing your node consoles.</p>
+</li>
+</ol>
+</div>
+</dd>
+</dl>
+</div>
+</td>
+</tr>
+</table>
+</div>
+<div class="paragraph">
+<p>To create the <code>install-config.yaml</code> file required for deploying the OKD cluster, use the following command:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-bash hljs" data-lang="bash">$ openshift-installer create install-config</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>After creating the file, you need to fill in the necessary parameters, which will be presented in the context menu. The created configuration file includes only the required parameters for a minimal cluster deployment. For customization, refer to the official documentation.</p>
+</div>
+<details>
+<summary class="title">The <em>install-config.yaml</em> configuration:</summary>
+<div class="content">
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-yaml hljs" data-lang="yaml">apiVersion: v1
+baseDomain: eua.gov.ua
+compute:
+- architecture: amd64
+  hyperthreading: Enabled
+  name: worker
+  platform: {}
+  replicas: 3
+controlPlane:
+  architecture: amd64
+  hyperthreading: Enabled
+  name: master
+  platform: {}
+  replicas: 3
+metadata:
+  creationTimestamp: null
+  name: mdtuddm
+networking:
+  clusterNetwork:
+  - cidr: 10.128.0.0/14
+    hostPrefix: 23
+  machineNetwork:
+  - cidr: 10.0.0.0/16
+  networkType: OVNKubernetes
+  serviceNetwork:
+  - 172.30.0.0/16
+platform:
+  vsphere:
+    apiVIP: 10.9.1.110
+    cluster: HX-02
+    datacenter: HXDP-02
+    defaultDatastore: NCR_Data2
+    ingressVIP: 10.9.1.111
+    network: EPAM_OKD_Vlan9_EPG
+    password: &lt;password&gt;
+    username: epam_dev1@vsphere.local
+    vCenter: vcsa.ncr.loc
+publish: External
+pullSecret: '{"auths":{"fake":{"auth":"aWQ6cGFzcwo="}}}'
+sshKey: |
+  &lt;ssh_key&gt;</code></pre>
+</div>
+</div>
+</div>
+</details>
+<div class="admonitionblock note">
+<table>
+<tr>
+<td class="icon">
+<i class="fa icon-note" title="Note"></i>
+</td>
+<td class="content">
+<div class="ulist">
+<ul>
+<li>
+<p>During the creation of the configuration file, replace <strong><code>&lt;password&gt;</code></strong> with your password and <strong><code>&lt;ssh_key</code></strong>&gt; with your generated SSH key.</p>
+</li>
+<li>
+<p>Also, copy the authentication parameters from your Red Hat account and insert them into the <strong><code>pullSecret</code></strong> field.</p>
+</li>
+<li>
+<p>Please note that you may need to adjust some parameters to match your infrastructure and requirements.</p>
+</li>
+</ul>
+</div>
+</td>
+</tr>
+</table>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_running_the_okd4_installer_and_deploying_an_empty_okd4_cluster"><a class="anchor" href="#_running_the_okd4_installer_and_deploying_an_empty_okd4_cluster"></a><a class="link" href="#_running_the_okd4_installer_and_deploying_an_empty_okd4_cluster">4. Running the OKD4 installer and deploying an empty OKD4 cluster</a></h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>After creating the <code>install-config.yaml</code> file, to deploy the OKD cluster, execute the following command:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-bash hljs" data-lang="bash">$ openshift-installer create cluster</code></pre>
+</div>
+</div>
+<div class="admonitionblock note">
+<table>
+<tr>
+<td class="icon">
+<i class="fa icon-note" title="Note"></i>
+</td>
+<td class="content">
+The cluster deployment process typically takes up to 1.5 hours.
+</td>
+</tr>
+</table>
+</div>
+<div class="paragraph">
+<p>Upon successful deployment, the following cluster access parameters will be provided:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>Login;</p>
+</li>
+<li>
+<p>Password;</p>
+</li>
+<li>
+<p>Link to the cluster&#8217;s web console.</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>In the directory where the command was executed, a series of files storing the cluster&#8217;s status, necessary for its uninstallation, will be created.</p>
+</div>
+<div class="paragraph">
+<p>Additionally, an <code>/auth</code> folder will appear in this directory, containing two authentication files for working with the cluster through the <strong>OKD web console</strong> and the <strong>OKD CLI</strong>.</p>
+</div>
+<div class="admonitionblock note">
+<table>
+<tr>
+<td class="icon">
+<i class="fa icon-note" title="Note"></i>
+</td>
+<td class="content">
+After starting the cluster deployment process, the Installer removes the <code>install-config.yaml</code> file. Therefore, it is recommended to make a backup of this file if you plan to deploy multiple clusters.
+</td>
+</tr>
+</table>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_replacing_self_signed_certificates_with_trusted_certificates"><a class="anchor" href="#_replacing_self_signed_certificates_with_trusted_certificates"></a><a class="link" href="#_replacing_self_signed_certificates_with_trusted_certificates">5. Replacing self-signed certificates with trusted certificates</a></h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>To replace self-signed certificates with trusted certificates, you first need to obtain these certificates.</p>
+</div>
+<div class="paragraph">
+<p>In this section, we will discuss obtaining free <a href="https://letsencrypt.org/">Let&#8217;s Encrypt</a> certificates and installing them on the server.</p>
+</div>
+<div class="paragraph">
+<p>Acquiring Let&#8217;s Encrypt certificates is done using the <a href="https://github.com/acmesh-official/acme.sh">acme.sh</a> utility.</p>
+</div>
+<div class="admonitionblock tip">
+<table>
+<tr>
+<td class="icon">
+<i class="fa icon-tip" title="Tip"></i>
+</td>
+<td class="content">
+For detailed information on using Let&#8217;s Encrypt based on the ACME protocol, refer to the <a href="https://letsencrypt.org/docs/client-options/">official source</a>.
+</td>
+</tr>
+</table>
+</div>
+<div class="sect2">
+<h3 id="_preparation"><a class="anchor" href="#_preparation"></a><a class="link" href="#_preparation">5.1. Preparation</a></h3>
+<div class="paragraph">
+<p>Clone the acme.sh utility from the GitHub repository:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-bash hljs" data-lang="bash">$ cd $HOME
+$ git clone https://github.com/neilpang/acme.sh
+$ cd acme.sh</code></pre>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_certificate_request"><a class="anchor" href="#_certificate_request"></a><a class="link" href="#_certificate_request">5.2. Certificate request</a></h3>
+<div class="paragraph">
+<p>1) To simplify the certificate acquisition process, set two environment variables. The first variable should point to the API Endpoint. Make sure you are logged in to OKD as <code>system:admin</code> and use the Openshift CLI console to find the API Endpoint URL:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-bash hljs" data-lang="bash">$ oc whoami --show-server</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p><strong>Example response:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>https://api.e954.ocp4.opentlc.com:6443</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>2) Now set the <code>LE_API</code> variable for the fully qualified API domain:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-bash hljs" data-lang="bash">$ export LE_API=$(oc whoami --show-server | cut -f 2 -d ':' | cut -f 3 -d '/' | sed 's/-api././')</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>3) Set the <code>LE_WILDCARD</code> variable for your Wildcard Domain:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-bash hljs" data-lang="bash">$ export LE_WILDCARD=$(oc get ingresscontroller default -n openshift-ingress-operator -o jsonpath='{.status.domain}')</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>4) Run the acme.sh script:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-bash hljs" data-lang="bash">$ ${HOME}/acme.sh/acme.sh --issue -d ${LE_API} -d *.${LE_WILDCARD} --dns</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p><strong>Example response:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-bash hljs" data-lang="bash">$  ./acme.sh --issue -d  ${LE_API} -d \*.${LE_WILDCARD} --dns --yes-I-know-dns-manual-mode-enough-go-ahead-please
+[Wed Jul 28 18:37:33 EEST 2021] Using CA: https://acme-v02.api.letsencrypt.org/directory
+[Wed Jul 28 18:37:33 EEST 2021] Creating domain key
+[Wed Jul 28 18:37:33 EEST 2021] The domain key is here: $HOME/.acme.sh/api.e954.ocp4.opentlc.com/api.e954.ocp4.opentlc.com.key
+[Wed Jul 28 18:37:33 EEST 2021] Multi domain='DNS:api.e954.ocp4.opentlc.com,DNS:*.apps.e954.ocp4.opentlc.com'
+[Wed Jul 28 18:37:33 EEST 2021] Getting domain auth token for each domain
+[Wed Jul 28 18:37:37 EEST 2021] Getting webroot for domain='cluster-e954-api.e954.ocp4.opentlc.com'
+[Wed Jul 28 18:37:37 EEST 2021] Getting webroot for domain=‘*.apps.cluster-e954-api.e954.ocp4.opentlc.com’
+[Wed Jul 28 18:37:38 EEST 2021] Add the following TXT record:
+[Wed Jul 28 18:37:38 EEST 2021] Domain: '_acme-challenge.api.e954.ocp4.opentlc.com'
+[Wed Jul 28 18:37:38 EEST 2021] TXT value: 'VZ2z3XUe4cdNLwYF7UplBj7ZTD8lO9Een0yTD7m_Bbo'
+[Wed Jul 28 18:37:38 EEST 2021] Please be aware that you prepend _acme-challenge. before your domain
+[Wed Jul 28 18:37:38 EEST 2021] so the resulting subdomain will be: _acme-challenge.api.e954.ocp4.opentlc.com
+[Wed Jul 28 18:37:38 EEST 2021] Add the following TXT record:
+[Wed Jul 28 18:37:38 EEST 2021] Domain: '_acme-challenge.apps.e954.ocp4.opentlc.com'
+[Wed Jul 28 18:37:38 EEST 2021] TXT value: 'f4KeyXkpSissmiLbIIoDHm5BJ6tOBTA0D8DyK5sl46g'
+[Wed Jul 28 18:37:38 EEST 2021] Please be aware that you prepend _acme-challenge. before your domain
+[Wed Jul 28 18:37:38 EEST 2021] so the resulting subdomain will be: _acme-challenge.apps.e954.ocp4.opentlc.com
+[Wed Jul 28 18:37:38 EEST 2021] Please add the TXT records to the domains, and re-run with --renew.
+[Wed Jul 28 18:37:38 EEST 2021] Please add '--debug' or '--log' to check more details.</code></pre>
+</div>
+</div>
+<div class="admonitionblock caution">
+<table>
+<tr>
+<td class="icon">
+<i class="fa icon-caution" title="Caution"></i>
+</td>
+<td class="content">
+DNS records as mentioned in the previous response should be added to the DNS server responsible for the <code>e954.ocp4.opentlc.com</code> zone (<strong>the zone value here is just an example</strong>). The TXT records should have the following format:
+</td>
+</tr>
+</table>
+</div>
+<div class="paragraph">
+<p><strong>TXT record 1</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-bash hljs" data-lang="bash">_acme-challenge.api.e954.ocp4.opentlc.com TXT value: 'VZ2z3XUe4cdNLwYF7UplBj7ZTD8lO9Een0yTD7m_Bbo'</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p><strong>TXT record 2</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-bash hljs" data-lang="bash">_acme-challenge.apps.e954.ocp4.opentlc.com TXT value: 'f4KeyXkpSissmiLbIIoDHm5BJ6tOBTA0D8DyK5sl46g'</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>5) After this step, you need to run the <code>acme.sh</code> command again:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-bash hljs" data-lang="bash">$ acme.sh --renew -d e954.ocp4.opentlc.com --yes-I-know-dns-manual-mode-enough-go-ahead-please</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>6) Upon successful completion of the previous steps, run the following commands.</p>
+</div>
+<div class="paragraph">
+<p>Usually, a good approach is to move certificates from the default acme.sh path to a more convenient directory. You can use the <code>—install-cert</code> key of the <code>acme.sh</code> script to copy certificates to <code>$HOME/certificates</code>, for example:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-bash hljs" data-lang="bash">$ export CERTDIR=$HOME/certificates
+
+$ mkdir -p ${CERTDIR} ${HOME}/acme.sh/acme.sh --install-cert -d ${LE_API} -d *.${LE_WILDCARD} --cert-file ${CERTDIR}/cert.pem --key-file ${CERTDIR}/key.pem --fullchain-file ${CERTDIR}/fullchain.pem --ca-file ${CERTDIR}/ca.cer</code></pre>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_installing_certificates_for_router"><a class="anchor" href="#_installing_certificates_for_router"></a><a class="link" href="#_installing_certificates_for_router">5.2.1. Installing certificates for Router</a></h4>
+<div class="ulist">
+<ul>
+<li>
+<p>You need to create a secret for this. Execute the following command:</p>
+</li>
+</ul>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-bash hljs" data-lang="bash">$ oc create secret tls router-certs --cert=${CERTDIR}/fullchain.pem --key=${CERTDIR}/key.pem -n openshift-ingress</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>After completing the previous steps, you need to update the Custom Resource:</p>
+</li>
+</ul>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-bash hljs" data-lang="bash">$ oc patch ingresscontroller default -n openshift-ingress-operator --type=merge --patch='{"spec": 	{ "defaultCertificate": { "name": "router-certs" }}}'</code></pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_creating_a_machineset2_for_ceph_infrastructure"><a class="anchor" href="#_creating_a_machineset2_for_ceph_infrastructure"></a><a class="link" href="#_creating_a_machineset2_for_ceph_infrastructure">6. Creating a MachineSet<sup class="footnote">[<a id="_footnoteref_2" class="footnote" href="#_footnotedef_2" title="View footnote.">2</a>]</sup> for Ceph Infrastructure</a></h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>To deploy the Platform, you need to create a MachineSet for the <a href="https://ceph.io/en/">Ceph</a> data storage system. To do this, use the <code>machine-set-ceph.yaml</code> configuration file and modify the cluster name accordingly.</p>
+</div>
+<details>
+<summary class="title"><em>Example machine-set-ceph.yaml configuration file</em></summary>
+<div class="content">
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-yaml hljs" data-lang="yaml">kind: MachineSet
+metadata:
+  name: mdtuddm-b86zw-ceph
+  namespace: openshift-machine-api
+  labels:
+    machine.openshift.io/cluster-api-cluster: mdtuddm-b86zw
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      machine.openshift.io/cluster-api-cluster: mdtuddm-b86zw
+      machine.openshift.io/cluster-api-machineset: mdtuddm-b86zw-ceph
+  template:
+    metadata:
+      labels:
+        machine.openshift.io/cluster-api-cluster: mdtuddm-b86zw
+        machine.openshift.io/cluster-api-machine-role: worker
+        machine.openshift.io/cluster-api-machine-type: worker
+        machine.openshift.io/cluster-api-machineset: mdtuddm-b86zw-ceph
+    spec:
+      taints:
+        - effect: NoSchedule
+          key: node.ocs.openshift.io/storage
+          value: 'true'
+      metadata:
+        labels:
+          cluster.ocs.openshift.io/openshift-storage: ''
+      providerSpec:
+        value:
+          numCoresPerSocket: 1
+          diskGiB: 120
+          snapshot: ''
+          userDataSecret:
+            name: worker-user-data
+          memoryMiB: 73728
+          credentialsSecret:
+            name: vsphere-cloud-credentials
+          network:
+            devices:
+              - networkName: EPAM_OKD_Vlan9_EPG
+          metadata:
+            creationTimestamp: null
+          numCPUs: 16
+          kind: VSphereMachineProviderSpec
+          workspace:
+            datacenter: HXDP-02
+            datastore: NCR_Data2
+            folder: /HXDP-02/vm/mdtuddm-b86zw
+            resourcePool: /HXDP-02/host/HX-02/Resources
+            server: vcsa.ncr.loc
+          template: mdtuddm-b86zw-rhcos
+          apiVersion: vsphereprovider.openshift.io/v1beta1</code></pre>
+</div>
+</div>
+</div>
+</details>
+<div class="paragraph">
+<p>After editing the file according to the cluster name, execute the command to create the necessary MachineSet and the corresponding number of nodes for deploying the Ceph data storage.</p>
+</div>
+<div class="admonitionblock tip">
+<table>
+<tr>
+<td class="icon">
+<i class="fa icon-tip" title="Tip"></i>
+</td>
+<td class="content">
+In our case, the cluster name is defined in the <em>.yaml</em> file as <code>mdtuddm-b86zw</code>.
+</td>
+</tr>
+</table>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_preparing_and_running_the_installer3_for_platform_deployment_on_the_target_okd_cluster"><a class="anchor" href="#_preparing_and_running_the_installer3_for_platform_deployment_on_the_target_okd_cluster"></a><a class="link" href="#_preparing_and_running_the_installer3_for_platform_deployment_on_the_target_okd_cluster">7. Preparing and running the Installer<sup class="footnote">[<a id="_footnoteref_3" class="footnote" href="#_footnotedef_3" title="View footnote.">3</a>]</sup> for Platform deployment on the target OKD cluster</a></h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>To run the Installer, you need to meet several conditions for preparing the workstation from which the Installer will be launched. Below is an example of such preparation on Ubuntu 20.04 LTS.</p>
+</div>
+<div class="sect2">
+<h3 id="_prerequisites"><a class="anchor" href="#_prerequisites"></a><a class="link" href="#_prerequisites">7.1. Prerequisites</a></h3>
+<div class="paragraph">
+<p>Install Docker from the official source: <a href="https://docs.docker.com/engine/install/" class="bare">https://docs.docker.com/engine/install/</a>.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_deploying_and_updating_the_platform"><a class="anchor" href="#_deploying_and_updating_the_platform"></a><a class="link" href="#_deploying_and_updating_the_platform">7.2. Deploying and updating the Platform</a></h3>
+<div class="sect3">
+<h4 id="_deploying_the_platform_from_scratch"><a class="anchor" href="#_deploying_the_platform_from_scratch"></a><a class="link" href="#_deploying_the_platform_from_scratch">7.2.1. Deploying the Platform from scratch</a></h4>
+<div class="sect4">
+<h5 id="_prerequisites_2"><a class="anchor" href="#_prerequisites_2"></a><a class="link" href="#_prerequisites_2">7.2.1.1. Prerequisites</a></h5>
+<div class="admonitionblock note">
+<table>
+<tr>
+<td class="icon">
+<i class="fa icon-note" title="Note"></i>
+</td>
+<td class="content">
+Ensure that the required packages are installed: <code>docker</code>, <code>wget</code>, <code>unzip</code>.
+</td>
+</tr>
+</table>
+</div>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>Download the necessary version of the installer.</p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-shellscript hljs" data-lang="shellscript">сd /tmp
+wget -O mdtu-ddm-platform-&lt;version&gt;.zip https://nexus-public-mdtu-ddm-edp-cicd.apps.cicd2.mdtu-ddm.projects.epam.com/nexus/repository/edp-maven-releases/ua/gov/mdtu/ddm/infrastructure/mdtu-ddm-platform/&lt;version&gt;/mdtu-ddm-platform-&lt;version&gt;.zip</code></pre>
+</div>
+</div>
+</li>
+<li>
+<p>Unpack the archive in the home directory.</p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-shellscript hljs" data-lang="shellscript">unzip /tmp/mdtu-ddm-platform-&lt;version&gt;.zip -d /home/&lt;user&gt;/workdir/installer-&lt;version&gt;</code></pre>
+</div>
+</div>
+</li>
+<li>
+<p>Move the <em>kubeconfig</em> file after cluster installation:</p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-shellscript hljs" data-lang="shellscript">cd /home/&lt;user&gt;/workdir/installer-&lt;version&gt;
+cp /path/to/kubeconfig ./</code></pre>
+</div>
+</div>
+</li>
+<li>
+<p>Move the <em>certificates</em> folder for DSO:</p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-shellscript hljs" data-lang="shellscript">cp /path/to/folder/certificates ./</code></pre>
+</div>
+</div>
+</li>
+</ol>
+</div>
+</div>
+<div class="sect4">
+<h5 id="_adding_a_separate_configuration_file_for_deployment_in_the_vsphere_environment"><a class="anchor" href="#_adding_a_separate_configuration_file_for_deployment_in_the_vsphere_environment"></a><a class="link" href="#_adding_a_separate_configuration_file_for_deployment_in_the_vsphere_environment">7.2.1.2. Adding a separate configuration file for deployment in the vSphere environment</a></h5>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>Edit <em>exports.list</em> for vSphere.</p>
+<div class="paragraph">
+<p>All values should be taken after the cluster installation. Also, ensure that you have up-to-date values for <code>idgovuaClientId</code> and <code>idgovuaClientSecret</code>.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-shellscript hljs" data-lang="shellscript">vi exports.list
+
+### vSphere Credentials ###
+export VSPHERE_SERVER=""
+export VSPHERE_USER=""
+export VSPHERE_PASSWORD=""
+export VSPHERE_CLUSTER=""
+export VSPHERE_DATASTORE=""
+export VSPHERE_DATACENTER=""
+export VSPHERE_NETWORK=""
+export VSPHERE_NETWORK_GATEWAY=""
+export VSPHERE_RESOURCE_POOL="" #якщо не використовується, ставимо "/"
+export VSPHERE_FOLDER=""
+
+### Minio and Vault IPs ###
+export VSPHERE_VAULT_INSTANCE_IP=""
+export VSPHERE_MINIO_INSTANCE_IP=""
+
+### id.gov.ua ###
+export idgovuaClientId=""
+export idgovuaClientSecret=""</code></pre>
+</div>
+</div>
+</li>
+<li>
+<p>Edit <em>install.sh</em>, specifically after <code>source ./functions.sh</code>, add <code>source ./exports.list</code>.</p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-shellscript hljs" data-lang="shellscript">vi install.sh</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>It should look like this:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-shellscript hljs" data-lang="shellscript">#!/usr/bin/env bash
+set -e
+#Include function file
+source ./functions.sh
+source ./exports.list</code></pre>
+</div>
+</div>
+</li>
+</ol>
+</div>
+</div>
+<div class="sect4">
+<h5 id="_deploying_the_installer"><a class="anchor" href="#_deploying_the_installer"></a><a class="link" href="#_deploying_the_installer">7.2.1.3. Deploying the Installer</a></h5>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>Execute the following commands:</p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-shellscript hljs" data-lang="shellscript">IMAGE_CHECKSUM=$(sudo docker load -i control-plane-installer.img | sed -r "s#.*sha256:(.*)#\\1#" | tr -d '\n');
+echo $IMAGE_CHECKSUM
+sudo docker tag ${IMAGE_CHECKSUM} control-plane-installer:&lt;version&gt;;</code></pre>
+</div>
+</div>
+</li>
+<li>
+<p>Deploy a new version of the Platform with images from scratch:</p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-shellscript hljs" data-lang="shellscript">sudo docker run --rm --name control-plane-installer-&lt;version&gt; --user root:$(id -g) --net host -v $(pwd):/tmp/installer --env KUBECONFIG=/tmp/installer/kubeconfig --env idgovuaClientId=mock --env idgovuaClientSecret=mock --env CUSTOM_INGRESS_CIDRS="['0.0.0.0/0', '85.223.209.0/24']" --env deploymentMode=development --entrypoint "/bin/bash" control-plane-installer:&lt;version&gt; -c "./install.sh -i"</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>where <code>deploymentMode</code> can be either <code>development</code> or <code>production</code>.</p>
+</li>
+</ul>
+</div>
+</li>
+</ol>
+</div>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_updating_the_platform"><a class="anchor" href="#_updating_the_platform"></a><a class="link" href="#_updating_the_platform">7.2.2. Updating the Platform</a></h4>
+<div class="sect4">
+<h5 id="_prerequisites_3"><a class="anchor" href="#_prerequisites_3"></a><a class="link" href="#_prerequisites_3">7.2.2.1. Prerequisites</a></h5>
+<div class="admonitionblock note">
+<table>
+<tr>
+<td class="icon">
+<i class="fa icon-note" title="Note"></i>
+</td>
+<td class="content">
+Ensure that the required packages are installed: <code>docker</code>, <code>wget</code>, <code>unzip</code>.
+</td>
+</tr>
+</table>
+</div>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>Download the necessary version of the installer.</p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-shellscript hljs" data-lang="shellscript">сd /tmp
+wget -O mdtu-ddm-platform-&lt;version&gt;.zip https://nexus-public-mdtu-ddm-edp-cicd.apps.cicd2.mdtu-ddm.projects.epam.com/nexus/repository/edp-maven-releases/ua/gov/mdtu/ddm/infrastructure/mdtu-ddm-platform/&lt;version&gt;/mdtu-ddm-platform-&lt;version&gt;.zip</code></pre>
+</div>
+</div>
+</li>
+<li>
+<p>Unpack the archive in the home directory.</p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-shellscript hljs" data-lang="shellscript">unzip /tmp/mdtu-ddm-platform-&lt;version&gt;.zip -d /home/&lt;user&gt;/workdir/installer-&lt;version&gt;</code></pre>
+</div>
+</div>
+</li>
+<li>
+<p>Move the <em>kubeconfig</em> file after cluster installation:</p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-shellscript hljs" data-lang="shellscript">cd /home/&lt;user&gt;/workdir/installer-&lt;version&gt;
+cp /path/to/kubeconfig ./</code></pre>
+</div>
+</div>
+</li>
+<li>
+<p>Move the <em>certificates</em> folder for DSO.</p>
+<div class="admonitionblock note">
+<table>
+<tr>
+<td class="icon">
+<i class="fa icon-note" title="Note"></i>
+</td>
+<td class="content">
+If the certificates haven&#8217;t changed, you can skip this step.
+</td>
+</tr>
+</table>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-shellscript hljs" data-lang="shellscript">cp /path/to/folder/certificates ./</code></pre>
+</div>
+</div>
+</li>
+</ol>
+</div>
+</div>
+<div class="sect4">
+<h5 id="_adding_a_separate_configuration_file_for_deployment_in_the_vsphere_environment_2"><a class="anchor" href="#_adding_a_separate_configuration_file_for_deployment_in_the_vsphere_environment_2"></a><a class="link" href="#_adding_a_separate_configuration_file_for_deployment_in_the_vsphere_environment_2">7.2.2.2. Adding a separate configuration file for deployment in the vSphere environment</a></h5>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>Move <em>exports.list</em> from the previous release.</p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-shellscript hljs" data-lang="shellscript">cp /home/&lt;user&gt;/workdir/installer-&lt;previous_version&gt;/exports.list ./</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Also, ensure that you have up-to-date values for <code>idgovuaClientId</code> and <code>idgovuaClientSecret</code>.</p>
+</div>
+</li>
+<li>
+<p>Edit <em>install.sh</em>, specifically after <code>source ./functions.sh</code>, add <code>source ./exports.list</code>.</p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-shellscript hljs" data-lang="shellscript">vi install.sh</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>It should look as follows:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-shellscript hljs" data-lang="shellscript">#!/usr/bin/env bash
+set -e
+#Include function file
+source ./functions.sh
+source ./exports.list</code></pre>
+</div>
+</div>
+</li>
+</ol>
+</div>
+</div>
+<div class="sect4">
+<h5 id="_configuring_the_minio_component_during_cluster_update_in_the_vsphere_environment"><a class="anchor" href="#_configuring_the_minio_component_during_cluster_update_in_the_vsphere_environment"></a><a class="link" href="#_configuring_the_minio_component_during_cluster_update_in_the_vsphere_environment">7.2.2.3. Configuring the MinIO component during cluster update in the vSphere environment</a></h5>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>Transfer the tfstate for MinIO from the previous release for vSphere.</p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-shellscript hljs" data-lang="shellscript">cp /home/&lt;user&gt;/workdir/installer-&lt;version&gt;/terraform/minio/vsphere/terraform.tfstate ./terraform/minio/vsphere/</code></pre>
+</div>
+</div>
+</li>
+<li>
+<p>Transfer the tfstate for MinIO (Packer) from the previous release for vSphere.</p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-shellscript hljs" data-lang="shellscript">сp /home/&lt;user&gt;/workdir/installer-&lt;version&gt;/terraform/minio/vsphere/packer/terraform.tfstate ./terraform/minio/vsphere/packer/</code></pre>
+</div>
+</div>
+</li>
+</ol>
+</div>
+</div>
+<div class="sect4">
+<h5 id="_configuring_the_vault_component_during_cluster_update_in_the_vsphere_environment"><a class="anchor" href="#_configuring_the_vault_component_during_cluster_update_in_the_vsphere_environment"></a><a class="link" href="#_configuring_the_vault_component_during_cluster_update_in_the_vsphere_environment">7.2.2.4. Configuring the vault component during cluster update in the vSphere environment</a></h5>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>Transfer the tfstate for Vault from the previous release.</p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-shellscript hljs" data-lang="shellscript">cp /home/&lt;user&gt;/workdir/installer-&lt;version&gt;/terraform/vault/vsphere/terraform.tfstate ./terraform/vault/vsphere/</code></pre>
+</div>
+</div>
+</li>
+<li>
+<p>Transfer the tfstate for Vault (Packer) from the previous release.</p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-shellscript hljs" data-lang="shellscript">сp /home/&lt;user&gt;/workdir/installer-&lt;version&gt;/terraform/vault/vsphere/packer/terraform.tfstate ./terraform/vault/vsphere/packer/</code></pre>
+</div>
+</div>
+</li>
+</ol>
+</div>
+</div>
+<div class="sect4">
+<h5 id="_deploying_the_installer_2"><a class="anchor" href="#_deploying_the_installer_2"></a><a class="link" href="#_deploying_the_installer_2">7.2.2.5. Deploying the Installer</a></h5>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>Execute the following commands:</p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-shellscript hljs" data-lang="shellscript">IMAGE_CHECKSUM=$(sudo docker load -i control-plane-installer.img | sed -r "s#.*sha256:(.*)#\\1#" | tr -d '\n');
+echo $IMAGE_CHECKSUM
+sudo docker tag ${IMAGE_CHECKSUM} control-plane-installer:&lt;version&gt;;</code></pre>
+</div>
+</div>
+</li>
+<li>
+<p>Update the Platform version with update images.</p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-shellscript hljs" data-lang="shellscript">sudo docker run --rm --name control-plane-installer-&lt;version&gt; --user root:$(id -g) --net host -v $(pwd):/tmp/installer --env KUBECONFIG=/tmp/installer/kubeconfig --env idgovuaClientId=mock --env idgovuaClientSecret=mock --env CUSTOM_INGRESS_CIDRS="['0.0.0.0/0', '85.223.209.0/24']" --env deploymentMode=development --entrypoint "/bin/bash" control-plane-installer:&lt;version&gt; -c "./install.sh -u"</code></pre>
+</div>
+</div>
+<div class="admonitionblock tip">
+<table>
+<tr>
+<td class="icon">
+<i class="fa icon-tip" title="Tip"></i>
+</td>
+<td class="content">
+Where <code>deploymentMode</code> can be either <code>development</code> or <code>production</code>, depending on the previous run.
+</td>
+</tr>
+</table>
+</div>
+</li>
+</ol>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_managing_platform_configuration"><a class="anchor" href="#_managing_platform_configuration"></a><a class="link" href="#_managing_platform_configuration">8. Managing Platform configuration</a></h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Cluster management follows the <a href="https://about.gitlab.com/topics/gitops/">GitOps</a> methodology. This means that any changes in the cluster configuration, cluster components, and Platform components are made through modifying the cluster configuration in the git branch of the corresponding component.</p>
+</div>
+<div class="paragraph">
+<p>Metadata for all components managed through the GitOps approach is stored in the <code>cluster-mgmt</code> component.</p>
+</div>
+<div class="paragraph">
+<p>Below is a list of components for which GitOps management is currently implemented:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><code>catalog-source</code></p>
+</li>
+<li>
+<p><code>monitoring</code></p>
+</li>
+<li>
+<p><code>storage</code></p>
+</li>
+<li>
+<p><code>logging</code></p>
+</li>
+<li>
+<p><code>service-mesh</code></p>
+</li>
+<li>
+<p><code>backup-management</code></p>
+</li>
+<li>
+<p><code>user-management</code></p>
+</li>
+<li>
+<p><code>control-plane-nexus</code></p>
+</li>
+<li>
+<p><code>external-integration-mocks</code></p>
+</li>
+<li>
+<p><code>cluster-kafka-operator</code></p>
+</li>
+<li>
+<p><code>smtp-server</code></p>
+</li>
+<li>
+<p><code>redis-operator</code></p>
+</li>
+<li>
+<p><code>postgres-operator</code></p>
+</li>
+</ul>
+</div>
+</div>
+</div>
+<div id="footnotes">
+<hr>
+<div class="footnote" id="_footnotedef_1">
+<a href="#_footnoteref_1">1</a>. <strong>OKD</strong> - is a Kubernetes distribution optimized for continuous application development and the deployment of multiple instances of isolated container environments (in our case, instances of a registry). For detailed information, please refer to the <a href="https://docs.okd.io/">official source</a>.
+</div>
+<div class="footnote" id="_footnotedef_2">
+<a href="#_footnoteref_2">2</a>. <strong>MachineSet resources</strong> are groups of machines. MachineSets are intended for machines as sets of replicas for Pods where containers are deployed. If you need more machines or, conversely, need to reduce their quantity, you can adjust the replica field at the MachineSet level to meet your computational needs. For detailed information on creating MachineSets, please refer to the <a href="https://docs.openshift.com/container-platform/4.6/machine_management/creating_machinesets/creating-machineset-vsphere.html">official source.</a>
+</div>
+<div class="footnote" id="_footnotedef_3">
+<a href="#_footnoteref_3">3</a>. <em>Installer</em>&#8201;&#8212;&#8201;is a set of commands or a script used for deploying the Platform
 </div>
 </div>
 </article>
