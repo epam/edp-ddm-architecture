@@ -1,0 +1,116 @@
+//= Збереження ролей користувачів до Keycloak (Save user roles)
+= Save user roles in Keycloak
+include::platform:ROOT:partial$templates/document-attributes/default-set-en.adoc[]
+
+include::platform:ROOT:partial$admonitions/language-en.adoc[]
+
+//CAUTION: Новіша версія цього інтеграційного розширення описана на сторінці розділі xref:#batch-creation-entities-v2[].
+CAUTION: The latest version of this integration extension is described at xref:#batch-creation-entities-v2[].
+
+//.Короткі відомості про делегат
+.Brief information about the delegate
+|===
+//|Назва | Пояснення
+|Name | Explanation
+
+//|Бізнес-назва
+|Business name
+|*Save user roles*
+
+//|Службова назва
+|Service name
+|*`${keycloakSaveUserRoleConnectorDelegate}`*
+
+//|Назва файлу у бібліотеці розширень
+|Filename in the extensions library
+|*_keycloakSaveUserRoleConnectorDelegate.json_*
+|===
+
+//== Загальний опис
+== General description
+
+//Загальне інтеграційне розширення-делегат надає можливість взаємодіяти із сервіс управління ідентифікацією та доступом *Keycloak* для зміни ролей користувача. Делегат налаштовується у сервісних задачах (*Service Task*) бізнес-процесу за допомогою шаблону *Save user roles*.
+The general integration extension delegate provides the capability to interact with the *Keycloak* identity and access management service to modify user roles. The delegate is configured within service tasks in the business process using the *Save user roles* template.
+
+//== Налаштування шаблону у бізнес-процесі
+== Configuring template in business process
+
+//. Створіть *Service Task*.
+. Create a *Service Task*.
+//. У полі *`Name`* вкажіть назву сервісної задачі.
+. In the *Name* field, specify the name of the service task.
+//. Застосуйте шаблон делегата *Save user roles* зі списку доступних у каталозі.
+. Apply the *Save user roles* delegate template from the available list in the catalog.
+//. У секції *Inputs > Roles* передайте ролі, які необхідно призначити користувачу. Наприклад, `officer`.
+. In the *Inputs > Roles* section, provide the roles that need to be assigned to the user. For example, `officer`.
++
+[NOTE]
+====
+//У нашому прикладі передається одна роль (`officer`) масивом (`List`).
+In our example, a single role (`officer`) is passed as an array (`List`).
+
+//Доступні типи змінних, через які можна передати ролі:
+Available variable types through which roles can be passed include:
+
+//* *`List`* -- список/масив;
+//* *`Map`* -- ключі-значення;
+//* *`Script`* -- скрипт;
+//* *`String or expression`* -- рядок або вираз.
+* *`List`* — a list/array.
+* *`Map`* — key-value pairs.
+* *`Script`* — a script.
+* *`String or expression`* — a string or expression.
+====
++
+//.Масив ролей, які необхідно призначити користувачу
+.An array of roles to assign to the user
++
+====
+[source,list]
+----
+['officer', 'manager1', 'manager2']
+----
+//* `officer` -- системна роль, яка призначається користувачу після реєстрації.
+//* `manager1` та `manager2` -- можуть бути регламентними ролями у реєстрі.
+* `officer` -- a system role assigned to the user after registration.
+* `manager1` and `manager2` -- can be roles in the registry regulations.
+====
+//. Вкажіть ім'я користувача (*`username`*) у системі Keycloak. Це можна зробити, наприклад, за допомогою juel-функції *`initiator()`*:
+. Specify the *`username`* in the Keycloak system. This can be done, for example, using the JUEL function *`initiator()`*:
++
+----
+${initiator().userName}
+----
++
+//. Оберіть реалм Keycloak, до якого відноситься користувач. Наприклад, *`officer`*, при реєстрації посадових осіб.
+. Select the Keycloak realm to which the user belongs. For example, *`officer`*, for registering Officer.
++
+//Доступні опції реалмів:
+Available realm options:
+//* *`CITIZEN`* -- реалм, в якому зберігаються отримувачі послуг та їх ролі.
+//* *`OFFICER`* -- реалм, в якому зберігаються посадові особи (надавачі послуг) та їх ролі.
+* *`CITIZEN`* — the realm where Citizens and their roles are stored.
+* *`OFFICER`* — the realm where Officers (service providers) and their roles are stored.
+//. Вкажіть тип ролей, які можуть бути змінені для користувача. Доступні опції:
+. Specify the type of roles that can be modified for the user. Available options:
+//* *`ALL ROLES`* -- усі поточні ролі будуть заміщені переліком ролей, вказаних у секції `Roles`.
+* *`ALL ROLES`* -- all current roles will be replaced by the list of roles specified in the Roles section.
+//* *`PLATFORM ROLES`* -- поточні системні ролі, призначені користувачу, будуть заміщені переліком ролей, вказаних у секції `Roles`. Поточні регламентні/реєстрові ролі залишаться без змін.
+* *`PLATFORM ROLES`* -- current system roles assigned to the user will be replaced by the list of roles specified in the Roles section. Current regulatory/registry roles will remain unchanged.
+//* *`REGISTRY ROLES`* -- у користувача будуть заміщені лише регламентні/реєстрові ролі.
+* *`REGISTRY ROLES`* -- only the regulatory/registry roles of the user will be replaced.
+
++
+[NOTE]
+====
+//* Якщо при налаштуванні делегата як input-параметри передати масив ролей, одна з яких -- системна, а дві інші - регламентні (_тут_ -- `officer` та `manager1` і `manager2`), то необхідно обрати опцію *`ALL ROLES`*.
+* If when configuring the delegate, you pass an array of roles as input parameters, one of which is a system role and the other two are regulatory (e.g., `officer`, `manager1`, and `manager2`), then you should choose the *`ALL ROLES`* option.
+
+//* Якщо при налаштуванні делегата передати системну роль (_тут_ -- *`officer`*), то необхідно обрати опцію *`PLATFORM ROLES`*.
+* If when configuring the delegate, you pass a system role (e.g., officer), then you should choose the *`PLATFORM ROLES`* option.
+
+//* Якщо при налаштуванні делегата передати регламентні ролі (_тут_ -- `manager1` і `manager2`), то необхідно обрати опцію *`REGISTRY ROLES`*.
+* If when configuring the delegate, you pass regulatory roles (e.g., `manager1` and `manager2`), then you should choose the *`REGISTRY ROLES`* option.
+====
+
+image:bp-modeling/bp/element-temp/service-task/save-user-roles/delegate-save-user-roles-1.png[]
