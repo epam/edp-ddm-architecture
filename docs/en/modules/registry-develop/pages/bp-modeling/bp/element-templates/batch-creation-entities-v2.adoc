@@ -1,0 +1,117 @@
+= Batch creation of entities in data factory v2
+include::platform:ROOT:partial$templates/document-attributes/default-set-en.adoc[]
+
+include::platform:ROOT:partial$admonitions/language-en.adoc[]
+
+.Delegate summary
+//.Короткі відомості про делегат
+|===
+|Name | Description
+//|Назва | Пояснення
+
+|Business name of the integration extension
+//|Бізнес-назва інтеграційного розширення
+|*Batch creation of entities in data factory v2*
+
+|Service name of the integration extension
+//|Службова назва інтеграційного розширення
+|*`${dataFactoryConnectorBatchCreateDelegateV2}`*
+
+|File name in the extensions library
+//|Назва файлу у бібліотеці розширень
+|*_dataFactoryConnectorBatchCreateDelegateV2.json_*
+|===
+
+General overview ::
+//Загальний опис ::
+//Загальне інтеграційне розширення-делегат надає можливість взаємодіяти з REST API реєстру та створювати сутності у базі даних масивом як *`LIST`* або *`CSV`* _транзакційно_ -- _тобто зберігаються або усі дані, або жодні_. Делегат налаштовується у сервісних задачах (*Service Task*) бізнес-процесу за допомогою шаблону *Batch creation of entities in data factory v2*.
+The general integration delegate extension allows to interact with the registry's REST API and create entities in the database as the *`LIST`* or *`CSV`* arrays _transactionally_, i.e. _either all data or none are stored_. A delegate is configured in *Service Tasks* of a business process using the *Batch creation of entities in data factory v2* template.
++
+[NOTE]
+====
+//Максимальна кількість записів для завантаження до БД через цей делегат -- 50:
+The maximum number of records to upload into the database using this delegate is 50:
+
+//* 50 записів для *`LIST`*
+//* 50 записів для `*CSV*`.
+* 50 records for *`LIST`*
+* 50 records for `*CSV*`.
+====
++
+TIP: For more information about using the delegate in business processes, see xref:registry-develop:bp-modeling/bp/loading-data-from-csv.adoc[].
+//TIP: Детальніше про застосування делегата у бізнес-процесах ви можете переглянути на сторінці xref:registry-develop:bp-modeling/bp/loading-data-from-csv.adoc[].
+
+//Налаштування шаблону у бізнес-процесі: ::
+Configuring templates in workflows: ::
++
+NOTE: When configuring a delegate in the Camunda Modeler application, make sure that the *_resources > element-templates_* folder with the application contains the *_dataFactoryConnectorBatchCreateDelegateV2.json_* file.
+//NOTE: При налаштуванні делегата у додатку Camunda Modeler, переконайтеся, що папка із застосунком *_resources > element-templates_* містить файл *_dataFactoryConnectorBatchCreateDelegateV2.json_*.
+
+. Open *Service Task*, press kbd:[*Open Catalog*] and select the template from the list, then press kbd:[*Apply*].
+//. Відкрийте *Service Task*, натисніть kbd:[*Open Catalog*] та оберіть шаблон зі списку, після чого натисніть kbd:[*Apply*].
++
+image:registry-develop:bp-modeling/bp/loading_data_from_csv/loading_data_from_csv-05.png[]
+
+. In the `Name` field, enter the task name.
+//. У полі `Name` вкажіть назву задачі.
+. In the `Resource` field, enter the resource, the name of the endpoint for the table where the data will be stored. For example, `diplomas`.
+//. У полі `Resource` вкажіть ресурс, назву ендпоінту для таблиці, куди зберігатимуться дані. Наприклад, `diplomas`.
+. In the `Upload type` field, select the data download format from the list: `*CSV*`, or `*LIST*`.
+//. У полі `Upload type` оберіть формат завантаження даних зі списку -- `*CSV*`, або `*LIST*`.
++
+[NOTE]
+====
+//Для обох типів, `*CSV*` та `*LIST*`, конфігурація конектора є однаковою. Відрізнятиметься лише `${payload}`, який зазвичай формується у попередній скрипт-задачі процесу та передається до сервісної задачі як змінна `${payload}`.
+For both types, `*CSV*` and `*LIST*`, the connector configuration is the same. Only `${payload}` is different, which is usually formed during the previous script task of the process and passed to the service task as the `${payload}` variable.
+
+//* Якщо необхідно завантажити дані масивом у *CSV*-форматі, то `payload` може формуватися у скрипті наступним чином:
+* If you want to load data as an array in the *CSV* format, then `payload` can be generated in the script as follows:
++
+//.Приклад формування payload (CSV)
+.Example of payload generation (CSV)
+[source,groovy]
+----
+set_transient_variable('payload', submission('signCsvFileActivity').formData.prop('csvFile').elements().first())
+----
+
+//Тобто отримуємо список елементів `csvFile` із форми (`formData`) за допомогою JUEL-функції `submission()`, формуємо об'єкт `payload` й надалі використовуємо як змінну при налаштуванні делегата. СSV-дані на форму можна завантажити за допомогою компонента *`Content`* (_детальніше про моделювання форм -- за xref:registry-develop:bp-modeling/bp/loading-data-from-csv.adoc#save-data-csv-content[посиланням]_).
+That means that we get a list of the `csvFile` elements from the form (`formData`) using the `submission()` JUEL function; we form the `payload` object and then use it as a variable when configuring the delegate. You can upload the CSV data to the form using the *`Content`* component (_follow this xref:registry-develop:bp-modeling/bp/loading-data-from-csv.adoc#save-data-csv-content[link] to learn more about forms modeling_).
+
+//* Якщо необхідно завантажити дані масивом як *`LIST`*, то `payload` може формуватися у скрипті наступним чином:
+* If you want to upload the data as an array in the *`LIST`* format, then `payload` can be generated in the script as follows:
++
+.Example of an array generation (LIST)
+//.Приклад формування масиву даних (LIST)
+[source,groovy]
+----
+var data=
+'''
+[
+   {
+      "data":"test data",
+      "description":"some description"
+   },
+   {
+      "data2":"test data2",
+      "description2":"some description2"
+   }
+]
+'''
+
+execution.setVariable("jsonArray", S(data))
+----
+
+We create the *`data`* string that contains a JSON array with two objects. Each object contains the key-value pairs -- data that is taken from the UI form. We write the result to the *`jsonArray`* variable, which we then use when configuring the delegate. You can upload the data as an array to the form using the `*Edit Grid*` component (_follow this xref:bp-modeling/forms/components/edit-grid/edit-grid.adoc#save-data-array-edit-grid[link] to learn more about forms modeling_).
+//Створюємо рядок *`data`*, який містить JSON-масив із двома об'єктами. Кожен об'єкт містить пари ключ-значення -- дані, які беруться з UI-форми. Результат записуємо до змінної *`jsonArray`*, яку потім використовуємо при налаштуванні делегата. дані на форму можна завантажити як масив за допомогою компонента `*Edit Grid*` (_детальніше про моделювання форм -- за xref:bp-modeling/forms/components/edit-grid/edit-grid.adoc#save-data-array-edit-grid[посиланням]_).
+
+====
+. In the `Payload` field, enter the data to be created; this data is passed in the body of the request. For example, `${payload}`.
+//. У полі `Payload` введіть дані для створення, що передаються як тіло запита. Наприклад, `${payload}`.
+. In the `X-Access-Token source` field, enter the user access token to the system used for the current operation. For example, `${completer('signCsvFileActivity').accessToken}`.
+//. У полі `X-Access-Token source` вкажіть токен доступу користувача до системи, під яким виконується операція. Наприклад, `${completer('signCsvFileActivity').accessToken}`.
+. In the `X-Digital-Signature source` field, enter the source of the digital signature. For example, `${sign_submission('signCsvFileActivity').signatureDocumentId}`.
+//. У полі `X-Digital-Signature source` вкажіть джерело цифрового підпису. Наприклад, `${sign_submission('signCsvFileActivity').signatureDocumentId}`.
+. In the `Result variable` field, enter any name for the output parameter (_default name is_ `response`).
+//. У полі `Result variable` вкажіть будь-яке ім'я для вихідного параметра (_за замовчуванням_ -- `response`).
++
+image:registry-develop:bp-modeling/bp/loading_data_from_csv/loading_data_from_csv-04.png[]
