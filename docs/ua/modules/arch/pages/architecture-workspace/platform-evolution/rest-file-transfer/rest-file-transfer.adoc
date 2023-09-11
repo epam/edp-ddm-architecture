@@ -19,7 +19,8 @@ NOTE: Work In Progress
 == Загальні принципи та положення
 
 * Поведінка і контракт існуючих критеріїв пошуку не змінюється. 
-* Зберігається зворотна сумісність конфігурації критеріїв пошуку.    
+* Зберігається зворотна сумісність конфігурації критеріїв пошуку.
+* Отримання файлів відбувається окремим запитом.
 
 == Функціональні сценарії
 
@@ -49,58 +50,96 @@ image::architecture-workspace/platform-evolution/rest-file-transfer/file-transfe
 
 == Варіанти рішення
 
-=== Повернення контенту як додаткового атрибуту типу _type_file_ в Base64
+=== Повернення інформації про файли які міститься в сутності
 
-При формуванні відповіді додавати контент в структуру type_file новим атрибутом.
+При запиті сутностей, що містять тип файл або масив файлів при відсутності заголовків з інформацією про бізнес-процес повертається структура з ідентифікатором файлу з кошика _file-ceph-bucket_. При цьому не відбувається копіювання файлів.
 
-.Приклад
-[source, yaml]
+.Приклад сутності
+[source, xml]
 ----
-"someFile": [
+ <createTable tableName="user" ext:historyFlag="true">
+            <column name="user_id" type="UUID" defaultValueComputed="uuid_generate_v4()">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="pk_koatuu_id"/>
+            </column>
+            <column name="name" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="photo" type="file">
+                <constraints nullable="false"/>
+            </column>
+            <column name="documents" type="file[]">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+----
+
+.Приклад відповіді на запит пошуку сутності за ідентифікатором
+[source, json]
+----
+{
+  "userId": "uuid1-user",
+  "name": "Petro",
+  "photo": {
+    "id": "uuid2-photo",
+    "checksum": "..."
+  },
+  "documents": [
     {
-      "id": "string",
-      "checksum": "string"
-      "content": "V2h5IHdvdWxkIHlvdSBkZWNvZGUgaXQ/"
-    }
+        "id": "uuid3-passport",
+        "checksum": "..."
+    },
+    {
+        "id": "uuid4-driver-licence",
+        "checksum": "..."
+    }]
+}
+
 ----
 
-==== Переваги
-* Проста реалізація. Не потребує змін за межами підсистеми управління даними реєстру.
-* Безпека гарантується наявною авторизацією 
+=== Створення окремих точок інтеграції для отримання вмісту файлів.
 
-==== Недоліки
-* Значно збільшене навантаження та риск відмови сервісів API. SC можуть повертати багато рядків що містять файли. Додавання контенту для них зробить відповідь надмірно великою.
-* Не дає можливості клієнту API обирати завантажувати йому контент файлу чи ні
-
-=== Повернення контенту як presigned посилання на _file-ceph-bucket_
-
-Генерувати https://docs.aws.amazon.com/AmazonS3/latest/userguide/using-presigned-url.html[presigned URL] з обмеженим часом дії та повертати його.
-
-.Приклад
+.Шаблон формування посилання до вмісту файлу
+[source, httprequest]
 ----
-<host>:<port>/<bucket>/<key>?AWSAccessKeyId=<access_key>&Signature=<signature>&Expires=<expires>
+HTTP GET /api/data-factory/{entity}/{entityId}/{fieldName}/{fieldId}
 ----
 
-==== Переваги
-* Стандартний метод для файлів що зберігаються в S3 сумісному сховищі.
-* Достатні гарантії безпеки. Посилання діє обмежений час і щоб отримати посилання користувач має пройти авторизацію (включно з RBAC) на доступ до даних реєстру що містять посилання на файл.
+.Посилання для прикладу
+[source, httprequest]
+----
+HTTP GET /api/data-factory/user/uuid1-user/photo/uuid2-photo
+----
 
-==== Недоліки
-* Необхідно відкривати CEPH S3 REST API для зовнішніх систем.
-* Нетривіальна взаємодія через ШБО. Пускати S3 REST через ШБО? Генерувати якийсь SOAP? Віддавати файли повз ШБО?
+.Посилання для прикладу
+[source, httprequest]
+----
+GET /api/data-factory/user/uuid1-user/documents/uuid3-passport
+GET /api/data-factory/user/uuid1-user/documents/uuid4-driver-licence
+----
 
-=== Повернення контенту як посилання на новий rest/soap endpoint
+Дане посилання підтримує запити двох типів контенту  _application/json_ і при такому запиті повертає структуру _JSON_, вміст файлу закодований у _Base64_ в якості значення поля _content_ з мета інформацією про файл у _checksum_ та _fileName_
 
-Створювати REST ендпоинт для отримання контенту файлу за ідентифікатором та повертати цей ідентифікатор у відповіді на запити по SC чи сутностям що мають файли.
+[source, httprequest]
+----
+GET /api/data-factory/user/uuid1-user/documents/uuid3-passport
+Content-Type: application/json
+-
+{
+    "contetn": "passport in Base64",
+    "checksum": "..."
+    "fileName": "petro_passport.pdf"
+}
+----
 
-Тут головне питання що може бути таким ідентифікатором файлу.
+Запити між _soap-api_ та _rest-api_ для файлів відбуваються саме таким чином, а трансформація об'єкта для передачі по _SOAP_Trembita_ відбувається безпосередньо на _soap-api_
 
-Якщо це ceph id  - неможливо провести авторизацію так як вона налаштована тільки для сутностей в БД
+Якщо в запиті не зазначено, що в якості відповіді очікується _application/json_, то типи визначаються динамічно в залежності від типу файлу.
+Додатково проставляються заголовки _Content-Disposition_ із занченням _attachment_ та вказанням атрибуту _filename_ взятого з метаданих про файл.
+Такі посилання можна буде формувати в бізнес-процесах, та публікувати на користувацьких формах, для завантаження файлів безпосередньо з форм.
 
-Якщо це id запису в БД + назва колонки (типу `GET /licenses/{id}/licenseFileContent`) - можна провести авторизацію, але як виявилося це не може бути ідентифікатором. По перше не всі SC повертають id і якщо його нема у view то ми не можемо його отримати і в registry-rest-api. По друге - ми дозволяємо і більш того маємо в референтних прикладах можливість створювати масив файлів. Таким чином в одному запису в БД в одній колонці можуть бути декілька файлів.
-
-== Корисні посилання
-
-https://github.com/nordic-institute/X-Road/issues/209#issuecomment-538424890[x-road(Трембіта) - рекомендації з передачі фалів через ШБО]
-
-https://github.com/vrk-kpa/xroad-fileservice[x-road(Трембіта) - приклад сервісу що передає фали через ШБО]
+[source, httprequest]
+----
+GET /api/data-factory/user/uuid1-user/documents/uuid3-passport
+Content-Type: application/pdf
+Content-Disposition: attachment; filename="petro_passport.pdf"
+----
