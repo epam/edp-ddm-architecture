@@ -3287,6 +3287,9 @@ Work In Progress
 <li>
 <p>Зберігається зворотна сумісність конфігурації критеріїв пошуку.</p>
 </li>
+<li>
+<p>Отримання файлів відбувається окремим запитом.</p>
+</li>
 </ul>
 </div>
 </div>
@@ -3363,111 +3366,103 @@ Work In Progress
 <h2 id="_варіанти_рішення"><a class="anchor" href="#_варіанти_рішення"></a>Варіанти рішення</h2>
 <div class="sectionbody">
 <div class="sect2">
-<h3 id="_повернення_контенту_як_додаткового_атрибуту_типу_type_file_в_base64"><a class="anchor" href="#_повернення_контенту_як_додаткового_атрибуту_типу_type_file_в_base64"></a>Повернення контенту як додаткового атрибуту типу <em>type_file</em> в Base64</h3>
+<h3 id="_повернення_інформації_про_файли_які_міститься_в_сутності"><a class="anchor" href="#_повернення_інформації_про_файли_які_міститься_в_сутності"></a>Повернення інформації про файли які міститься в сутності</h3>
 <div class="paragraph">
-<p>При формуванні відповіді додавати контент в структуру type_file новим атрибутом.</p>
+<p>При запиті сутностей, що містять тип файл або масив файлів при відсутності заголовків з інформацією про бізнес-процес повертається структура з ідентифікатором файлу з кошика <em>file-ceph-bucket</em>. При цьому не відбувається копіювання файлів.</p>
 </div>
 <div class="listingblock">
-<div class="title">Приклад</div>
+<div class="title">Приклад сутності</div>
 <div class="content">
-<pre class="highlightjs highlight"><code class="language-yaml hljs" data-lang="yaml">"someFile": [
+<pre class="highlightjs highlight"><code class="language-xml hljs" data-lang="xml"> &lt;createTable tableName="user" ext:historyFlag="true"&gt;
+            &lt;column name="user_id" type="UUID" defaultValueComputed="uuid_generate_v4()"&gt;
+                &lt;constraints nullable="false" primaryKey="true" primaryKeyName="pk_koatuu_id"/&gt;
+            &lt;/column&gt;
+            &lt;column name="name" type="TEXT"&gt;
+                &lt;constraints nullable="false"/&gt;
+            &lt;/column&gt;
+            &lt;column name="photo" type="file"&gt;
+                &lt;constraints nullable="false"/&gt;
+            &lt;/column&gt;
+            &lt;column name="documents" type="file[]"&gt;
+                &lt;constraints nullable="false"/&gt;
+            &lt;/column&gt;
+        &lt;/createTable&gt;</code></pre>
+</div>
+</div>
+<div class="listingblock">
+<div class="title">Приклад відповіді на запит пошуку сутності за ідентифікатором</div>
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-json hljs" data-lang="json">{
+  "userId": "uuid1-user",
+  "name": "Petro",
+  "photo": {
+    "id": "uuid2-photo",
+    "checksum": "..."
+  },
+  "documents": [
     {
-      "id": "string",
-      "checksum": "string"
-      "content": "V2h5IHdvdWxkIHlvdSBkZWNvZGUgaXQ/"
-    }</code></pre>
-</div>
-</div>
-<div class="sect3">
-<h4 id="_переваги"><a class="anchor" href="#_переваги"></a>Переваги</h4>
-<div class="ulist">
-<ul>
-<li>
-<p>Проста реалізація. Не потребує змін за межами підсистеми управління даними реєстру.</p>
-</li>
-<li>
-<p>Безпека гарантується наявною авторизацією</p>
-</li>
-</ul>
-</div>
-</div>
-<div class="sect3">
-<h4 id="_недоліки"><a class="anchor" href="#_недоліки"></a>Недоліки</h4>
-<div class="ulist">
-<ul>
-<li>
-<p>Значно збільшене навантаження та риск відмови сервісів API. SC можуть повертати багато рядків що містять файли. Додавання контенту для них зробить відповідь надмірно великою.</p>
-</li>
-<li>
-<p>Не дає можливості клієнту API обирати завантажувати йому контент файлу чи ні</p>
-</li>
-</ul>
+        "id": "uuid3-passport",
+        "checksum": "..."
+    },
+    {
+        "id": "uuid4-driver-licence",
+        "checksum": "..."
+    }]
+}</code></pre>
 </div>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_повернення_контенту_як_presigned_посилання_на_file_ceph_bucket"><a class="anchor" href="#_повернення_контенту_як_presigned_посилання_на_file_ceph_bucket"></a>Повернення контенту як presigned посилання на <em>file-ceph-bucket</em></h3>
-<div class="paragraph">
-<p>Генерувати <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/using-presigned-url.html">presigned URL</a> з обмеженим часом дії та повертати його.</p>
+<h3 id="_створення_окремих_точок_інтеграції_для_отримання_вмісту_файлів"><a class="anchor" href="#_створення_окремих_точок_інтеграції_для_отримання_вмісту_файлів"></a>Створення окремих точок інтеграції для отримання вмісту файлів.</h3>
+<div class="listingblock">
+<div class="title">Шаблон формування посилання до вмісту файлу</div>
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-httprequest hljs" data-lang="httprequest">HTTP GET /api/data-factory/{entity}/{entityId}/{fieldName}/{fieldId}</code></pre>
+</div>
 </div>
 <div class="listingblock">
-<div class="title">Приклад</div>
+<div class="title">Посилання для прикладу</div>
 <div class="content">
-<pre>&lt;host&gt;:&lt;port&gt;/&lt;bucket&gt;/&lt;key&gt;?AWSAccessKeyId=&lt;access_key&gt;&amp;Signature=&lt;signature&gt;&amp;Expires=&lt;expires&gt;</pre>
+<pre class="highlightjs highlight"><code class="language-httprequest hljs" data-lang="httprequest">HTTP GET /api/data-factory/user/uuid1-user/photo/uuid2-photo</code></pre>
 </div>
 </div>
-<div class="sect3">
-<h4 id="_переваги_2"><a class="anchor" href="#_переваги_2"></a>Переваги</h4>
-<div class="ulist">
-<ul>
-<li>
-<p>Стандартний метод для файлів що зберігаються в S3 сумісному сховищі.</p>
-</li>
-<li>
-<p>Достатні гарантії безпеки. Посилання діє обмежений час і щоб отримати посилання користувач має пройти авторизацію (включно з RBAC) на доступ до даних реєстру що містять посилання на файл.</p>
-</li>
-</ul>
+<div class="listingblock">
+<div class="title">Посилання для прикладу</div>
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-httprequest hljs" data-lang="httprequest">GET /api/data-factory/user/uuid1-user/documents/uuid3-passport
+GET /api/data-factory/user/uuid1-user/documents/uuid4-driver-licence</code></pre>
 </div>
-</div>
-<div class="sect3">
-<h4 id="_недоліки_2"><a class="anchor" href="#_недоліки_2"></a>Недоліки</h4>
-<div class="ulist">
-<ul>
-<li>
-<p>Необхідно відкривати CEPH S3 REST API для зовнішніх систем.</p>
-</li>
-<li>
-<p>Нетривіальна взаємодія через ШБО. Пускати S3 REST через ШБО? Генерувати якийсь SOAP? Віддавати файли повз ШБО?</p>
-</li>
-</ul>
-</div>
-</div>
-</div>
-<div class="sect2">
-<h3 id="_повернення_контенту_як_посилання_на_новий_restsoap_endpoint"><a class="anchor" href="#_повернення_контенту_як_посилання_на_новий_restsoap_endpoint"></a>Повернення контенту як посилання на новий rest/soap endpoint</h3>
-<div class="paragraph">
-<p>Створювати REST ендпоинт для отримання контенту файлу за ідентифікатором та повертати цей ідентифікатор у відповіді на запити по SC чи сутностям що мають файли.</p>
 </div>
 <div class="paragraph">
-<p>Тут головне питання що може бути таким ідентифікатором файлу.</p>
+<p>Дане посилання підтримує запити двох типів контенту  <em>application/json</em> і при такому запиті повертає структуру <em>JSON</em>, вміст файлу закодований у <em>Base64</em> в якості значення поля <em>content</em> з мета інформацією про файл у <em>checksum</em> та <em>fileName</em></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-httprequest hljs" data-lang="httprequest">GET /api/data-factory/user/uuid1-user/documents/uuid3-passport
+Content-Type: application/json
+-
+{
+    "contetn": "passport in Base64",
+    "checksum": "..."
+    "fileName": "petro_passport.pdf"
+}</code></pre>
+</div>
 </div>
 <div class="paragraph">
-<p>Якщо це ceph id  - неможливо провести авторизацію так як вона налаштована тільки для сутностей в БД</p>
+<p>Запити між <em>soap-api</em> та <em>rest-api</em> для файлів відбуваються саме таким чином, а трансформація об&#8217;єкта для передачі по <em>SOAP_Trembita</em> відбувається безпосередньо на <em>soap-api</em></p>
 </div>
 <div class="paragraph">
-<p>Якщо це id запису в БД + назва колонки (типу <code>GET /licenses/{id}/licenseFileContent</code>) - можна провести авторизацію, але як виявилося це не може бути ідентифікатором. По перше не всі SC повертають id і якщо його нема у view то ми не можемо його отримати і в registry-rest-api. По друге - ми дозволяємо і більш того маємо в референтних прикладах можливість створювати масив файлів. Таким чином в одному запису в БД в одній колонці можуть бути декілька файлів.</p>
+<p>Якщо в запиті не зазначено, що в якості відповіді очікується <em>application/json</em>, то типи визначаються динамічно в залежності від типу файлу.
+Додатково проставляються заголовки <em>Content-Disposition</em> із занченням <em>attachment</em> та вказанням атрибуту <em>filename</em> взятого з метаданих про файл.
+Такі посилання можна буде формувати в бізнес-процесах, та публікувати на користувацьких формах, для завантаження файлів безпосередньо з форм.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-httprequest hljs" data-lang="httprequest">GET /api/data-factory/user/uuid1-user/documents/uuid3-passport
+Content-Type: application/pdf
+Content-Disposition: attachment; filename="petro_passport.pdf"</code></pre>
 </div>
 </div>
-</div>
-</div>
-<div class="sect1">
-<h2 id="_корисні_посилання"><a class="anchor" href="#_корисні_посилання"></a>Корисні посилання</h2>
-<div class="sectionbody">
-<div class="paragraph">
-<p><a href="https://github.com/nordic-institute/X-Road/issues/209#issuecomment-538424890">x-road(Трембіта) - рекомендації з передачі фалів через ШБО</a></p>
-</div>
-<div class="paragraph">
-<p><a href="https://github.com/vrk-kpa/xroad-fileservice">x-road(Трембіта) - приклад сервісу що передає фали через ШБО</a></p>
 </div>
 </div>
 </div>
