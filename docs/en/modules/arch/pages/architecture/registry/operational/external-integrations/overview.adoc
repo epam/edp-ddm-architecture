@@ -1,0 +1,237 @@
+= External integrations subsystem
+include::ROOT:partial$templates/document-attributes/arch-set-en.adoc[]
+
+include::ROOT:partial$admonitions/language-en.adoc[]
+
+== Overview
+
+//Підсистема надає стандартизовані інтерфейси для взаємодії на базі _REST_ та _SOAP_ протоколів з ціллю забезпечення інтероперабельності реєстру з зовнішніми системами.
+The subsystem provides standardized interaction interfaces based on _REST_ and _SOAP_ protocols, ensuring registry interoperability with external systems.
+
+//_Підсистема зовнішніх інтеграцій_ підтримує наступні опції налаштування інформаційного обміну:
+_External integrations management subsystem_ supports the following options for the information exchange configuration:
+
+//* Через використання шини безпечного обміну "_Трембіта_" у якості захищеного транспорту.
+* Via _Secure Exchange Gateway_, as a protected transport.
+//* Через налаштування прямих інтеграцій з зовнішніми системами, які не є учасниками інформаційного обміну _СЕВДЕІР "Трембіта"_.
+* Via the configuration of direct integrations with external systems that aren't part of _Secure Exchange Gateway_ information exchange.
+//* Через налаштування прямих інтеграцій з реєстрами, які розгорнуті на одному екземплярі _Платформи Реєстрів_.
+* Via the configuration of direct integrations with the Registries deployed on one _Registry Platform_ instance.
+//* Через публічно-доступний _API_.
+* Via public _API_.
+
+//Зовнішніми системами для інтеграції можуть виступати як сторонні інформаційні системи, так і реєстри, розгорнуті на окремих екземплярах _Платформи Реєстрів_.
+Existing information systems, and Registries deployed on separate _Registry Platform_ instances can act as external systems for integration.
+
+//== Функції підсистеми
+== Subsystem functions
+
+//* Надання API для ініціювання автоматичних та напівавтоматичних бізнес-процесів реєстру сторонніми системами.
+* Providing API for the initiation of automated and semi-automated Business Processes in a Registry by external systems.
+//* Надання API пошукових операцій по даним реєстру стороннім системам.
+* Providing search API for Registry data to external systems.
+//* Маршрутизація запитів при міжреєстровій взаємодії на одному екземплярі _Платформи Реєстрів_.
+* Request routing during cross-Registry interaction on one _Registry Platform_ instance.
+
+//== Технічний дизайн підсистеми
+== Subsystem technical design
+
+//.Логічна діаграма підсистеми
+.Subsystem logical diagram
+image::arch:architecture/registry/operational/external-integrations/cross-registry-integration-context.drawio.svg[]
+
+//.Розгорнуті сценарії послідовності даних
+.Expanded scenarios of data sequence
+image::arch:architecture/registry/operational/external-integrations/cross-registry-integration-flow.drawio.svg[]
+
+//=== Міжреєстрова взаємодія
+=== Cross-Registry interaction
+
+//В рамках цієї підсистеми виникає взаємодія між двома реєстрами розгорнутими на одній платформі, що створює звʼязок реєстр джерело даних та реєстр споживач даних.
+The subsystem involves interaction between two Registries deployed on the same Platform, which creates a connection between the data source Registry and the data consumer Registry.
+
+//_Реєстр джерело даних_ - реєстр тримач даних який дозволяє операції читання цих даних за допомогою окремих пошукових запитів.
+_Data source Registry_ - is the data holder Registry that allows read operations with its data by using dedicated search requests.
+
+//_Реєстр споживач даних_ - реєстр якому було надано доступ до пошукових запитів _реєстру джерела даних_
+_Data consumer Registry_ - is the Registry that was give access to search requests to _data source Registry_.
+
+//Ключовий аспект який дозволяє таку взаємодію це створення сервісного користувача в реєстрі джерелі для реєстру споживача даних та використання його при здійсненні запитів.
+The main aspect that enables this interaction is the creation of a service user in the data source Registry for the data consumer Registry, and using it for requests.
+//Отримання облікових даних сервісного користувача та операція автентифікації здійснюється _API-шлюзом міжреєстрової взаємодії_ розгорнутим в реєстрі споживачі даних.
+The receiving of service user account data, and authentication are performed by _cross-Registry interaction API-gateway_ deployed in the data consumer Registry.
+//Сам _API-шлюз міжреєстрової взаємодії_ доступний для автентифікованих користувачів реєстру споживача даних.
+This _cross-Registry interaction API-gateway_ is available for authenticated users of the data consumer Registry.
+
+//Окремим випадком є надання доступу до даних сторонній системі споживачу даних. В даному сценарії створюється окремий сервісний користувач, а його облікові дані передаються адміністраторам системи. В такому разі автентифікація і обмін токенів має відбуватись безпосередньо сторонньою системою.
+As a separate case, there is the provision of data access to external system data consumer. In this scenario a dedicated service user is created, and the account data is transferred by system administrator. This way, the authentication and token exchange must be performed by the external system.
+
+//== Аудит та журналювання подій
+== Event audit and logging
+
+//Події маніпуляцій з даними реєстру через сторонні системи фіксуються у журналі аудиту з повним контекстом.
+Events of Registry manipulation via external systems are recorded in the audit log with full context.
+//Окрім подій xref:arch:architecture/registry/operational/registry-management/overview.adoc#_аудит_та_журналювання_подій[підсистеми управління даними реєстру] фіксуються додатково наступні події:
+Along with xref:arch:architecture/registry/operational/registry-management/overview.adoc[Registry data management subsystem] events, the following events are recorded:
+
+
+////
+|===
+|Тип події|Службова назва|Опис
+
+|_USER_EVENT_|SOAP request. Method: ${methodName}|Запит на читання даних з фіксацією конкретного методу.
+|_USER_EVENT_|EXCEPTION|Помилка отримання даних.
+|===
+////
+
+|===
+|Event type|Service name|Description
+
+|_USER_EVENT_|SOAP request. Method: ${methodName}|Data read request with method recording.
+|_USER_EVENT_|EXCEPTION|Data reception error.
+|===
+
+
+[NOTE]
+--
+//Детальніше з дизайном _Підсистеми журналювання подій аудиту_ можна ознайомитися
+//xref:arch:architecture/registry/operational/audit/overview.adoc[за посиланням].
+You can finkd more information on the _Registry audit events logging subsystem_ xref:arch:architecture/registry/operational/audit/overview.adoc[here].
+--
+
+//== Складові підсистеми
+== Subsystem components
+
+
+////
+|===
+|Назва компоненти|Представлення в реєстрі|Походження|Репозиторій|Призначення
+
+|_API-шлюз для викликів БП зовнішніми системами_
+|`bp-webservice-gateway`
+|origin
+| https://github.com/epam/edp-ddm-bp-webservice-gateway[github:/epam/edp-ddm-bp-webservice-gateway]
+|Шлюз надання доступу для виклику бізнес процесів сторонніми системами через _ШБО Трембіта_ та напряму через _Підсистему управління
+зовнішнім трафіком_.
+
+|_API-шлюз міжреєстрової взаємодії_
+|`platform-gateway-deployment`
+|origin
+|https://github.com/epam/edp-ddm-platform-gateway[github:/epam/edp-ddm-platform-gateway]
+|Сервіс виконання запитів до реєстрів платформи від імені сервісних користувачів.
+
+|_API-шлюз для читання даних реєстру зовнішніми системами_
+|`registry-soap-api-deployment`
+|origin
+a|https://github.com/epam/edp-ddm-soap-api-core-base-image[github:/epam/edp-ddm-soap-api-core-base-image]
+
+https://github.com/epam/edp-ddm-service-generation-utility[github:/epam/edp-ddm-service-generation-utility]
+|Компонент який надає _SOAP_ інтерфейс для читання даних через _ШБО Трембіта_.
+
+|_Сервіс синхронного управління даними реєстру для міжреєстрової взаємодії_
+|`registry-rest-api-ext`
+|origin
+.2+a|https://github.com/epam/edp-ddm-rest-api-core-base-image[github:/epam/edp-ddm-rest-api-core-base-image]
+
+https://github.com/epam/edp-ddm-service-generation-utility[github:/epam/edp-ddm-service-generation-utility]
+|Виділений екземпляр сервісу синхронного управління даними для надання доступу до читання даних іншим реєстрам на платформі.
+
+|_Сервіс синхронного управління даними реєстру для публічного доступу до даних_
+|`registry-rest-api-public`
+|origin
+|Виділений екземпляр сервісу синхронного управління даними для надання доступу до читання даних з публічним доступом
+
+|===
+////
+
+|===
+|Component name|Representation in the Registry|Source|Repository|Function
+
+|_API-gateway for calling Business Processes by external systems_
+|`bp-webservice-gateway`
+|origin
+| https://github.com/epam/edp-ddm-bp-webservice-gateway[github:/epam/edp-ddm-bp-webservice-gateway]
+|API-gateway for the provision of access to Business Process calls by external systems via _Secure Exchange Gateway_, or directrly via _external traffic management subsystem_.
+
+|_Cross-Registry interaction API-gateway_
+|`platform-gateway-deployment`
+|origin
+|https://github.com/epam/edp-ddm-platform-gateway[github:/epam/edp-ddm-platform-gateway]
+|The service for request execution from service users to Platform Registries.
+
+|_API-gateway for Registry data reading by external systems_
+|`registry-soap-api-deployment`
+|origin
+a|https://github.com/epam/edp-ddm-soap-api-core-base-image[github:/epam/edp-ddm-soap-api-core-base-image]
+
+https://github.com/epam/edp-ddm-service-generation-utility[github:/epam/edp-ddm-service-generation-utility]
+|The component that provides _SOAP_ interface for data reading via the _Secure Exchange Gateway_.
+
+|_Synchronous Registry data management service for cross-Registry interaction_
+|`registry-rest-api-ext`
+|origin
+.2+a|https://github.com/epam/edp-ddm-rest-api-core-base-image[github:/epam/edp-ddm-rest-api-core-base-image]
+
+https://github.com/epam/edp-ddm-service-generation-utility[github:/epam/edp-ddm-service-generation-utility]
+|A dedicated instance of the synchronous Registry data management service for the provision of data read access to other Registries on the Platform.
+
+|_Synchronous Registry data management service for public data access_
+|`registry-rest-api-public`
+|origin
+|A dedicated instance of the synchronous Registry data management service for the provision of public data read access .
+
+|===
+
+
+
+//== Технологічний стек
+== Technology stack
+
+//При проектуванні та розробці підсистеми, були використані наступні технології:
+During the design and development of the subsystem, the following technologies were used:
+
+* xref:arch:architecture/platform-technologies.adoc#java[Java]
+* xref:arch:architecture/platform-technologies.adoc#spring[Spring]
+* xref:arch:architecture/platform-technologies.adoc#spring-boot[Spring Boot]
+* xref:arch:architecture/platform-technologies.adoc#spring-cloud[Spring Cloud]
+
+//== Атрибути якості підсистеми
+== Subsystem quality attributes
+
+=== _Interoperability_
+
+//_Підсистема зовнішніх інтеграцій_ підтримує сумісність з іншими системами за рахунок надання стандартизованих інтерфейсів для взаємодії з реєстром (_REST_, _SOAP_).
+The _External integrations management subsystem_ supports compatibility with other systems by providing standardized interfaces for Registry interaction (_REST_, _SOAP_).
+
+=== _Scalability_
+
+//_Підсистема зовнішніх інтеграцій_ підтримує як горизонтальне, так і вертикальне масштабування.
+The _External integrations management subsystem_ supports horizontal and vertical scaling.
+
+
+[TIP]
+--
+//Детальніше з масштабуванням підсистем можна ознайомитись у відповідних розділах:
+You can find more details on subsystems scaling in the corresponding sections:
+
+* xref:architecture/container-platform/container-platform.adoc[]
+--
+
+=== _Observability_
+
+//_Підсистема зовнішніх інтеграцій_ підтримує журналювання та збір метрик продуктивності для подальшого аналізу через веб-інтерфейси відповідних підсистем Платформи.
+_External integrations management subsystem_ supports logging and performance metrics gathering for further analysis via web-interfaces of the corresponding Platform subsystems.
+
+[TIP]
+--
+//Детальніше з дизайном підсистем можна ознайомитись у відповідних розділах:
+You can find more details on subsystems design in the corresponding sections:
+
+* xref:arch:architecture/platform/operational/logging/overview.adoc[]
+* xref:arch:architecture/platform/operational/monitoring/overview.adoc[]
+--
+
+=== _Security_
+
+//В _Підсистемі зовнішніх інтеграцій_ всі комунікації здійснюються з використанням асинхронного шифрування трафіку TLS. Всі запити до сервісів які безпосередньо здійснюють операції над даними реєстру вимагають автентифікацію. Запити між реєстрами в середині _Платформи_ здійснюються за внутрішніми іменами сервісів (внутрішня мережа).
+The _External integrations management subsystem_ uses TLS asynchronous traffic encryption for all communication. All requests to services that perform the operations on Registry data require authentication. Requests between Registries within the _Platform_ are performed by internal service names (internal network).
