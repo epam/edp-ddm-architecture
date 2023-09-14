@@ -100,8 +100,13 @@ image::architecture-workspace/platform-evolution/rest-file-transfer/file-transfe
 .Шаблон формування посилання до вмісту файлу
 [source, httprequest]
 ----
-HTTP GET /api/data-factory/{entity}/{entityId}/{fieldName}/{fieldId}
+HTTP GET /api/data-factory/files/{entity}/{entityId}/{fieldName}/{fieldId}
 ----
+
+Данна точка інтеграції наслідує всі правила застосування _RBAC_.
+
+Така точка інтеграції доступна в rest-api якщо в моделі даних є хоча б одне поле типу _file_ або _file[]_. +
+В сервісах _rest-api-ext_ та _rest-api-public_ правила _Istio_ налаштовані так, що доступ до цих посилань для користувачів з реалму _external_systems_ є тільки за умови якщо хоча б один _searchCondition_ що містить в собі тип _file_ або _file[]_ був виставлений через тег _<exposeSearchCondition/>_
 
 .Посилання для прикладу
 [source, httprequest]
@@ -109,7 +114,7 @@ HTTP GET /api/data-factory/{entity}/{entityId}/{fieldName}/{fieldId}
 HTTP GET /api/data-factory/user/uuid1-user/photo/uuid2-photo
 ----
 
-.Посилання для прикладу
+.Посилання для прикладу для доступу до конкретних документів в масиві
 [source, httprequest]
 ----
 GET /api/data-factory/user/uuid1-user/documents/uuid3-passport
@@ -118,11 +123,18 @@ GET /api/data-factory/user/uuid1-user/documents/uuid4-driver-licence
 
 Дане посилання підтримує запити двох типів контенту  _application/json_ і при такому запиті повертає структуру _JSON_, вміст файлу закодований у _Base64_ в якості значення поля _content_ з мета інформацією про файл у _checksum_ та _fileName_
 
+.Приклад запиту для отримання відповіді в JSON форматі
 [source, httprequest]
 ----
 GET /api/data-factory/user/uuid1-user/documents/uuid3-passport
-Content-Type: application/json
--
+Accept: application/json
+----
+
+[source, httprequest]
+----
+HTTP/1.1 200 OK
+Content-Type: text/html; charset=UTF-8
+
 {
     "contetn": "passport in Base64",
     "checksum": "..."
@@ -133,14 +145,23 @@ Content-Type: application/json
 Запити між _soap-api_ та _rest-api_ для файлів відбуваються саме таким чином, а трансформація об'єкта для передачі по _SOAP_Trembita_ відбувається безпосередньо на _soap-api_
 
 Якщо в запиті не зазначено, що в якості відповіді очікується _application/json_, то типи визначаються динамічно в залежності від типу файлу.
-Додатково проставляються заголовки _Content-Disposition_ із занченням _attachment_ та вказанням атрибуту _filename_ взятого з метаданих про файл.
+Додатково проставляються заголовки _Content-Disposition_ із значенням _attachment_ та вказанням атрибуту _filename_ взятого з метаданих про файл.
 Такі посилання можна буде формувати в бізнес-процесах, та публікувати на користувацьких формах, для завантаження файлів безпосередньо з форм.
 
+
+.Приклад запиту для скачування файлу
 [source, httprequest]
 ----
 GET /api/data-factory/user/uuid1-user/documents/uuid3-passport
+----
+
+[source, httprequest]
+----
+HTTP/1.1 200 OK
 Content-Type: application/pdf
 Content-Disposition: attachment; filename="petro_passport.pdf"
+
+... (binary PDF data)
 ----
 
 == Високорівневий план розробки
