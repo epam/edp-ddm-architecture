@@ -1,0 +1,446 @@
+//== Генерація витягів з кабінету користувача
+== Generation of excerpts from User portals
+
+include::platform:ROOT:partial$templates/document-attributes/arch-set-en.adoc[]
+
+include::platform:ROOT:partial$admonitions/language-en.adoc[]
+
+//Для забезпечення вимог надання інформаційних послуг на базі платформи, реалізована підтримка двох підходів до моделювання бізнес-процесів в залежності від способу відображення даних через кабінет користувача:
+To fulfill the requirements of providing information services on the Platform, support for two approaches to modeling business processes has been implemented, depending on how data is displayed in the User portal:
+
+//- Бізнес-процес, результатом якого є відображення даних через UI-форму кабінету
+//- Бізнес-процес, результатом якого є зформований витяг, доступний для завантаження з кабінету та офлайн перегляду
+- Business process resulting in data display through a UI form in the portal
+- Business process resulting in a formatted excerpt, available for download from the portal and offline viewing
+
+//Данний технічний дизайн зфокусований на вимогах підтримки інформаційних послуг, результатом яких є генерація витягу з реєстру на рівні Low-code платформи.
+Current technical design focuses on the requirements for supporting information services, resulting in the generation of an excerpt from the registry at the Low-code Platform level.
+
+[NOTE]
+//Детальніше з дизайном підсистеми звітності можна ознайомитися xref:architecture/registry/operational/excerpts/excerpt.adoc[за посиланням].
+For more details about the Reporting subsystem design, please refer to the following xref:architecture/registry/operational/excerpts/excerpt.adoc[link].
+
+//== Базові принципи
+== Basic principles
+
+//- Витяги можуть бути згенеровані тільки в рамках надання інформаційних послуг через бізнес-процеси
+- Excerpts can only be generated within the scope of providing information services through business processes
+//- Доступ до інформаційної послуги генерації витягу контролюється на рівні БП та на рівні доступу до даних, які необхідно завантажити для формування витягу
+- Access to the information service for excerpt generation is controlled at both the business process level and the data access level required for excerpt generation
+//- Витяг має бути представлений окремим шаблоном на рівні регламенту реєстру та однозначно   ідентифікується _типом витягу_
+- An excerpt must be presented as a distinct template at the registry regulations level and is uniquely identified by the _excerpt type_
+//- В рамках одного бізнес-процесу може бути згенерований тільки один витяг з урахуванням прав доступу користувача, який ініціював БП до даних
+- Within a single business process, only one excerpt can be generated, taking into account the  access rights of the user who initiated the business process for the data
+//- Запит на формування витягу до "Підсистеми звітності" має бути підписаним ключем користувача або системним ключем
+- A request to the "Reporting subsystem"for excerpt generation must be signed by the user's key or a system key.
+//- Згенеровані витяги можуть бути завантажені лише користувачем, який замовив інформаційну послугу
+- Generated excerpts can only be downloaded by the user who ordered the information service
+//- Згенеровані витяги мають бути доступні для завантаження у визначений проміжок часу у початковому вигляді згідно прав доступу до даних на момент генерації
+- Generated excerpts must be available for download within a specified time frame in their original form according to data access rights at the time of generation
+//- На згенеровані витяги може бути накладено системний цифровий підпис в залежності від типу інформаційної послуги та даних, на базі яких формується витяг
+- System-level digital signatures may be applied to generated excerpts depending on the type of information service and the data upon which the excerpt is based
+//- Необхідність накладання системного цифрового підпису на витяг визначається адміністратором регламенту на рівні моделювання бізнес-процесу
+- The necessity of applying a system-level digital signature to the excerpt is determined by the regulations administrator at the business process modeling level
+//- Процес генерації витягу не має блокувати роботу користувача з кабінетом
+- The excerpt generation process must not obstruct the user's work with the portal
+//- Користувач кабінету має можливість отримати інформацію про статус генерації витягу на сторінці "Послуги у виконанні" та завантажити документ витягу зі сторінки "Замовлені послуги" у разі його готовності
+- Portal users have the ability to obtain information about the excerpt generation status on the "Services in progress" page and to download the excerpt document from the "Ordered services" page once it is ready.
+//- Підготовка даних для формування запиту на генерацію витягу моделюється на рівні БП за допомогою допоміжних Search Conditions функціональності платформи.
+- Data preparation for generating an excerpt request is modeled at the business process level using the auxiliary Search Conditions functionality of the Platform
+//- Рекомендовано мінімізувати об'єм даних, який завантажується на рівні БП для формування запиту на генерацію витягу
+- It is recommended to minimize the volume of data loaded at the business process level for generating the excerpt request
+
+//== Низькорівневий дизайн взаємодії
+== Low-level interaction design
+
+//На даній діаграмі зображено задіяні для реалізації вимог сервіси платформи, взаємодію між ними у розрізі напрямків та типів потоків даних. Додатково зображено важливі особливості, які необхідно прийняти до уваги в рамках реалізації та моделювання.
+This diagram depicts the Platform's engaged services for requirement implementation, their interaction in terms of directions and types of data flows. Additionally, important features that need to be considered within the scope of implementation and modeling are illustrated.
+
+image::architecture/registry/operational/excerpts/excerpt-generation.svg[]
+
+//=== Замовлення інформаційної послуги формування витягу
+===  Ordering an information service for excerpt generation
+
+//Інформаційна послуга формування витягу має бути змодельована у вигляді окремого бізнес-процесу з використанням наступних інструментів та можливостей моделювання:
+The information service for excerpt generation must be modeled as a distinct business process utilizing the following tools and modeling capabilities:
+
+//- <<Логічна модель бізнес-процесу формування витягу, Синхронний або асинхронний підхід до генерації витягу в рамках бізнес-процесу>>
+- <<Логічна модель бізнес-процесу формування витягу, Synchronous or asynchronous approach to generating an excerpt within the business process framework.>>
+//- <<Логічна модель бізнес-процесу формування витягу, Використання Call Activity елементу BPMN нотації для енкапсуляції логіки взаємодії з "API генерації витягів">>
+- <<Логічна модель бізнес-процесу формування витягу, Use of the Call Activity element in BPMN notation to encapsulate the interaction logic with the "Excerpt generation API">>
+//- <<Конфігурація типового розширення генерації витягів, Типове розширення для формування запиту на генерацію витягу>>
+- <<Конфігурація типового розширення генерації витягів, Standard extension for generating an excerpt request.>>
+//- <<Конфігурація типового розширення для отримання інформації про статус генерації витягів, Типове розширення для отримання інформації про статус генерації витягу>>
+- <<Конфігурація типового розширення для отримання інформації про статус генерації витягів, Standard extension for obtaining information about the excerpt generation status>>
+//- <<Конфігурація типового розширення отримання токена доступу системного користувача, Типове розширення отримання токена доступу системного користувача>>
+- <<Конфігурація типового розширення отримання токена доступу системного користувача, Standard extension for acquiring access token of the system user.>>
+//- Системні змінні екземпляру бізнес-процесу, які використовуються для відображення результату формування витягу та встановлення асоціації між екземпляром бізнес-процесу та згенерованим документом
+- System variables of the business process instance used to display the result of excerpt generation and establish an association between the business process instance and the generated document
+
+[plantuml, excerpt_generation, svg]
+----
+include::partial$architecture/registry/operational/excerpts/excerpt-generation.puml[]
+----
+
+//=== Логічна модель бізнес-процесу формування витягу
+=== Logical model of the excerpt generation business process
+
+//На даній діаграмі зображено логічну модель бізнес-процесу формування запиту на генерацію витягу. Підтримується два підходи до організації UX з боку користувача:
+This diagram presents the logical model of the business process for creating a request to generate an excerpt. There are two user-centric UX organizational approaches supported:
+
+//- _Синхронний підхід до моделювання бізнес-процесу генерації витягів_ (*sync*), при якому користувач після ініціювання через кабінет має дочекатися завершення процесу генерації після чого система автоматично перенаправять його на сторінку "Замовлені послуги", на якій є можливість завантажити витяг, згенерований в рамках початкового бізнес-процесу. Цей підхід пришвидшує користувачу доступ до завантаження, але, в той же час, може бути використаний для витягів, час генерації яких не погіршує UX у розрізі часу очікування
+- _Synchronous approach to modeling the excerpt generation business process_ (*sync*), where the user, upon initiation through the portal, awaits the completion of the generation process. Subsequently, the system automatically redirects them to the "Ordered services" page, where the generated excerpt from the initial business process can be downloaded. This approach expedites user access to downloads but may also be utilized for excerpts whose generation time doesn't worsen the UX concerning waiting time.
+
+//- _Асинхронний підхід до моделювання бізнес-процесу генерації витягів_ (*beforeAsync*), при якому користувач після ініціювання запиту на формування витягу перенаправляється на сторінку "Послуг у виконанні", де він може відслідковувати стан генерації витягу або продовжувати роботу з кабінетом. У цьому разі, користувачу потрібно буде самостійно перейти на сторінку "Замовлені послуги" по завершенню бізнес-процесу генерації витягу
+- _Asynchronous approach to modeling the excerpt generation business process_ (*beforeAsync*), where the user, upon initiating a request for excerpt generation, is redirected to the "Services in progress" page. Here, they can monitor the status of excerpt generation or continue working with the portal. In this scenario, the user will need to manually navigate to the "Ordered services" page upon completion of the excerpt generation business process.
+
+image::architecture/registry/operational/excerpts/excerpt-generation-bpmn.png[]
+
+//=== Задіяні системні змінні бізнес-процесу
+=== Involved business process system variables
+
+//З ціллю підтримки асоціації між ініційованим єкземпляром бізнес-процесу та згенерованим документом витягу, використовуються змінні процесу, які зберігаються в історичну таблицю операційного сховища бізнес-процесів.
+In order to establish an association between the initiated instance of the business process and the generated excerpt document, process variables are used. They are stored in the historical table of the business processes operational repository.
+|===
+//|Назва системної змінної|Опис
+|System variable name|Description
+
+|SYS_VAR_PROCESS_EXCERPT_ID
+//|Змінна використовується для збереження ідентифікатору витягу, у разі, якщо витяг є результатом надання послуги / виконання бізнес-процесу
+|This variable is used to retain the identifier of the excerpt in case the excerpt is a result of service provision or business process execution.
+
+|SYS_VAR_PROCESS_COMPLETION_RESULT
+//|Опис результату виконання, який вказується адміністратором регламенту при моделюванні бізнес-процесу
+|Description of the execution result specified by the regulations administrator  during business process modeling.
+
+|===
+
+//=== Отримання згенерованих витягів через кабінет
+=== Retrieving generated excerpts through the portal
+
+//Результатом бізнес-процесу надання інформаційної послуги є згенерований документ, який збережено у розподіленому об'єктному сховищу Ceph. Додатково, ідентифікатор документу витягу буде збережено у вигляді змінної екземпляру бізнес-процесу _SYS_VAR_PROCESS_EXCERPT_ID_. Наявність цієї змінної і є ознакою інформаційної послуги, результатом якої є витяг на відміну від інших. Для замовлених послуг з цією ознакою стає доступна окрема опція "Завантажити витяг" у кабінеті користувача, яка дозволяє завантажити цілоьвий документ через "API отримання витягів".
+The outcome of the informational service business process is a generated document, preserved within the distributed object storage Ceph. Furthermore, the identifier of the excerpt document will be saved as an instance variable, _SYS_VAR_PROCESS_EXCERPT_ID_. The presence of this variable signifies an informational service where the result is an excerpt, as opposed to others. For ordered services with this characteristic, a separate "Download excerpt" option becomes available in the user portal. This option permits the download of the complete document via the "Excerpt retrieval API".
+
+[NOTE]
+//За надання доступу до завантаження згенерованих документів за унікальним ідентифікатором та контроль доступу відповідає окремий бекенд-сервіс "API отримання витягів". З описом контракту API "Підсистеми звітності" можна ознайомитися xref:architecture/registry/operational/excerpts/excerpt.adoc[за посиланням]
+Access to the retrieval of generated documents via a unique identifier and access control is managed by a distinct backend service, the "Excerpt retrieval API". For the API contract details of the "Reporting subsystem," refer to the xref:architecture/registry/operational/excerpts/excerpt.adoc[link].
+
+[plantuml, excerpt_retrieval, svg]
+----
+include::partial$architecture/registry/operational/excerpts/excerpt-retrieval.puml[]
+----
+
+//.Коди помилок, які повертаються при невдалій спробі обробки запиту на отримання витягу
+.Error codes returned upon unsuccessful attempt to process excerpt retrieval request
+|===
+//|Код|Опис
+|Code|Description
+
+a|[green]#200#
+//|OK з поверненням згенерованого файлу витягу
+|OK with return of the generated excerpt file
+a|[red]#400#
+//|Некоректно сформований запит (неправильний формат даних)
+|Malformed request (incorrect data format)
+a|[yellow]#401#
+//| Помилка автентифікації (відсутній токен доступу)
+|Authentication error (missing access token)
+a|[yellow]#404#
+//|Не знайдено файл витягу за ідентифікатором
+|Excerpt file not found by identifier
+a|[red]#500#
+//|Серверна помилка обробки запиту
+|Server-side request processing error
+|===
+
+//=== Авторизація доступу користувачів до згенерованих витягів
+=== Authorization of user access to generated excerpts
+
+//Доступ до згенерованого витягу повинен мати лише користувач, який автентифікований у системі та який ініціював замовлення інформаційної послуги формування витягу через бізнес-процес згідно прав доступу, налаштованим на рівні регламенту.
+Access to the generated excerpt should only be granted to users who are authenticated in the system and who initiated the order for the informational service of excerpt generation through the business process, in accordance with the access rights configured at the regulation level.
+
+//== Типові розширення моделювання
+== Typical modeling extensions
+
+//=== Конфігурація типового розширення генерації витягів
+=== Configuration of the standard excerpt generation extension
+
+//З ціллю надання можливостей моделювання інформаційних послуг, результатом яких є згенерований документ витягу, використовується окреме типове розширення _Java Delegate_ у каталозі моделювання, за допомогою якого можно визначити всі необхідні параметри запиту на генерацію.
+To facilitate the modeling of informational services that yield generated excerpt documents, a dedicated standard _Java Delegate_ extension is employed within the modeling catalog. This extension allows the definition of all necessary parameters for the generation request.
+
+//До виклику автоматично додаються системні змінні контексту виклику у якості HTTP заголовків:
+System context variables are automatically added to the call context as HTTP headers:
+
+//- *X-Source-System* - Назви підсистеми, яка виконує запит ("*Low-code Platform*")
+- *X-Source-System* - Names the subsystem executing the request (*Low-code Platform*)
+//- *X-Source-Application* - Назва компоненти підсистеми, яка ініціює запит ("*business-process-management*")
+- *X-Source-Application* - Names the subsystem component initiating the request (*business-process-management*)
+//- *X-Source-Business-Process* - Назва бізнес-процесу, яку визначив адміністратор регламенту при моделюванні (_Process Name_)
+- *X-Source-Business-Process* - Specifies the name of the business process defined by the regulation administrator during modeling (_Process Name_)
+//- *X-Source-Business-Process-Definition-Id* - Унікальний ідентифікатор бізнес-процесу, яку визначив адміністратор регламенту при моделюванні (_Process Id_)
+- *X-Source-Business-Process-Definition-Id* - The unique identifier of the business process as defined by the regulation administrator during modeling (_Process Id_)
+//- *X-Source-Business-Process-Instance-Id* - Автоматично згенерований унікальний ідентифікатор екземпляру бізнес-процесу, в рамках якого виконується запит (Генерується автоматично, максимальна довжина 64 символи)
+- *X-Source-Business-Process-Instance-Id* - Automatically generated unique identifier of the instance of the business process in which the request is executed (Automatically generated, maximum length of 64 characters)
+//- *X-Source-Business-Activity* - Назва сервісної задачі, яку визначив адміністратор регламенту при моделюванні (_Name_)
+- *X-Source-Business-Activity* - Names the service task as defined by the regulation administrator during modeling (_Name_)
+//- *X-Source-Business-Activity-Definition-Id* - Унікальний ідентифікатор сервісної задачі, яку визначив адміністратор регламенту при моделюванні (_Id_)
+- *X-Source-Business-Activity-Definition-Id* - The unique identifier of the service task as defined by the regulations administrator during modeling (_Id_)
+//- *X-Source-Business-Activity-Instance-Id* - Автоматично згенерований унікальний ідентифікатор екземпляру сервісної задачі бізнес-процесу, в рамках якої виконується запит.
+//Максимальна довжина 64 символи)
+- *X-Source-Business-Activity-Instance-Id* - Automatically generated unique identifier of the instance of the business process's service task in which the request is executed (Maximum length of 64 characters)
+
+//Додатково, розширення додає наступні автоматично згенеровані HTTP заголовоки:
+Additionally, the extension adds the following automatically generated HTTP headers:
+
+//- _X-Digital-Signature-Derived_ - Посилання на Ceph документ в якому зберігається системний підпис, який автоматично накладено на тіло запиту
+- _X-Digital-Signature-Derived_ - A link to the Ceph document where the system signature is stored, which is automatically applied to the request body
+
+|===
+//|Конфігураційний параметр|Вхідний/Вихідний|Службова назва|Тип|Частина запиту|Опис|
+|Configuration parameter|Input/Output|Service name|Type|Request component|Description
+
+//|Токен доступу
+|Access Token
+|in
+|X-Access-Token
+|string
+//|HTTP заголовок
+||HTTP header
+//|Токен користувача, під яким виконується запит на генерацію витягу
+|User token used for the excerpt generation request
+
+//|Оригінальний документ запиту з підписом
+|Original signed request document
+|in
+|X-Digital-Signature
+|string
+//|HTTP заголовок
+|HTTP header
+//|Посилання на Ceph документ, в якому збережено оригінальний запит користувача та підпис
+|Link to the Ceph document containing the user's original request and signature
+
+//|Тип звіту
+|Report type
+|in
+|excerptType
+|string
+//|Частина JSON документу тіла запиту
+|JSON request body part
+//|Тип витягу, який необхідно згенерувати в рамках бізнес-процесу
+|Type of the excerpt to be generated within the business process
+
+//|Накладання системного підпису
+|System signature overlay
+|in
+|requiresSystemSignature
+|boolean
+//|Частина JSON документу тіла запиту
+|JSON request body part
+//|Необхідність накладання системного підпису для заданого типу звіту
+|Indicates the necessity of overlaying a system signature for the specified report type
+
+//|Вхідні дані для генерації
+|Generation input data
+|in
+|excerptInputData
+|map
+//|Частина JSON документу тіла запиту
+|JSON request body part
+//|Набір данних, які необхідно передати у якості параметрів для генерації витягу
+|Set of data to be transmitted as parameters for excerpt generation
+
+//|Ідентифікатор витягу
+|Excerpt identifier
+|out
+|excerptIdentifier
+|string
+//|Тіло відповіді
+|Response body
+//|Унікальний ідентифікатор витягу, за яким можно отримати доступ на завантаження згенерованого документу
+|Unique identifier of the excerpt, which allows access to download the generated document
+|===
+
+//.Приклад тіла запиту на генерацію витягу (системний підпис накладається на все тіло запиту та передається у вигляді посилання на Ceph документ у HTTP заголовку _X-Digital-Signature-Derived_)
+.Example request body for excerpt generation (system signature applied to the entire request body and conveyed as a link to the Ceph document in the HTTP header _X-Digital-Signature-Derived_):
+[source,json]
+----
+{
+  "excerptType": "subject-laboratories-accreditation-excerpt",
+  "requiresSystemSignature": true,
+  "excerptInputData": {
+    "subjectId": "<UUID>"
+  }
+}
+----
+
+//.Приклад відповіді у разі успішного результату виконання запиту на генерацію витягу
+.Example response for successful excerpt generation request:
+[source,json]
+----
+{
+  "excerptIdentifier": "<UUID>"
+}
+----
+
+//.Коди помилок, які повертаються при невдалій спробі обробки запиту
+.Error codes returned upon unsuccessful attempt to process request:
+|===
+//|Код|Опис
+|Code|Description
+
+a|[green]#200#
+//|OK з поверненням ідентифікатора витягу, за яким можна отримати статус генерації
+|OK with the return of the excerpt identifier, which allows obtaining the generation status.
+a|[red]#400#
+//|Некоректно сформований запит (невідомий тип витягу, відсутність необхідних полей або неправильний формат переданих даних)
+|Malformed request (unknown excerpt type, missing required fields, or incorrect data format).
+a|[yellow]#401#
+//| Помилка автентифікації (відсутній токен доступу або цифровий підпис)
+|Authentication error (missing access token or digital signature).
+a|[yellow]#403#
+//| Недостатньо прав для виконання операції
+| Insufficient permissions to perform the operation.
+a|[red]#500#
+//|Серверна помилка обробки запиту
+|Server-side request processing error
+|===
+
+..=== Конфігурація типового розширення для отримання інформації про статус генерації витягів
+=== Configuration of the standard extension for retrieving excerpt generation status
+
+//З ціллю надання можливостей моніторингу статусу виконання запиту на генерацію витягу, використовується окреме типове розширення _Java Delegate_ у каталозі моделювання, за допомогою якого можно визначити всі необхідні параметри запиту та отримати актуальний статус формування документу.
+In order to provide monitoring capabilities for the execution status of an excerpt generation request, a dedicated standard Java Delegate extension is utilized within the modeling catalog. This extension allows for the definition of all necessary request parameters and obtaining the current document formation status.
+
+//Додатково, до виклику автоматично додаються системні змінні контексту виклику у якості заголовків:
+Additionally, system context variables are automatically added to the call context as headers:
+
+//- *X-Source-System* - Назви підсистеми, яка виконує запит ("*Low-code Platform*")
+- *X-Source-System* - Names the subsystem executing the request (*Low-code Platform*)
+//- *X-Source-Application* - Назва компоненти підсистеми, яка ініціює запит ("*business-process-management*")
+- *X-Source-Application* - Names the subsystem component initiating the request (*business-process-management*)
+//- *X-Source-Business-Process* - Назва бізнес-процесу, яку визначив адміністратор регламенту при моделюванні (_Process Name_)
+- *X-Source-Business-Process* - Specifies the name of the business process defined by the regulation administrator during modeling (_Process Name_)
+//- *X-Source-Business-Process-Definition-Id* - Унікальний ідентифікатор бізнес-процесу, яку визначив адміністратор регламенту при моделюванні (_Process Id_)
+- *X-Source-Business-Process-Definition-Id* - The unique identifier of the business process as defined by the regulation administrator during modeling (_Process Id_)
+//- *X-Source-Business-Process-Instance-Id* - Автоматично згенерований унікальний ідентифікатор екземпляру бізнес-процесу, в рамках якого виконується запит (Генерується автоматично, максимальна довжина 64 символи)
+- *X-Source-Business-Process-Instance-Id* - Automatically generated unique identifier of the instance of the business process in which the request is executed (Automatically generated, maximum length of 64 characters)
+//- *X-Source-Business-Activity* - Назва сервісної задачі, яку визначив адміністратор регламенту при моделюванні (_Name_)
+- *X-Source-Business-Activity* - Names the service task as defined by the regulation administrator during modeling (_Name_)
+//- *X-Source-Business-Activity-Definition-Id* - Унікальний ідентифікатор сервісної задачі, яку визначив адміністратор регламенту при моделюванні (_Id_)
+- *X-Source-Business-Activity-Definition-Id* - The unique identifier of the service task as defined by the regulations administrator during modeling (_Id_)
+//- *X-Source-Business-Activity-Instance-Id* - Автоматично згенерований унікальний ідентифікатор екземпляру сервісної задачі бізнес-процесу, в рамках якої виконується запит.
+//(Максимальна довжина 64 символи)
+- *X-Source-Business-Activity-Instance-Id* - Automatically generated unique identifier of the instance of the business process's service task in which the request is executed (Maximum length of 64 characters)
+
+|===
+//|Конфігураційний параметр|Вхідний/Вихідний|Службова назва|Тип|Частина запиту|Опис
+|Configuration parameter|Input/Output|Service name|Type|Request component|Description
+
+//|Токен доступу
+|Access token
+|in
+|X-Access-Token
+|string
+//|HTTP заголовок
+|HTTP header
+//|Токен системного користувача, який було отримано в рамках <<_конфігурація_типового_розширення_отримання_токена_доступу_системного_користувача, окремого єтапу БП>>
+|Token of the system user obtained within the framework of <<Configuration of the typical extension for obtaining a system user access token>>, separate stage of business process.
+
+//|Ідентифікатор витягу
+|Excerpt identifier
+|in
+|excerptIdentifier
+|string
+//|Параметр запиту
+|Request parameter
+//|Унікальний ідентифікатор документу витягу, за яким можно отримати інформацію про статус генерації
+|Unique identifier of the excerpt document, which can be used to retrieve information about the generation status
+
+//|Статус генерації витягу
+|Excerpt generation status
+|out
+|status
+|string
+//|Тіло відповіді
+|Response body
+//|Статус генерації документу витягу (IN_PROGRESS, COMPLETED, FAILED)
+|Status of excerpt document generation (IN_PROGRESS, COMPLETED, FAILED)
+//TODO: The below row does not display in the table. Why?
+//|Детальний опис помилки генерації витягу (опційно)
+|Detailed description of the excerpt generation error (optional)
+|out
+|statusDetails
+|string
+//|Техничний опис помилки у разі, якщо процес завершився з негативним результатом. Використовується для дослідження помилок моделювання
+|Technical description of the error in case the process has concluded with a negative outcome. This is used for investigating modeling errors.
+|===
+
+//.Приклад тіла запиту для отримання статусу генерації витягу за ключем
+.Example request body to retrieve the status of an excerpt generation using the key
+[source,json]
+----
+{
+  "excerptIdentifier": "<UUID>"
+}
+----
+
+//.Приклад відповіді для успішно згенерованого витягу
+.Example response for a successfully generated excerpt
+[source,json]
+----
+{
+  "status": "COMPLETED"
+}
+----
+
+//.Приклад відповіді для витягу, який не вдалося згенерувати успішно
+.Example response for an unsuccessfully generated excerpt
+[source,json]
+----
+{
+  "status": "FAILED",
+  "statusDetails": "Технічний опис помилки"
+}
+----
+
+//.Коди помилок, які повертаються при невдалій спробі обробки запиту
+.Error codes returned in case of unsuccessful request processing:
+|===
+//|Код|Опис
+|Code|Description
+
+a|[green]#200#
+//|OK з поверненням статусу у тілі відповіді
+|OK with status returned in the response body
+a|[red]#400#
+//|Некоректно сформований запит (неправильний формат даних)
+|Malformed request (invalid data format)
+a|[yellow]#401#
+//| Помилка автентифікації (відсутній токен доступу)
+|Authentication error (missing access token)
+a|[yellow]#404#
+//|Не знайдено запис трекінга статусу генерації витяга за ідентифікатором
+|Tracking record for excerpt generation status not found for the identifier
+a|[red]#500#
+//|Серверна помилка обробки запиту
+|Server error processing the request
+|===
+
+//=== Конфігурація типового розширення отримання токена доступу системного користувача
+=== Configuration of the typical extension for obtaining a system user access token
+
+//У ряді випадків існує необхідність взаємодії бізнес-процесу з внутрішніми сервісами платформи на рівні service-2-service, а контекст виклику не обов'язково потребує токен доступу користувача, який ініціював бізнес-процес або є виконавцем задач. У цьому разі платформа надає типове розширення для отримання токена доступу від імені системного користувача (сервіс-акаунта) з Keycloak, який дозволяє виконувати внутрішні системні запити / проходити авторизацію.
+In some cases, there is a need for business processes to interact with internal platform services at the service-2-service level, and the context of the call does not necessarily require the access token of the user who initiated the business process or is the task performer. In this scenario, the Platform provides a typical extension for obtaining an access token on behalf of a system user (service account) from Keycloak, enabling internal system requests or authorization.
+
+|===
+//|Конфігураційний параметр|Вхідний/Вихідний|Службова назва|Тип|Опис
+|Configuration parameter|Input/Output|Service name|Type|Description
+
+//|Токен доступу
+|Access token
+|out
+|systemUserAccessToken
+|string
+//|Токен системного користувача (сервіс-акаунта, створеного для _bpms_ сервісу)
+|System user token (service account created for the _bpms_ service)
+|===

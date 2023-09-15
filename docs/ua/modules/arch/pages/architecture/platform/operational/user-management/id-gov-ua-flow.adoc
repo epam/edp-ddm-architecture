@@ -1,0 +1,219 @@
+= Аутентифікація посадових осіб через портал `id.gov.ua`
+
+== Загальний опис
+
+Надання можливості використовувати портал (`id.gov.ua`) для аутентифікації в кабінеті посадової особи як альтернативу використання ІІТ-віджета. Основною перевагою використання `id.gov.ua` над вбудованим в сторінку кабінету посадової особи віджета - додатковий рівень аудиту і контролю над процесом аутентифікації з боку державних органів, що набувається за рахунок створення додаткового централізованого сервісу керування користувачами, який лежить поза межами платформи (`id.gov.ua`).
+
+== Ролі користувачів
+
+* Посадова особа
+* Технічний адміністратор реєстру
+
+== Загальні принципи та положення
+
+* Користувач посадової особи має існувати в реалмі посадових осіб відповідного реєстру
+* Наявність атрибутів (`drfo`, `edrpou`, `fullName` ) в ключі посадової особи є обовʼязковою
+* Значення атрибутів посадової особи в порталі `id.gov.ua` та атрибути користувача мають співпадати
+* У випадку недотримання правил створення користувача буде неможливо аутентифікуватись в кабінеті посадової особи (користувач буде перенаправлений на сторінку з помилкою та формою аутентифікації)
+* Збереження чутливої інформації відбувається до центрального сховища секретів
+* Налаштування методу аутентифікації посадових осіб реєстру доступне через інтерфейс адмін-консолі Платформи
+
+== Функціональні сценарії
+
+=== Аутентифікація посадової особи
+
+.Послідовність аутентифікації
+[plantuml, flow, svg]
+----
+@startuml
+autonumber
+actor "Посадова особа" as officer
+participant "Браузер" as browser
+participant "API менеджер" as api
+participant "Кабінет чиновника" as portal
+participant "Підсистема управління \nкористувачами та ролями" as key
+
+participant "Портал \n(id.gov.ua)" as idgov
+
+officer -> browser: адреса портала
+browser -> api: захищений ресурс
+api -> portal: перенаправлення\nна відповідний сервіс
+return стартова сторінка
+api --> browser
+browser --> officer: стартова сторінка
+
+officer -> browser: "Увійти в систему"
+browser -> key: запит на аутентифікацію
+
+return посилання на сторінку для аутентифікації
+browser -> idgov: перенаправлення на сторінку для аутентифікації
+note left: Передається clientId\n та redirectUrl
+return форма аутентифікації
+browser --> officer: логін форма id.gov.ua
+
+officer -> browser: файл ключ та пароль
+browser -> idgov: аутентифікація в id.gov.ua
+idgov -> browser: отримання токена обміну \n(authorization code)
+browser -> key: закінчення аутентифікації
+key -> idgov: запит на отримання токену\n(access token)
+note left:clientId та clientSecret\nє частиною запиту
+idgov --> key: результат аутентифікації\n(отримання access token)
+
+key -> idgov: отримання інформації \nпро користувача (/userInfo)
+note left:clientId та clientSecret\nє частиною запиту
+return данні користувача
+
+key -> key: пошук та валідація користувача за\nданими з id.gov.ua (аутентифікатор)
+key --> browser: аутентифікація успішна\nідентифікатор сесії та посилання на головну сторінку
+browser -> portal: головна
+portal -> key: перевірка токена
+return токен валідний
+portal --> browser
+browser --> officer
+@enduml
+----
+=== Конфігурація методу аутентифікації
+
+.Послідовність конфігурації
+[plantuml, configuration, svg]
+----
+@startuml
+actor "Технічний адміністратор\nреєстру" as admin
+participant "Інтерфейс адмін-консолі" as cp
+participant "Система контролю версій" as gerrit
+participant "Центральне\nсховище секретів" as registry
+admin -> cp: змінна аутентифікаційної\nпослідовності для\nкабінету посадової особи
+alt id.gov.ua
+cp -> registry: збереження\nідентифікатора клієнта\nта клієнтського секрета
+return успішно збережено
+end
+cp -> gerrit: зміна посилання\nдо ресурсу аутентифікації
+return запит створенно та інтегровано
+cp --> admin: метод аутентифікації змінено
+@enduml
+----
+
+Секрети зберігаються в _Центральному сховищі секретів_, за шляхом:
+[source]
+----
+registry-kv/registry/%НАЗВА_РЕЄСТРУ%/officer-id-gov-ua-client-info
+----
+з ключами `clientId`, `clientSecret` для збереження ідентифікатора клієнта та клієнтського секрету відповідно
+
+== Інтерфейси адміністратора
+
+=== Інтерфейс адмін-консолі
+
+.Екран конфігурації налаштувань аутентифікації через віджет
+image::architecture/platform/operational/user-management/id-gov-ua-control-plane-widget-config.png[]
+
+
+.Екран конфігурації налаштувань аутентифікації через id.gov.ua
+image::architecture/platform/operational/user-management/id-gov-ua-control-plane-config.png[]
+[NOTE]
+При перемиканні типу аутентифікації параметри для іншого типу лишаються незмінними, так щоб одночасно могло співіснувати дві конфігурації, але активна може бути тільки одна
+
+== Технічний дизайн рішення
+
+=== Загальна структура компонента
+
+image::architecture/platform/operational/user-management/user-managment-components.svg[]
+
+|===
+|Назва контейнера |Опис
+
+|*Officer id.gov.ua*
+| *[Нове розширення]* Аутентифікатор `id.gov.ua` для реалму посадових осіб
+
+|*Citizen id.gov.ua*
+|Аутентифікатор `id.gov.ua` для реалму громадян
+
+|*REST API extension*
+|Розширення для пошуку користувачів за атрибутами
+
+|*Citizen authenticator*
+|Аутентифікатор для кабінету користувачів через плагін  ІІТ
+
+|*Citezen authenticator*
+|Аутентифікатор для кабінету посадової особи через плагін  ІІТ
+
+|*User storage provider*
+|Розширення для зберігання данних про користувачів в зашифрованому вигляді
+|===
+
+=== Діаграма розгортання
+
+image::architecture/platform/operational/user-management/user-managment-deployment.svg[]
+
+.Структура конфігурації values.yaml для конфігурації реєстру.
+[source, yaml]
+----
+signWidget:
+  url: %ПОСИЛАННЯ_НА_ВІДЖЕТ%
+
+keycloak:
+  realms:
+    officerPortal:
+      browserFlow: %НАЗВА_ПОСЛІДОВНОСТІ%
+  authFlows:
+    officerAuthFlow:
+      widgetHeight: %ВИСОТА_ВІДЖЕТА%
+
+  identityProviders:
+    idGovUa:
+        url: %ПОСИЛАННЯ_ДЛЯ_ID_GOV_UA%
+        secretKey: >-
+          registry-kv/registry/%НАЗВА_РЕЄСТРУ%/officer-id-gov-ua-client-info
+----
+
+Доступні значення для `browserFlow`:
+|===
+|Назва послідовності |Опис
+
+|dso-officer-auth-flow
+|Послідовність використовується для аутентифікації за допомогою ІІТ плагіну
+
+|id-gov-ua-officer-redirector
+|Послідованість для аутентифікації через сайт `id.gov.ua`
+|===
+
+Зміна налаштувань компоненту через конфігурацію реєстру відбувається за рахунок переписування (override) параметрів `values.yaml` registry-configuration chart в `values.yaml` _Helmfile_ реєстру.
+
+.Приклад ресурсу для створення зовнішніх секретів
+[source, yaml]
+----
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: officer-id-gov-ua-client-external-secrets
+  namespace: %НАЗВА_РЕЄСТРУ%
+spec:
+  dataFrom:
+    - extract:
+        conversionStrategy: Default
+        decodingStrategy: None
+        key: {{ .Values.identityProviders.idGovUa.secretKey}}
+  refreshInterval: 10s
+  secretStoreRef:
+    kind: SecretStore
+    name: central-vault-secret-store
+  target:
+    creationPolicy: Owner
+    deletionPolicy: Retain
+    name: officer-id-gov-ua-client-secret
+----
+
+== Високорівневий план розробки
+
+=== Технічні експертизи
+
+* _BE_
+* _DevOps_
+
+=== План розробки
+
+* Створення  розширення `Keycloak` (аутентифікатора та identity provider-а)
+* Розширення конфігурації `Realm`-у посадових осіб послідовністю аутентифікації та побудови логіки створення додаткових ресурсів на рівні `Helm chart`-у в залежності від обраної послідовності
+* Винесення конфігурації на рівень шаблону реєстру `Helmfile`-у
+* Створення зовнішніх секретів для збереження ідентифікатора та секрета для інтеграції з `id.gov.ua`
+* Додавання екрану конфігурації в адміністративний портал

@@ -1,0 +1,594 @@
+= Міграція реєстрів
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+include::platform:ROOT:partial$admonitions/language-ua.adoc[]
+
+Ця сторінка надає практичне керівництво з виконання міграції між OKD кластерами A та B.
+
+== Позначення та скорочення
+
+* [.underline]#Кластер А# -- кластер, на якому розгорнуто наявний реєстр.
+* [.underline]#Кластер B# -- кластер, куди буде перенесено наявний реєстр (цільовий кластер).
+
+NOTE: Міграція реєстру виконується з останньої резервної копії наявного реєстру та, відповідно до інструкції, буде переноситися із кластера А до кластера B й відновлюватися вже на цьому кластері.
+
+== Передумови для міграції
+
+. Процес міграції включає запуск bash-скрипту, що здійснює перенесення даних з кластера А до кластера B. Для успішної міграції, цей скрипт має бути виконаний на платформі Linux з архітектурою мікропроцесора `x86-64` (відомою також як `AMD64`, Intel 64, чи `x64`)
+. Користувач, який буде переносити реєстр на інший кластер, повинен бути доданий до адміністраторів Платформи на обох кластерах через *`control-plane-console`*.
++
+TIP: Див. детальніше -- xref:admin:registry-management/control-plane-assign-platform-admins.adoc#add-platform-admin-cp[Створення адміністратора платформи].
+. На кластері, на який переноситься реєстр, повинна бути розгорнута та версія платформи, у якої версія `control-plane-gerrit` буде дорівнювати версії самого реєстру (наприклад, версія платформи -- *`1.9.4.11`*, версія реєстру -- *`1.9.4.7`*, версія `control-plane-gerrit` – *`1.9.4.7`*). Цю версію можна перевірити наявністю гілки у репозиторії *`cluster-mgmt`* в центральному *Gerrit*. Якщо гілка з версією реєстру існує, то версію реєстру можна переносити на кластер B. Якщо ні, то існує два шляхи:
+
+* Оновити платформу на кластері B, яка буде відповідати версії самого реєстру.
+* Оновити реєстр на кластері A до версії, яка вже існує на кластері B.
+
+. Одночасний доступ до кластера А та кластера B.
+
+. Наявність наступних команд в Terminal:
+
+* `oc`
+* `velero`
+* `rclone`
+* `vault`
+
+. Стабільне з'єднання з інтернетом. _Чим більша пропускна здатність, тим швидше буде проходити міграція_. В іншому випадку, можна використовувати *jumpbox* (із доступом до обох кластерів), який знаходиться або в AWS, або в іншого cloud-провайдера. Використання jumpbox зменшить час перенесення резервної копії з одного кластера на інший.
++
+[NOTE]
+====
+Якщо ви використовуєте *jumpbox*, то необхідно перевірити доступ до платформних Minio/Vault з IP-адреси *jumpbox*. Для отримання IP *jumpbox* виконайте наступну команду:
+----
+ssh sshmyip.com
+----
+
+Далі необхідно перевірити наявність або додати IP-адресу *jumpbox* до переліку дозволенних CIDR на рівні керування платформою для кластера А та кластера B ( _див. детальніше на сторінці xref:admin:registry-management/control-plane-cidr-access-endpoints.adoc[]_).
+
+Якщо відсутній доступ до control-plane-console, зверніться до L2-команди для перевірки доступу.
+====
++
+[IMPORTANT]
+====
+При міграції реєстру, важливо щоб перед початком міграції, на кластері B не було ресурсів пов'язаних із реєстром.
+
+_Якщо раніше реєстр не існував на цьому кластері, то подальші дії можна не виконувати._
+
+Якщо реєстр існував, то для видалення усіх ресурсів потрібно перевірити/видалити наступне: ::
+* Видаліть реєстр через інтерфейс адміністративної панелі Control Plane.
++
+TIP: Детальніше про це ви можете переглянути на сторінці xref:registry-management/control-plane-remove-registry.adoc[].
++
+////
+Перейти в control-plane-console на кластері B (Openshift-консоль > Projects > control-plane > Networking > control-plane-console), пройти аутентифікацію через openshift-sso, перейти в підрозділ - Реєстри, та натиснути на кошик навпроти назви реєстру, підтвердити зміни та дочекатись видалення реєстру
+////
+
+* Підтвердьте зміни та дочекатися видалення реєстру.
+
+* Після видалення перевірте відсутність проєкту у центральному компоненті Gerrit.
+
+** Перейдіть до Gerrit (*Openshift*-консоль > *Projects* > *`control-plane`* > *Networking* > *Routes* > *`control-plane-gerrit`* ).
+** Автентифікуйтеся через *openshift-sso*, відкрийте меню *Browse* > *Repositories* та виконайте пошук за назвою реєстру.
+** Якщо пошук знаходить репозиторій, то перейдіть до *Openshift*-консоль > *Projects* > *`control-plane`* > *Home* > *API Explorer* > у пошуку ( `Filter by kind ...` ) знайдіть `gerritproject` > `<назва реєстру>` > *Actions* > *`Delete GerritProject`*.
+** Після видалення Gerrit-проєкту, перейдіть до Gerrit-консолі та перевірте, що репозиторій відсутній. Якщо репозиторій існує, видаліть його через Gerrit-консоль ( відкрийте репозиторій реєстру > *Commands* > *Delete project*).
+
+* Видаліть директорію в Minio.
+
+** Для перевірки створених директорій в Minio, перейдіть до *MinioUI* (для кластерів vSphere цей Route можна знайти в *OpenShift*-консолі > *Projects* > *`control-plane`* > *Networking* > *Routes* > *`platform-minio-ui`*.
+
+** У випадку відсутності Route, перейдіть до секретів за шляхом: +
+*Openshift*-консоль > *Project* > *`control-plane`* > *Workloads* > *Secrets* > *`backup-credentials`*, скопіюйте поле `backup-s3-like-storage-url` та додайте до URL порт (Наприклад, `https://endpoint.com:9001` ).
++
+TIP: Дані для аутентифікації в Minio знаходяться в *Openshift*-консолі > *Project* > *`control-plane`* > *Secrets* > *`backup-credentials`*, де *`username`* -- це поле *`backup-s3-like-storage-access-key-id`*, а `*password*` --   *`backup-s3-like-storage-secret-access-key`*.
+
+** Після аутентифікації перевірте/видаліть директорії, пов'язані у реєстрі в бакеті. Такими є:
+*** _openshift-backups/backups/<назва-реєстру>*_;
+*** _openshift-backups/restic/<назва-реєстру>_;
+*** _obc-backups/<назва реєстру>_.
+
+====
+
+== Підготовка реєстру до міграції
+
+. Зробіть резервну копію реєстру на кластері A.
++
+Перед перенесенням реєстру на новий кластер, необхідно запустити Jenkins-процес *`Create-registry-backup-<назва реєстру>`*.
++
+Якщо Jenkins pipeline завершився зі статусом *`Success`*, то резервна копія виконана успішно.
++
+[NOTE]
+====
+Для отримання назви резервної копії, перейдіть до логів/журналів подій останнього запуску Jenkins pipeline (*Console Output*), та за пошуком на сторінці знайдіть повідомлення накшталт:
+
+----
+[INFO] Velero backup - <назва реєстру>-<час> done with Completed status
+----
+
+Наприклад, таке:
+
+----
+[INFO] Velero backup - abc-02-2023-04-18-19-03-14 done with Completed status
+----
+
+* де *`abc-02-2023-04-18-19-03-14`* -- назва резервної копії.
+
+====
++
+[WARNING]
+====
+Для версій реєстру < 1.9.3 необхідно виконати у Terminal наступну команду:
+
+----
+velero backup describe <назва бекапу>
+----
+
+Назву бекапу можна знайти в логах останнього запуску Jenkins-процесу *`Create-registry-backup-<назва реєстру>`*.
+====
++
+[TIP]
+====
+Детальніше про створення резервних копій та відновлення реєстрів див. у розділі xref:backup-restore/overview.adoc[].
+====
+
+. Якщо останній velero backup завершився зі статусом *`Completed`*, то можна переходити далі. У випадку, коли статус velero backup відрізняється від `Completed`, необхідно долучати спеціалістів із технічної підтримки L2-L3 для перевірки працездатності Jenkins-пайплайну.
+
+. Забороніть робити зміни у реєстрі за допомогою Jenkins пайплайнів.
++
+У кожному пайплайні для реєстру перейдіть до секції *Configure* та знайдіть параметр *`Disable this project`* у секції *Build Triggers*, встановіть напроти нього прапорець та збережіть зміни за допомогою кнопки kbd:[*Save*].
+
+== Міграція резервної копії із кластера А до кластера B
+
+. Отримайте логін-команди для обох кластерів.
++
+Для цього виконайте вхід до Openshift-консолі та у правому верхньому кутку, натисканням на свій username, перейдіть до *`Copy login command`*, скопіюйте токен доступу у полі *`Log in with token`* та збережіть його у текстовому редакторі.
+
++
+NOTE: Операцію потрібно повторити для обох кластерів: А та B.
+
+. Отримайте назву останньої резервної копії, яка була створена на кластері А (наприклад, `abc-02-2023-04-18-19-03-14`).
+
+. Відкрийте термінал та виконайте наступні команди:
++
+.Експорт логіну для кластера А
+----
+export A_CLUSTER_LOGIN="oc login --token …"
+----
++
+Вставте між лапок *`"..."`* після `--token` отриману в пункті 1 команду логіну для кластера А. В кінці логін-команди не повинно бути перенесення на наступний рядок.
+
++
+.Експорт логіну для кластера В
+----
+export B_CLUSTER_LOGIN="oc login --token …"
+----
++
+Вставте між лапок *`"..."`* після `--token` отриману в пункті 1 команду логіну для кластера В. В кінці логін-команди не повинно бути перенесення на наступний рядок.
+
++
+.Експорт назви реєстру
+----
+export REGISTRY_NAME="abc-02"
+----
++
+TIP: `abc-02` -- назва реєстру
+
++
+.Експорт назви резервної копії
+----
+export BACKUP_NAME="<назва резервної копії>"
+----
++
+TIP: Приклад назви резервної копії: `*abc-02-2023-04-18-19-03-14*`.
++
+[WARNING]
+====
+У випадку, коли реєстр попередньо був мігрований на кластер A, а не розгорнутий на цій Платформі, виконайте додатковий *`export`*:
+
+[source,bash]
+----
+export VAULT_KEY="<назва ключа>"
+----
+
+* де *`<назва ключа>`* -- ключ для unseal процесу, який можна знайти в *Openshift*-консолі ( Кластер А ) > *Projects* > `<назва реєстру>` > *ConfigMaps* > *`hashicorp-vault-config`*. Поле *key_name* і є назвою ключа.
++
+Наприклад:
++
+[source,hcl]
+----
+key_name        = "autounseal-migration"
+----
+
+====
++
+[WARNING]
+====
+У випадку міграції великого реєстру, виконайте експорт наступної змінної:
+[source,bash]
+----
+export LARGE_DATA="true"
+----
+====
+. Збережіть link:{attachmentsdir}/migrate-registry/registry-migration.zip[архів], розархівуйте його в нову директорію наступною командою:
++
+----
+unzip registry-migration.zip -d registry-migration
+----
++
+Перейдіть в директорію registry-migration (`cd`) та виконайте команду:
++
+----
+chmod +x && ./migration.sh
+----
+
+. Після виконання скрипту, виконайте логін у терміналі за допомогою *oc cli* на кластері B, та перевірте наступне:
+
+* Наявність velero backup на кластері B.
+* Наявність директорій із назвою _keycloak-export-<назва реєстру>-*_ у папці, де знаходиться скрипт.
+
+== Підготовка до відновлення на кластері B
+
+. Перенесіть реалми.
++
+Для перенесення реалмів, виконайте вхід до Keycloak на кластері B:
+
+* В Openshift-консолі знайдіть проєкт (namespace) *`user-management`*, відкрийте *Networking* > *Routes* та перейдіть за посиланням до сервісу *`keycloak`*.
++
+TIP: Дані для логіну можна отримати із секретів keycloak у тому ж проєкті. Для цього перейдіть до Workloads > Secrets, знайдіть у пошуку секрет із назвою *`keycloak`*, та у розділі Data скопіюйте дані для входу до сервісу.
+
+* За допомогою `*Select realm*` (1) > *`Add realm`* (2) > *`Import`* (3), виберіть файл _keycloak-export-<назва реєстру>-*/*-realm.json_ та створити реалми (оберіть стратегію *`SKIP`*, запропоновану Keycloak). Так пройдіться по усіх директоріях із назвою _keycloak-export-<назва реєстру>-*_.
+
++
+image:admin:migrate-registry/migrate-registry-1.png[image,width=514,height=194]
+
+. Перенесіть користувачів.
++
+Залишаючись в адмін-консолі Keycloak, перейдіть до реалму (1), який був створений за допомогою імпорту, та у лівому меню реалму оберіть  *`Import`* (2) (при імпорті оберіть стратегію *`SKIP`*), далі натисніть *`Select file`* (3) та виберіть файл із директорії _keycloak-export-<назва реєстру>-<ім’я реалму>/<ім’я реалму>-users-*.json_.
++
+NOTE: Якщо файлів більше одного, то виконайте імпорт усіх файлів.
+
++
+image:admin:migrate-registry/migrate-registry-2.png[image,width=601,height=417]
+
+. Створіть реєстр через *`control-plane-console`*.
+
+* Створіть реєстр з тим же ім'ям, і такою ж версією на кластері B. При створенні реєстру призначте усіх адміністраторів, що були у реєстрі на кластері A, та вкажіть актуальні дані.
++
+[NOTE]
+====
+Дані про ключ ::
+Поля заповніть або з актуальними ключами для цього реєстру, або використовуйте тестові ключі. У майбутньому, після міграції, інформацію про ключі можна актуалізувати через консоль *Control Plane*. За даними для ключів звертатись до L2-L3 підтримки.
++
+Детальніше про оновлення ключів реєстру -- див. на сторінці xref:admin:registry-management/system-keys/control-plane-registry-keys.adoc[].
+
+Шаблон реєстру ::
+Оберіть такий самий шаблон, як і шаблон цього реєстру на кластері A. Для отримання назви шаблону, перейдіть до *Openshift*-консолі > *Projects* > *`control-plane`* > *API Explorer* > У пошуку визначте `codebase` > Перейдіть до `codebase` > *Instances* > Відкрийте `codebase <назва реєстру>` > Перевірте наступні налаштування:
++
+.codebase.yaml
+=====
+----
+metadata:
+  annotations:
+    registry-parameters/template-name: templates/registry-tenant-template-minimal
+----
+* де *`templates/registry-tenant-template-minimal`* -- назва шаблону розгортання реєстру.
+=====
+====
++
+NOTE: Якщо функціональність консолі дозволяє додати DNS для keycloak або порталів, на цьому етапі необхідно пропустити цей крок, адже трафік поки налаштований на кластер A).
+
+* Після створення, одразу перейдіть до Jenkins (namespace *`control-plane`* > *Networking* > *Routes* > *`jenkins`*), та зупиніть першу збірку *`MASTER-Build-<назва реєстру>`*.
++
+NOTE: Дочекайтеся створення директорії `<назва реєстру>` та створення Jenkins-пайплайну. Після запуску одразу зробити *Abort* збірки.
+
+. Залишаючись у консолі Jenkins, змініть конфігурацію *MASTER-Build-`<назва реєстру>`*: +
+Перейдіть до *MASTER-Build-`<назва реєстру>`* > *Configure*, та у секції *Build Triggers* встановіть прапорець на параметрі *Disable this project*. Далі збережіть зміни кнопкою *`Save`*.
+
+. Перенесіть файли конфігурації *_values.yaml_* та *_values.gotmpl_* з репозиторію реєстру кластера А на кластер B.
+
+* Перейдіть до репозиторію реєстру на кластері А: +
+Відкрийте *Control-plane-console* > +++<b style="font-weight: 600">Дашборд<b>+++ > *Gerrit* > *Browse* > *Repositories* > оберіть репозиторій *`<назва реєстру>`*. +
+У репозиторії реєстру перейдіть до *Branches* > `master`, далі перейдіть до *deploy-templates*, відкрийте файл *_values.yaml_* ( *_values.gotmpl_* ) > Скопіюйте *raw*-код до буфера обміну.
+* Далі перейдіть до репозиторію реєстру на кластері B: +
+*Control-plane-console* > +++<b style="font-weight: 600">Дашборд<b>+++ > *Gerrit* ) > *Browse* > *Repositories* та оберіть репозиторій *`<назва реєстру>`*. Через *commands* > *`Create change`* створіть зміну (change) із наступними параметрами:
+
+** `Select branch for new change: master`.
+** `Description: Update registry before migration`.
++
+Після створення зміни, у самому change натисніть *`Edit`* > *`ADD/OPEN/UPLOAD`* -- знайдіть файл *_values.yaml_* (*_values.gotmpl_*).
+Перенесіть до цього файлу скопійовану конфігурацію *_values.yaml_* (*_values.gotmpl_*) із кластера А.
+* Повторіть операцію для обох файлів: *_values.yaml_* та *_values.gotmpl_*.
+* Збережіть зміни, дочекайтеся проходження пайплайну *Code Review* (*СІ Jenkins `+1`*), проставте `*Code-review +2*`,та виконайте злиття змін до `master`-гілки кнопкою `*Submit*`.
+
+. Перевірка наявності `*CustomResourceDefintition*`.
++
+[WARNING]
+====
+Якщо до цього на кластері не було жодного реєстру, обов'язково перевірте наявність існування *`CustomResourceDefintition`*. Для цього виконайте логін через *`oc cli`* на кластері B та виконати наступну команду:
+
+----
+oc get customresourcedefinition ingressclassparameterses.configuration.konghq.com
+----
+
+Якщо команда завершиться з помилкою та видасть у консолі *`No resources found`*, то перейдіть до директорії, де знаходиться скрипт *_migration.sh_*, та з кореневого шляху виконайте наступну команду:
+
+----
+for file in $(ls crds); do oc apply -f crds/$file; done
+----
+====
+
+== Відновлення реєстру на кластері B
+
+. Відрийте до Jenkins (namespace *`control-plane`* > *Networking* > *Routes* > *`jenkins`*), перейдіть до папки із назвою реєстру та запустіть Jenkins-пайплайн *`Restore-registry-<назва реєстру>`*. Після запуску пайплайну оберіть версію (на етапі `cleanup-registry-before-restore`) та дочекайтеся, коли процес завершиться.
++
+NOTE: У випадку, коли процес завершується помилкою або триває понад 1-2 години, зверніться до спеціалістів команди технічної підтримки L2-L3 "ЕПАМ".
+
+. Після завершення пайплайну перейдіть в Openshift-консоль > Projects > <назва реєстру>, та перевірте, що немає под у статусі помилок.
++
+[NOTE]
+====
+У випадку, коли пода із назвою *`bpms-*`* не запущена і має статус помилки, виправте паролі у `postgres` для *`operational-instance`* та *`analytical-instance`* под, для цього потрібно:
+
+* Перейдіть в *Openshift*-консоль > *Secrets*, знайдіть secret для `operational-instance` -- *`operational-pguser-postgres`* (для `analytical-instance` -- це *`analytical-pguser-postgres`*).
+* Перейдіть в *Secret* та скопіюйте поле *`password`*.
+* Перейдіть в *Openshift*-консоль > *Pods* > знайдіть поду *`operational-instance`* або *`analytical-instance`* та виконайте по черзі наступні команди:
++
+[source,bash]
+----
+psql
+----
++
+[source,sql]
+----
+ALTER ROLE postgres WITH PASSWORD '<password>';
+----
+
+** де *`<password>`* -- поле `password`, скопійоване у *Secret*, для відповідного екземпляра -- `operational` або `analytical`.
+
+* Після виконання усіх операцій, видаліть поду *`bpms`* та дочекайтеся, коли вона буде у статусі *`Running`* (активна/запущена).
+====
++
+[NOTE]
+====
+У випадку, коли пода *`registry-rest-api`* запускається з помилкою `ImagePullBackOff`, додайте IP кластера B до анотації *Openshift Route* > *Nexus*.
+
+* Для цього перейдіть в *Openshift*-консоль > *Project* > `<назва реєстру>` > *Routes* > *Nexus* > *YAML* та перевірте наступне поле у _.yaml_-конфігурації:.
++
+.route.yaml
+=====
+----
+metadata:
+  annotations:
+    haproxy.router.openshift.io/ip_whitelist: <NAT Cluster IP>/32,....
+----
+=====
++
+Якщо IP-адреса кластера B відсутня, додайте її до *`haproxy.router.openshift.io/ip_whitelist`* із маскою *`/32`*.
+
+====
++
+. Після перевірки, що усі поди у статусі *`Running`*, перенесіть конфігурацію реєстру до *_values.yaml/values.gotmpl_*.
++
+* Увійдіть до *_control-plane-gerrit_* (*Openshift*-консоль > *Projects* -> *`control-plane`* -> *Networking* -> *`gerrit`* > Логін через *`openshift-sso`*).
++
+У Gerrit перейдіть до *Browse* > *Repositories* та оберіть репозиторій *`<назва реєстру>`*. Через *`commands`* > *`Create change`* створіть зміну (change) із наступними параметрами:
+
+** `Select branch for new change: master`.
+** `Description: Update registry after migration`.
++
+Після створення change, у самому change натисніть *`Edit`*.
+
+* Додайте конфігурацію `vault` у *_values.gotmpl_*.
++
+Для цього візьміть актуальну конфігурацію `vault` з config-map *`hashicorp-vault-config`* (*Openshift*-консоль > *Projects* > `<назва реєстру>` > *Workloads* > *ConfigMaps* > *`hashicorp-vault-config`*) та скопіюйте поле як у наступному прикладі:
++
+----
+ui = true
+
+listener "tcp" {
+  tls_disable = 1
+  address = "[::]:8200"
+  cluster_address = "[::]:8201"
+}
+storage "file" {
+  path = "/vault/data"
+}
+seal "transit" {
+   address         = "https://<vault url>"
+   disable_renewal = "false"
+   key_name        = "<key name>"
+   mount_path      = "transit/"
+   tls_skip_verify = "true"
+}
+----
++
+* де *`<vault URL>`* -- посилання до *`vault`*, *`<key name>`* -- назва ключа (у конфігурації з `config-map` будуть актуальні поля).
++
+Далі в change натисніть *`ADD/OPEN/UPLOAD`*, у пошуку вкажіть *_values.gotmpl_* та виберіть потрібний файл. В самому файлі додайте конфігурацію як у прикладі:
++
+[source,yaml]
+----
+vault:
+  platformVaultToken: {{ env "platformVaultToken" }}
+  openshiftApiUrl: {{ env "openshiftApiUrl" }}
+  centralVaultUrl: {{ b64dec $centralVaultUrl }}
+  server:
+    dataStorage:
+      storageClass: ocs-storagecluster-ceph-rbd
+    auditStorage:
+      storageClass: ocs-storagecluster-ceph-rbd
+
+    standalone:
+      config: |
+       ui = true
+
+       listener "tcp" {
+         tls_disable = 1
+         address = "[::]:8200"
+         cluster_address = "[::]:8201"
+       }
+       storage "file" {
+         path = "/vault/data"
+       }
+       seal "transit" {
+          address         = "https://<vault url>"
+          disable_renewal = "false"
+          key_name        = "<key name>"
+          mount_path      = "transit/"
+          tls_skip_verify = "true"
+       }
+----
+
+* Після додавання натисніть Save.
+
+* Змініть розмір `kafka`-дисків. Залишаючись у цьому файлі, знайдіть поле:
++
+[source,yaml]
+----
+storage:
+  zookeeper:
+    size: 5Gi
+  kafka:
+    size: 20Gi
+----
+
+* Змініть розмір `kafka.size` відповідно до розміру актуального диска в *Openshift*-консолі (*Openshift*-консоль > *Project* -> `<назва реєстру>` -> *Storage* > *`PersistentVolumeClaims`* ). У пошуку знайдіть *`data-0-kafka-cluster-kafka-0`* та його *`Capacity`*. Поверніться до редагування _values.gtmpl_ та встановіть бажаний розмір диска:
++
+----
+storage:
+  zookeeper:
+    size: 5Gi
+  kafka:
+    size: 40Gi
+----
+
+** де 40Gi - актуальний розмір диска з `Capacity`.
+
+* Видаліть усіх *`GerritGroupMember`*. Для цього виконайте вхід до кластера B через ос cli та виконати наступну команду:
++
+----
+oc -n <назва-реєстру> delete gerritgroupmember --all
+----
+
+. Після застосування змін має запуститися Jenkins-процес *`MASTER-Build-<назва реєстру>`*.
+. Після з завершення Jenkins-пайплайну *`MASTER-Build-<назва реєстру>`*, виправте Jenkins Credentials у Jenkins реєстру.
++
+[NOTE]
+====
+У випадку, коли доступу немає, додайте себе як адміністратора реєстру через control-plane-console.
+====
+* Для цього перейдіть в *Openshift-консоль* > *Projects* > `<назва реєстру>` > *Workloads* > *Secrets* > *`gerrit-control-plane-sshkey`* та скопіюйте поле *`id_rsa`*.
+
+* Після цього перейдіть у реєстровий Jenkins (*Networking* > *Routes* > `*jenkins*`) > Manage Jenkins > Manage Credentials > *`gerrit-ci-users-sshkey`* (*`gerrit-control-plane-sshkey`*) > натисніть *`Update`*.
+
+* У полі *`Private Key`* за допомогою *`Replace`* вставте скопійоване значення.
+
+. Оновіть посилання на Nexus у репозиторії регламенту.
++
+Для цього перейдіть до *Openshift*-консолі > *Project* -> <назва реєстру> > *Gerrit* та виконайте логін.
++
+Далі перевірте наявність доступу до проєктів у Gerrit та клонуйте локально репозиторій *_registry-regulations_*. Для цього:
+
+* У вебінтерфейсі Gerrit, перейдіть у налаштування > *HTTP Credentials* > згенеруйте новий пароль за допомогою `*Generate New Password*`, та збережіть цей пароль у нотатках.
+
+* Перейдіть до репозиторію *`registry-regulations`* > та скопіюйте команду  для клону *Anonymous HTTP* > *`Clone with commit-msg hook`*. +
+
+* Вставте команду для клону репозиторію до термінала та виконайте. Команда запитає логін та пароль. Логін в цьому випаду буде ваш email, а пароль -- той, який ви згенерували у першому підпункті.
++
+TIP: Детальніше про роботу з репозиторієм Gerrit див. на сторінці xref:registry-develop:registry-admin/regulations-deploy/registry-admin-deploy-regulation.adoc[].
++
+[NOTE]
+====
+Якщо в системі git user відрізняється від вашого user на сервері Gerrit, виконайте наступні команди:
+----
+git config --global user.name "New Author Name"
+git config --global user.email "<email@address.example>"
+----
+
+Наприклад:
+----
+git config --global user.name "Jonh Doe"
+git config --global user.email "jong_doe@doemail.com"
+----
+====
+
+. Змініть мінорну версію в _settings.yaml_ у кореневій (root) директорії репозиторію *_registry-regulations_* згідно із приладом:
++
+----
+settings:
+  general:
+    package: ua.gov.mdtu.ddm.dataplatform.template
+    register: registry
+    version: 2.21.0
+----
+Наприклад, додайте до версії `+1`:
++
+----
+settings:
+  general:
+    package: ua.gov.mdtu.ddm.dataplatform.template
+    register: registry
+    version: 2.21.1
+----
+
+. Замініть згадування DNS-кластера А на кластер B. Для цього у терміналі перейдіть до директорії *_registry-regulations/data-model_*
++
+----
+cd registry-regulations/data-model
+----
+Та виконайте наступну команду по заміні DNS:
++
+----
+find "." \( -type d -name .git -prune \) -o -type f -print0 | xargs -0 sed -i -e  's/<Cluster A DNS wildcard> /<Cluster B DNS Wildcard> /g'
+----
++
+[TIP]
+====
+`Cluster A DNS wildcard/Cluster B DNS wildcard` -- це *`apps.*`* (наприклад, `*apps.reestr1.eua.gov.ua*`).
+Як повинно виглядати sed правило:
+----
+'s/apps.cluster-a.dns.wildcard.com/apps.cluster-b.dns.wildcard.com/g'
+----
+====
+
+. Виконайте commit змін та push до репозиторію:
++
+[source,git]
+----
+git add --all
+----
++
+[source,git]
+----
+git commit -m "Update nexus URL"
+----
++
+[source,git]
+----
+git push origin refs/heads/master:refs/for/master
+----
+
+. Перейдіть у реєстровий Gerrit, проставте відмітки *`Code-Review +2`*, та за допомогою кнопки kbd:[*Submit*] застосуйте зміни до master-гілки.
+
+. Після внесення змін до master-гілки перейдіть до Jenkins реєстру та перевірте, що Jenkins-пайплайни у Jenkins Folder *registry-regulations* завершилися зі статусом *`Success`*.
+
+== Перевірка реєстру
+
+. Переконайтеся, що Кабінети користувачів працюють у штатному режимі, та бізнес-процеси мігрували успішно.
+
+. Усі Jenkins pipeline мають завершитися зі статусом *`Success`*.
+
+== Перенесення конфігурації реєстру
+
+Перенесіть конфігурацію реєстру із кластера А на кластер B відповідно до документації: ::
+
+* +++<b style="font-weight: 700">Адміністратори<b>+++ (_див. детальніше на сторінці xref:registry-develop:registry-admin/create-users/create-registry-admins.adoc[])_.
+* +++<b style="font-weight: 700">Дані про ключ<b>+++  (_див. детальніше на сторінці xref:admin:registry-management/system-keys/control-plane-registry-keys.adoc[]_).
+* +++<b style="font-weight: 700">Поштовий сервер<b>+++ (_див. детальніше на сторінці xref:registry-develop:registry-admin/user-notifications/email/config-smtp-server.adoc[]_).
+* +++<b style="font-weight: 700">Ресурси реєстру<b>+++
++
+[NOTE]
+Перенесіть параметри налаштувань із файлу _values.yaml_ (секція `global.registry` ) реєстру на кластері А до налаштувань у файлі _values.yaml_ реєстру на кластері В.
+
+* DNS (_див. детальніше на сторінці xref:admin:registry-management/custom-dns/custom-dns-overview.adoc[]_).
+* +++<b style="font-weight: 700">Обмеження доступу<b>+++ (_див. детальніше на сторінці xref:admin:registry-management/control-plane-cidr-access-endpoints.adoc[]_).
+* +++<b style="font-weight: 700">Автентифікація надавачів послуг<b>+++ (_див. детальніше на сторінках xref:registry-develop:registry-admin/cp-auth-setup/cp-auth-setup-officers.adoc[] та xref:registry-develop:registry-admin/cp-auth-setup/cp-officer-self-registration.adoc[]_).
+* +++<b style="font-weight: 700">Автентифікація отримувачів послуг<b>+++ (_див. детальніше на сторінці xref:registry-develop:registry-admin/cp-auth-setup/cp-auth-setup-citizens.adoc[]_)
+* +++<b style="font-weight: 700">Резервне копіювання<b>+++ (_див. детальніше на сторінках xref:admin:backup-restore/control-plane-backup-restore.adoc[] та xref:admin:backup-restore/backup-schedule-registry-components.adoc[]_).

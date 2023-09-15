@@ -1,0 +1,122 @@
+= Обробка помилок
+
+== Загальні положення
+
+- Ознакомитися з бізнес вимогами стосовно обробки помилок можно на KB: https://kb.epam.com/pages/viewpage.action?pageId=1242845750[Перелік сценаріїв помилок та способи їх обробки]
+- Усі сценарії помилок обробляються case-by-case окрім сценаріїв указаних у пункті <<auto_handling>>
+
+== Типи помилок
+
+[#notification_error]
+=== Нотифікація (некритичная помилка)
+
+Виникає частіше всього як реакція на якусь дію користувача яка виявилась невдалою, або просто після падіння некритичного для всієї сторінки запиту на бекенд. Має наступний вигляд (приклад):
+
+image::arch:architecture/registry/operational/portals/services/common-web-app/image-2022-12-07-18-11-41-487.png[]
+
+Дизайн: https://www.figma.com/file/a5karSvfr5nXsKXIhgItOR/01-MDTU-DDM-Styleguide?node-id=2691%3A151&t=HLsW3fVxfvWSZcXR-4
+
+[#critical_error]
+=== Критична помилка
+
+Після цієї помилки використання сторінки неможливе. Це або критичная помилка у логіці роботи сторінки або падіння критичного запиту на бекенд. Має наступний вигляд(приклад):
+
+image::arch:architecture/registry/operational/portals/services/common-web-app/image-2022-12-07-18-16-53-084.png[]
+
+Дизайн: https://www.figma.com/file/a5karSvfr5nXsKXIhgItOR/01-MDTU-DDM-Styleguide?node-id=5476%3A32990&t=HLsW3fVxfvWSZcXR-4
+
+[#validation_error]
+=== Валідаційна помилка
+
+Виникає після непроходження бекенд чи фронтенд валідації. Має два вигляди.
+
+Варіант 1 - Серверна помилка на сторінці користувацької задачі:
+
+image::arch:architecture/registry/operational/portals/services/common-web-app/image-2022-12-07-18-23-52-858.png[]
+
+Дизайн: https://www.figma.com/file/a5karSvfr5nXsKXIhgItOR/01-MDTU-DDM-Styleguide?node-id=2693%3A44&t=HLsW3fVxfvWSZcXR-4
+
+Варіант 2 - Кліентська помилка або серверна помилка за виключенням варінта 1:
+
+image::arch:architecture/registry/operational/portals/services/common-web-app/image-2022-12-07-18-26-14-293.png[]
+
+Дизайн: https://www.figma.com/file/a5karSvfr5nXsKXIhgItOR/01-MDTU-DDM-Styleguide?node-id=5006%3A21117&t=HLsW3fVxfvWSZcXR-4
+
+[#component_error]
+=== Помилка на рівні компонента
+
+Ця помилка використовується коли в результаті невірної роботи неможлива взаємодія лише з одним компонентом на сторінці (наприклад, з таблицею). Тоді тільки цей компонент приймає спеціальний вигляд. То як він при цьому виглядає - повністю спецефічно для цього компонента.
+
+[#auto_handling]
+== Автоматична обробка
+
+=== JavaScript Runtime Error
+
+При винекніні будь-якої JavaScript помилки у життєдіяльності React компонентів (https://reactjs.org/docs/error-boundaries.html[error boundary]) показується <<critical_error>>.
+
+Винекнення інших JavaScript помилок (e.g. у шарі Redux) не демонструється користувачу так як не блокує роботу зі сторінкою.
+
+=== errorCode = 401
+
+При отриманні відповіді з кодом помилки 401 після будь-якого запиту до API відбувається *перехід на сторінку Login*. Якщо ця помилка виникла вже після того як користувач мав активну сессію, то це означає, що час сессії вичерпано та сторінка *Login* буде мати інформацію про це.
+
+=== Будь-яке падіння запиту `api/userinfo`
+
+При отриманні будь-якого помилкового статуса на запит `api/userinfo` (цей запит відбувається у будь якому разі при потраплянні на сайт) відбувається сценарій критичної помилки (<<critical_error>>).
+
+=== Відсутність необхідної ролі для перегляду сторінки
+
+У цьому випадку буде показаана <<critical_error>> з інформацію про заборону перегляду сторінки для даного користувача.
+
+
+== Розробка
+
+Різні типи помилок задані у змінній ERROR_TYPE. Далі опишемо як відбувається робота з різними типами з цієї змінної.
+
+=== ERROR_TYPE.CRITICAL
+
+Вигляд: <<critical_error>>
+
+Ця помилка демонструється користувачу за допомогою окремого layout компонента - ErrorLayout.
+
+Існує два способи показати таку помилку:
+
+1. За допомогою Redux action. Якщо система отримає error action у якому буде указан тип помилки ERROR_TYPE.CRITICAL, то система автоматично покаже ErrorLayout з даними цієї помилки. xref:common-web-app:development/redux.adoc[Докладніше].
+2. Через передачу будь-якому іншому Layout параметра error:
+
+[source,javascript]
+----
+<CommonLayout
+  error={{
+    message: 'error',
+    type: ERROR_TYPE.CRITICAL,
+  }}
+>
+----
+
+=== ERROR_TYPE.NOTIFICATION
+
+Вигляд: <<notification_error>>
+
+Ця помилка демонструється користувачу лише за допомогою окремого Redux action. Якщо система отримає error action у якому буде указан тип помилки ERROR_TYPE.NOTIFICATION, то система автоматично покаже користувачу відповідну нотифікацію. xref:common-web-app:development/redux.adoc[Докладніше].
+
+=== ERROR_TYPE.VALIDATION
+
+Вигляд: <<validation_error>>
+
+Ця помилка не має автоматичного механізму демонстрації користувачу та потребує ручної передачі у відповідний компонент. Наприклад, для Formio форми є окремий параметр для передачі:
+
+[source,javascript]
+----
+<Form
+    validationErrors={[{
+      message: 'error',
+    }]}
+  />
+----
+
+=== ERROR_TYPE.COMPONENT
+
+Вигляд: <<component_error>>
+
+Ця помилка не має автоматичного механізму демонстрації користувачу та потребує ручної передачі у відповідний компонент. 

@@ -1,0 +1,100 @@
+@startuml
+actor "Розробник платформи" as devops order 10
+participant "CICD Nexus" as cicd_nexus  order 20
+actor "Адміністратор платформи" as admin  order 30
+participant "Цільова інфраструктура" as target_infra  order 40
+participant "Цільовій OKD кластер" as target_cluster  order 50
+participant "DDM Control Plane\n(Gerrit + Application)" as ddm_cp  order 60
+actor "Адміністратор реєстру" as registry_admin  order 70
+participant "Реєстр у цільовому кластреі" as registry  order 80
+
+title Діаграма послідовностей встановлення платформи
+autonumber
+
+group Підготовка до інсталяції
+  devops -> cicd_nexus: "Запит необхідної версії платформи"
+  activate devops
+    activate cicd_nexus
+      return "Архів з інсталяцією"
+    deactivate cicd_nexus
+    devops -> target_infra: "Збереження архіву з інсталяціє"
+    activate target_infra
+      devops -> target_infra: "Створення дзеркала з докер образами для встановлення платформи "
+      target_infra -> target_infra: "Закачування всіх образів"
+      return "Доступ до дзеркала"
+    deactivate target_infra
+  devops -> admin: "Передача інструкцій по інсталяції"
+  deactivate devops
+end
+
+group Інсталяція платформи
+  admin -> target_infra: "Запускає інсталяцію OKD кластеру"
+  activate admin
+    activate target_infra
+      target_infra -> target_cluster: "Створення першої ноди кластеру"
+      activate target_cluster
+        target_cluster -> target_cluster: "Інсталяція базових компонентів OKD"
+        return  "Створені необхідні віртуальні машини та інші ресурси"
+      deactivate target_cluster
+      return "Доступ до кластеру"
+    deactivate target_infra
+  deactivate admin
+  admin -> target_cluster: "Запускає інсталяцію DDM Control Plane"
+  activate admin
+    activate target_cluster
+      target_cluster -> ddm_cp: "Інсталяція"
+      activate ddm_cp
+        ddm_cp -> ddm_cp: "Ініціалізція DDM CP компонентів"
+        ddm_cp -> ddm_cp: "Інсталяція інфраструктурних компонентів"
+        return "Проінстальовані інфраструктурні компоненти кластеру"
+      deactivate ddm_cp
+      return "Доступ до DDM Control Plane"
+    deactivate target_cluster
+  deactivate admin
+end
+
+group Додавання реєстру
+  admin -> ddm_cp: "Заповнює форму створення реєстра"
+  activate admin
+    activate ddm_cp
+      ddm_cp -> target_cluster: "Створює EDP Codebase CR"
+      ddm_cp -> ddm_cp: "Ініціалізує реєстр на базі EDP Codebase CR"
+      ddm_cp -> registry: "Створює namespace(project) для реєстру"
+      activate registry
+        ddm_cp -> registry: "Встановлює компоненти реєстру"
+        return "Статус інсталяції в Jenkins Job"
+      deactivate registry
+      return "Посилання на реєстр"
+    deactivate ddm_cp
+    admin -> registry: "Додає користувачів реєстру"
+    admin -> registry_admin: "Доступ до реэстру"
+  deactivate admin
+end
+
+group Зміна до конфігурації реєстру
+  admin -> ddm_cp: "Commit зміни у репозиторій registry-tenant-XXX"
+  activate admin
+    activate ddm_cp
+      ddm_cp -> ddm_cp: "Бекап конфігурації"
+      ddm_cp -> registry: "Вносить зміни до компонентів реєстру"
+      admin <-- ddm_cp: "Статус змін"
+    deactivate ddm_cp
+  deactivate admin
+end
+
+group Зміна регламенту реєстру
+  registry_admin -> registry: "Commit зміни у репозиторій registry-regulations"
+  activate registry_admin
+    activate registry
+      registry -> registry: "Бекап конфігурації"
+      registry -> registry: "Оновлює схему БД"
+      registry -> registry: "Створює нові інстанси kafka та rest api"
+      registry -> registry: "Додає бізнес-процеси та таблиці прийняття рішень"
+      registry -> registry: "Додає форми"
+      registry_admin <-- registry: "Статус змін"
+    deactivate registry
+  deactivate registry_admin
+end
+
+
+@enduml

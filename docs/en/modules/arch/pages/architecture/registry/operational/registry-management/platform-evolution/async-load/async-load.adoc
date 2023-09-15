@@ -1,0 +1,498 @@
+:toc-title: On this page:
+:toc: auto
+:toclevels: 5
+:experimental:
+:sectnums:
+:sectnumlevels: 5
+:sectanchors:
+:sectlinks:
+:partnums:
+
+= Asynchronous data loading
+
+NOTE: 🌐 This document is available in both English and Ukrainian. Use the language toggle in the top right corner to switch between versions.
+
+== General description
+
+//В поточній імплементації існує механізм який дозволяє завантажити csv файл з даним які будуть завантажені до відповідної таблиці. Цей процес відбувається синхронно, тому відповідь клієнт має отримати за 30 секунд (максимальний допустимий таймаут). Окрім того оскільки комунікація між сервісами синхронного та асинхронного управління даними реєстру відбувається через брокер повідомлень, існує ліміт в один мегабайт для повідомлень. Тому було встановлено штучний ліміт в 50 рядків. В процесі експлуатації виникла необхідність завантажувати більші об'єми даних, за розміром завантаження яких може займати значно довший час.
+In the current implementation, there is a mechanism that allows you to download a csv file with data that will be uploaded to the corresponding table. This process occurs synchronously, so the client should receive a response within 30 seconds (the maximum allowable timeout). In addition, since the communication between the synchronous and asynchronous registry data management services takes place through a message broker, there is a limit of one megabyte for messages. Therefore, an artificial limit of 50 lines was set. In the process of operation, it became necessary to download larger volumes of data, the size of which can take a much longer time to download.
+
+//== Функціональні сценарії
+== Functional scenarios
+
+////
+* Збереження даних з файлу який більше одного мегабайта і збереження якого може тривати довше ніж 30 секунд.
+* Збереження даних з файлу у декілька таблиць.
+////
+* Saving data from a file that is larger than one megabyte and may take longer than 30 seconds to save.
+* Saving data from a file to several tables.
+
+== User roles
+
+////
+* Розробник регламенту
+* Надавач послуг
+////
+
+* Developer of regulations
+* Service provider
+
+//== Загальні принципи та положення
+== General provisions
+
+////
+* Збереження даних з файлу відбуваються в одній транзакції.
+* Опрацювання файлу відбувається по рядках.
+* Бізнес процес будується на подіях які виникають при відправці повідомлення до брокера.
+* Події завантаження в бізнес процес мають обробляться головним процесом і не можуть бути проасоційовані із саб-процесом.
+* Операція збереження відбувається асинхронно.
+* Прогрес завантаження не відслідковується.
+* В якості посилання на похідний документ для всіх сутностей буде один ключ на весь файл без вказання на конкретний рядок.
+* Фали що не відповідають правилам встановленим моделювальникам не можуть бути завантажені.
+* Обмеження по розміру файлу керується на рівні control plane
+////
+
+* Saving data from a file takes place in one transaction.
+* The file is processed line by line.
+* The business process is built on events that occur when a message is sent to the broker.
+* Events loaded into a business process must be processed by the main process and cannot be associated with a sub-process.
+* The save operation is asynchronous.
+* Download progress is not tracked.
+* As a reference to the derived document for all entities, there will be one key for the entire file without specifying a specific line.
+* Files that do not comply with the rules of the installed simulators cannot be loaded.
+* The file size limit is managed at the control plane level
+
+//== Високорівневий дизайн рішення
+== High-level solution design
+
+image:architecture/registry/operational/registry-management/platform-evolution/async-load/context.svg[]
+
+image:architecture/registry/operational/registry-management/platform-evolution/async-load/context-details.svg[]
+
+
+//=== Ключові сценарії взаємодії сервісів
+=== Key scenarios of services interaction
+////
+.Опрацювання файлу
+[plantuml, req, svg]
+----
+!theme plain
+participant "Кабінет" as portal
+participant "Сервіс завантаження\n документів" as dds
+box "BPMS" #LightBlue
+participant "Бізнес процес" as bpms
+participant "Kafka делегат " as delegate
+participant "Kafka Listener" as listener
+end box
+participant "Registry Rest API" as restApi
+queue "Kafka" as kafka
+collections "Ceph" as ceph
+participant "Registry Kafka API" as kafkaApi
+database "Операційна\nбаза даних" as db
+participant "Keycloak" as keycloak
+
+== Збереження файлів ==
+portal -> dds: завантаження файлу
+dds -> restApi: валідація вмісту файлу по відношенню до структури та кількості сутностей
+return структура та вміст валідні
+dds -> ceph: збереження документу
+return документ завантажено
+dds --> portal: ключ ceph до документу
+portal -> bpms: відправка форми з ключем файлу
+group опційний крок
+bpms -> bpms: перетворення csv файлу
+bpms -> ceph: збереження результату обробки
+return ключ
+end
+bpms -> delegate: формування запиту
+
+== Завантаження даних ==
+delegate -> kafka: повідомлення завантаження \n [вхідна черга повідомлень]
+kafkaApi -> kafka: отримання запиту на збереження файлу
+kafkaApi -> keycloak: отримання сертифікату для валідації токену
+return публічний сертифікату
+kafkaApi -> kafkaApi: валідація токену
+kafkaApi -> ceph: завантаження файлу
+return файл за данними
+kafkaApi -> kafkaApi: валідація вмісту файлу по відношенню до\nструктури та кількості сутностей
+kafkaApi -> ceph: збереження файлу в окреме сховище
+return
+group цикл [кожен рядок]
+kafkaApi -> db: збереження відповідним сервісом
+return результат збереження
+end
+kafkaApi -> kafkaApi: формування відповіді
+kafkaApi --> kafka: повідомлення з результатом обробки \n [вихідна черга повідомлень]
+listener -> kafka
+listener -> listener: кореляція з запитом,\n формування події згідно зі статусом
+listener -> bpms: формування події
+bpms --> portal: результат опрацювання
+----
+////
+
+.File processing
+[plantuml, req, svg]
+----
+!theme plain
+participant "Portal" as portal
+participant "Document upload\n service" as dds
+box "BPMS" #LightBlue
+participant "Business process" as bpms
+participant "Kafka delegate " as delegate
+participant "Kafka Listener" as listener
+end box
+participant "Registry Rest API" as restApi
+queue "Kafka" as kafka
+collections "Ceph" as ceph
+participant "Registry Kafka API" as kafkaApi
+database "Operational\n database" as db
+participant "Keycloak" as keycloak
+
+== Saving files ==
+portal -> dds: uploading a file
+dds -> restApi: validation of the file content in relation to the structure and number of entities
+return structure and content are valid
+dds -> ceph: saving the document
+return the document has been uploaded
+dds --> portal: ceph key to the document
+portal -> bpms: sending a form with a file key
+group optional step
+bpms -> bpms: csv file conversion
+bpms -> ceph: saving the processing result
+return key
+end
+bpms -> delegate: forming a request
+
+== Loading data ==
+delegate -> kafka: loading message \n [incoming message queue]
+kafkaApi -> kafka: receiving a request to save the file
+kafkaApi -> keycloak: obtaining a certificate for token validation
+return public certificate
+kafkaApi -> kafkaApi: token validation
+kafkaApi -> ceph: uploading a file
+return file by data
+kafkaApi -> kafkaApi: validating file contents against the\nstructure and number of entities
+kafkaApi -> ceph: saving the file to a separate storage
+return
+group cycle [each row]
+kafkaApi -> db: saving by the corresponding service
+return saving result
+end
+kafkaApi -> kafkaApi: forming an answer
+kafkaApi --> kafka: message with processing result \n [outgoing message queue]
+listener -> kafka
+listener -> listener: correlation with the request,\n event formation according to the status
+listener -> bpms: formation of the event
+bpms --> portal: processing result
+----
+
+
+//== Моделювання регламенту реєстру
+== Simulation of the registry regulations
+
+//=== Розширення для моделювання
+=== Simulation extension
+
+//Для реалізації можливості асинхронного завантаження сутностей до БД, конфігурація складається з декілька частин:
+
+//Конфігурація на рівні моделі даних за допомогою розширення liquibase, моделювання форми по завантаженню файлів та використання делегату асинхронної взаємодії при моделюванні БП.
+
+To implement the possibility of asynchronous loading of entities to the database, the configuration consists of several parts:
+
+Configuration at the level of the data model using the liquibase extension, modeling the file upload form, and using the asynchronous interaction delegate for BP modeling.
+
+////
+.Розширення бібліотеки liquibase
+[source, xml]
+----
+<changeSet>
+    <createTable name="item">
+        <!-- Опис полів таблиці !-->
+    </createTable>
+    <createTable name="demo_entity">
+        <!-- Опис полів таблиці !-->
+    </createTable>
+
+    <createCompositeEntity name="item_with_references">
+        <!-- Опис полів складної сутності !-->
+    </createCompositeEntity>
+
+    <createAsyncLoad name="allowedAsyncLoads">
+        <entityList>
+            <entity name="item" limit="100"/>
+            <entity name="item_with_references" limit="1000"/>
+            <entity name="demo_entity" limit="1000000"/>
+        </entityList>
+    </createAsyncLoad>
+
+    <deleteAsyncLoad name="removeEntities">
+        <entityList>
+            <entity name="demo_entity"/>
+        </entityList>
+    </deleteAsyncLoad>
+
+</changeSet>
+----
+////
+
+.An extension of the liquibase library
+[source, xml]
+----
+<changeSet>
+    <createTable name="item">
+        <!-- Description of table fields !-->
+    </createTable>
+    <createTable name="demo_entity">
+        <!-- Description of table fields !-->
+    </createTable>
+
+    <createCompositeEntity name="item_with_references">
+        <!-- Description of the fields of a complex entity !-->
+    </createCompositeEntity>
+
+    <createAsyncLoad name="allowedAsyncLoads">
+        <entityList>
+            <entity name="item" limit="100"/>
+            <entity name="item_with_references" limit="1000"/>
+            <entity name="demo_entity" limit="1000000"/>
+        </entityList>
+    </createAsyncLoad>
+
+    <deleteAsyncLoad name="removeEntities">
+        <entityList>
+            <entity name="demo_entity"/>
+        </entityList>
+    </deleteAsyncLoad>
+
+</changeSet>
+----
+
+
+//Атрибут `limit` є обовʼязковим при створенні `createAsyncLoad`
+The `limit` attribute is required when creating `createAsyncLoad`
+
+image:architecture/registry/operational/registry-management/platform-evolution/async-load/business-process.png[]
+
+//.Конфігурація делегату для асинхронного завантаження
+.Configuring a delegate for asynchronous loading
+====
+image:architecture/registry/operational/registry-management/platform-evolution/async-load/delegateConfiguration.png[]
+====
+
+//В результаті обробки, можливе виникнення декількох подій, в залежності від статусу результату.
+//Тип події складається з назви сутності та статусу.
+
+As a result of processing, several events may occur, depending on the status of the result.
+An event type consists of an entity name and a status.
+
+
+//.Приклади налаштування обробки подій успішного завантаження сутності item
+.Examples of setting event handling of successful loading of the item entity
+====
+image:architecture/registry/operational/registry-management/platform-evolution/async-load/succesEvent.png[]
+====
+
+//.Приклади налаштування обробки подій для при збереженні сутності item
+.Examples of setting event processing for when saving the item entity
+====
+image:architecture/registry/operational/registry-management/platform-evolution/async-load/constraintViolation.png[]
+====
+
+//Загальне правило для формування подій при асинхронній взаємодії формується за допомогою `camel case` і складається з `назви сутності над якою здійснюється операція + назва операція + результат операції`
+The general rule for forming events during asynchronous interaction is formed using `camel case' and consists of `the name of the entity on which the operation is performed + the name of the operation + the result of the operation'
+
+//.Можливі статуси результату опрацювання
+.Possible statuses of the processing result
+
+////
+|===
+|Результат операції |Опис |Приклад події на бізнес процесі
+
+|SUCCESS
+|Операція  закінчилась успішно.
+|%item%DataLoadCsvSuccess
+
+|CONSTRAINT_VIOLATION
+|Дані з файлу не можуть бути завантаженні оскільки один з них порушує існуючі правила БД.
+|%item%DataLoadCsvConstraintViolation
+
+|OPERATION_FAILED
+|Під час опрацювання файлу виникла помилка.
+|%item%DataLoadCsvOperationFailed
+|===
+////
+
+|===
+|The result of the operation |Description |An example of an event on a business process
+
+|SUCCESS
+|The operation ended successfully.
+|%item%DataLoadCsvSuccess
+
+|CONSTRAINT_VIOLATION
+|Data from the file cannot be loaded because one of them violates existing database rules.
+|%item%DataLoadCsvConstraintViolation
+
+|OPERATION_FAILED
+|An error occurred while processing the file.
+|%item%DataLoadCsvOperationFailed
+|===
+
+
+//== Низькорівневий дизайн сервісів
+== Low-level service design
+
+//=== Бібліотека Liquibase-розширень для моделювання дата моделі реєстру
+=== Library of Liquibase-extensions for modeling the date model of the registry
+
+//Результатом обробки тегів `createAsyncLoad` `deleteAsyncLoad` є формування переліку структур для яких дозволено асинхронне завантаження даних з файлів в таблиці метаданих.
+The result of processing the `createAsyncLoad` `deleteAsyncLoad` tags is the formation of a list of structures for which asynchronous loading of data from files in the metadata table is allowed.
+
+//=== Делегат для відправки асинхронних повідомлень
+=== Delegate for sending asynchronous messages
+
+//При відправці повідомлення за допомогою делегата, разом з тілом повідомлення відправляються службові заголовки для трасування.
+When sending a message using a delegate, service headers for tracing are sent along with the message body.
+
+//Поля делегата які заповнюються при моделюванні.
+Delegate fields that are filled in during modeling.
+////
+_Назва сутності_ - назва обʼєкту дата моделі (таблиця або складний обʼєкт) +
+_Файл_ - структура яка представляє файл і складається з ключа до файлу і чексуми. +
+_Підпис_ - структура яка представляє форму яка була підписана з вмістом файлу. +
+__Похідний файл (опційно) __- структура яка представляє файл, який був створений в бізнес процесі або в результаті опрацювання оригінального файлу. +
+_Змінна_ - Назва змінної в яку буде збережено результат обробки файлу. +
+_JWT токен_ - токен користувача. +
+////
+
+Entity name_ - name of the object date of the model (table or complex object) +
+_File_ is a structure that represents a file and consists of a key to the file and a checksum. +
+_Signature_ - a structure that represents the form that was signed with the contents of the file. +
+__Derived file (optional) __- a structure that represents a file that was created in a business process or as a result of processing the original file. +
+_Variable_ - the name of the variable in which the result of file processing will be saved. +
+_JWT token_ - user token. +
+
+//.Приклад тіла повідомлення для збереження даних з файлу
+.An example of a message body for saving data from a file
+[source,json]
+----
+{
+  "payload": {
+    "file": {
+      "checksum": "....",
+      "id": "process/bp-instance-id/uuid"
+    },
+    "derivedFile": {
+      "checksum": "...",
+      "id": "process/bp-instance-id/uuid"
+    }
+  }
+}
+----
+Всі метадані до повідомлення передаються в заголовках до повідомлення разом з типовими для БП "X-Digital-*" заголовками.
+
+_X-Digital-Signature_ - користувацький підпис. +
+_X-Digital-Signature-Derived_ - підпис який генерується на підставі фінального повідомлення. +
+_EntityName_ - назва обʼєкту дата моделі. +
+_ResultVariable_ - назва персистеної змінної в яку буде збережено результат обробки файлу. +
+
+
+//=== Сервіс синхронного управління даними реєстру
+=== Synchronous registry data management service
+
+//Валідація відбувається згідно існуючого процесу за рахунок проксювання запитів до сервісу синхронного управління даними, правила щодо дозволеної кількості сутностей виставлених моделювальником формується на етапі генерації сервісу.
+Validation takes place according to the existing process by proxying requests to the synchronous data management service, the rules regarding the permitted number of entities exposed by the modeler are formed at the service generation stage.
+
+//=== Сервіс асинхронного управління даними реєстру
+=== Asynchronous registry data management service
+
+//Процес обробки повідомлення здійснюється існуючими обробниками для збереження сутностей (`createEntity`, `createCompositeEntity`) який обирається динамічно по тупи сутності в залежності від значення поля `entityName`, формування переліку маршрутизації `entityName`  до обробника відбувається на етапі генерації.
+The process of processing the message is carried out by existing handlers for saving entities (`createEntity`, `createCompositeEntity`) which is dynamically selected according to the entity name depending on the value of the `entityName` field, the formation of the routing list of `entityName` to the handler takes place at the generation stage.
+
+//Результатом обробки буде статус та деталі до повідомлення.
+The processing result will be the status and details for the message.
+
+[source, json]
+----
+{
+  "status": "SUCCESS",
+  "details": "OK"
+}
+----
+
+[source, json]
+----
+{
+  "status": "CONSTRAINT_VIOLATION",
+  "details": "error: {%s} in line: {%d}"
+}
+----
+
+//Текст з помилки про порушення правил БД, береться з процедури, а номер рядка за рахунок ведення лічильника в середині транзакції.
+The text from the error about the violation of the database rules is taken from the procedure, and the line number is due to keeping a counter in the middle of the transaction.
+
+//=== Обробник повідомлень подій результатів завантаження даних для сервісу виконання бізнес-процесів
+=== Handler of data loading results event messages for the business process execution service
+
+//Кореляція результату з бізнес процесом відбувається за рахунок `BusinessProcessInstanceId` з контексту.
+//А тип повідомлення формується динамічно на підставі типу сутності та результату.
+
+Correlation of the result with the business process occurs due to `BusinessProcessInstanceId` from the context.
+The message type is generated dynamically based on the entity type and the result.
+
+//.Приклад можливої кореляції
+.An example of a possible correlation
+[source, java]
+----
+@Component
+public class AsyncDataLoadResponseKafkaListener {
+    private static final String ACTION = "DataLoadCsv";
+    @Autowired
+    private RuntimeService runtimeService;
+
+    @KafkaListener("data-load.csv.outbound")
+    public void processAsyncMessages(
+            @Payload AsyncDataLoadResponse message,
+            MessageHeaders headers) {
+        AsyncDataLoadResult payload = message.geyPayload();
+
+        RequestContext requestContext = message.getRequestContext();
+        Result result = new Result(message.getStatus(), message.getDetails());
+        runtimeService.createMessageCorrelation(payload.getEntityName() + ACTION + message.getStatus())
+          .processInstanceId(requestContext.getProcessInstanceId())
+          .setVariable(payload.getResultVariable(), result)
+          .correlate();
+    }
+
+}
+----
+
+//== Високорівневий план розробки
+== High-level development plan
+
+//=== Технічні експертизи
+=== Technical examinations
+
+* BE
+* FE
+
+//=== План розробки
+=== Development plan
+////
+* Створення нової форми для завантаження даних з CSV файлів
+* Розширення бібліотека Liquibase додатковими тегами.
+* Розробка нового делегату для відправки асинхронних повідомлень.
+* Розширення сервісу асинхронного управління даними реєстру для роботи з повідомленнями про завантаження даних.
+* Розширення сервісу виконання бізнес-процесів компонентою для обробки вхідних повідомлень.
+* Розробка реферетного прикладу БП.
+* Зміна існуючої форми в частині необхідності вказання сутності для валідації (поле стає не обовʼязковим і валідація здійснюється тільки при наявності значення в цьому полі)
+* Розширення можливості збереження файлів CSV як файлів в сервісах управління даними реєстру
+////
+* Creation of a new form for uploading data from CSV files
+* Liquibase library extension with additional tags.
+* Development of a new delegate for sending asynchronous messages.
+* Extension of the asynchronous registry data management service to work with data download notifications.
+* Extension of the business process execution service with a component for processing incoming messages.
+* Development of an abstract example of BP.
+* Changing the existing form in terms of the need to specify the entity for validation (the field becomes optional and validation is carried out only if there is a value in this field)
+* Expanding the ability to save CSV files as files in registry data management services

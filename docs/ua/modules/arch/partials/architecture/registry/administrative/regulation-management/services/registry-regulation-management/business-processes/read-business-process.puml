@@ -1,0 +1,38 @@
+@startuml
+participant "Web клієнт" as client order 1
+participant "Модуль роботи з\nбізнес-процесами" as businessProcessModule order 2
+participant "Модуль роботи з файлами" as fileModule order 3
+participant "Файловий\nсервіс" as fileService order 4
+
+skinparam responseMessageBelowArrow true
+
+title Читання бізнес-процесу регламенту з вказаної версії
+
+client -> businessProcessModule: запит на читання\nбізнес-процесу за ім'ям
+activate businessProcessModule
+
+  businessProcessModule -> fileModule: отримати файловий\nсервіс для вказаної версії
+  activate fileModule
+    create fileService
+    fileModule -> fileService: ініціалізувати
+    alt вказана версія не існує
+      fileModule <-- fileService: помилка ініціалізації
+      businessProcessModule <-- fileModule: помилка ініціалізації\nфайлового сервісу
+      client <-- businessProcessModule: помилка зі статусом\n404 Not Found
+    end
+    fileModule <-- fileService
+    return файловий сервіс
+  deactivate fileModule
+
+  businessProcessModule -> fileService: зчитати контент бізнес-процесу з вказаним ім'ям
+  activate fileService
+    alt бізнес-процес не існує
+      businessProcessModule <-- fileService: помилка читання
+      client <-- businessProcessModule: помилка зі статусом\n404 Not Found
+    end
+    return контент бізнес-процесу
+  deactivate fileService
+
+  client <-- businessProcessModule: контент бізнес-процесу
+deactivate businessProcessModule
+@enduml

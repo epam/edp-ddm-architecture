@@ -1,0 +1,49 @@
+@startuml
+participant "Інтерфейс командної строки" as cli  order 10
+participant "Camunda-auth-cli" as camundaAuthCli  order 20
+participant "Cервіс виконання бізнес-процесів" as bpms order 30
+skinparam responseMessageBelowArrow true
+
+title Створення прав доступу
+    cli -> camundaAuthCli: Створити права доступу:\nbpms url, токен, файли конфігурацій
+    activate camundaAuthCli
+      camundaAuthCli -> camundaAuthCli: Читання файлів конфігурацій прав доступу
+      group Видалення прав доступу
+      camundaAuthCli -> bpms: Отримати всі READ, CREATE-INSTANCE права доступу до регламентів
+      activate bpms
+      bpms -> camundaAuthCli: 200 OK, Права доступу до регламентів
+      deactivate bpms
+      camundaAuthCli -> bpms: Отримати CREATE права доступу для груп до інстансів регламенту
+      activate bpms
+      bpms -> camundaAuthCli: 200 OK, Права доступу до інстансів регламенту
+      deactivate bpms
+      loop ідентифікатори прав доступу
+         camundaAuthCli -> bpms: Видалити право доступу за ідентифікатором
+         activate bpms
+         bpms -> camundaAuthCli: 204 OK, Право доступу видалено
+         deactivate bpms
+      end
+    end
+    group Строрення прав доступу
+      group Строрення прав доступу до регламентів
+        loop Регламенти
+          loop Вказані ролі для регламента
+              camundaAuthCli -> bpms: Створити право доступу до регламенту для ролі
+              activate bpms
+                bpms -> camundaAuthCli: 200 OK, Право доступу створено
+              deactivate bpms
+          end
+        end
+      end
+      group Строрення прав доступу для інстансів регламенту
+        loop Всі унікальні ролі
+          camundaAuthCli -> bpms: Створити право доступу строрення інстансів регламента для вказаної ролі
+          activate bpms
+            bpms -> camundaAuthCli: 200 OK, Право доступу створено
+          deactivate bpms
+        end
+      end
+    end
+    camundaAuthCli -> cli: Права доступу створено
+    deactivate camundaAuthCli
+@enduml

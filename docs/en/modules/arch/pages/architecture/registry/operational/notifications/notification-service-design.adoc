@@ -1,0 +1,327 @@
+= User notification service
+include::platform:ROOT:partial$templates/document-attributes/arch-set-en.adoc[]
+
+include::platform:ROOT:partial$admonitions/language-en.adoc[]
+
+== General overview
+
+//За реалізацію вимог по формуванню та відправленню повідомлень користувачам відповідає "_Сервіс повідомлень користувачів_".
+"_User notification service_" is responsible for the implementation of the requirements for creating and sending notifications to the users.
+
+//Інтерфейсом для зовнішньої взаємодії з сервісом виступає окремий _Kafka_-топік "_user-notifications_", а основою рішення є реагування та обробка подій-запитів на генерацію повідомлень з використанням _FreeMarker_-шаблонів, попередньо завантажених у сховище та їх послідуюча відправка згідно налаштувань користувача у _Kafka_-топіки, які відповідають за окремі канали зв'язку.
+
+The interface for external interaction with the service is a separate _Kafka_-topic "_user-notifications_", and the basis of the solution is the response and processing of events-requests for the generation of notifications using _FreeMarker_-templates pre-loaded in the storage and their subsequent sending according to the user's settings in _Kafka_- topics that are responsible for separate communication channels.
+
+[NOTE]
+//У разі, якщо подію-запит на відправку повідомлення через "_user-notifications_" топік не вдалося обробити, система проводить N спроб згідно поточної конфігурації і за відсутності результату перенаправляє повідомлення в окремий службовий топік "_user-notifications.DLT_".
+If the event-request to send a notification through the "_user-notifications_" topic could not be processed, the system makes N attempts according to the current configuration and, in the absence of a result, redirects the message to a separate service topic "_user-notifications.DLT_".
+
+//== Компонентна діаграма
+== Component diagram
+
+//На даній компонентній діаграмі зображено важливі аспекти функціонування сервісу, компоненти та їх призначення, зовнішні інтеграції та інтеграції з іншими сервісами _Платформами_.
+This component diagram shows important aspects of service functioning, components and their purpose, external integrations and integrations with other services of the _Platforms_.
+
+image::architecture/registry/operational/notifications/notifications-service.svg[]
+
+//== Компоненти та їх призначення
+== Components and their purpose
+
+////
+|===
+|Компонент|Бібліотека|Призначення
+
+|*Notification Event Subscriber*
+|-
+|Обробка системних запитів на відправлення повідомлень користувачам
+
+Логування деталей у разі невдалої спроби опрацювання запиту.
+
+Публікація запитів, які не вдалося опрацювати у окрему чергу повідомлень для аналізу.
+
+|*Notification Service*
+|-
+|Оркестрація процесу обробки запиту на відправлення повідомлень.
+
+Завантаження налаштувань користувачів та їх даних, необхідних для відправлення.
+
+Формування переліку каналів для яких необхідно відправити повідомлення.
+
+|*Notification Template Service*
+|-
+|Збереження змін до шаблонів повідомлень.
+
+Отримання шаблону повідомлення для каналу зв'язку.
+
+|*Channel Notification Validators*
+|-
+|Валідація запиту на відправку повідомлення згідно особливостей каналу зв'язку
+
+|*Channel Notification Producers*
+|-
+|Формування запиту на відправлення повідомлення для окремого каналу зв'язку на базі шаблону
+
+|*Channel Notification Publishers*
+|-
+|Публікація запитів на відправлення повідомлень для окремого каналу зв'язку
+
+|*Channel Notification Subscribers*
+|-
+|Обробка запитів на відправлення повідомлень для окремого каналу зв'язку.
+
+Публікація запитів, які не вдалося опрацювати у окрему чергу канала для подальшої обробки
+
+|*Inbox Notification Service*
+|-
+|Збереження in-app повідомлень для користувача.
+
+Отримання переліку in-app повідомлень користувача.
+
+Підтвердження перегляду in-app повідомлення користувачем
+
+|*User Settings Feign Client*
+|ddm-user-settings-client
+|Отримання налаштувань каналів зв'язку для користувача
+
+|*Diia Notification Service*
+|ddm-diia-client
+|Відправлення push-повідомлення користувачу
+
+|*Diia Notification Template Service*
+|ddm-diia-client
+|Реєстрація шаблону повідомлення для послідуючого використання при відправленні push-повідомлення
+
+|*Audit Service*
+|ddm-audit-starter
+|Фіксація події аудиту в журнал
+
+|*Idm Service*
+|ddm-idm-client
+|Отримання атрибутів користувача за ідентифікатором
+
+|===
+////
+
+|===
+|Component|Library|Purpose
+
+|*Notification Event Subscriber*
+|-
+|Processing system requests for sending notifications to users
+
+Logging of details in case of an unsuccessful attempt to process the request.
+
+Publishing requests that could not be processed to a separate notification queue for analysis.
+
+|*Notification Service*
+|-
+|Orchestration of the processing of the request to send notifications.
+
+Downloading user settings and their data required for sending.
+
+Formation of the list of channels for which it is necessary to send a notification.
+
+|*Notification Template Service*
+|-
+|Saving changes to notification templates.
+
+Getting the notification template for the communication channel.
+
+|*Channel Notification Validators*
+|-
+|Validation of a request to send a notification according to the characteristics of the communication channel
+
+|*Channel Notification Producers*
+|-
+|Forming a request to send a notification for a separate communication channel based on a template
+
+|*Channel Notification Publishers*
+|-
+|Publication of requests for sending notifications for a separate communication channel
+
+|*Channel Notification Subscribers*
+|-
+|Processing requests for sending notifications for a separate communication channel.
+
+Publishing requests that could not be processed into a separate channel queue for further processing
+
+|*Inbox Notification Service*
+|-
+|Saving in-app messages for the user.
+
+Getting a list of in-app user notifications.
+
+Confirmation of viewing of the in-app notification by the user
+
+|*User Settings Feign Client*
+|ddm-user-settings-client
+|Getting communication channel settings for the user
+
+|*Diia Notification Service* (citizen-facing solution)
+|ddm-diia-client
+|Sending a push notifications to the user
+
+|*Diia Notification Template Service* (citizen-facing solution)
+|ddm-diia-client
+|Registration of a notification template for subsequent use when sending a push notification
+
+|*Audit Service*
+|ddm-audit-starter
+|Logging of the audit event
+
+|*Idm Service*
+|ddm-idm-client
+|Getting user attributes by ID
+
+|===
+
+//== Взаємодія компонентів в рамках реалізації сценаріїв
+== Interaction of components within the framework of the implementation of scenarios
+
+//=== Отримання _in-app_ повідомлень та підтвердження перегляду користувачем
+=== Receiving _in-app_ notifications and confirming the user's view
+
+[plantuml, inbox-notification-read-flow, svg]
+----
+include::partial$architecture/registry/operational/notifications/inbox/inbox-notification-read-flow.puml[]
+----
+
+//=== Відправлення повідомлень
+=== Sending notifications
+
+//==== Загальний сценарій обробки повідомлень
+==== General notification processing scenario
+
+
+//.Загальний сценарій обробки повідомлень kafka-топіком user-notifications
+.General scenario for notification processing by the user-notifications kafka topic
+
+[plantuml, notification-to-channels-flow.puml, svg]
+----
+include::partial$architecture/registry/operational/notifications/general/notification-to-channels-flow.puml[]
+----
+
+//==== Обробка запиту на відправлення поштового повідомлення
+==== Processing of a request to send a email notification
+
+//.Обробка запитів на відправку поштових повідомлень користувачам
+.Processing requests for sending email notifications to the users
+
+[plantuml, email-notification-flow, svg]
+----
+include::partial$architecture/registry/operational/notifications/email/email-notification-flow.puml[]
+----
+
+
+
+
+
+
+////
+//==== Обробка запиту на відправлення push-нотифікації в Дію
+==== Processing a request to send a push notification to Diia
+
+
+include::ROOT:partial$admonitions/ua-specific.adoc[]
+
+//TIP: З детальною інформацією щодо взаємодії з сервісом нотифікація Дії можна ознайомитись у розділі xref:architecture/registry/operational/notifications/diia-notifications-api.adoc[API відправки push-нотифікацій у мобільний додаток "Дія"].
+
+TIP: Detailed information on interaction with the Action notification service can be found in the section xref:architecture/registry/operational/notifications/diia-notifications-api.adoc[API for sending push notifications to the "Diia" mobile application].
+
+.Обробка запитів на відправку push-нотифікацій користувачам у мобільний додаток Дія
+[plantuml, diia-notification-flow, svg]
+----
+include::partial$architecture/registry/operational/notifications/diia/diia-notification-flow.puml[]
+----
+////
+
+
+
+
+//==== Обробка запиту на відправлення in-app повідомлень у inbox користувача Кабінету Громадянина
+
+==== Processing a request to send in-app notifications to the inbox of a Citizen's portal
+
+[plantuml, inbox-notification-save-flow, svg]
+----
+include::partial$architecture/registry/operational/notifications/inbox/inbox-notification-save-flow.puml[]
+----
+
+//== Загальні налаштування сервісу
+== General service settings
+
+//.Приклад налаштувань сервісу для публікації подій через Kafka-топік (на прикладі використання *ddm-starter-kafka* бібліотеки)
+.An example of service settings for publishing events via a Kafka topic (using the *ddm-starter-kafka* library as an example)
+[source, yaml]
+----
+data-platform:
+  kafka:
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      custom-config:
+        "[enable.idempotence]": true
+    topic-properties:
+      creation:
+        enabled: true
+        timeout-in-seconds: 60
+      retention:
+        default-in-days: 7
+        num-partitions: 1
+        replication-factor: 1
+    error-handler:
+      initial-interval: 1500
+      max-elapsed-time: 6000
+      multiplier: 2
+    topics:
+      "<topic-name>": "<topic-name>"
+----
+
+//.Приклад налаштувань сервісу для отримання повідомлень через Kafka-топік (на прикладі використання *ddm-starter-kafka* бібліотеки)
+.An example of service settings for receiving notifications via a Kafka topic (on the example of using the *ddm-starter-kafka* library)
+[source, yaml]
+----
+data-platform:
+   kafka:
+     consumer:
+       group-id: <consumer-group>
+       key-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+       value-deserializer: org.springframework.kafka.support.serialize.ErrorHandlingDeserializer
+       custom-config:
+         "[allow.auto.create.topics]": false
+         "[retry.backoff.ms]": 10000
+     topics:
+       "<topic-name>": "<topic-name>"
+     error-handler:
+       initial-interval: 1500
+       max-elapsed-time: 6000
+       multiplier: 2
+----
+
+//TIP: Існує необхідність реалізації автоматичного створення Kafka-топіків "_<topic-name>.DLT_" в рамках *ddm-starter-kafka* бібліотеки (_StartupKafkaTopicsCreator_) для коректного відпрацювання _DeadLetterPublishingRecoverer_ стратегії при неможливості обробки повідомлення.
+
+TIP: There is a need to implement the automatic creation of Kafka topics "_<topic-name>.DLT_" within the framework of the *ddm-starter-kafka* library (_StartupKafkaTopicsCreator_) for the correct implementation of the _DeadLetterPublishingRecoverer_ strategy in case of notification processing failure.
+
+//.Канонічний приклад налаштувань каналів зв'язку з секретами для тестування
+.Canonical example of communication channel settings with secrets for testing
+[source, yaml]
+----
+notifications:
+  email:
+    host: smtp.gmail.com
+    port: 587
+    username: <username>
+    password: <password>
+    properties:
+      mail:
+        transport:
+          protocol: smtp
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+  diia:
+    url: https://api2t.diia.gov.ua/
+    partner:
+      token: <partner-token>
+----

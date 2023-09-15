@@ -1,0 +1,59 @@
+@startuml
+actor "Адміністратор платформи" as admin  order 10
+participant "Bash-installer" as bashInstaller  order 20
+participant "Helm-installer" as installer  order 30
+participant "Ceph" as ceph order 40
+participant "Logging" as logging order 45
+participant "Service-mesh" as servicemesh order 46
+participant "Nexus Registry" as nexus order 50
+participant "Keycloak" as keycloak  order 58
+participant "ControlPlane components" as cp  order 60
+participant "Cluster-management helm in Gerrit" as gerrit  order 70
+participant "Gitops Job Jenkins" as jenkins  order 80
+participant "Інші компоненти" as other  order 90
+
+title Детальна інсталяція платформи
+autonumber
+
+admin -> bashInstaller: запускає інсталлер
+activate bashInstaller
+    bashInstaller -> bashInstaller: активує шифрування etcd
+    bashInstaller -> installer: активує catalog-source (Redhat репозиторії)
+    bashInstaller -> ceph: встановлює storage
+    bashInstaller -> logging: встановлює logging
+    bashInstaller -> servicemesh: встановлює service-mesh
+    bashInstaller -> nexus: встановлює control-plane-nexus
+    bashInstaller -> bashInstaller: встановлює platform-vault
+    bashInstaller -> bashInstaller: встановлює platform-minio
+    bashInstaller -> nexus: завантажує докер імеджі
+    bashInstaller -> keycloak: встановлює user-management
+    bashInstaller -> installer: запускає control-plane-installer
+    bashInstaller -> nexus: завантажує nexus ресурси (*.xsd)
+    bashInstaller -> installer: створює backup-credentials
+    activate installer
+        installer -> cp: встановлює CP компоненти
+        activate cp
+            cp -> jenkins: встановлює jenkins-operator та jenkins
+            cp -> other: встановлює codebase-operator
+            cp -> other: встановлює keycloak-operator
+            cp -> gerrit: встановлює gerrit-operator та gerrit
+            cp -> gerrit: встановлює codebase cluster-mgmt
+            activate gerrit
+                gerrit -> gerrit: інціалізує cluster-mgmt repo з helm
+            return
+        return
+    return
+return
+activate cp
+  activate jenkins
+    cp -> jenkins: створює gitops job для cluster-mgmt
+    cp -> jenkins: запускає gitops job для cluster-mgmt
+    jenkins -> gerrit: checkout helmfile
+    jenkins -> jenkins: запускає helmfile
+    jenkins -> other: встановлює
+  deactivate jenkins
+  cp -> keycloak: створює realm для Control Plane
+  cp -> cp: інтегрує всі компоненти з keycloak
+deactivate cp
+
+@enduml

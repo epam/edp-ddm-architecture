@@ -1,0 +1,254 @@
+= Моніторинг загальних показників виконання бізнес-процесів
+
+== Загальний опис
+
+Необхідно забезпечити можливості моніторингу загальних метрик виконання бізнес-процесів для спрощення діагностики та аналізу поведінки системи з ціллю своєчасного виконання корегуючих дій.
+
+== Ролі користувачів
+
+* Технічний адміністратор реєстру
+* Служба підтримки платформи (L2)
+
+== Принципи та положення
+
+* Для зменшення навантаження на сервіси операційної зони реєстру, метрики мають збиратись через окремий екземпляр _Camunda_ (*business-process-administration-portal*) адміністративної зони
+* Реєстрація змін метрик виконання бізнес-процесів є опційною та має налаштовуватись на рівні конфігурації сервісу (*business-process-administration-portal*)
+* Інтервал збору метрик налаштовується на рівні службового процесу _Prometheus_
+* Механізм автоматичних сповіщень не входить до скоупу цього документа
+
+== Технічний дизайн рішення
+
+image::architecture/platform/operational/monitoring/camunda-metrics/camunda-metrics.svg[camunda-metrics,400]
+
+=== Компоненти та їх призначення
+
+У даному розділі наведено перелік компонент системи, які задіяні або потребують змін/створення в рамках реалізації функціональних вимог згідно технічного дизайну рішення.
+
+|===
+|Компонент|Службова назва|Призначення
+
+|_Веб-інтерфейс моніторингу Платформи_
+|*grafana*
+|Розробка та розгортання окремого дашборду для моніторингу метрик виконання бізнес-процесів
+
+|_Сервіс збору та зберігання метрик моніторингу_
+|*prometheus*
+|Налаштування збирання додаткових метрик
+
+|_Веб-інтерфейс управління виконанням бізнес-процесів_
+|*business-process-administration-portal*
+|Розробка окремого _Process Engine Plugin_ для збору та реєстрації додаткових метрик виконання бізнес-процесів через _Micrometer_. Реєстрація метрик проводиться лише у разі відповідного налаштування `camunda.bpm.metrics.enabled`
+|===
+
+=== Налаштування реєстрації змін метрик
+
+.Налаштування експорту метрик у Prometheus-сумісному форматі через службовий роут `'/actuator/prometheus'` в `application.yml`
+[source,yaml]
+----
+management:
+  endpoints:
+    web:
+      exposure:
+        include: 'prometheus'
+----
+
+.Налаштування реєстрації змін метрик виконання бізнес-процесів в `application.yml`
+[source,yaml]
+----
+camunda:
+  bpm:
+    metrics:
+      enabled: true # Налаштування для вмикання експорту метрик Camunda [Включено за замовченням]
+----
+
+=== Налаштування збору метрик
+
+.Налаштування збирання метрик виконання бізнес-процесів в `prometheus.yml`
+[source,yaml]
+----
+scrape_configs:
+  - job_name: "camunda"
+    metrics_path: "/actuator/prometheus"
+    scrape_interval: 60s # Інтервал збору метрик
+    static_configs:
+      - targets: ['HOST:PORT']
+----
+
+=== Налаштування Grafana-дашборда
+
+.Приклад Grafana-дашборди для кастомізації (xref:attachment$architecture/platform/operational/monitoring/camunda-metrics/camunda-metrics.json[Завантажити])
+[%collapsible]
+====
+[source,json]
+----
+include::attachment$architecture/platform/operational/monitoring/camunda-metrics/camunda-metrics.json[]
+----
+====
+
+=== Реєстрація метрик для експорту
+
+Існує два базових підходи до збору метрик в залежності від вимог до інтервалів актуалізації даних та продукованого навантаження:
+
+- Реєстрація метрик разом з функціями для актуалізації їх значень. Оновлення значень метрик відбувається у разі виконання запиту через службовий роут `'/actuator/prometheus'` згідно з інтервалом, налаштованим на рівні _Prometheus_
+- Реєстрація метрик та актуалізація їх значень за окремо налаштованим графіком за допомогою _Spring Task Scheduling_ та `@Scheduled(fixedRate = <?>)` з ціллю розподілення навантаження
+
+[IMPORTANT]
+--
+На даному етапі, рекомендовано слідувати підходу з налаштуванням інтервалу оновлення метрик на рівні _Prometheus_.
+
+У разі необхідності, в майбутньому розглянути доцільність використання підходу з гранулярним налаштуванням графіка оновлень метрик.
+--
+
+.Приклад реєстрації метрик з оновленням за інтервалом, налаштованим на рівні _Prometheus_
+[source,java]
+----
+class CamundaMetricsBinderV1 implements MeterBinder {
+    ProcessEngine processEngine;
+
+    void bindTo(MeterRegistry registry) {
+        Gauge.builder("<metric.key.name>", processEngine.getHistoryService().createHistoricProcessInstanceQuery(), Query::count)
+                .tag("<dimension.tag.one>", "<value>")
+                .tag("<dimension.tag.two>", "<value>")
+                .description("<metric description>")
+                .register(registry);
+
+        FunctionCounter.builder("<metric.key.name>", processEngine.getManagementService().createMetricsQuery().name(Metrics.ROOT_PROCESS_INSTANCE_START), MetricsQuery::sum)
+                .tag("<dimension.tag.one>", "<value>")
+                .tag("<dimension.tag.two>", "<value>")
+                .description("<metric description>")
+                .register(registry);
+    }
+}
+----
+
+.Приклад реєстрації метрик з оновленням за інтервалом, налаштованим на рівні окремої метрики
+[source,java]
+----
+class CamundaMetricsBinderV2 implements MeterBinder {
+    ProcessEngine processEngine;
+
+    AtomicLong metricGaugeNumber;
+
+    void bindTo(MeterRegistry registry) {
+        this.metricGaugeNumber = registry.gauge("<metric.key.name>", new AtomicLong(0));
+    }
+
+    @Scheduled(fixedRate = 60000L)
+    void updateMetricNumber(){
+        metricGaugeNumber.set(processEngine.getHistoryService().createHistoricProcessInstanceQuery().count());
+    }
+}
+----
+
+== Метрики для моніторингу
+
+[TIP]
+--
+Детальніше з типами _Micrometer_-метрик можна ознайомитись в офіційній документації https://micrometer.io/docs/concepts[Micrometer].
+--
+
+[TIP]
+--
+Детальніше з вбудованими метриками Camunda можна ознайомитись в офіційній документації https://docs.camunda.org/javadoc/camunda-bpm-platform/7.17/org/camunda/bpm/engine/management/Metrics.html[Camunda Metrics].
+--
+
+|===
+|Категорія|Метрика|Тип
+
+.4+|Загальні метрики _Process Engine_
+|_camunda.user.count_
+|`Gauge`
+
+|_camunda.authorization.count_
+|`Gauge`
+
+|_camunda.deployments_
+|`Gauge`
+
+|_camunda.active.process.definitions_
+|`Gauge`
+
+.9+|Загальні метрики бізнес-процесів
+|_camunda.active.user.tasks_
+|`Gauge`
+
+|_camunda.active.user.tasks.assigned_
+|`Gauge`
+
+|_camunda.active.user.tasks.unassigned_
+|`Gauge`
+
+|_camunda.completed.process.instances_
+|`Gauge`
+
+|_camunda.terminated.process.instances_
+|`Gauge`
+
+|_camunda.suspended.process.instances_
+|`Gauge`
+
+|_camunda.active.process.instances_
+|`Gauge`
+
+|_camunda.process.instances.total_
+|`Gauge`
+
+|_camunda.active.incidents_
+|`Gauge`
+
+.4+|Загальні метрики обміну повідомленнями в рамках бізнес-процесу
+|_camunda.active.signal.event.subscriptions_
+|`Gauge`
+
+|_camunda.active.conditional.event.subscriptions_
+|`Gauge`
+
+|_camunda.active.compensate.event.subscriptions_
+|`Gauge`
+
+|_camunda.active.message.event.subscriptions_
+|`Gauge`
+
+.4+|Загальні метрики асинхронного виконання задач бізнес-процесу
+|_camunda.message.jobs_
+|`Gauge`
+
+|_camunda.timer.jobs_
+|`Gauge`
+
+|_camunda.executable.timer.jobs_
+|`Gauge`
+
+|_camunda.executable.jobs_
+|`Gauge`
+
+.5+|Видалення історичних даних виконання бізнес-процесів
+|_camunda.history.cleanup.removed.process.instances_
+|`Gauge`
+
+|_camunda.history.cleanup.removed.task.metrics_
+|`Gauge`
+|===
+
+== Оновлення існуючих реєстрів
+
+В рамках процедури оновлення, необхідно забезпечити:
+
+* Реєстрація даних метрик увімкнена за замовченням
+* Налаштування збору та зберігання метрик в _Promethes_
+* Встановлення та налаштування _Grafana_-дашборди
+
+== Високорівневий план розробки
+
+=== Технічні експертизи
+
+* _BE_
+* _DevOps_
+
+=== План розробки
+
+* Автоматизація налаштування _Prometheus_ для збирання метрик з *business-process-administration-portal*
+* Реалізація механізму реєстрації метрик виконання бізнес-процесів та налаштувань через _Micrometer_ в *business-process-administration-portal* у формі _ProcessEnginePlugin_ з підтримкою налаштування `camunda.bpm.metrics.enabled`
+* Розробка _Grafana_-дашборди моніторингу метрик виконання бізнес-процесів
+* Розробка процедури оновлення існуючих реєстрів з автоматичним встановленням _Grafana_-дашборди
+* Створення інструкцій для адміністраторів по використанню дашборди моніторингу метрик виконання бізнес-процесів

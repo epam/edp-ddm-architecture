@@ -1,0 +1,212 @@
+:toc-title: On this page:
+:toc: auto
+:toclevels: 5
+:experimental:
+:sectnums:
+:sectnumlevels: 5
+:sectanchors:
+:sectlinks:
+:partnums:
+
+//= Виклик реєстру зовнішньою системою: Отримання JWT-токена у Keycloak
+= Calling the registry from an external system: getting a JWT token from Keycloak
+
+//== Загальний опис
+== Overview
+
+//Щоб отримати доступ до ресурсів реєстру на Платформі, зовнішня система має отримати спеціальний токен доступу -- *JWT*-токен. Він призначений для подальшої авторизації зовнішніх систем при взаємодії з реєстрами, що розгорнуті в межах Платформи.
+To access the registry resources, an external system must obtain a *JWT* access token. This token is used to authorize external systems when interacting with the registries deployed on the Platform.
+
+//Токен доступу, або JWT-токен, видається сервісом керування ідентифікацією та доступом *Keycloak*. Для отримання токена необхідно виконати API-запит до відповідного ендпоінту `*/token*` у Keycloak API.
+A JWT access token is issued by the *Keycloak* identity and access management service. To obtain the token, you need to make an API request to the corresponding */token* endpoint of the Keycloak API.
+
+//TIP: На цій сторінці ми розглянемо емуляцію отримання JWT-токена із Keycloak за допомогою інструмента Postman.
+TIP: This guide illustrates obtaining a JWT token from Keycloak using the Postman tool.
+
+//== Отримання JWT-токена доступу до реєстру
+== Obtaining a JWT token to access a registry
+
+//Найперше, сформуйте запит для отримання токена доступу до реєстру. Це можна зробити за допомогою *Postman* -- інструмента для тестування та розробки API.
+First, create a request to obtain a registry access token. You can do this using *Postman*, an API testing and development tool.
+
+//. Завантажте застосунок *Postman* з офіційного джерела за посиланням: https://www.postman.com/downloads/[], або використовуйте його вебверсію.
+. Download and install the *Postman* app from https://www.postman.com/downloads/[], or use the web version of the tool.
++
+//. Відкрийте додаток та створіть новий запит. Для цього натисніть `Create a request`.
+. Open the app and create a request by clicking *`Create a request`*.
++
+image:registry-admin/external-integration/api-publish/get-token/get-jwt-token-postman-6.png[]
++
+//. Сформуйте запит на отримання JWT-токена:
+. Set up the request to obtain a JWT token:
+//* Визначте HTTP-метод -- `*POST*`.
+* Set HTTP method to *POST*.
+//* Вкажіть шлях до ресурсу:
+* Specify the resource path:
+//.URL ресурсу: ендпоінт /token
++
+.Resource URL: /token endpoint
+====
+----
+https://<server-name>/auth/realms/<keycloak-realm>/protocol/openid-connect/token
+----
+//* Замість `<server-name>` підставте назву сервера.
+* Replace `<server-name>` with your server name.
+//* Замість `<keycloak-realm>` підставте назву реалму в Keycloak.
+* Replace `<keycloak-realm>` with the name of your Keycloak realm.
+
+For example:
+----
+https://platform-keycloak.apps.your-server.mdtu-ddm.projects.epam.com/auth/realms/consent-01-external-system/protocol/openid-connect/token
+----
+====
++
+//* Введіть параметри тіла запита.
+* Provide request body parameters.
++
+.Request body
+====
+[source,json]
+----
+{
+    "grant_type": "client_credentials",
+    "client_id": "test-ext",
+    "client_secret": "u43exi9l6kc4gcm6ksjbbsg7gu2dyocyjey1"
+}
+----
+
+
+|===
+|Parameter|Description
+
+|`grant_type`
+//| Тип гранту в OIDC. Грант `"client_credentials"` можна використовувати для міжмашинної автентифікації (система-система). У цьому гранті певний користувач не авторизується, а перевіряються облікові дані та повертається загальний токен доступу -- `access_token`.
+|An OpenID Connect (OIDC) grant type. The `"client_credentials"` grant can be used for machine-to-machine authentication. In this grant, a specific user is not authorized, but the credentials are verified, and a generic access_token is returned.
+
+|`client_id`
+//| Ідентифікатор зовнішньої системи (службова назва зовнішньої системи у Control Plane).
+|An external system identifier (a service name of an external system in Control Plane).
+
+|`client_secret`
+//| Пароль доступу до реєстру, згенерований в результаті надання доступу зовнішній системі у Control Plane (_див. детальніше -- xref:admin:registry-management/control-plane-registry-grant-access.adoc#password-change[Зміна пароля доступу до реєстру]_)
+|A password generated as a result of granting an external system access to the registry in Control Plane. For details, see xref:admin:registry-management/control-plane-registry-grant-access.adoc#password-change[Changing the registry access password].
+|===
+
+====
++
+//. Натисніть `Send`, щоб надіслати запит.
+. Click *`Send`* to send your request.
++
+image:registry-admin/external-integration/api-publish/get-token/get-jwt-token-postman-7.png[]
++
+//. У відповідь API-сервіс повертає об'єкт із JWT-токеном у закодованому вигляді (Base64Url), а також додаткові атрибути.
+. In response, the API service returns an object with an encoded JWT token (Base64Url) and additional attributes.
++
+//IMPORTANT: У відповіді повертається список ролей з Keycloak, для яких передбачений доступ. JWT-токен можливо отримати лише для одного клієнта за раз.
+IMPORTANT: The response returns a list of Keycloak roles for which access is granted. A JWT token can only be obtained for one client at a time.
++
+image:registry-admin/external-integration/api-publish/get-token/get-jwt-token-postman-8.png[]
+//.Тіло відповіді від API-сервісу
++
+.API service response body
+====
+[source,json]
+----
+{
+    "access_token": "eyJhbGciOiJSUzI1NiIsInR5cCIgOiAiSldUIiwia2lkIiA6ICJxdk4walJlNzJJNzBwQl9rdjBWVkZHR0lWSk50OF9mN3AtdzhKRHE2SlZvIn0.eyJleHAiOjE2NTcyOTUzMjUsImlhdCI6MTY1NzI5NTAyNSwianRpIjoiNDY5NDA3MDYtMzQ0MS00ZWMyLWJmNDUtYzhiYWRjZGM3ZDIyIiwiaXNzIjoiaHR0cHM6Ly9wbGF0Zm9ybS1rZXljbG9hay5hcHBzLmNpY2QyLm1kdHUtZGRtLnByb2plY3RzLmVwYW0uY29tL2F1dGgvcmVhbG1zL21kdHUtZGRtLWVkcC1jaWNkLWxvd2NvZGUtZGV2LWRldi1leHRlcm5hbC1zeXN0ZW0iLCJzdWIiOiI0YTYyMmY0Yy1hOGE4LTQ5M2UtOGQ4ZS03MjMyNGJlODEwZGMiLCJ0eXAiOiJCZWFyZXIiLCJhenAiOiJ0cmVtYml0YS1pbnZva2VyIiwiYWNyIjoiMSIsImFsbG93ZWQtb3JpZ2lucyI6WyIiXSwicmVhbG1fYWNjZXNzIjp7InJvbGVzIjpbInRyZW1iaXRhLWludm9rZXIiXX0sInNjb3BlIjoicHJvZmlsZSBlbWFpbCIsImVkcnBvdSI6IjAiLCJlbWFpbF92ZXJpZmllZCI6ZmFsc2UsImNsaWVudEhvc3QiOiI4NS4yMjMuMjA5LjE4IiwiY2xpZW50SWQiOiJ0cmVtYml0YS1pbnZva2VyIiwiZHJmbyI6IjAiLCJmdWxsTmFtZSI6ItCh0LXRgNCy0ZbRgdC90LjQuSDQutC-0YDQuNGB0YLRg9Cy0LDRhyDQotGA0LXQvNCx0ZbRgtC4IiwicHJlZmVycmVkX3VzZXJuYW1lIjoic2VydmljZS1hY2NvdW50LXRyZW1iaXRhLWludm9rZXIiLCJjbGllbnRBZGRyZXNzIjoiODUuMjIzLjIwOS4xOCJ9.uhf6GZFd9fc1IDehIlo9kspsOPxxLSqtsOTAmUt3cneMZFs77AE-Ew7UoirLUfy0kmjfGy0tfcG1gj2nM6EXmAW1_XDCvHB_ygM-NnkS8B_FkgoIdcB5XkBWQ2HrE0YnSN5QnOWMkgi2dtYkubgd3g37__46-2Uxeg6l-OVYjdDEQ_kEa2rrGl9ckYLflZgM_-PKG3XxvXuJjuKuC2GqLGF-ngpWg_S672pwIqqr0li20JjXYdpO-jtEqPMKU6pckBwmkAWsiO6lmz2b9XUe0i2nWECsChA9IHmgds1UgCjxtp0KoToqAwcbNhXgdyh8hOI0WCNig56dSWc3sAoDmw",
+    "expires_in": 300,
+    "refresh_expires_in": 0,
+    "token_type": "Bearer",
+    "not-before-policy": 0,
+    "scope": "profile email"
+}
+----
+====
++
+[NOTE]
+====
+//Отриманий токен можливо використовувати необмежену кількість разів упродовж часу його дійсності, який зазначається у параметрі `expires_in` і має значення 300 секунд.
+The token can be used an unlimited number of times during its validity period, which is specified in the `expires_in` parameter and has a default value of 300 seconds.
+
+//* Термін дії токена -- 300 секунд (за замовчуванням).
+* Token validity period: 300 seconds (by default)
+//* Тип токена -- `Bearer`.
+* Token type: `Bearer`
+====
++
+[TIP]
+====
+//Для зручності можна розкодувати токен доступу у формат JSON та перевірити, для якого клієнта та реалму видано токен. Для цього скористайтеся інструментом https://jwt.io/[].
+For convenience, you can decode the access token into the JSON format and check the client and realm for which the token was issued. You can use the https://jwt.io/[] tool.
+
+//На виході отримаємо наступний об'єкт:
+The output contains the following object:
+[source,json]
+----
+{
+"realm_access": {
+    "roles": [
+      "trembita-invoker"
+    ]
+  }
+}
+----
+
+//У нашому випадку надано доступ для ролі `trembita-invoker` у реалмі `consent-01-external-system` відповідного реєстру в Keycloak.
+In our example, access is granted to the `trembita-invoker` role in the `consent-01-external-system` realm of a corresponding registry in Keycloak.
+====
++
+//TIP: Детальніше про JWT-токен ви можете переглянути на сторінці xref:arch:architecture/platform/operational/user-management/user-profile.adoc[].
+TIP: For details on JWT tokens, see xref:arch:architecture/platform/operational/user-management/user-profile.adoc[].
++
+//. Надалі використовуйте отриманий `*access_token*` для авторизації при запитах до ресурсів реєстру. Тип токена має бути `*Bearer*` -- він визначається у заголовку `*Authorization*`.
+. You can now use the `*access_token*` you received to authorize requests to the registry resources. Set the token type to *Bearer* in the *Authorization* header.
+//.Bearer Token, вказаний як змінна `{{access_token}}`
++
+.A Bearer token set as the `{{access_token}}` variable
+image::registry-admin/external-integration/api-publish/get-token/get-jwt-token-postman-9.png[]
++
+[NOTE]
+====
+//Є 2 типи ресурсів, до яких можна звернутися у цільовому реєстрі:
+There are several types of resources that can be accessed in a target registry:
+
+//. Ресурси бізнес-процесів -- передбачені ендпоінти для взаємодії з бізнес-процесами. Наразі підтримується один єдиний ендпоінт для запуску бізнес-процесу -- `*/start-bp*`.
+. *Business process resources*: endpoints for interacting with the business processes. A single endpoint is currently supported for starting a business process: `*/start-bp*`.
++
+For example: ::
++
+----
+https://external-service-api-<registry-server>/api/gateway/business-process/api/start-bp
+----
++
+//де `<registry-server>` -- назва реєстру та сервер, на якому реєстр розгорнуто.
+Where `<registry-server>` is the name of the registry and the server on which the registry is deployed.
++
+//.Шлях до ресурсу /start-bp у реєстрі consent-02 на тестовому сервері:
+.A path to the /start-bp resource in the "consent-02" registry on the demo server:
++
+----
+https://external-service-api-consent-02-main.apps.test-server.mdtu-ddm.projects.epam.com/api/gateway/business-process/api/start-bp
+----
++
+//. Ресурси фабрики даних -- передбачені моделлю даних критерії пошуку (Search Conditions), до яких ви надаєте доступ через відповідні атрибути (_див. детальніше xref:registry-develop:data-modeling/data/physical-model/rest-api-view-access-to-registry.adoc[]_)
+. *Data factory resources*: search conditions provisioned by the data model, to which you provide access through the corresponding attributes. For details, see xref:registry-develop:data-modeling/data/physical-model/rest-api-view-access-to-registry.adoc[].
++
+For example: ::
++
+----
+https://external-service-api-<registry-server>/api/gateway/data-factory/<search-condition>
+----
++
+//де `<registry-server>` -- назва реєстру та сервер, на якому реєстр розгорнуто, а `<search-condition>` -- ендпоінт, створений на базі критерію пошуку у БД.
+Where `<registry-server>` is the name of the registry and the server on which the registry is deployed, and `<search-condition>` is the endpoint based on the database search condition.
++
+//.Шлях до ресурсу /count-units-in-parallel у реєстрі mon-school на сервері envone:
+.A path to the /count-units-in-parallel resource in the "mon-school" registry on the "envone" server:
++
+----
+https://external-service-api-mon-school-main.apps.envone.dev.registry.eua.gov.ua/api/gateway/data-factory/count-units-in-parallel
+----
+
+====

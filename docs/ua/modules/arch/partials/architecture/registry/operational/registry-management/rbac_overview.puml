@@ -1,0 +1,54 @@
+@startuml
+
+skinparam monochrome true
+'skinparam backgroundColor #aaaaaa
+'skinparam linetype ortho
+'skinparam linetype polyline
+
+rectangle Redash
+Actor User
+rectangle Gateway
+'note left of Gateway: sdsdfsdf
+rectangle Lowcode
+rectangle Keycloak
+'note left of Keycloak: RedashGroups\nattribute
+'note right of Keycloak: roles
+
+rectangle Datafactory
+'note left of Redash: RedashGroups from Keycloak\nassigns user to security group
+database "Operational DB\nCitus\n" as Citus_O{
+    component "Permission Check" as Perm_Check
+    artifact Roles
+    note right of Roles: access\nmap
+    collections "  Data\nTables" as Tables_O
+    artifact Routine
+}
+database "Analytical DB\nCitus" as Citus_R{
+    Actor "DB User" as DB_User
+    collections Views
+    note right: limits access\nto the data
+    collections "  Data\nTables" as Tables_R
+}
+
+User -> Gateway: auth
+User <-> Gateway: request/response
+Redash <-> User: data request
+Redash -up-> Keycloak: credentials
+Redash <-up- Keycloak: auth
+Redash <--> DB_User: query
+DB_User <-> Views
+Gateway -up-> Keycloak: auth
+Gateway <- Keycloak: JWT
+Gateway <-> Lowcode: JWT
+Lowcode <-> Datafactory: API
+Datafactory <--> Perm_Check: JDBC
+Perm_Check <--> Roles: permission\ncheck
+Datafactory <--> Tables_O: query
+Datafactory --> Routine: DML
+Routine --> Tables_O: DML
+Tables_O => Tables_R: replication
+'Citus_O => Citus_R: replication
+Tables_R -up-> Views: data
+
+
+@enduml

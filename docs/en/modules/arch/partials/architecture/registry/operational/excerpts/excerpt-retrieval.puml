@@ -1,0 +1,56 @@
+@startuml
+skinparam monochrome true
+
+actor "User" as user
+participant "Client's App\nUser portal" as cabinet
+participant "Kong \nAPI Management" as kong
+participant "User business processes \n management service" as user_process_mngmnt
+
+box "Business processes execution"
+participant "Business processes execution service" as bpms
+database "Business processes operational storage" as bpms_db
+end box
+
+box "Reporting subsystem" #LightBlue
+participant "Excerpt retrieval API" as report_storage_api
+participant "Ceph object storage" as ceph
+end box
+
+skinparam responseMessageBelowArrow false
+title Obtaining an excerpt generated within the business process ==
+
+user -> cabinet: View provided services
+activate cabinet
+  cabinet -> kong: Request for provided services retrieval
+  activate kong
+    kong -> user_process_mngmnt: Request for provided services retrieval
+    activate user_process_mngmnt
+      user_process_mngmnt -> bpms: Retrieve completed business processes of the User
+      activate bpms
+        bpms -> bpms_db:  Retrieve historical business processes
+        note over bpms, bpms_db: SYS_VAR_PROCESS_COMPLETION_RESULT та SYS_VAR_PROCESS_EXCERPT_ID
+        bpms -> bpms_db: Retrieve values of historical process variables
+        bpms -> bpms: Form aggregated list of processes
+      return return List of completed business processes \nand their variables
+    return List of provided services
+  return List of provided services
+  cabinet -> cabinet: Mark services with \nSYS_VAR_PROCESS_EXCERPT_ID \nas available for excerpt download
+return List of provided services
+
+group Business Process Resulting in Generated Excerpt [SYS_VAR_PROCESS_EXCERPT_ID present]
+user -> cabinet: Download excerpt for selected process \nwith SYS_VAR_PROCESS_EXCERPT_ID value
+activate cabinet
+  cabinet -> kong: Request for excerpt file retrieval
+  activate kong
+    kong -> report_storage_api: Request for excerpt retrieval by identifier \nand initiator user's Access Token
+    activate report_storage_api
+      report_storage_api -> report_storage_api: Authorization for excerpt retrieval \n(keycloakId from generation process \nmust match keycloakId from Access Token)
+      report_storage_api -> report_storage_api: Check document checksum match between \nObject Store Ceph and original checksum \nreceived from generated excerpt
+      report_storage_api -> ceph: Retrieve excerpt file from storage
+      ceph -> report_storage_api: Excerpt file
+    return Excerpt data
+  return Excerpt data
+return Excerpt data
+end
+
+@enduml

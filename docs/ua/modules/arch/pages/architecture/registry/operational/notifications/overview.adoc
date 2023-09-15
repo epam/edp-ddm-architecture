@@ -1,0 +1,121 @@
+= Підсистема нотифікацій користувачів
+
+include::platform:ROOT:partial$templates/document-attributes/arch-set-ua.adoc[]
+
+include::platform:ROOT:partial$admonitions/language-ua.adoc[]
+
+== Загальний опис
+
+Підсистема, призначенням якої є отримання та обробка запитів на відправлення нотифікацій користувачам згідно з персональними налаштуваннями та каналами зв'язку, які підтримуються реєстром.
+
+== Функції підсистеми
+
+* Формування на базі налаштованого шаблону та відправлення поштових нотифікацій з використанням платформного або зовнішнього _SMTP_-сервера відповідно до поточних налаштувань реєстру
+* Формування на базі налаштованого шаблону та відправлення _push_-нотифікацій в мобільний додаток _Дія_
+* Формування на базі налаштованого шаблону та створення _in-app_-нотифікацій в _Inbox_ кабінету користувача
+* Перегляд переліку та підтвердження перегляду in-app повідомлень користувачем
+
+== Технічний дизайн підсистеми
+
+Ця діаграма показує компоненти, які входять до _Підсистеми нотифікацій користувачів_ та їх взаємодію з іншими підсистемами в рамках реалізації функціональних сценаріїв.
+
+image::arch:architecture/registry/operational/notifications/notifications-subsystem-design.svg[float="center",align="center"]
+
+=== Аудит та журналювання подій
+
+Події відправки повідомлень користувачам системою фіксуються у журналі аудиту з повним контекстом.
+
+|===
+|Тип події|Службова назва|Опис
+
+|_SYSTEM_EVENT_|SEND_USER_NOTIFICATION|Спроба відправки повідомлення з результатом операції
+|===
+
+[NOTE]
+--
+Детальніше з дизайном _Підсистеми журналювання подій аудиту_ можна ознайомитися
+xref:arch:architecture/registry/operational/audit/overview.adoc[за посиланням].
+--
+
+== Складові підсистеми
+
+|===
+|Назва компоненти|Представлення в реєстрі|Походження|Репозиторій|Призначення
+
+|_Сервіс нотифікацій користувачів_
+|`ddm-notification-service`
+|origin
+|https://github.com/epam/edp-ddm-notification-service[github:/epam/edp-ddm-notification-service]
+|Обробка запитів на відправку повідомлень користувачам згідно налаштувань каналів зв'язку
+
+|_xref:arch:architecture/registry/operational/notifications/notifications-db.adoc[Операційна БД нотифікацій]_
+|`operational:notifications`
+|origin
+|https://github.com/epam/edp-ddm-registry-postgres/tree/main/platform-db/changesets/notifications[github:/epam/edp-ddm-registry-postgres/tree/main/platform-db/changesets/notifications]
+|Зберігання шаблонів повідомлень та inbox-нотифікацій користувачів
+|===
+
+== Технологічний стек
+
+При проектуванні та розробці підсистеми, були використані наступні технології:
+
+* xref:arch:architecture/platform-technologies.adoc#java[Java]
+* xref:arch:architecture/platform-technologies.adoc#spring[Spring]
+* xref:arch:architecture/platform-technologies.adoc#spring-boot[Spring Boot]
+* xref:arch:architecture/platform-technologies.adoc#spring-cloud[Spring Cloud]
+* xref:arch:architecture/platform-technologies.adoc#postgresql[PostgreSQL]
+* xref:arch:architecture/platform-technologies.adoc#kafka[Kafka]
+
+== Атрибути якості підсистеми
+
+=== Scalability
+
+_Підсистема нотифікацій користувачів_ підтримує як горизонтальне, так і вертикальне масштабування.
+
+[TIP]
+--
+Детальніше з масштабуванням підсистем можна ознайомитись у відповідних розділах:
+
+* xref:architecture/container-platform/container-platform.adoc[]
+--
+
+=== Security
+
+_Підсистема нотифікацій користувачів_ надає _API_ для перегляду персональних _inbox_-повідомлень через кабінет автентифікованим користувачам та доступна лише через _Підсистему управління зовнішнім трафіком_.
+
+=== Observability
+
+_Підсистема нотифікацій користувачів_ підтримує журналювання та збір метрик продуктивності для подальшого аналізу через веб-інтерфейси відповідних підсистем Платформи.
+
+[TIP]
+--
+Детальніше з дизайном підсистем можна ознайомитись у відповідних розділах:
+
+* xref:arch:architecture/platform/operational/logging/overview.adoc[]
+* xref:arch:architecture/platform/operational/monitoring/overview.adoc[]
+--
+
+=== Auditability
+
+_Підсистема нотифікацій користувачів_ фіксує значимі технічні та бізнес події, пов'язані з експлуатацією системи кінцевими користувачами.
+
+[TIP]
+--
+Детальніше з дизайном підсистеми можна ознайомитись у відповідних розділах:
+
+* xref:arch:architecture/registry/operational/audit/overview.adoc[]
+--
+
+=== Interoperability
+
+_Підсистема нотифікацій користувачів_ наразі підтримує наступні канали зв'язку з користувачами:
+
+inbox ::
+Відправлення _in-app_ повідомлень у скриньку кабінетів користувачів.
+
+email ::
+Відправлення поштових повідомлень користувачам з використанням _платформного_ або _зовнішнього_ поштового сервера.
+
+diia ::
+
+Відправлення _push_-нотифікацій у мобільний додаток _Дія_ через зовнішній _API_-шлюз.

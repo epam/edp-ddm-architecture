@@ -1,0 +1,724 @@
+//= Збереження декількох сутностей в рамках однієї транзакції
+= Saving multiple entities within a single transaction
+include::platform:ROOT:partial$templates/document-attributes/default-set-en.adoc[]
+
+include::platform:ROOT:partial$admonitions/language-en.adoc[]
+
+//== Проблематика
+== Problem statement
+
+//При використанні делегата `dataFactoryConnectorCreateDelegate` та відповідного ендпоінта, за потреби запису 2-х і більше сутностей до бази даних, виникає проблема -- це може бути реалізовано тільки по черзі, різними транзакціями.
+When using the `dataFactoryConnectorCreateDelegate` delegate with the corresponding endpoint to write two or more entities to the database, you run into the following issue: it can only be done sequentially, using separate transactions.
+
+//Відповідно, одна транзакція може завершитися успішно, а наступна -- з будь-якої причини не завершитися. Такий сценарій може призвести до неконсистентності даних, необхідності видалення успішної транзакції із БД і повторного виконання всіх процедур.
+As a result, one transaction may finish successfully, while the next one may fail for any reason. This scenario can lead to data inconsistency and the need to delete the successful transaction from the database and re-execute all procedures.
+
+//Такий підхід ускладнює моделювання, значно подовжуючи бізнес-процес, а також збільшує навантаження на базу даних, адже збільшується і кількість транзакцій при створенні сутностей.
+This approach complicates modeling, lengthens the business process, and increases the database load by increasing the number of transactions when creating entities.
+
+//.Приклад
+.Use case example
+====
+//Наприклад, необхідно записати дані про користувача (1), його навчальний профіль (2) та налаштування користувача (3). Маємо три послідовні БД-транзакції:
+Suppose we need to record data about the user (1), their educational profile (2), and user settings (3). This requires three consecutive database transactions:
+
+//. Запис персональних даних користувача (простий об'єкт `personProfile`) до таблиці `person_profile`. Операція успішна.
+. Record the user's personal data as a simple `personProfile` object to the `person_profile` table. The operation is successful.
+//. Запис даних для створення навчального профілю користувача (простий об'єкт `personEduProfile`) до таблиці `person_edu_profile`. Операція неуспішна.
+. Record the user's education data as a simple `personEduProfile` object to the `person_edu_profile` table. The operation fails.
+//. Запис налаштувань користувача (простий об'єкт `userSettings`) до таблиці `user_setting`. Транзакція не розпочалася взагалі.
+. Record user settings as a simple `userSettings` object to the `user_settings` table. The transaction does not start.
+
+//В результаті, лише одна транзакція успішна. База даних не консистентна. Виникає необхідність відкотити БД до попереднього стану, тобто видалити кожну виконану транзакцію через `DELETE`-ендпоінт, і виконати всі три записи повторно.
+As a result, only one transaction is successful and the database is not consistent. It is necessary to roll back the database to the previous state -- that is, delete each completed transaction through the `DELETE` endpoint and perform all three transactions again.
+====
+
+//Для розв'язання цієї проблеми впроваджено спеціальний делегат, що забезпечуватиме можливість одночасно зберігати декілька сутностей до різних таблиць бази даних в рамках однієї транзакції.
+To deal with this issue, we implemented a special delegate that enables saving multiple entities to different database tables simultaneously within a single transaction.
+
+//== Загальний опис
+== Overview
+
+//З метою підтримки функціональності збереження декількох сутностей в рамках однієї транзакціїfootnote:[_Транзакція_ -- група послідовних операцій із базою даних, яка є логічною одиницею роботи з даними. Транзакція може бути виконана або цілком і успішно, дотримуючись цілісності даних і незалежно від інших транзакцій, що ідуть паралельно, або не виконана зовсім.], розроблено типове розширення до бізнес-процесів -- делегат `${dataFactoryConnectorNestedCreateDelegate}`, для якого імплементовано однойменний шаблон *Create nested entities in data factory*, представлений у вигляді JSON-файлу _dataFactoryConnectorNestedCreateDelegate.json_.
+To support saving multiple entities within a single transactionfootnote:[_A transaction_ is a group of sequential operations with a database that constitutes a logical unit of work with data. A transaction can be either executed entirely and successfully, preserving data integrity and being independent of other concurrently running transactions, or not executed at all.], we developed a standard business process extension -- the `${dataFactoryConnectorNestedCreateDelegate}` delegate. This delegate uses the *Create nested entities in data factory* template, presented as the _dataFactoryConnectorNestedCreateDelegate.json_ file.
+
+//Делегат потрібний для того, щоб в рамках однієї транзакції створювати декілька сутностей у Фабриці даних.
+The delegate is used to create multiple entities in the data factory within a single transaction.
+
+[TIP]
+====
+//На Платформі реєстрів реалізовано подібний делегат і відповідний шаблон до нього -- *Create entity in data factory*, але він дозволяє створити _лише одну_ сутність в рамках транзакції.
+The Platform has a similar delegate with the *Create entity in data factory* template, but it allows you to create _only one_ entity within a transaction.
+
+//За таких обставин результат _однієї сервісної задачі_ бізнес-процесу може створити тільки _один запис_ у сховищі даних.
+This means that as a result of _one service task_ of a business process, only _one record_ can be created in the data store.
+====
+
+//За допомогою делегата `${dataFactoryConnectorNestedCreateDelegate}` реалізовано можливість створення _декількох записів з однієї сервісної задачі_.
+The `${dataFactoryConnectorNestedCreateDelegate}` delegate enables you to create _multiple records from one service task_.
+
+//Для того, щоб делегат міг функціонувати, на рівні Фабрики даних реалізована можливість створення _вкладених сутностей_ (_nested entities_), тобто імплементовано окремий _спеціальний ендпоінт_, щоб приймати комплексні (вкладені) об'єкти, що містять декілька сутностей, від рівня бізнес-процесів і створювати відповідні записи у різних таблицях бази даних за одну транзакцію.
+To function, the delegate relies on the data factory's capability to create _nested entities_. At the data factory level, this feature is implemented as a separate _special endpoint_ that receives complex (nested) objects with multiple entities from the business process level and creates corresponding records in different database tables in one transaction.
+
+//На рівні API, у контракті, описано, яким має бути тіло запита, щоб мати змогу створити декілька сутностей у БД.
+The API contract describes what the request body should look like to be able to create multiple entities in the database.
+
+[IMPORTANT]
+====
+//Після опрацювання на рівні API, Фабрика даних сама розкладе дані до належних таблиць.
+After processing data at the API level, the data factory distributes it to the appropriate tables automatically.
+====
+
+//== Моделювання бізнес-процесу для створення та використання вкладених сутностей
+== Modeling a business process to create and use nested entities
+
+[CAUTION]
+====
+//Передумови ::
+Prerequisites ::
+
+//Перед моделюванням процесу та налаштуванням делегата *Create nested entities in data factory*, переконайтеся, що папка `/element-templates` застосунку Camunda Modeler містить файл _dataFactoryConnectorNestedCreateDelegate.json_.
+Before modeling the process and configuring the *Create nested entities in data factory* delegate, make sure the _/element-templates_ folder of the Camunda Modeler application contains the _dataFactoryConnectorNestedCreateDelegate.json_ file.
++
+image:bp-modeling/bp/element-temp/nested-entities/bp-nested-entities-1.png[]
+====
+
+//=== Моделювання та налаштування бізнес-процесу
+=== Modeling and configuring the business process
+
+//На прикладі бізнес-процесу для створення вкладених сутностей розглянемо налаштування делегата *Create nested entities in data factory*, а також кроки моделювання таких сутностей у процесі: _створення користувача_, _створення навчального профілю користувача_, а також _створення наказів_, на підставі яких додається навчальний профіль.
+Let's use the business process for creating nested entities as an example of configuring the *Create nested entities in data factory* delegate and modeling the following entities: _creating a user_, _creating a user's educational profile_, as well as _creating orders_ based on which an educational profile is added.
+
+image:bp-modeling/bp/element-temp/nested-entities/bp-nested-entities-01.png[]
+
+//==== Створення пулу для бізнес-процесу
+==== Creating a pool for the business process
+
+//. Відкрийте додаток *Camunda Modeler* та створіть нову діаграму BPMN. Для цього у лівому верхньому куті натисніть меню *File* -> *New File* -> *BPMN Diagram*.
+. Open the *Camunda Modeler* application and create a new BPMN diagram. To do this, open the *File* menu in the upper-left corner and select *New File* > *BPMN Diagram*.
++
+image:registry-develop:bp-modeling/bp/modeling-instruction/bp-1.png[]
++
+//. На панелі інструментів зліва знайдіть елемент *Create pool/Participant* та перетягніть його до області моделювання.
+. From the toolbar on the left, drag the *Create pool/Participant* element to the modeling canvas.
++
+image:registry-develop:bp-modeling/bp/modeling-instruction/bp-2.png[]
++
+//. Заповніть наступні поля відповідними значеннями:
+. Fill out the following fields:
++
+//* У полі `Participant Name` введіть назву пулу, що відображатиметься у моделері -- `Бізнес-процес`.
+* *Participant Name*: Enter the name of the pool that will be displayed in the modeler -- for example, `Business process`.
+//* У полі `Process id` введіть ідентифікатор бізнес-процесу -- `nested_entity_test_process`.
+* *Process Id*: Enter the business process ID -- for example, `nested_entity_test_process`.
+//* У полі `Process Name` вкажіть бізнес-назву процесу -- `nested entity test process`.
+* *Process Name*: Enter the business name of the process -- for example, `nested entity test process`.
++
+image:bp-modeling/bp/element-temp/nested-entities/bp-nested-entities-02.png[]
+
+//==== Моделювання стартової події
+==== Modeling the start event
+
+//_Створіть початкову подію_ для запуску бізнес-процесу користувачем. Для цього виконайте наступні кроки:
+Create a start event to trigger the business process by the user. For this, perform the following steps:
+
+//. На панелі інструментів, зліва, знайдіть елемент (коло) *CreateStartEvent* та перетягніть його до панелі моделювання.
+. In the toolbar on the left, find the *CreateStartEvent* item (a circle) and drag it to the modeling canvas.
+//. На панелі налаштувань справа заповніть наступні параметри відповідними значеннями:
+. In the properties panel on the right, fill out the following parameters:
+//* У полі `Name` введіть назву початкової події -- `Початок`;
+* *Name*: Enter the name of the start event -- for example, `Start`.
+//* У полі `Initiator` введіть `initiator`.
+* *Initiator*: Enter `initiator`.
++
+//TIP: `initiator` -- спеціальна змінна, що встановлюється для користувача, який розпочав процес.
+TIP: The `initiator` variable will contain information about the user who started the business process.
++
+image:bp-modeling/bp/element-temp/nested-entities/bp-nested-entities-03.png[]
+
+//==== Моделювання користувацьких форм для введення та підпису даних
+==== Modeling user forms to enter and sign data
+
+//Моделювальник має створити дві користувацькі задачі (форми) для внесення персональних даних користувача (1) та їх подальшого підпису КЕП (2).
+The modeler must create two user tasks (forms):
+
+. A form for entering the user's personal data.
+. A form for signing the data.
+
+image:bp-modeling/bp/element-temp/nested-entities/bp-nested-entities-04.png[]
+
+Perform the following steps:
+
+//. Змоделюйте користувацьку задачу (*User form*) для внесення даних профілю користувача та пов'яжіть її із формою бізнес-процесу параметром `Form key`.
+. Model the *User form* for entering user profile data and associate it with the business process form using the `Form key` parameter.
++
+//* У полі `Id` вкажіть ідентифікатор задачі -- `addPersonProfileActivity`. Він є ключем визначення задачі (task definition key).
+* In the *Id* field, enter the task identifier -- for example, `addPersonProfileActivity`. This is the task definition key.
+//* У полі `Name` введіть назву задачі. Наприклад, `Внести дані про освітній профіль`.
+* In the *Name* field, enter the task name -- for example, `Enter educational profile data`.
+//* У полі `Form key` введіть ключ форми бізнес-процесу -- `add-dataprof`.
+* In the *Form key* field, enter the business process form key -- `add-dataprof`.
+//* У полі `Assignee` вкажіть змінну, що використовується для зберігання користувача, який запустив екземпляр процесу, -- `${initiator}`.
+* In the *Assignee* field, enter the variable for the user who initiated the execution of the business process -- `${initiator}`.
++
+image:bp-modeling/bp/element-temp/nested-entities/bp-nested-entities-05.png[]
++
+//. Змоделюйте користувацьку задачу (*User form*) для підпису даних профілю користувача за допомогою КЕП та пов'яжіть її із формою бізнес-процесу параметром `Form key`.
+. Model the *User form* for signing user profile data using a qualified electronic signature (QES) and associate it with the business process form using the `Form key` parameter.
++
+//* У полі `Id` вкажіть ідентифікатор задачі -- `signPersonProfileActivity`. Він є ключем визначення задачі (task definition key).
+* In the *Id* field, enter the task identifier -- for example, `signPersonProfileActivity`. This is the task definition key.
+//* У полі `Name` введіть назву задачі. Наприклад, `Підписати дані про освітній профіль`.
+* In the *Name* field, enter the task name -- for example, `Sign educational profile data`.
+//* У полі `Form key` введіть ключ форми бізнес-процесу -- `add-signd`.
+* In the *Form key* field, enter the business process form key -- `add-signd`.
+//* У полі `Assignee` вкажіть змінну, що використовується для зберігання користувача, який запустив екземпляр процесу, -- `${initiator}`.
+* In the *Assignee* field, enter the variable for the user who initiated the execution of the business process -- `${initiator}`.
++
+image:bp-modeling/bp/element-temp/nested-entities/bp-nested-entities-06.png[]
+
+//TIP: Тобто з погляду UI, після запуску бізнес-процесу, перед посадовою особою з'явиться форма для внесення даних профілю. Після внесення даних з'явиться нова форма для підпису даних за допомогою КЕП. Дані будуть передані бізнес-процесу за параметром `Form key` і використані у наступній задачі процесу.
+TIP: In terms of the UI, after starting the business process, the officer will see the form for entering profile data. Once they provide the data, the officer will see the form for signing the data using QES. The data is passed to the business process via the `Form key` parameter to be used in the next task of the process.
+
+//==== Моделювання задачі скриптування "Підготовка даних до запису (transient var)" для формування простого об'єкта
+==== Modeling the script task to create a simple object
+
+//Внесені на формі та підписані КЕП дані передаються задачі скриптування (*Script task*), де використовується groovy-скрипт, який формує із цих даних JSON-об'єкт і записує його до змінної `createPersonPayload`.
+The data provided via the form and signed by the QES is transferred to the *Script task*, where a Groovy script creates a JSON object from the data and writes it to the `createPersonPayload` variable.
+
+image:bp-modeling/bp/element-temp/nested-entities/bp-nested-entities-07.png[]
+
+//. Створіть нову задачу, визначте її тип, натиснувши іконку ключа та обравши з меню пункт *Script Task* (Задача скриптування).
+. Create a new task and set the task type by clicking the wrench icon and selecting *Script Task* from the menu.
++
+//. На панелі налаштувань справа заповніть наступні поля:
+. In the properties panel on the right, fill out the following parameters:
++
+//* У полі `Name` вкажіть назву задачі -- `Підготовка даних для запису (transient var)`.
+* In the *Name* field, enter the task name -- for example, `Prepare data for writing (transient var)`.
+//* У полі `Script Format` вкажіть формат скрипту -- `groovy`.
+* In the *Script Format* field, enter the script format -- `groovy`.
+//* У полі `Script Type` вкажіть тип скрипту -- `Inline Script`.
+* In the *Script Type* field, select the `Inline Script` type.
+//* У полі `Script` введіть безпосередньо groovy-скрипт:
+* In the *Script* field, enter the body of the Groovy script.
+//.Приклад. Groovy-скрипт, що формує JSON-об'єкт для подальшого запису до БД
++
+.A Groovy script that creates a JSON object for further writing into the database
+====
+[source,groovy]
+----
+def cephData = [:]
+
+        def formData = submission('signPersonProfileActivity').formData
+
+        cephData['lastName'] = formData.prop('last_name').value()
+        cephData['firstName'] = formData.prop('first_name').value()
+        cephData['secondName'] = formData.prop('second_name').value()
+        cephData['birthday'] = formData.prop('birthday').value()
+
+        set_transient_variable('createPersonPayload', S(cephData, 'application/json'))
+----
+====
++
+image:bp-modeling/bp/element-temp/nested-entities/bp-nested-entities-08.png[]
++
+//. В результаті виконання задачі, у виводі отримуємо сформований JSON, збережений до змінної `createPersonPayload`, що надалі використовуватиметься у бізнес-процесі.
+. As the output of this task, we get the generated JSON saved to the  `createPersonPayload` variable, which will be used further in the business process.
+//.Приклад. Сформований JSON-об'єкт, збережений до змінної 'createPersonPayload'
++
+.A JSON object saved to the 'createPersonPayload' variable
+====
+[source,json]
+----
+{
+"secondName": "string",
+"firstName": "string",
+"lastName": "string",
+"birthday": "2022-02-16T13:17:10.952Z"
+}
+----
+====
+
+//TODO Call Activity section skipped
+////
+==== Моделювання Call Activity для підпису простого об'єкта системним ключем
+
+Далі необхідно створити Call Activity для виклику глобального підпроцесу підпису даних системним ключем. Call Activity використовує змінну `createPersonPayload`, дані з якої передаються до підпроцесу для подальшого їх підпису.
+
+В результаті виконання підпроцесу, викликаного у Call Activity, дані підписуються системним Ceph-ключем. Ключ зберігається до змінної `person_profile_system_signature_ceph_key`.
+
+. Змоделюйте елемент *Call Activity*.
+. Перейдіть до панелі налаштувань справа та застосуйте делегат *System digital signature*. Для цього оберіть відповідний шаблон із каталогу (`Open Catolog`).
++
+TIP: Приклад налаштування делегата System digital signature наведено за xref:bp-modeling/bp/element-templates/bp-element-templates-installation-configuration.adoc#element-temp-system-digital-signature[посиланням].
+
+. Виконайте подальші налаштування:
+
+* У полі `Name` вкажіть назву елемента -- `Підписати дані системним ключем`.
+* У полі `Input data` вкажіть вхідні дані, які необхідно передати підпроцесу, що викликатиметься -- `${createPersonPayload}`.
+* У полі `Output variable name` введіть назву змінної, в яку буде записано системний Ceph-ключ -- `person_profile_system_signature_ceph_key`. Він потрібний для додаткового системного підпису у Фабриці даних.
++
+NOTE: Ідентифікатор підпроцесу, що викликатиметься, передається у полі `Called Element` і має стале значення `system-signature-bp`. Ці та деякі інші налаштування "вшито" до шаблону з метою спрощення моделювання.
++
+image:bp-modeling/bp/element-temp/nested-entities/bp-nested-entities-09.png[]
+////
+
+//==== Моделювання сервісної задачі для створення профілю користувача
+==== Modeling the service task to create a user profile
+
+//Надалі дані використовуються у сервісній задачі "Створити профайл".
+Next, the data is used in the "Create profile" service task.
+
+//У задачі необхідно застосувати делегат для створення однієї сутності у базі даних (*Create entity in data factory*), використавши підписані дані (Payload) зі змінної `${createPersonPayload}`, та надіслати запит до відповідного API-ендпоінту (ресурсу) `person-profile`.
+In this task, we need to create one entity in the database via the *Create entity in data factory* delegate using the signed data (Payload) from the `${createPersonPayload}` variable and send a request to the `person-profile` API endpoint (resource).
+
+//Разом із даними передається і ключ для перевірки системного підпису Фабрикою даних, який взято зі змінної `${person_profile_system_signature_ceph_key}`.
+Along with the data, we're passing the key for verifying the system signature by the data factory, which is taken from the `${person_profile_system_signature_ceph_key}` variable.
+
+//В результаті отримуємо відповідь від API, яка зберігатиметься у змінній `createPersonProfileResponse`.
+As a result, we receive an API response, which is saved to the `createPersonProfileResponse` variable.
+
+//. Змоделюйте нову задачу.
+. Model a new task.
+//. Визначте її тип, натиснувши іконку ключа та обравши з меню пункт *Service Task* (сервісна задача).
+. Set the task type by clicking the wrench icon and selecting *Service Task* from the menu.
+//. Перейдіть до панелі налаштувань справа та застосуйте делегат *Create entity in data factory*. Для цього оберіть відповідний шаблон із каталогу (`Open Catalog`).
+. Go to the properties panel on the right and apply the *Create entity in data factory* delegate. To do this, click *`Open Catalog`* and select the appropriate template.
++
+//. Виконайте подальші налаштування:
+. Fill out the following fields:
++
+//* У полі `Id` вкажіть ідентифікатор сервісної задачі -- `createProfile`.
+* In the *Id* field, enter the service task identifier -- for example, `createProfile`.
+//* У полі `Name` вкажіть назву задачі. Наприклад, `Створити профайл`.
+* In the *Name* field, enter the task name -- for example, `Create profile`.
+//* У полі `Resource` вкажіть ресурс (API-ендпоінт), куди необхідно виконати запит -- `person-profile`.
+* In the *Resource* field, enter the API endpoint where the request should be executed -- `person-profile`.
++
+//NOTE: На рівні API ендпоінт виглядає наступним чином: `/<resource name>`, де `<resource name>` -- назва ресурсу. Тобто у полі `Resource` необхідно ввести значення, вказане після косої риски (`/`).
+NOTE: The API endpoint looks like this: `/<resource name>`. In the *Resource* field, you must enter the value indicated after the slash (`/`).
++
+//* У полі `Payload` введіть тіло запита -- JSON-об`єкт, тобто дані зі змінної `${createPersonPayload}`, які необхідно зберегти до Фабрики даних.
+* In the *Payload* field, enter the request body -- a JSON object, i.e. the data from the `${createPersonPayload}` variable, which must be saved to the data factory.
++
+//NOTE: Майте на увазі, що необхідно попередньо побудувати цей JSON-об`єкт, тобто `payload`, в рамках задачі скриптування.
+NOTE: The JSON object, or payload, must already be created as part of the script task.
++
+//* У полі `X-Access-Token` вкажіть токен доступу до ресурсу.
+* In the *X-Access-Token* field, enter the resource access token.
++
+[CAUTION]
+====
+//Токен доступу береться з АБО ініціатора (наприклад, `${initiator().accessToken}`), АБО виконавця задачі (наприклад, `${completer('taskDefinitionId').accessToken}`):
+The access token is taken either from the initiator (for example, $initiator().accessToken}) or the completer of the task (for example, ${completer('taskDefinitionId').accessToken}).
+
+//* Якщо перед сервісною задачею у бізнес-процесі немає жодної користувацької задачі, використовуємо токен ініціатора процесу (initiator).
+* If there are no user tasks before the service task in the business process, the process initiator token is used.
+
+//* Якщо перед сервісною задачею є користувацька задача, використовуємо токен виконавця задачі (completer).
+* If there is a user task before the service task, the task completer token is used.
+
+//Таким чином ми від імені користувача, який АБО запустив бізнес-процес, АБО виконав користувацьку задачу, створюємо сутність у базі даних.
+This way, we can create an entity in the database on behalf of the user who initiated the business process OR executed the user task.
+====
++
+//* У полі `X-Digital-Signature-source` вкажіть джерело цифрового підпису (КЕП), тобто передайте функції `sign_submission()` ID користувацької форми, де застосовували КЕП -- `${sign_submission('signPersonProfileActivity').signatureDocumentId}`.
+* In the *X-Digital-Signature-source* field, enter the QES source -- that is, pass the ID of the user form where the QES was applied to the `sign_submission()` function: `${sign_submission('signPersonProfileActivity').signatureDocumentId}`.
++
+//* У полі `X-Digital-Signature-Derived-source` вкажіть джерело системного підпису, тобто змінну, з якої необхідно взяти системний ключ, -- `${person_profile_system_signature_ceph_key}`.
+* In the *X-Digital-Signature-Derived-source* field, enter the system signature source -- that is, the variable containing the system key: `${person_profile_system_signature_ceph_key}`.
++
+//* У полі `Result variable` вкажіть назву змінної, до якої необхідно зберегти відповідь від API, -- `createPersonProfileResponse`.
+* In the *Result variable* field, enter the name of the variable to which the API response will be saved -- `createPersonProfileResponse`.
++
+image:bp-modeling/bp/element-temp/nested-entities/bp-nested-entities-2.png[]
+
+//IMPORTANT: В результаті виконується _одна транзакція_, що записує _один простий об'єкт_ `personProfile` до відповідної таблиці `person_profile` у базі даних.
+IMPORTANT: The result is _one transaction_ that writes _one simple object_ -- `personProfile` -- to the `person_profile` table in the database.
+
+//==== Моделювання задачі скриптування "Підготовка даних" для формування комплексного об'єкта
+==== Modeling the script task to create a nested object
+
+//Далі у задачі скриптування необхідно створити комплексний об'єкт (nested object), що містить вкладені сутності:
+Next, we need to use the script task to create a nested object containing these nested entities:
+
+//* об'єкт `personEduProfile` (навчальний профіль користувача), в якому ми передаємо вкладений об'єкт з ID щойно створеного користувача (`personProfileId`);
+* The `personEduProfile` object -- the user's educational profile containing a nested object with the ID of the newly created user (`personProfileId`).
+//* а також об'єкт `orders`, в якому передається список атрибутів наказу, тобто додаткові налаштування (підстави) для створення такого навчального профілю.
+* The `orders` object containing a list of order attributes -- that is, additional settings (grounds) for creating an educational profile.
+
+//Комплексний JSON-об'єкт із вкладеними сутностями записуємо до змінної `createComplexPayload`.
+A complex JSON object with nested entities is saved to the `createComplexPayload` variable.
+
+image:bp-modeling/bp/element-temp/nested-entities/bp-nested-entities-3.png[]
+
+//. Створіть нову задачу, визначте її тип, натиснувши іконку ключа та обравши з меню пункт *Script Task* (Задача скриптування).
+. Create a new task and set the task type by clicking the wrench icon and selecting *Script Task* from the menu.
++
+//. На панелі налаштувань справа заповніть наступні поля:
+. In the properties panel on the right, fill out the following parameters:
++
+//* У полі `Name` вкажіть назву задачі -- `Підготовка даних`.
+* In the *Name* field, enter the task name -- for example, `Prepare data`.
+//* У полі `Script Format` вкажіть формат скрипту -- `groovy`.
+* In the *Script Format* field, enter the script format -- `groovy`.
+//* У полі `Script Type` вкажіть тип скрипту -- `Inline Script`.
+* In the *Script Type* field, select the `Inline Script` type.
+//* У полі `Script` введіть безпосередньо groovy-скрипт:
+* In the *Script* field, enter the body of the Groovy script.
+//.Приклад. Groovy-скрипт, що формує комплексний JSON-об'єкт для подальшого запису до БД
++
+.A Groovy script that creates a complex JSON object for further writing into the database
+====
+[source,groovy]
+----
+def personProfileId = createPersonProfileResponse.responseBody.prop('id').value()
+
+        def personEduProfile = ['personProfileId':personProfileId]
+
+        def formData = submission('signPersonProfileActivity').formData
+
+        def orders = [:]
+        orders['ordersType'] = formData.prop('order_type').value()
+        orders['ordersNumber'] = formData.prop('order_number').value()
+        orders['ordersDate'] = formData.prop('order_date').value()
+        orders['personProfileId'] = personProfileId
+
+        def cephData = ['personEduProfile':personEduProfile,'orders':orders]
+
+        set_transient_variable('createComplexPayload', S(cephData, 'application/json'))
+----
+====
++
+image:bp-modeling/bp/element-temp/nested-entities/bp-nested-entities-4.png[]
++
+//. В результаті виконання задачі, у виводі отримуємо сформований JSON, збережений до змінної `createComplexPayload`, що надалі використовуватиметься у бізнес-процесі.
+. As the output of this task, we get the generated JSON saved to the  `createComplexPayload` variable, which will be used further in the business process.
+//.Приклад. Сформований JSON-об'єкт, збережений до змінної 'createComplexPayload'
++
+.A JSON object saved to the 'createComplexPayload' variable
+====
+[source,json]
+----
+{
+  "personEduProfile": {
+    "personProfileId": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+  },
+  "orders": {
+    "ordersType": "string",
+    "ordersNumber": "string",
+    "ordersDate": "2022-02-16T13:33:30.660Z",
+    "personProfileId": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+  }
+}
+----
+====
+
+//TODO Call Activity section skipped
+////
+==== Моделювання Call Activity для підпису комплексного об'єкта системним ключем
+
+Далі необхідно створити Call Activity для виклику глобального підпроцесу підпису даних системним ключем. Call Activity використовує змінну `createComplexPayload`, дані з якої передаються до підпроцесу для подальшого їх підпису.
+
+В результаті виконання підпроцесу, викликаного у Call Activity, дані підписуються системним Ceph-ключем для перевірки системного підпису Фабрикою даних. Ключ зберігається до змінної `transaction_system_signature_ceph_key`.
+
+. Змоделюйте елемент *Call Activity*.
+. Перейдіть до панелі налаштувань справа та застосуйте делегат *System digital signature*. Для цього оберіть відповідний шаблон із каталогу (`Open Catolog`).
++
+TIP: Приклад налаштування делегата System digital signature наведено за xref:bp-modeling/bp/element-templates/bp-element-templates-installation-configuration.adoc#element-temp-system-digital-signature[посиланням].
+
+. Виконайте подальші налаштування:
+
+* У полі `Name` вкажіть назву елемента -- `Підписати дані системним ключем`.
+* У полі `Input data` вкажіть вхідні дані, які необхідно передати підпроцесу, що викликатиметься -- `${createComplexPayload}`.
+* У полі `Output variable name` введіть назву змінної, до якої буде записано системний Ceph-ключ -- `transaction_system_signature_ceph_key`. Він потрібний для перевірки системного підпису у Фабриці даних.
++
+NOTE: Ідентифікатор підпроцесу, що викликатиметься, передається у полі `Called Element` і має стале значення `system-signature-bp`. Ці та деякі інші налаштування "вшито" до шаблону з метою спрощення моделювання.
++
+image:bp-modeling/bp/element-temp/nested-entities/bp-nested-entities-5.png[]
+////
+
+//==== Моделювання сервісної задачі для створення декількох сутностей в рамках однієї транзакції
+==== Modeling the service task to create multiple entities within a single transaction
+
+//Далі дані використовуються у сервісній задачі "Збереження даних".
+Next, the data is used in the "Save data" service task.
+
+//У задачі необхідно застосувати делегат для створення декількох сутностей у базі даних в рамках однієї транзакції (*Create nested entities in data factory*), використавши підписані дані (Payload) зі змінної `${createСomplexPayload}`.
+In this task, we need to create several entities in the database within a single transaction via the *Create nested entities in data factory* delegate using the signed data (Payload) from the `${createСomplexPayload}` variable.
+
+//В рамках виконання задачі бізнес-процес: ::
+During this task, the business process does the following: ::
+
+//* надсилає підписані дані (`${createComplexPayload}`) до API-ендпоінту (ресурсу) `nested-transaction-entity`.
+* Sends the signed data (`${createComplexPayload}`) to the `nested-transaction-entity` API endpoint (resource).
+//* передає токен доступу до ресурсу.
+* Passes the resource access token.
+//* передає у запиті КЕП користувача.
+* Passes the user's QES with the request.
+//* передає системний ключ зі змінної `${transaction_system_signature_ceph_key}`.
+* Passes the system key from the `${transaction_system_signature_ceph_key}` variable.
+
+//Результат (відповідь) від API записуємо до змінної `response`.
+The API response is saved to the `response` variable.
+
+//. Змоделюйте нову задачу.
+. Model a new task.
+//. Визначте її тип, натиснувши іконку ключа та обравши з меню пункт *Service Task* (сервісна задача).
+. Set the task type by clicking the wrench icon and selecting *Service Task* from the menu.
+//. Перейдіть до панелі налаштувань справа та застосуйте делегат *Create entity in data factory*. Для цього оберіть відповідний шаблон із каталогу (`Open Catalog`).
+. Go to the properties panel on the right and apply the *Create entity in data factory* delegate. To do this, click *`Open Catalog`* and select the appropriate template.
++
+//TIP: Приклад налаштування делегата *Create nested entities in data factory* наведено за xref:bp-modeling/bp/element-templates/bp-element-templates-installation-configuration.adoc#create-nested-entities[посиланням].
+TIP: For an example of configuring the *Create nested entities in data factory* delegate, see xref:bp-modeling/bp/element-templates/bp-element-templates-installation-configuration.adoc#create-nested-entities[this section].
++
+//. Виконайте подальші налаштування:
+. Fill out the following fields:
++
+//* У полі `Id` вкажіть ідентифікатор сервісної задачі -- `createComplex`.
+* In the *Id* field, enter the service task identifier -- `createComplex`.
+//* У полі `Name` вкажіть назву задачі. Наприклад, `Збереження даних`.
+* In the *Name* field, enter the task name -- for example, `Save data`.
+//* У полі `Resource` вкажіть ресурс (API-ендпоінт), куди необхідно виконати запит -- `nested-transaction-entity`.
+* In the *Resource* field, enter the API endpoint where the request should be executed -- `nested-transaction-entity`.
++
+//NOTE: На рівні API ендпоінт виглядає наступним чином: `/nested/<resource name>`, де `<resource name>` -- назва ресурсу. Тобто у полі `Resource` необхідно ввести значення, вказане після останньої косої риски (`/`).
+NOTE: The API endpoint looks like this: `/nested/<resource name>`. In the *Resource* field, you must enter the value indicated after the second slash (`/`).
++
+//* У полі `Payload` введіть тіло запита -- JSON-об`єкт, тобто дані зі змінної `${createComplexPayload}`, які необхідно зберегти до Фабрики даних.
+* In the *Payload* field, enter the request body -- a JSON object, i.e. the data from the `${createComplexPayload}` variable, which must be saved to the data factory.
++
+//NOTE: Майте на увазі, що необхідно попередньо побудувати цей JSON-об`єкт, тобто `payload`, в рамках задачі скриптування.
+NOTE: The JSON object, or payload, must already be created as part of the script task.
++
+//* У полі `X-Access-Token` вкажіть токен доступу до ресурсу.
+* In the *X-Access-Token* field, enter the resource access token.
++
+[CAUTION]
+====
+//Токен доступу береться з АБО ініціатора (наприклад, `${initiator().accessToken}`), АБО виконавця задачі (наприклад, `${completer('taskDefinitionId').accessToken}`):
+The access token is taken either from the initiator (for example, $initiator().accessToken}) or the completer of the task (for example, ${completer('taskDefinitionId').accessToken}).
+
+//* Якщо перед сервісною задачею у бізнес-процесі немає жодної користувацької задачі, використовуємо токен ініціатора процесу (initiator).
+* If there are no user tasks before the service task in the business process, the process initiator token is used.
+
+//* Якщо перед сервісною задачею є користувацька задача, використовуємо токен виконавця задачі (completer).
+* If there is a user task before the service task, the task completer token is used.
+
+//Таким чином ми від імені користувача, який АБО запустив бізнес-процес, АБО виконав користувацьку задачу, створюємо сутності у базі даних.
+This way, we can create the entities in the database on behalf of the user who initiated the business process OR executed the user task.
+====
++
+//* У полі `X-Digital-Signature-source` вкажіть джерело цифрового підпису (КЕП), тобто передайте функції `sign_submission()` ID користувацької форми, де застосовували КЕП, -- `${sign_submission('signPersonProfileActivity').signatureDocumentId}`.
+* In the *X-Digital-Signature-source* field, enter the QES source -- that is, pass the ID of the user form where the QES was applied to the `sign_submission()` function: `${sign_submission('signPersonProfileActivity').signatureDocumentId}`.
++
+//* У полі `X-Digital-Signature-Derived-source` вкажіть джерело системного підпису, тобто змінну, з якої необхідно взяти системний ключ, -- `${transaction_system_signature_ceph_key}`.
+* In the *X-Digital-Signature-Derived-source* field, enter the system signature source -- that is, the variable containing the system key: `${transaction_system_signature_ceph_key}`.
++
+//* У полі `Result variable` вкажіть назву змінної, в якій необхідно зберегти відповідь від API, -- `response`.
+* In the *Result variable* field, enter the name of the variable to which the API response will be saved -- `response`.
++
+image:bp-modeling/bp/element-temp/nested-entities/bp-nested-entities-6.png[]
++
+//. Виконайте `Unlink` шаблону, тобто від'єднайте шаблон від задачі, щоб побачити деталі його імплементації, що передзаповнюються автоматично з метою спрощення моделювання:
+. Unlink the template from the task to view its implementation details, which are pre-populated automatically to simplify modeling. To do this, expand the menu in the upper-right corner and click *`Unlink`*. Then, check the following fields:
++
+//* У полі `Implementation` визначено тип -- `Delegate Expression`.
+* The *Implementation* field is set to the `Delegate Expression` type.
+//* У полі `Delegate Expression`  визначено назву делегата -- `$dataFactoryConnectorNestedCreateDelegate`.
+* The *Delegate Expression* field contains the delegate name -- `$dataFactoryConnectorNestedCreateDelegate`.
++
+image:bp-modeling/bp/element-temp/nested-entities/bp-nested-entities-7.png[]
++
+image:bp-modeling/bp/element-temp/nested-entities/bp-nested-entities-8.png[]
++
+[IMPORTANT]
+====
+//В результаті виконується _одна транзакція_, що записує _комплексний об'єкт_, який складається із декількох вкладених об'єктів (сутностей): `personEduProfile` та `orders`, до відповідних БД-таблиць `person_edu_profile` та `order`, які посилаються за зовнішнім ключем `personProfileId` до таблиці `person_profile`.
+The result is _one transaction_ that writes a _complex object_ with several nested entities -- `personEduProfile` and `orders` -- to the `person_edu_profile` and `order` database tables, respectively. These tables reference the `person_profile` table using the `personProfileId` foreign key.
+
+//Таким чином маємо виконану транзакцію одночасно до 3-х таблиць у базі даних. Рівень API Фабрики даних автоматично розкладає дані, що надходять у тілі запита, за різними таблицями.
+This way, the transaction is executed across three database tables simultaneously. The data factory API distributes the data from the request body into the corresponding tables automatically.
+====
++
+//. Продовжіть бізнес-процес за необхідності або завершіть.
+. Finish the business process or continue as needed.
+
+//=== Використання комплексного об'єкта у бізнес-процесі
+=== Using a complex object in a business process
+
+//Розглянемо приклад подальшого використання комплексного об'єкта у цьому ж бізнес-процесі, дані якого були збережені до бази даних в рамках попередньої транзакції.
+Let's consider an example of further using the complex object in the same business process after its data has been saved to the database during the previous transaction.
+
+//==== Моделювання сервісної задачі "Get transaction"
+==== Modeling the "Get transaction" service task
+
+//Для подальшого використання комплексного об'єкта та його збережених сутностей, необхідно спочатку отримати ID транзакції, в рамках якої був записаний цей об'єкт.
+To continue using the complex object and its entities, you need to first obtain the ID of the transaction in which this object was recorded.
+
+//Для цього потрібно надіслати `GET`-запит на відповідний ендпоінт `Get transaction`, вказавши ID транзакції зі змінної `response` останньої сервісної задачі -- `${response.value.responseBody.prop('id').value()}`, а також токен доступу до ресурсу.
+For this, you need to send a `GET` request to the `Get transaction` endpoint and specify the transaction ID from the `response` variable of the last service task -- `${response.value.responseBody.prop('id').value()}`, as well as the resource access token.
+
+image:bp-modeling/bp/element-temp/nested-entities/bp-nested-entities-9.png[]
+
+//. Змоделюйте нову задачу.
+. Model a new task.
+//. Визначте її тип, натиснувши іконку ключа та обравши з меню пункт *Service Task* (сервісна задача).
+. Set the task type by clicking the wrench icon and selecting *Service Task* from the menu.
+//. Перейдіть до панелі налаштувань справа та застосуйте делегат *Read entity from data factory*. Для цього оберіть відповідний шаблон із каталогу (`Open Catalog`).
+. Go to the properties panel on the right and apply the *Read entity from data factory* delegate. To do this, click *`Open Catalog`* and select the appropriate template.
+//. Виконайте подальші налаштування:
+. Fill out the following fields:
+
+//* У полі `Name` вкажіть назву задачі. Наприклад, `Get transaction`.
+* In the *Name* field, enter the task name -- for example, `Get transaction`.
+//* У полі `Resource` вкажіть ресурс (API-ендпоінт), куди необхідно виконати запит -- `transaction`.
+* In the *Resource* field, enter the API endpoint where the request should be executed -- `transaction`.
++
+//NOTE: На рівні API ендпоінт виглядає наступним чином: `/<resource name>`, де `<resource name>` -- назва ресурсу. Тобто у полі `Resource` необхідно ввести значення, вказане після косої риски (`/`).
+NOTE: The API endpoint looks like this: `/<resource name>`. In the *Resource* field, you must enter the value indicated after the slash (`/`).
++
+//* У полі `Resource id` введіть ID транзакції зі змінної `response` останньої сервісної задачі -- `${response.value.responseBody.prop('id').value()}`, що необхідно передати до Фабрики даних.
+* In the *Resource id* field, enter the transaction ID from the `response` variable of the last service task -- `${response.value.responseBody.prop('id').value()}` that needs to be passed to the data factory.
++
+//* У полі `X-Access-Token` вкажіть токен доступу до ресурсу -- `${completer('signPersonProfileActivity').accessToken}`.
+* In the *X-Access-Token* field, enter the resource access token -- `${completer('signPersonProfileActivity').accessToken}`.
++
+[CAUTION]
+====
+//Токен доступу береться з АБО ініціатора (наприклад, `${initiator().accessToken}`), АБО виконавця задачі (наприклад, `${completer('taskDefinitionId').accessToken}`):
+The access token is taken either from the initiator (for example, $initiator().accessToken}) or the completer of the task (for example, ${completer('taskDefinitionId').accessToken}).
+
+//* Якщо перед сервісною задачею у бізнес-процесі немає жодної користувацької задачі, використовуємо токен ініціатора процесу (initiator).
+* If there are no user tasks before the service task in the business process, the process initiator token is used.
+
+//* Якщо перед сервісною задачею є користувацька задача, використовуємо токен виконавця задачі (completer).
+* If there is a user task before the service task, the task completer token is used.
+
+//Таким чином ми від імені користувача, який АБО запустив бізнес-процес, АБО виконав користувацьку задачу, виконуємо пошук сутності у базі даних.
+This way, we can perform an entity lookup in the database on behalf of the user who initiated the business process OR executed the user task.
+====
++
+//* У полі `Result variable` вкажіть назву змінної, в якій необхідно зберегти відповідь від API, -- `txResponse`.
+* In the *Result variable* field, enter the name of the variable to which the API response will be saved -- `txResponse`.
++
+image:bp-modeling/bp/element-temp/nested-entities/bp-nested-entities-10.png[]
+
+//==== Моделювання сервісної задачі "Пошук даних за наказом"
+==== Modeling the "Search data by order" service task
+
+//Після отримання ID транзакції в результаті виконання попередньої задачі, ми можемо виконати пошук за певними даними, що збереглися в рамках такої транзакції (тут -- за наказом, тобто об'єктом `orders`).
+Once we get the transaction ID as a result of the previous task, we can search for data saved in the scope of the transaction. In this case, we will search by the `orders` object.
+
+//Для цього потрібно надіслати `GET`-запит на відповідний ендпоінт `orders`, вказавши ID транзакції зі змінної `txResponse` останньої сервісної задачі -- `${txResponse.value.responseBody.prop('ordersId').value()}`, а також токен доступу до ресурсу.
+For this, you need to send a `GET` request to the `orders` endpoint and specify the transaction ID from the `txResponse` variable of the last service task -- `${txResponse.value.responseBody.prop('ordersId').value()}`, as well as the resource access token.
+
+//. Змоделюйте нову задачу.
+. Model a new task.
+//. Визначте її тип, натиснувши іконку ключа та обравши з меню пункт *Service Task* (сервісна задача).
+. Set the task type by clicking the wrench icon and selecting *Service Task* from the menu.
+//. Перейдіть до панелі налаштувань справа та застосуйте делегат *Read entity from data factory*. Для цього оберіть відповідний шаблон із каталогу (`Open Catalog`).
+. Go to the properties panel on the right and apply the *Read entity from data factory* delegate. To do this, click *`Open Catalog`* and select the appropriate template.
+//. Виконайте подальші налаштування:
+. Fill out the following fields:
++
+//* У полі `Name` вкажіть назву задачі. Наприклад, `Пошук даних за наказом`.
+* In the *Name* field, enter the task name -- for example, `Search data by order`.
+//* У полі `Resource` вкажіть ресурс (API-ендпоінт), куди необхідно виконати запит -- `orders`.
+* In the *Resource* field, enter the API endpoint where the request should be executed -- `orders`.
++
+//NOTE: На рівні API ендпоінт виглядає наступним чином: `/<resource name>`, де `<resource name>` -- назва ресурсу. Тобто у полі `Resource` необхідно ввести значення, вказане після косої риски (`/`).
+NOTE: The API endpoint looks like this: `/<resource name>`. In the *Resource* field, you must enter the value indicated after the slash (`/`).
++
+//* У полі `Resource id` введіть ID транзакції зі змінної `txResponse` останньої сервісної задачі -- `${txResponse.value.responseBody.prop('ordersId').value()}`, що необхідно передати до Фабрики даних.
+* In the *Resource id* field, enter the transaction ID from the `txResponse` variable of the last service task -- `${txResponse.value.responseBody.prop('ordersId').value()}` that needs to be passed to the data factory.
++
+//* У полі `X-Access-Token` вкажіть токен доступу до ресурсу -- `${completer('signPersonProfileActivity').accessToken}`.
+* In the *X-Access-Token* field, enter the resource access token -- `${completer('signPersonProfileActivity').accessToken}`.
++
+[CAUTION]
+====
+//Токен доступу береться з АБО ініціатора (наприклад, `${initiator().accessToken}`), АБО виконавця задачі (наприклад, `${completer('taskDefinitionId').accessToken}`):
+The access token is taken either from the initiator (for example, $initiator().accessToken}) or the completer of the task (for example, ${completer('taskDefinitionId').accessToken}).
+
+//* Якщо перед сервісною задачею у бізнес-процесі немає жодної користувацької задачі, використовуємо токен ініціатора процесу (initiator).
+* If there are no user tasks before the service task in the business process, the process initiator token is used.
+
+//* Якщо перед сервісною задачею є користувацька задача, використовуємо токен виконавця задачі (completer).
+* If there is a user task before the service task, the task completer token is used.
+
+//Таким чином ми від імені користувача, який АБО запустив бізнес-процес, АБО виконав користувацьку задачу, виконуємо пошук сутності у базі даних.
+This way, we can perform an entity lookup in the database on behalf of the user who initiated the business process OR executed the user task.
+====
++
+//* У полі `Result variable` вкажіть назву змінної, в якій необхідно зберегти відповідь від API, -- `ordResponse`.
+* In the *Result variable* field, enter the name of the variable to which the API response will be saved -- `ordResponse`.
++
+image:bp-modeling/bp/element-temp/nested-entities/bp-nested-entities-11.png[]
++
+//. Продовжіть бізнес-процес за необхідності або завершіть.
+. Finish the business process or continue as needed.
+
+//== Імплементація на рівні API
+== API-level implementation
+
+//Для окремого типу запита використовують окремий делегат. Тобто в загальному випадку є REST-контролер, який підтримує певні типи запитів (методи): `POST`, `GET`, `PUT` та `DELETE`. Для кожного методу -- свій делегат.
+A separate request type requires a separate delegate. The REST controller supports certain types of requests, or methods: `POST`, `GET`, `PUT`, and `DELETE`. Each method has its delegate.
+
+[WARNING]
+====
+//Для ресурсу `/nested/<resource name>` та делегата `$dataFactoryConnectorNestedCreateDelegate` використовується _лише_ метод `PUT`.
+The `/nested/<resource name>` resource and `$dataFactoryConnectorNestedCreateDelegate` delegate _only_ use the `PUT` method.
+
+//І хоча метод `PUT` зазвичай використовується для оновлення записів, та у нашому випадку `PUT` може як _створити сутність_, так і _оновити_ її, в залежності від того, які параметри ми передаємо у запиті:
+Although the `PUT` method is usually used to update records, in our case `PUT` can both _create an entity_ and _update_ it, depending on the request parameters:
+
+//* Якщо необхідно _створити сутність_, то ми НЕ передаємо параметр `<table_primary_key>_id` у тілі запита. Наприклад, `orders_id`.
+* To _create an entity_, do NOT pass the `<table_primary_key>_id` parameter in the request body. For example, `orders_id`.
++
+//* Якщо необхідно _оновити сутність_, то ми включаємо параметр ``<table_primary_key>_id`` у тіло запита. Наприклад, `orders_id`.
+* To _update an entity_, include the `<table_primary_key>_id` parameter in the request body. For example, `orders_id`.
+====
+
+//.Приклад. Тіло запита
+.Request body
+====
+[source,json]
+----
+{
+  "personEduProfile": {
+    "personProfileId": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+  },
+  "orders": {
+    "ordersType": "string",
+    "ordersNumber": "string",
+    "ordersDate": "2022-02-16T13:33:30.660Z",
+    "personProfileId": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+  }
+}
+----
+====
+
+//.Приклад відповіді від API-сервісу:
+.API response
+====
+
+HTTP code: ::
+----
+200 OK
+----
+
+Response body: ::
+----
+{
+   "id":"d1394f5d-5274-4831-90ac-0dfdb6d7bd35"
+}
+----
+====
+
+[IMPORTANT]
+====
+//Отже, нема потреби створювати окремий контролер із різними ендпоінтами для різних цілей. Достатньо використовувати один _окремий_ ендпоінт, який матиме можливість приймати й правильно опрацьовувати комплексний JSON-об'єкт, в якому одночасно передаватимуться всі необхідні дані користувача та його налаштування, і параметри якого можна буде зберегти до різних таблиць в одній БД-транзакції.
+There is no need to create a separate controller with different endpoints for different purposes. It is sufficient to use a single _dedicated_ endpoint capable of receiving and processing a complex JSON object that will transfer all the necessary user data and settings simultaneously and whose parameters can be saved to different tables in a single database transaction.
+====

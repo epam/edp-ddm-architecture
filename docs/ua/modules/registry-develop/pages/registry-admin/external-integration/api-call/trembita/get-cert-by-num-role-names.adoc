@@ -1,0 +1,184 @@
+// use these attributes to translate captions and labels to the document's language
+// more information: https://asciidoctor.org/docs/user-manual/#customizing-labels
+// table of contents title
+:toc-title: ЗМІСТ
+:toc:
+:experimental:
+:example-caption: Приклад
+:important-caption: ВАЖЛИВО
+:note-caption: ПРИМІТКА
+:tip-caption: ПІДКАЗКА
+:warning-caption: ПОПЕРЕДЖЕННЯ
+:caution-caption: УВАГА
+// captions for specific blocks
+:figure-caption: Figure
+:table-caption: Таблиця
+// caption for the appendix
+:appendix-caption: Appendix
+// how many headline levels to display in table of contents?
+:toclevels: 5
+// https://asciidoctor.org/docs/user-manual/#sections-summary
+// turn numbering on or off (:sectnums!:)
+:sectnums:
+// enumerate how many section levels?
+:sectnumlevels: 5
+// show anchors when hovering over section headers
+:sectanchors:
+// render section headings as self referencing links
+:sectlinks:
+// number parts of a book
+:partnums:
+
+= Сервіс отримання даних Свідоцтва про народження (GetCertByNumRoleNames)
+
+Сервіс `GetCertByNumRoleNames` надає можливість здійснити пошук у _Державному реєстрі актів цивільного стану_ (ДРАЦС) та отримати відомості щодо Свідоцтва про народження дитини за вказаними серією і номером Свідоцтва та ПІБ через ШБО "Трембіта".
+
+Пошук Свідоцтва про народження в ДРАЦС здійснюється за критеріями:
+
+* `ByParam`
+* `CertNumber` -- номер свідоцтва;
+* `CertSerial` -- серія свідоцтва;
+* `DateBirth` -- дата народження;
+* `Name` -- ім'я;
+* `Patronymic` -- по батькові;
+* `Role` -- Роль особи;
+* `Surname` -- Прізвище.
+
+
+.запит у форматі XML:
+====
+[source, xml]
+----
+<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">
+  <s:Header>
+    ...
+  </s:Header>
+  <s:Body xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+    <CeServiceRequest xmlns="http://tempuri.org/">
+      <ByParam>4</ByParam>
+      <CertNumber>218727</CertNumber>
+      <CertSerial>IV-AM</CertSerial>
+      <DateBirth xsi:nil="true" />
+      <Name>Павло</Name>
+      <Patronymic>Іванович</Patronymic>
+      <Role>1</Role>
+      <Surname>Сидоренко</Surname>
+    </CeServiceRequest>
+  </s:Body>
+</s:Envelope>
+----
+====
+
+.відповідь у форматі JSON:
+====
+[source, json]
+----
+{
+   "certificate":[
+      {
+         "certStatus":1,
+         "certRepeat":0,
+         "certSerial":"IV-AM",
+         "certNumber":"218727",
+         "certSerialNumber":null,
+         "certOrg":null,
+         "certDate":null,
+         "arOrg":null,
+         "arNumb":null,
+         "arComposeDate":null,
+         "childSurname":"Сидоренко",
+         "childName":"Павло",
+         "childPatronymic":"Іванович",
+         "childBirthdate":null,
+         "fatherSurname":null,
+         "fatherName":null,
+         "fatherPatronymic":null,
+         "fatherCitizenship":null,
+         "fatherCitizenshipAnother":null,
+         "motherSurname":null,
+         "motherName":null,
+         "motherPatronymic":null,
+         "motherCitizenship":null,
+         "motherCitizenshipAnother":null,
+         "oldSurname":null,
+         "oldName":null,
+         "oldPatronymic":null,
+         "newSurname":null,
+         "newName":null,
+         "newPatronymic":null,
+         "dateOfBirth":null,
+         "placeofBirth":null,
+         "husbandOldSurname":null,
+         "husbandSurname":null,
+         "husbandName":null,
+         "husbandPatronymic":null,
+         "husbandCitizenship":null,
+         "husbandBirthdate":null,
+         "husbandPlaceofBirth":null,
+         "wifeOldSurname":null,
+         "wifeSurname":null,
+         "wifeName":null,
+         "wifePatronymic":null,
+         "wifeCitizenship":null,
+         "wifeBirthdate":null,
+         "wifePlaceOfBirth":null
+      }
+   ]
+}
+----
+====
+
+.Опис структурних параметрів
+|====
+|Параметр |Опис |Тип |Важливість
+|ErrorInfo|текстова інформація про помилки|string|необов'язково
+|ResultCode|результат запиту|string|необов'язково
+|ResultData|XML з вихідними даними згідно формату в документі та з набором заданих полів в Base64|string|необов'язково
+|====
+
+Опис `ResultCode` результат запиту:
+
+*	0 - успішно виконано;
+*	1 - внутрішня помилка;
+*	2 - не дозволено для даного клієнта;
+*	3 - більше ніж один активний сервіс;
+*	4 - поля не задано;
+*	5 - некоректні вхідні параметри (валідація неуспішна).
+
+.Опис складу результату вивантаження даних свідоцтва `ResultData`
+|====
+|Параметр |Опис |Тип |Важливість|Примітки
+|CertStatus|Статус свідоцтва|number|обов'язково|1 – дійсне; 3 - анульоване;
+|CertRepeat|Ознака «Повторне»|number|необов'язково|0 – ні; 1 - так;
+|CertSerial|Серія свідоцтва |string|обов'язково|
+|CertNumber|Номер свідоцтва |string|обов'язково|
+|CertSerialNumber|Серія та  номер свідоцтва|string|обов'язково|Частина Serial – символи (до 10 символів); Частина Number - тільки цифри (до 11 символів);
+|CertOrg|Орган, що видав свідоцтво|string|обов'язково|
+|CertDate|Дата видачі свідоцтва|string|обов'язково|Дата. Приклад (10.10.2018)
+|ArOrg|Місце державної реєстрації|string|необов'язково|
+|AR_NUMB|Номер актового запису в книзі державної реєстрації	|string|необов'язково|
+|AR_COMPOSEDATE|Дата складання актового запису в книзі державної реєстрації |string|необов'язково|
+|ChildSurname|Прізвище дитини|string|обов'язково|
+|ChildName|Власне ім'я дитини|string|обов'язково|
+|ChildPatronymic|По батькові дитини (за наявності)|string|обов'язково|
+|ChildBirthdate|Дата народження дитини|string|обов'язково|
+|PlaceofBirth|Місце народження|string|необов'язково|
+|FatherSurname|Прізвище батька |string|необов'язково|
+|FatherName|Власне ім'я батька |string|необов'язково|
+|FatherPatronymic|По батькові батька (за наявності)|string|необов'язково|
+|FatherСitizenship|Громадянство батька |number|необов'язково|82 – особа без громадянства; 83 - громадянин України; 84 - громадянка України; 85 – інше;
+|FatherСitizenship Another|Громадянство батька|number|необов'язково|Надається при значенні  FatherСitizenship = 85
+|MotherSurname|Прізвище матері |string|необов'язково|
+|MotherName|Власне ім'я матері |string|необов'язково|
+|MotherPatronymic|По батькові матері (за наявності)|string|необов'язково|
+|MotherСitizenship|Громадянство матері|number|необов'язково|82 – особа без громадянства; 83 - громадянин України; 84 - громадянка України; 85 – інше;
+|MotherСitizenship Another|Громадянство матері (тип інше)|string|необов'язково|Надається при значенні  MotherСitizenship = 85
+|====
+
+[TIP]
+====
+Актуальну інформацію щодо необхідних ідентифікаторів сервісу та його постачальника, а також опис параметрів і WSDL, ви можете отримати за посиланнями:
+
+* link:https://directory-test.trembita.gov.ua:8443/SEVDEIR-TEST/GOV/22956058/TEST_DRAC/GetCertByNumRoleNames?tab=0&lang=ua[Вебсервіс GetCertByNumRoleNames (тестове середовище)]
+* link:https://directory-prod.trembita.gov.ua:8443/SEVDEIR/GOV/00015622/2_MJU_EDR_prod/SubjectDetail?tab=0[Вебсервіс GetCertByNumRoleNames (промислове середовище)]
+====

@@ -1,0 +1,301 @@
+:toc-title: ЗМІСТ
+:toc: auto
+:toclevels: 5
+:experimental:
+:important-caption:     ВАЖЛИВО
+:note-caption:          ПРИМІТКА
+:tip-caption:           ПІДКАЗКА
+:warning-caption:       ПОПЕРЕДЖЕННЯ
+:caution-caption:       УВАГА
+:example-caption:           Приклад
+:figure-caption:            Зображення
+:table-caption:             Таблиця
+:appendix-caption:          Додаток
+:sectnums:
+:sectnumlevels: 5
+:sectanchors:
+:sectlinks:
+:partnums:
+
+= Заміна файлового ключа на апаратний в user-management
+
+Криптографічний сервіс digital-signature-ops, що розгорнутий в проєкті user-management, використовує два секрети:
+
+* digital-signature-data;
+* digital-signature-env-vars.
+
+image:admin:crypto-service-id-gov-ua/crypto-service-id-gov-ua-01.png[]
+
+Наприклад, для інтеграції з link:https://id.gov.ua/[id.gov.ua], необхідно замінити файловий ключ на апаратний. Для цього потрібно виконати наступні кроки:
+
+. Налаштувати digital-signature-data;
+. Налаштувати digital-signature-env-vars;
+. Перезапустити сервіс digital-signature-ops.
+
+== Налаштування digital-signature-data
+
+. Перейдіть до налаштувань секрету `digital-signature-data` в *Openshift-консолі*.
+
+* Оберіть розділ `Workloads`.
+* Оберіть підрозділ `Secrets`.
+* Виберіть проєкт `user-management`.
+* У рядку пошуку вкажіть `digital-signature`.
+* Натисніть на `digital-signature-data` у колонці `Name`.
+
++
+image:admin:crypto-service-id-gov-ua/crypto-service-id-gov-ua-02.png[]
+
+. Внизу сторінки представлено параметри, які необхідно налаштувати.
++
+image:admin:crypto-service-id-gov-ua/crypto-service-id-gov-ua-03.png[]
+
+. Зберіть усі необхідні файли з параметрами в одній директорії.
++
+image:admin:crypto-service-id-gov-ua/crypto-service-id-gov-ua-12.png[]
+
+* `CACertificates.p7b` - список сертифікатів сумісних ЦСК (link:https://iit.com.ua/download/productfiles/CACertificates.p7b[CACertificates.p7b]), який можна отримати на сайті АТ "ІІТ" за посиланням https://iit.com.ua/downloads.
+* `CAs.json` - параметри взаємодії із сумісними ЦСК (link:https://iit.com.ua/download/productfiles/CAs.json[CAs.json]), який можна отримати на сайті АТ "ІІТ" за посиланням https://iit.com.ua/downloads.
+* `Key-6.dat` - сам файл ключа.
+* `allowed-keys.yml` - файл з даними дозволених ключів (використовується при роботі реєстрів). Необхідно зазначити два параметри для кожного ключа:
+** `issuer` - реквізити ЦСК.
++
+[TIP]
+====
+Можна переглянути в детальній інформації ключа, при його зчитуванні у застосунку "ІІТ Користувач ЦСК".
+
+Наприклад: ::
++
+image:admin:infrastructure/cluster-mgmt/change-key/change-key-18.png[]
+====
++
+** `serial` - реєстраційний (серійний) номер ключа.
++
+[TIP]
+====
+Можна переглянути в детальній інформації ключа, при його зчитуванні у застосунку "ІІТ Користувач ЦСК".
+
+Наприклад: ::
++
+image:admin:infrastructure/cluster-mgmt/change-key/change-key-19.png[]
+====
+* `osplm.ini` - файл з налаштуваннями для ініціалізації криптографічного сервісу. Приклад структури файлу доступний за link:{attachmentsdir}/crypto-service-id-gov-ua/osplm.ini[посиланням].У цьому файлі налаштовуються наступні параметри:
+** Налаштування у блоці даних АЦСК *[\SOFTWARE\Institute of Informational Technologies\Certificate Authority-1.3\End User\CMP]*:
+*** `CommonName` - назва АЦСК.
+*** `Address` - хост АЦСК.
+*** `Port` - порт АЦСК.
++
+[TIP]
+====
+Зазначені параметри можливо отримати у файлі `CAs.json`, наприклад:
+
+image:admin:crypto-service-id-gov-ua/crypto-service-id-gov-ua-04.png[]
+====
+** Налаштування у блоці даних ключа *[\SOFTWARE\Institute of Informational Technologies\Key Medias\NCM Gryada-301\Modules\001]*:
+*** `SN` - серійний номер пристрою.
+*** `Address` - хост ключа (IP-адреса).
++
+[TIP]
+====
+Серійний номер пристрою і хост ключа відображається в назві ключа при його зчитуванні у застосунку "ІІТ Користувач ЦСК", наприклад:
+
+`001:3016(10.0.200.102)`, де
+
+* `001` -- серійний номер пристрою;
+* `3016` -- порт ключа;
+* `10.0.200.102` -- хост ключа.
+
+image:admin:infrastructure/cluster-mgmt/change-key/change-key-30.png[]
+====
+*** `AddressMask` - маска ключа.
++
+[TIP]
+====
+За замовчуванням встановлюється значення -- `255.255.255.255`.
+
+====
+
+. Запустіть командний рядок (cmd) з місця де знаходяться файли з налаштуваннями.
++
+[NOTE]
+====
+У разі виконання дій вперше, попередньо завантажте `OpenShift command line interface`.
+
+* Натисніть піктограму знака питання в правій верхній частині сторінки.
+* Виберіть меню `Command line tools`.
+* Виберіть утиліту з переліку для завантаження, відповідно до вашої операційної системи.
+* Розархівуйте та запустіть завантажений файл.
++
+image:registry-develop:registry-admin/remote-connection/remote-connection-3.png[]
+====
+
+. Отримайте токен для авторизації в OpenShift.
+* Натисніть на ім'я профілю у правій верхній частині сторінки та оберіть пункт меню `Copy login command`.
++
+image:registry-develop:registry-admin/remote-connection/remote-connection-5.png[]
+* Повторно автентифікуйтесь в системі.
+* Натисніть `Display Token`.
+* Скопіюйте значення з поля `Log in with this token`.
++
+image:registry-develop:registry-admin/remote-connection/remote-connection-6.png[]
+
+. Виконайте скопійовану команду в командному рядку (cmd), наприклад:
++
+[source, bash]
+----
+oc login --token=sha256~1aWEXnvr4IBVNsrdepqDl5Q10NkhokW7nt-s_-trO8k --server=https://api.cicd2.mdtu-ddm.projects.epam.com:6443
+----
+
+. Виберыть проєкт `user-management`, виконавши команду:
++
+[source, bash]
+----
+oc project user-management
+----
+
+. Виконайте наступну команду, щоб застосувати зміни у налаштуваннях секрету `digital-signature-data`.
++
+[source, bash]
+----
+oc create secret generic digital-signature-data --from-file=./CACertificates.p7b --from-file=./CAs.json --from-file=./osplm.ini --from-file=./Key-6.dat --from-file=./allowed-keys.yml --dry-run=client -o yaml | oc replace -f -
+----
++
+image:admin:crypto-service-id-gov-ua/crypto-service-id-gov-ua-05.png[]
+
+. У разі успішного виконання в командному рядку буде показано:
++
+[source, bash]
+----
+secret/digital-signature-data replaced
+----
+
+
+== Налаштування digital-signature-env-vars
+
+. Перейдіть до налаштувань секрету `digital-signature-env-vars` в *Openshift-консолі*.
+
+* Оберіть розділ `Workloads`.
+* Оберіть підрозділ `Secrets`.
+* Виберіть проєкт `user-management`.
+* У рядку пошуку вкажіть `digital-signature`.
+* Натисніть на `digital-signature-env-vars` у колонці `Name`.
+
++
+image:admin:crypto-service-id-gov-ua/crypto-service-id-gov-ua-06.png[]
+
+. Внизу сторінки представлено параметри, які необхідно налаштувати.
++
+image:admin:crypto-service-id-gov-ua/crypto-service-id-gov-ua-07.png[]
+
+. Зберіть усі необхідні файли з параметрами в одній директорії.
++
+image:admin:crypto-service-id-gov-ua/crypto-service-id-gov-ua-13.png[]
+
+* `sign.key.device-type` - тип ключа. Вкажіть `hardware` - для апаратного ключа.
++
+[NOTE]
+====
+Параметри, що встановлені за замовчуванням для файлового ключа:
+
+* `sign.key.device-type` зі значенням `file`.
+
+* `sign.key.file.issuer` - назва АЦСК.
+
+* `sign.key.file.password` - пароль ключа.
+
+При заміні файлового ключа на апаратний ці параметри залишити пустими.
+====
+
+* `sign.key.hardware.device` - параметри мережевого криптомодуля у заданому форматі _(для апаратного ключа)_.
++
+[TIP]
+====
+Приклад формату: ::
++
+`001:3016(10.0.200.102)`, де
+
+* `001` -- серійний номер пристрою;
+* `3016` -- порт ключа;
+* `10.0.200.102` -- хост ключа.
+
+image:admin:infrastructure/cluster-mgmt/change-key/change-key-30.png[]
+====
+
+* `sign.key.hardware.password` - пароль ключа _(для апаратного ключа)_.
++
+[NOTE]
+====
+Пароль ключа має наступну структуру: ::
++
+`&#35;&#35;User&#35;&#35;Password`.
+====
+
+* `sign.key.hardware.type` - тип криптомодуля _(для апаратного ключа)_.
++
+[NOTE]
+====
+Зазвичай значення за замовчуванням: ::
++
+`криптомод. ІІТ Гряда-301`
+====
+
+. Запустіть командний рядок (cmd) з місця де знаходяться файли з налаштуваннями.
+
+. Отримайте токен для авторизації в OpenShift.
+* Натисніть на ім'я профілю у правій верхній частині сторінки та оберіть пункт меню `Copy login command`.
++
+image:registry-develop:registry-admin/remote-connection/remote-connection-5.png[]
+* Повторно автентифікуйтесь в системі.
+* Натисніть `Display Token`.
+* Скопіюйте значення з поля `Log in with this token`.
++
+image:registry-develop:registry-admin/remote-connection/remote-connection-6.png[]
+
+. Виконайте скопійовану команду в командному рядку (cmd), наприклад:
++
+[source, bash]
+----
+oc login --token=sha256~1aWEXnvr4IBVNsrdepqDl5Q10NkhokW7nt-s_-trO8k --server=https://api.cicd2.mdtu-ddm.projects.epam.com:6443
+----
+
+. Виберыть проєкт `user-management`, виконавши команду:
++
+[source, bash]
+----
+oc project user-management
+----
+
+. Виконайте наступну команду, щоб застосувати зміни у налаштуваннях секрету `digital-signature-env-vars`.
++
+[source, bash]
+----
+oc create secret generic digital-signature-env-vars --from-file=./sign.key.device-type --from-file=./sign.key.file.issuer --from-file=./sign.key.file.password --from-file=./sign.key.hardware.device --from-file=./sign.key.hardware.password --from-file=./sign.key.hardware.type --dry-run=client -o yaml | oc replace -f -
+----
++
+image:admin:crypto-service-id-gov-ua/crypto-service-id-gov-ua-14.png[]
+
+. У разі успішного виконання в командному рядку буде показано:
++
+[source, bash]
+----
+secret/digital-signature-env-vars replaced
+----
+
+== Перезапуск сервісу digital-signature-ops
+
+Для того, щоб перезапустити сервіс `digital-signature-ops`
+
+. Відкрийте сервіс `digital-signature-ops`.
++
+image:admin:crypto-service-id-gov-ua/crypto-service-id-gov-ua-08.png[]
+
+. Перейдіть до вкладки `Pods`, натисніть іконку у вигляді трьох вертикальних крапок, зі спадного меню оберіть `Delete Pod`.
++
+image:admin:crypto-service-id-gov-ua/crypto-service-id-gov-ua-09.png[]
+
+. Натисніть `Delete` для підтвердження.
++
+image:admin:crypto-service-id-gov-ua/crypto-service-id-gov-ua-11.png[0,250]
+
+. Після видалення відбудеться перезапуск pod. У разі успішного налаштування pod буде у статусі `Running`, а на вкладці `Logs` будуть показані системні записи з підключення.
++
+image:admin:crypto-service-id-gov-ua/crypto-service-id-gov-ua-10.png[]

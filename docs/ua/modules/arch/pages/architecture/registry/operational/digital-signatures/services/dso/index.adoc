@@ -1,0 +1,226 @@
+= Сервіс КЕП операцій
+
+== Загальний опис
+
+Метою сервісу є валідація цифрового підпису отриманого від клієнтів сервісу а також накладання системного цифрового підпису на отримані дані. Базується сервіс на "IIT Java digital signature" бібліотеці від ІІТ.
+
+Сервіс надає наступний функціонал:
+
+* Перевірка ЕЦП накладеного на документ
+* Накладання на документ системного підпису (цифрової печатки)
+* Перевірка системного підпису накладеного на документ
+
+=== Взаємодія з сервісами платформи та АЦСК:
+
+image::arch:architecture/registry/operational/digital-signatures/services/dso/process_cntxt.svg[]
+
+=== Параметри конфігурації сервісу
+
+|===
+|Параметр |Тип |Необхідність |Опис
+
+|sign.timeout-ms
+|long
+|required
+|дозволений проміжок часу між накладанням підпису та перевіркою
+
+|sign.auth.timeout-ms
+|long
+|required
+|дозволений проміжок часу між накладанням підпису та перевіркою при автентифікації
+
+|sign.key.file
+|string
+|required
+|ім'я файлу системного ключа
+
+|sign.key.folder
+|string
+|required
+|ім'я директорії розташування системного ключа
+
+|sign.key.password
+|string
+|required
+|пароль системного ключа
+
+|sign.key.issuer
+|string
+|required
+|назва емітента ключа
+
+|sign.allowed-keys
+|list
+|required
+|список дозволених системних ключів
+
+|sign.allowed-keys[].issuer
+|string
+|required
+|назва емітента ключа
+
+|sign.allowed-keys[].serial
+|string
+|required
+|серійний номер ключа
+
+|datafactory-excerpt-ceph.http-endpoint
+|string
+|required
+|Адреса доступу до Ceph сховища
+
+|datafactory-excerpt-ceph.bucket
+|string
+|required
+|Назва сегменту данних Ceph
+
+|datafactory-excerpt-ceph.access-key
+|string
+|required
+|Ключ доступу до Ceph
+
+|datafactory-excerpt-ceph.secret-key
+|string
+|required
+|Ключ доступу до Ceph
+|===
+
+
+=== Можливі помилки перевірки підпису, що генеруються бібліотекою ІІТ
+|===
+|Код помилки |Повідомлення
+
+|ERROR_NONE
+|Виконано успішно
+|ERROR_NOT_INITIALIZED
+|Бібліотека не ініціалізована
+|ERROR_BAD_PARAMETER
+|Невірний параметр
+|ERROR_LIBRARY_LOAD
+|Виникла помилка при завантажені базових бібліотек
+|ERROR_READ_SETTINGS
+|Виникла помилка при зчитуванні параметрів
+|ERROR_TRANSMIT_REQUEST
+|Виникла помилка при передачі запиту на сервер ЦСК за протоколом HTTP
+|ERROR_MEMORY_ALLOCATION
+|Виникла помилка при виділені пам'яті
+|WARNING_END_OF_ENUM
+|Перелік закінчено
+|ERROR_PROXY_NOT_AUTHORIZED
+|Автентифікація на proxy-сервері не пройдена або не можлива
+|ERROR_NO_GUI_DIALOGS
+|Діалог з оператором не підтримується
+|ERROR_DOWNLOAD_FILE
+|Виникла помилка при завантаженні файлу з HTTP-сервера
+|ERROR_WRITE_SETTINGS
+|Виникла помилка при записі параметрів
+|ERROR_CANCELED_BY_GUI
+|Операція відмінена оператором
+|ERROR_OFFLINE_MODE
+|Доступ до сервера ЦСК не можливий (увімкнено offline-режим)
+|ERROR_KEY_MEDIAS_FAILED
+|Виникла помилка при роботі з носієм ключової інформації
+|ERROR_KEY_MEDIAS_ACCESS_FAILED
+|Виникла помилка при доступі до носія ключової інформації
+|ERROR_KEY_MEDIAS_READ_FAILED
+|Виникла помилка при зчитуванні особистого ключа з носія ключової інформації
+|ERROR_KEY_MEDIAS_WRITE_FAILED
+|Виникла помилка при запису особистого ключа на носій ключової інформації
+|WARNING_KEY_MEDIAS_READ_ONLY
+|Носій ключової інформації не підтримує знищення даних
+|ERROR_KEY_MEDIAS_DELETE
+|Виникла помилка при видаленні особистого ключа з носія ключової інформації
+|ERROR_KEY_MEDIAS_CLEAR
+|Виникла помилка при очищенні носія ключової інформації
+|ERROR_BAD_PRIVATE_KEY
+|Виникла помилка при відкритті особистого ключа (невірний пароль чи ключ пошкоджений)
+|ERROR_PKI_FORMATS_FAILED
+|Виникла помилка при розборі чи формуванні даних (пошкоджені дані чи невірний формат)
+|ERROR_CSP_FAILED
+|Виникла помилка при виконанні криптоперетворень
+|ERROR_BAD_SIGNATURE
+|Вибачте, підпис не пройшов валідацію. Будь ласка, спробуйте ще раз
+|ERROR_AUTH_FAILED
+|Виникла помилка при автентифікації (дані автентифікації пошкоджені)
+|ERROR_NOT_RECEIVER
+|Власник особистого ключа відсутній у списку отримувачів зашифрованих даних
+|ERROR_STORAGE_FAILED
+|Виникла помилка при роботі з файловим сховищем сертифікатів та СВС
+|ERROR_BAD_CERT
+|Сертифікат пошкоджений або не може бути використаний
+|ERROR_CERT_NOT_FOUND
+|Сертифікат не знайдено
+|ERROR_INVALID_CERT_TIME
+|Сертифікат не чинний за строком дії або закінчився строк дії відповідного особистого ключа
+|ERROR_CERT_IN_CRL
+|Сертифікат не чинний (при перевірці за допомогою СВС)
+|ERROR_BAD_CRL
+|СВС пошкоджений
+|ERROR_NO_VALID_CRLS
+|Не знайдено діючих СВС (можливо виникла помилка при їх завантаженні з сервера ЦСК або завантаження не можливе)
+|ERROR_GET_TIME_STAMP
+|Виникла помилка при отриманні позначки часу
+|ERROR_BAD_TSP_RESPONSE
+|Виникла помилка при розборі відповіді від TSP-сервера
+|ERROR_TSP_SERVER_CERT_NOT_FOUND
+|Сертифікат TSP-сервера не знайдено
+|ERROR_TSP_SERVER_CERT_INVALID
+|Сертифікат TSP-сервера не чинний (можливо не знайдено діючих СВС)
+|ERROR_GET_OCSP_STATUS
+|Виникла помилка при спробі отримати статус сертифікату за протоколом OCSP
+|ERROR_BAD_OCSP_RESPONSE
+|Виникла помилка при розборі відповіді від OCSP-сервера
+|ERROR_CERT_BAD_BY_OCSP
+|Сертифікат не чинний (при перевірці за протоколом OCSP)
+|ERROR_OCSP_SERVER_CERT_NOT_FOUND
+|Сертифікат OCSP-сервера не знайдено
+|ERROR_OCSP_SERVER_CERT_INVALID
+|Сертифікат OCSP-сервера не чинний (можливо не знайдено діючих СВС)
+|ERROR_LDAP_ERROR
+|Виникла помилка при роботі з LDAP-сервером
+|===
+
+=== Можливі помилки валідації КЕП сервісу
+
+|===
+|Код помилки |Повідомлення
+
+|ERROR_SIGNATURE_EXPIRED
+|Різниця підпису та поточного часу перевищила дозволений інтервал
+|ERROR_SIGNATURE_DRFO_MISMATCH
+|РНОКПП код підпису та користувача відрізняються
+|ERROR_SIGNATURE_EDRPOU_MISMATCH
+|ЄДРПОУ код підпису та користувача відрізняються
+|ERROR_SIGNATURE_NAME_MISMATCH
+|ПІБ підпису та користувача відрізняються
+|ERROR_EMPTY_DRFO
+|Підпис не містить РНОКПП код. Будь ласка, використайте інший підпис
+|ERROR_EMPTY_EDRPOU
+|Ви автентифіковані як юридична особа. Будь ласка, використайте ключ юридичної особи
+|ERROR_EMPTY_FULL_NAME
+|Використання печатки не підтримується. Будь ласка, використайте персонифікований ключ
+|ERROR_EMPTY_TIME_INFO
+|Підпис не містить мітки часу
+|ERROR_UNKNOWN_ESEAL
+|Печатка не авторизована для накладання підпису
+|ERROR_INVALID_JWT
+|Токен користувача не містить необхідних даних
+|ERROR_NOT_EMPTY_EDRPOU
+|Ви автентифіковані як фізична особа. Будь ласка, використайте ключ фізичної особи
+|ERROR_EMPTY_ALLOWED_SUBJECT
+|Не вказано тип пакету валідаційних правил
+|ERROR_NOT_ENTREPRENEUR_SIGNATURE
+|Ви скористалися ключем представника ФОП або юридичної особи. Будь ласка, використайте ключ власного ФОП
+|ERROR_EMPTY_ENTREPRENEUR_EDRPOU
+|Ви автентифіковані як фізична особа-підприємець. Будь ласка, використайте ключ фізичної особи-підприємця
+
+|===
+
+Список кодів помилок також можна знайти у  https://gitbud.epam.com/mdtu-ddm/low-code-platform/platform/backend/applications/digital-signature-ops/-/blob/master/digital-signature-ops/src/main/resources/lang/messages.properties[файлі локалізації]. Повідомлення помилок локалізовано українською мовою.
+
+== Технологічний стек
+* https://spring.io/projects/spring-boot[Spring/Spring Boot] - програмний каркас з відкритим кодом та контейнери з підтримкою інверсії управління для платформи Java.
+* https://spring.io/projects/spring-cloud-kubernetes[Spring Cloud Kubernetes] - інтеграція з об'єктами Kubernetes інфраструктури ConfigMap/Secrets
+* https://iit.com.ua/download/productfiles/EUSignJavaAppletD.doc[IIT Digital Signature Java library] - бібліотека для створення та перевірки цифрового підпису документа.
+* https://maven.apache.org[Maven] - управління залежностями
+

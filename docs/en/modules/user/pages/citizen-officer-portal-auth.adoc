@@ -1,0 +1,379 @@
+:toc-title: On this page:
+:toc: auto
+:toclevels: 5
+:experimental:
+:sectnums:
+:sectnumlevels: 5
+:sectanchors:
+:sectlinks:
+:partnums:
+
+//= Автентифікація користувачів реєстру
+= Registry user authentication
+
+//== Загальний опис
+== General overview
+
+//Платформа реалізує складні механізми автентифікації кінцевих користувачів, які забезпечують належний захист даних та нівелюють можливість несанкціонованого доступу до інформації.
+The Platform implements sophisticated mechanisms for authenticating end-users, ensuring proper data protection, and mitigating unauthorized access to information.
+
+//В основі механізму автентифікації лежить [.underline]#Система управління ідентифікацією та доступом (IAM) *Keycloak*#, яка взаємодіє з [.underline]#Сервісом для роботи з КЕП# та інтегрованою системою електронної ідентифікації *ID.GOV.UA (ICEI)*. Також на платформі функціонують специфічні сервіси автентифікації посадових осіб та отримувачів послуг реєстру -- автентифікатори (_див. детальніше -- xref:#auth-logic[]_).
+The foundation of the authentication mechanism is the [.underline]#*Keycloak* Identity and Access Management (IAM) system#, which interacts with the [.underline]#Service for interacting with qualified electronic signatures# and the integrated electronic identification system *ID.GOV.UA (ICEI)*. Additionally, the platform includes specific authentication services for Officers and Citizens -- so called authenticators (_see xref:#auth-logic[]_).
+
+//Окрім цього, платформа використовує *Kong API Gateway* для управління, захисту та моніторингу доступу до API, що забезпечує додатковий рівень захисту та контролю над доступом до даних та сервісів платформи.
+Furthermore, the platform utilizes the *Kong API Gateway* to manage, protect, and monitor API access, providing an additional layer of security and control over data and platform services.
+
+//Взаємодія між усіма компонентами гарантує надійний механізм автентифікації, який адаптується до різних типів користувачів та їхніх ролей у системі. В результаті, користувачі можуть впевнено працювати з реєстрами, знаючи, що їх особисті дані та інформація знаходяться під надійним захистом, а можливість несанкціонованого доступу до системи зведена до мінімуму.
+The interaction between all components guarantees a reliable authentication mechanism that adapts to different types of users and their roles within the system. As a result, users can confidently work with registries, knowing that their personal data and information are well-protected, and the possibility of unauthorized access to the system is minimized.
+
+//+++<b style="font-weight: 700">Наразі Платформа підтримує 2 типи автентифікації </b>+++: ::
+*Currently, the Platform supports 2 types of authentication*:
+
+//* [*] автентифікація користувача за допомогою кваліфікованого електронного підпису (КЕП);
+* [*] User authentication using qualified electronic signatures.
+//* [*] автентифікація користувача за допомогою інтегрованої системи електронної ідентифікації ID.GOV.UA (ІСЕІ) -- зовнішнього постачальника ідентифікаційних даних.
+* [*] User authentication using the integrated electronic identification system ID.GOV.UA (ICEI) -- an external provider of identification data.
+
+[#auth-logic]
+//== Логіка автентифікації користувачів
+== User authentication logic
+
+//За автентифікацію користувачів реєстру відповідають такі сервіси:
+The following services are responsible for authenticating users in the registry:
+
+//* [.underline]#Сервіс автентифікації отримувачів послуг# -- `*keycloak-ds-citizen-authenticator*`;
+* [.underline]#Citizen authentication service# -- *`keycloak-ds-citizen-authenticator`*.
+//* [.underline]#Сервіс автентифікації посадових осіб# -- `*keycloak-ds-officer-authenticator*`.
+* [.underline]#Officer authentication service# -- *`keycloak-ds-officer-authenticator`*.
+
+////
+//TODO: Commenting and leaving out since UA-specific info in the block below.
+Для ідентифікації користувача у системі, сервіс автентифікації має отримати з КЕП, або від зовнішнього надавача послуг (`id.gov.ua`) як обов'язкові вхідні параметри наступні атрибути:
+To identify a user in the system, the authentication service must receive the following mandatory input attributes from the qualified electronic signature or the external service provider (`id.gov.ua`):
+
+* `*drfo*` (`РНОКПП`) -- ідентифікаційний номер, або серія і номер паспорта особи.
+
+* `*edrpou*` (`ЄДРПОУ`) -- код організації, до якої належить особа.
+
+* `*fullName*` (`ПІБ`) -- прізвище, ім'я та по батькові особи.
+
+У процесі автентифікації відбувається пошук користувача у базі даних за атрибутом `drfo`. Якщо користувача з відповідним атрибутом знайдено, то відбувається порівняння атрибутів `fullName` та `edrpou` (за наявності). [.underline]#Порівняння атрибутів `drfo` та `edrpou` відбувається за повним збігом їх значень#.
+
+[TIP]
+====
+Наприклад: ::
+
+Сервіс автентифікації посадових осіб отримує, РНОКПП особи, виконує запит до сервісу Keycloak, отримує там необхідний атрибут та звіряє його з тим, що вказано у КЕП. Якщо значення у Keycloak та КЕП повністю збігаються, то перевірка проходить успішно, якщо ні -- користувач отримає помилку автентифікації.
++
+При автентифікації отримувачів послуг, якщо атрибути не збігаються, тобто користувача не знайдено, то система створить нового користувача.
+====
+
+Для атрибута `*fullName*` (`ПІБ`) застосовується інша стратегія -- [.underline]#нечітке порівняння рядків, що не враховує спеціальні символи#.
+////
+
+[NOTE]
+====
+//Проблематика використання стратегії чіткого порівняння (strictIgnoreCase)::
+Issues with using `strictIgnoreCase` comparison strategy: ::
+
+//Атрибут `*fullName*` в КЕП, який містить ПІБ особи та є нестандартизованим. Його заповнюють працівники АЦСК без єдиного підходу. Це призводить до незбігу значення `fullName` при перевипуску або використанні КЕП, виданого іншим АЦСК. Наприклад, інший КЕП може містити декілька пробілів замість одного, містити, або не містити спеціальні символи, як-от апостроф або дефіс.
+The *`fullName`* attribute in the qualified electronic signature, containing the individual's full name, is non-standardized. It is filled in without a uniform approach. This leads to discrepancies in the `fullName` value when a qualified electronic signature is used or reissued by a different organization. For example, a different qualified electronic signature may contain multiple spaces instead of one, include or exclude special characters such as apostrophes or dashes.
+//TODO: didn't mention the АЦСК in the paragraph above, since it is UA-specific. Please check.
++
+//Ці зміни в атрибуті `fullName` призводять до того, що користувач не може увійти до Кабінету з новим ключем, оскільки значення атрибута `fullName` у КЕП не збігається зі значенням, що збережене у базі даних сервісу Keycloak. [.underline]#У Keycloak зберігається значення атрибута `fullName` з КЕП користувача, який використовувався при першому вході до реєстру (автореєстрації)#.
+These changes in the `fullName` attribute result in the user being unable to log in to their portal with a new key since the `fullName` value in the qualified electronic signature does not match the value stored in the Keycloak service database. [.underline]#The Keycloak service saves the value of the `fullName` attribute with the qualified electronic signature, that was used at the first access to the registry  (self-registration)#.
++
+//Реалізація [.underline]#стратегії автентифікації `strictIgnoreCase`# не враховує цю проблему та [.underline]#працює за принципом приведення стрічки до нижнього регістру та видалення лише символів пробілу#.
+The implementation of the [.underline]#authentication strategy `strictIgnoreCase`# does not take this issue into account and operates based on converting the string to lowercase and removing only whitespace characters.
++
+//Для розв'язання впроваджено нову стратегію нечіткого порівняння рядків, яка не враховує спецсимволи (`*alphanumericIgnoreCase*`).
+To address this, a new strategy of fuzzy string comparison has been implemented, which does not consider special characters (*`alphanumericIgnoreCase`*).
+====
+
+//Стратегія нечіткого порівняння рядків передбачає застосування наступних валідаційних правил:
+The fuzzy string comparison strategy applies the following validation rules:
+
+//* Перед порівнянням рядки приводяться до нижнього регістру.
+* Before comparison, strings are converted to lowercase.
+//* Видаляються усі символи, окрім латинських та кириличних літер та цифр.
+* All characters except Latin and Cyrillic letters and digits are removed.
+//* Довжина рядка після нормалізації має бути не менш як 50% від оригінального.
+* The length of the string after normalization should be at least 50% of the original length.
+
+////
+TODO: UA-specific example below.
+[TIP]
+====
+Наприклад: ::
+
+Якщо користувач заведений у Keycloak як `fullName: "Маряна-Іриna  Сергіївна"`, а у КЕП вказано `fullName: "Мар'яна-Іриna Сергіївна!%?"`, то користувач зможе пройти автентифікацію та увійти до Кабінету.
+====
+////
+
+[#kep-auth]
+//== Автентифікація за допомогою КЕП
+== Authenticating with the qualified electronic signature
+
+//Автентифікація користувачів за допомогою [.underline]#кваліфікованого електронного підпису (КЕП)# відбувається з використанням встановленого на стороні браузера стороннього віджета https://iit.com.ua/downloads[IIT] для виконання операцій, що вимагають шифрування та підпису даних, а також сервісу для роботи з КЕП, що використовує окрему криптобібліотеку від IIT на стороні Платформи для перевірки цілісності та незмінності даних, що передаються з вебклієнта.
+User authentication using [.underline]#qualified electronic signature# takes place with the use of a third-party widget https://iit.com.ua/downloads[IIT], installed on the browser side. This widget facilitates operations that require data encryption and signing. Additionally, a service for working with the qualified electronic signature is utilized, which employs a separate cryptographic library from IIT on the Platform side to verify the integrity and immutability of data transmitted from the web client.
+
+//Взаємодія користувачів з Платформою та розгорнутими на її базі реєстрами відбувається виключно через імплементовані вебінтерфейси -- додатки **Кабінет отримувача послуг** та **Кабінет посадової особи** -- із будь-якого визнаного індустрією браузера останньої версії.
+Users interact with the platform and the registries deployed on it solely through implemented web interfaces -- the *Citizen portal* and the *Officer portal*- accessible from any up-to-date industry-recognized browser.
+
+//Автентифікація з КЕП передбачає використання асиметричних алгоритмів шифрування, що забезпечують криптографічний захист даних користувачів.
+Authentication with the qualified electronic signature involves using asymmetric encryption algorithms that ensure the cryptographic protection of user data.
+
+//Для отримання доступу до функцій Кабінету, користувач має увійти до системи, виконавши кроки, описані нижче в інструкції.
+To access the portal's functions, users must sign in to the system by following the steps described below in the instructions.
+
+//CAUTION: Автентифікація з КЕП доступна для користувачів Кабінетів посадової особи та отримувача послуг реєстру.
+CAUTION: Authentication with the qualified electronic signature is available for users of both the Officer's Cabinet and the Citizen Service Recipient's Cabinet.
+
+
+//=== Передумови
+=== Prerequisites
+
+//Отримайте особистий ключ для підпису даних в одному з https://czo.gov.ua/ca-registry[акредитованих центрів сертифікації ключів (АЦСК)]. Відкритий ключ зберігатиметься на сервері постачальника, в той час, як секретний (закритий) ключ необхідно буде зберегти на одному із захищених носіїв, доступних для використання при вході до системи за допомогою КЕП (_див. крок 3 в підрозділі  xref:auth-process-pass[]_).
+Obtain a personal data signing key from one of the Accredited Key Certification Centers (AKCC). The public key will be stored on the server of the provider, while the private (closed) key must be kept on one of the secure media accessible for use when entering the system with the qualified electronic signature (_see step 3 in xref:auth-process-pass[]_).
+
+[#auth-process-pass]
+//=== Проходження автентифікації
+=== Passing authentication
+
+//NOTE: Процес автентифікації за допомогою КЕП є ідентичним як для посадових осіб, так і для отримувачів послуг реєстру.
+NOTE: The authentication process with the qualified electronic signature is identical for both officers and citizens.
+
+//Розглянемо процес проходження автентифікації на прикладі Кабінету отримувача послуг.
+Let's consider the authentication process using the example of the Citizen portal.
+
+[#auth-step-1]
+//Крок 1 ::
+Step 1: ::
+
+//* Відкрийте сторінку входу до [.underline]#Кабінету отримувача послуг# за адресою `http://citizen-portal-<назва-реєстру>-main.apps.envone.dev.registry.eua.gov.ua/`, якщо ви фізична, або юридична особа, або ФОП і хочете замовити послугу.
+* Open the login page of the [.underline]#Citizen portal# at `http://citizen-portal-<registry-name>-main.apps.envone.dev.registry.eua.gov.ua/` if you are a physical, legal entity, or individual entrepreneur and wish to order a service.
++
+//* Відкрийте сторінку входу до [.underline]#Кабінету посадової особи# за адресою `http://officer-portal-<назва-реєстру>-main.apps.envone.dev.registry.eua.gov.ua/officer/`, якщо ви посадова особа, що уповноважена надавати послуги.
+* Open the login page of the [.underline]#Officer portal# at `http://officer-portal-<registry-name>-main.apps.envone.dev.registry.eua.gov.ua/officer/` if you are an authorized officer providing services.
++
+//CAUTION: Адреси сервісів, що наведені у тексті вище, є шаблонними. Підставте назву свого реєстру в URL сервісу. При виникненні будь-яких питань, зверніться до адміністратора.
+CAUTION: The service addresses mentioned above are templates. Replace `registry-name` in the service URL with the name of your registry. If you have any questions, contact the administrator.
+
+[#auth-step-2]
+//Крок 2 ::
+Step 2: ::
+
+//Натисніть kbd:[Увійти до кабінету].
+Click on kbd:[Login to the portal].
++
+image:user:cp-auth-1.png[]
+
+[#iit-digital-sign-widget]
+//Крок 3 ::
+Step 3 ::
+
+//. Оберіть тип послуг:
+. Choose the service type:
++
+//* [.underline]#Для громадян# -- якщо ви бажаєте увійти як фізична особа (параметр встановлюється за замовчуванням);
+* [.underline]#For citizens# -- if you wish to log in as a physical person (this parameter is set by default).
+//* Для бізнесу -- якщо ви бажаєте увійти як ФОП або юридична особа.
+* [.underline]#For business# -- if you wish to log in as an individual entrepreneur or legal entity.
++
+//. Оберіть тип носія особистого ключа. +
+. Select the type of personal key medium. +
+//Оберіть [.underline]#Файловий носій# (параметр встановлюється за замовчуванням).
+Choose [.underline]#File medium# (this parameter is set by default).
++
+image:user:cp-auth-2.png[]
++
+//. У полі `Кваліфікований надавач ел. довірчих послуг` оберіть один з акредитованих центрів сертифікації ключів (АЦСК), натиснувши на елемент випадного списку, або залиште значення `Визначити автоматично`, встановлене за замовчуванням.
+. In the `Qualified trust service provider` field, select one of the accredited centers for key certification (ACCS) by clicking on the dropdown item or leave the default value `Automatically define`.
++
+image:user:cp-auth-3.png[]
++
+//. Оберіть особистий ключ:
+. Select the personal key:
++
+//* У полі `Особистий ключ` натисніть kbd:[Обрати].
+* In the `Personal key` field, click kbd:[Select].
+//* Знайдіть особистий ключ (наприклад `Key-6.dat`) та натисніть kbd:[Open] для підтвердження.
+* Find the personal key (e.g., ``Key-6.da``t) and click kbd:[Open] to confirm.
++
+image:user:cp-auth-4.png[]
++
+//. У полі `Пароль захисту ключа` введіть пароль захисту ключа.
+. In the `Key protection password` field, enter the key protection password.
+//. Натисніть kbd:[Зчитати] для перевірки введених даних.
+. Click kbd:[Read] to verify the entered data.
++
+image:user:cp-auth-5.png[]
+
+//Крок 4 ::
+Step 4 ::
+
+//. На формі _підпису даних_ натисніть kbd:[Увійти] для входу до Кабінету.
+. On the _data signing_ form, click kbd:[Log in] to enter the portal.
+//. (_Альтернативно_) Натисніть kbd:[Змінити ключ], якщо необхідно обрати інший ключ для входу.
+. (_Alternatively_) Click kbd:[Change key] if you need to select another key for login.
++
+image:user:cp-auth-6.png[]
++
+[WARNING]
+====
+//У разі використання невірного ключа, на кроці підпису даних сервер повертає помилку:
+If an incorrect key is used, the server returns an error during the data signing step:
+
+image:user:cp-auth-7-wrong-key.png[]
+====
++
+[WARNING]
+====
+//У разі введення невірних ідентифікаційних даних (як-от пароль захисту ключа тощо), на кроці підпису даних сервер повертає таку помилку:
+If incorrect identification data (e.g., key protection password, etc.) is entered, the server returns the following error during the data signing step:
+
+image:user:cp-auth-8-wrong-credentials.png[]
+====
+
+[NOTE]
+====
+//Після успішного проходження автентифікації у Кабінеті отримувача послуг, під час першого входу, особі буде запропоновано пройти процес онбордингуfootnote:[[.underline]#Онбординг# -- реєстрація в системі для надання прав доступу до функцій Кабінету отримувача послуг.]. Після проходження цього процесу, особа отримає доступ до функцій Кабінету.
+Upon successful authentication in the Citizen portal, during the first login, the individual will be prompted to undergo the onboardingfootnote:[[.underline]#Onboarding# refers to the registration process in the system to grant access rights to the features of the Citizen portal.] process. After completing this process, the individual will gain access to the portal's functions.
+====
+
+//NOTE: У Кабінеті посадової особи процес онбордингу не передбачений. Тому перед входом до Кабінету необхідно переконатися, що адміністратор доступу створив відповідного користувача.
+NOTE: The onboarding process is not applicable to the Officer portal. Therefore, before logging in, make sure that the access administrator has created the corresponding user.
+
+////
+TODO: Leaving the below section out since it is UA-specific.
+[#auth-id-gov-ua]
+== Автентифікація з ID.GOV.UA
+
+Платформа надає можливість здійснювати автентифікацію за вбудованого віджета `*id.gov.ua*` -- [.underline]#Інтегрованої системи електронної ідентифікації (ІСЕІ)#.
+
+Автентифікація через зовнішнього провайдера можлива як [.underline]#для отримувачів послуг#, так і [.underline]#для посадових осіб (надавачів послуг)# реєстру.
+
+ІСЕІ `*id.gov.ua*` має атестат відповідності комплексної системи захисту інформації (КСЗІ), тому персональні дані користувачів надійно захищені.
+
+TIP: Для отримання деталей підключення та використання ID.GOV.UA, будь ласка, зверніться до https://id.gov.ua/downloads/IDInfoProcessingD.pdf[технічної документації] або https://id.gov.ua/[офіційного сайту].
+
+[#auth-officers]
+=== Автентифікація посадових осіб (надавачів послуг)
+
+. Найперше, виконайте xref:#auth-step-1[крок 1] та xref:#auth-step-1[крок 2] у попередньому розділі цього документа.
+. Натисніть на відповідний елемент для автентифікації з ID.GOV.UA:
++
+
+image:user:cp-auth-idgovua-1.png[]
+
+. Оберіть вхід за допомогою [.underline]#Електронного підпису#.
++
+image:user-auth/user-auth-idgovua-4-02.png[]
+
+. Оберіть метод автентифікації -- [.underline]#Файловий носій#.
++
+[IMPORTANT]
+====
+Посадові особи можуть автентифікуватися лише через файловий носій.
+
+TIP: Файловий носій – це спеціальний файл, який містить ваш особистий ключ.
+Зазвичай цей файл має назву `*Key-6*` з розширенням `*.dat` (зустрічаються також розширення *.pfx, *.pk8, *.zs2, *.jks).
+====
++
+image:user-auth/user-auth-idgovua-1.png[]
+
+. Завантажте із зовнішнього носія чи власного комп'ютера файл із вашим особистим ключем.
++
+image:user-auth/user-auth-idgovua-2.png[]
+
+. Вкажіть пароль доступу до особистого ключа у відповідному полі та натисніть kbd:[Продовжити].
++
+image:user-auth/user-auth-idgovua-3.png[]
+
++
+У разі успішного зчитування ключа та проходження автентифікації, посадова особа зможе увійти до Кабінету.
+
+=== Автентифікація отримувачів послуг
+
+. Увійдіть до Кабінету отримувача послуг (_див. xref:#auth-step-1[крок 1] та xref:#auth-step-1[крок 2] цього документа_).
+
+. Оберіть опцію [.underline]#Для громадян#.
++
+image:user:user-auth/user-auth-idgovua-4-01.png[]
++
+[IMPORTANT]
+====
+Автентифікація з id.gov.ua можлива лише _ДЛЯ ГРОМАДЯН_. Якщо ви представник бізнесу, то зможете увійти до Кабінету лише з КЕП. +
+Фізичним особам доступні обидві опції для автентифікації: КЕП та id.gov.ua.
+====
+
+. Автентифікуйтеся через віджет `*ID.GOV.UA*`.
++
+image:user:user-auth/user-auth-idgovua-4-1.png[]
+
+. Оберіть бажану схему (спосіб) автентифікації.
++
+[NOTE]
+====
+Отримувачі послуг реєстру можуть використовувати такі способи автентифікації з `id.gov.ua`:
+
+* Електронний підпис
+* Bank ID НБУ
+* Дія.Підпис
+====
++
+image:user:user-auth/user-auth-idgovua-4.png[]
+
+. Дотримуйтеся інструкцій, описаних у підрозділах нижче.
++
+NOTE: Уся обробка даних відбувається на стороні `id.gov.ua`. Детальніше про кожен тип автентифікації ви можете дізнатися на https://id.gov.ua/verify[офіційному сайті].
+
+==== Автентифікація з електронним підписом
+
+Електронний підпис є аналогом власноручного підпису та забезпечує правдивість і цілісність інформації, викладеної у документі, а також дає змогу підтвердити цілісність електронного документа та ідентифікувати особу, яка підписала документ.
+
+. Увійдіть за допомогою електронного підпису.
+. Оберіть тип ключа, яким ви хочете підписати дані:
+
+* Файловий носій
+* Токен
+* Хмарне сховище
+* ID-картка
+
+image:user:user-auth/user-auth-idgovua-5.png[]
+
+[#auth-bank-id]
+==== Автентифікація з BankID НБУ
+
+Сервіс надається Національним банком України та можливий лише для клієнтів тих банків, які його підтримують.
+
+Після обрання свого банку ви будете переадресовані на його сайт для проходження автентифікації з використанням логіну, пароля, номера картки.
+
+image:user:user-auth/user-auth-idgovua-6.png[]
+
+У разі успішної автентифікації на сайті банку, система Bank ID передасть ваші персональні дані, що дозволить вас ідентифікувати.
+
+image:user:user-auth/user-auth-idgovua-7.png[]
+
+[#auth-dia-signature]
+==== Автентифікація з Дія.Підпис
+
+**Дія ID** -- послуга електронної ідентифікації для користувачів, які отримували особистий ключ віддалено за допомогою мобільного застосунку Дія. Дія.Підпис містить дві частини. Одна частина зберігається у вашому смартфоні, а інша — в спеціальному захищеному модулі порталу Дія.
+
+Отримати особистий ключ віддалено за допомогою мобільного застосунку Дія мають можливість громадяни України, які є власниками ID-картки або біометричного закордонного паспорта.
+
+Щоб авторизуватися на сайті за допомогою Дія ID, вам необхідно:
+
+1. Відсканувати QR-код.
+
+2. Зчитати особистий ключ шляхом сканування обличчя (перевірки за фото) та вводу пароля до особистого ключа.
+
+3. У разі успішної автентифікації у мобільному застосунку Дія, система передає ваші персональні дані, що дозволить вас ідентифікувати.
++
+image:user:user-auth/user-auth-idgovua-8.png[]
+////
+
+//== Пов'язані сторінки
+== Related pages
+
+* xref:registry-develop:registry-admin/cp-auth-setup/cp-auth-setup-overview.adoc[]

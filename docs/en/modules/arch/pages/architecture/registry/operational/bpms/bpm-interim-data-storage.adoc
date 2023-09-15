@@ -1,0 +1,609 @@
+= Intermediate data of business processes
+include::platform:ROOT:partial$templates/document-attributes/arch-set-en.adoc[]
+
+include::platform:ROOT:partial$admonitions/language-en.adoc[]
+
+//Поточний технічний дизайн зфокусований на загальних аспектах реалізації вимог щодо тимчасового зберігання проміжних даних, отриманих від користувача чи породжених у межах виконання бізнес-процесів.
+
+The current technical design is focused on the general aspects of implementing the requirements for temporary storage of intermediate data received from the user or generated within the execution of business processes.
+
+//== Опис складових _проміжних даних БП_
+== Description of components _intermediate data BP_
+
+//_Проміжні дані БП_ - це логічна група даних, яка належить окремому екземпляру бізнес-процесу та складається з наступних складових:
+_Intermediate BP data_ is a logical group of data that belongs to a separate instance of a business process and consists of the following components:
+
+////
+- Дані, отримані через UI-форми задач від користувачів
+- Файли, які були завантажені через UI-форми задач користувачами
+- Дані підписів, отримані через UI-форми задач від користувачів
+- Дані, які використовувались у якості вхідних при ініціюванні бізнес-процесу користувачем
+- Дані, які використовувались у якості вхідних при ініціюванні бізнес-процесу зовнішніми системами
+- Дані системних підписів, які були згенеровані на похідні дані
+- Дані, які були породжені у результаті міжпроцесної взаємодії
+////
+
+- Data received through task UI forms from users
+- Files that have been uploaded through the task UI forms by users
+- Signature data received through task UI forms from users
+- Data used as input when initiating a business process by the user
+- Data used as input when initiating a business process by external systems
+- Data of system signatures that were generated on derived data
+- Data that was generated as a result of interprocess interaction
+
+[NOTE]
+//_Проміжні дані БП_ є невід'ємною частиною стану екземпляра бізнес-процесу, яка життєво необхідна для його відновлення у разі збоїв та подальшого успішного проходження.
+_Intermediate BP data_ is an integral part of the state of a business process instance, which is vital for its recovery in the event of failures and subsequent successful completion.
+
+//== Сценарії використання проміжних даних
+== Scenarios for using intermediate data
+////
+- Зберігання та використання _проміжних даних БП_
+- Обмін _проміжними даними БП_ при міжсервісній взаємодії
+- Обмін _проміжними даними БП_ при міжпроцесній взаємодії
+- Видалення _проміжних даних БП_ при завершенні виконання бізнес-процесів
+////
+
+- Storage and use of _intermediate BP data_
+- Exchange of _intermediate BP data_ during interservice interaction
+- Exchange _intermediate BP data_ during interprocess interaction
+- Removal of _intermediate BP data_ upon completion of business processes
+
+//== Базові принципи
+== Basic principles
+
+- _Проміжні дані БП_ повинні зберігатися у сховищі, яке забезпечує вимоги надійності зберігання
+- _Проміжні дані БП_ повинні зберігатися у сховищах, які є оптимальними у розрізі типів цих даних та сценаріїв їх використання задля забезпечення швидкодії системи
+- Сховище _проміжних даних БП_ повинно забезпечувати вимоги відмовостійкості та масштабування
+- _Проміжні дані БП_ є даними, по відношенню до яких необхідно забезпечити вимоги бекапування та відновлення
+- Цілісність зберігання _проміжних даних БП_ забезпечується відсутністю можливостей адміністратора регламенту для внесення прямих змін, окрім сценаріїв, які надає система в автоматичному режимі
+- Взаємодія зі сховищем _проміжних даних БП_ повинна бути реалізовано з використанням захищеного протоколу обміну даними
+- _Проміжні дані БП_ повинні зберігатися у сховищі у зашифрованому вигляді
+- Сховище _проміжних даних БП_ має експортувати всі необхідні метрики для його моніторингу та обслуговування
+
+//== Технічний дизайн рішення
+== Technical solution design
+
+//На даній діаграмі зображено залучені для реалізації вимог сервіси платформи та взаємодію між ними. Додатково зображено важливі особливості, які необхідно брати до уваги в рамках реалізації.
+
+This diagram shows the platform services involved in implementing the requirements and the interaction between them. In addition, important features that must be taken into account in the framework of implementation are depicted.
+
+//Для збереження та обміну проміжними даними бізнес-процесів використовуються два типи сховищ:
+Two types of storage are used to save and exchange intermediate data of business processes:
+////
+- *Redis:* _Hash_-структура з сегрегацією даних за _keyspaces_
+- *Ceph:* "_lowcode-file-storage_" бакет для тимчасового збереження документів
+////
+
+- *Redis:* _Hash_ structure with data segregation by _keyspaces_
+- *Ceph:* "_lowcode-file-storage_" bucket for temporary storage of documents
+
+image::architecture/registry/operational/bpms/bpm-redis-storage.svg[bpm-redis-storage, 800]
+
+//=== Компоненти системи та їх призначення в рамках дизайну рішення
+=== System components and their purpose within the solution design
+
+//У даному розділі наведено перелік компонент системи, які задіяні або потребують змін/створення в рамках реалізації функціональних вимог згідно технічного дизайну рішення.
+
+This section provides a list of system components that are involved or need to be changed/created as part of the implementation of functional requirements according to the technical design of the solution.
+////
+|===
+|Компонент|Службова назва| Сценарії використання
+
+|_Сервіс виконання бізнес-процесів_
+|*bpms*
+|- Збереження та читання даних та підпису користувача, отриманих через UI-форми задач бізнес-процесів.
+
+- Збереження _похідних даних_ та системного підпису.
+
+- Збереження та читання пейлоадів повідомлень, сформованих при міжпроцесній взаємодії.
+
+- Видалення тимчасових даних при завершенні виконання бізнес-процесів.
+
+|_Сервіс управління задачами користувачів_
+|*user-task-management*
+|- Збереження даних користувача та підпису, отриманих у процесі виконання задач бізнес-процесів.
+
+- Читання даних користувача, отриманих у процесі виконання задач бізнес-процесів
+
+|_Сервіс управління процесами користувачів_
+|*user-process-management*
+|Збереження вхідних даних, отриманих від користувача через стартову UI-форму бізнес-процесу
+
+|_Сервіс-шлюз для інтеграції з зовнішніми системами_
+|*bp-webservice-gateway*
+|Збереження вхідних даних, необхідних для ініціювання бізнес-процесу у разі виклику зовнішніми системами
+
+|_Сервіс цифрових документів_
+|*digital-documents*
+|- Зберігання проміжних даних / документів на час виконання бізнес-процесів
+
+- Видалення проміжних даних / документів при завершенні виконання бізнес-процесів.
+
+|_Сервіс обслуговування запитів на зміни даних реєстру_
+|*registry-rest-api*
+|- Отримання первинних даних користувача з накладеним підписом.
+
+- Отримання підпису, згенерованого на _похідні дані_ системою
+
+|_Сервіс обслуговування запитів на генерацію витягів_
+|*excerpt-service-api*
+|- Отримання первинних даних користувача з накладеним підписом.
+
+- Отримання підпису, згенерованого на _похідні дані_ системою
+
+|_Розподілене in-memory сховище даних_
+|*redis*
+|Зберігання проміжних даних на час виконання бізнес-процесів
+
+|_Розподілене об'єктне сховище даних_
+|*ceph*
+|Зберігання проміжних даних / документів на час виконання бізнес-процесів
+
+|===
+////
+
+|===
+|Component|Official title| Usage scenarios
+
+|_Business processes execution service_
+|*bpms*
+|- Saving and reading data and user signature obtained through UI-forms of business process tasks.
+
+- Storage of _derived data_ and system signature.
+
+- Saving and reading payloads of messages formed during interprocess interaction.
+
+- Deletion of temporary data upon completion of business processes.
+
+|_User tasks management service_
+|*user-task-management*
+|- Storage of user and signature data obtained during the execution of business process tasks.
+
+- Reading user data obtained in the process of performing tasks of business processes
+
+|_User processes management service_
+|*user-process-management*
+|Saving the input data received from the user through the start UI form of the business process
+
+|_Gateway service for integration with external systems_
+|*bp-webservice-gateway*
+|Storage of input data required to initiate a business process when called by external systems
+
+|_Digital documents service_
+|*digital-documents*
+|- Storage of intermediate data / documents during the execution of business processes
+
+- Deletion of intermediate data / documents upon completion of business processes.
+
+|_Service for requests for changes to registry data_
+|*registry-rest-api*
+|- Obtaining primary user data with a superimposed signature.
+
+- Get the signature generated on _derived data_ by the system
+
+|_Service for servicing requests for excerpt generation_
+|*excerpt-service-api*
+|- Obtaining primary user data with a superimposed signature.
+
+- Get the signature generated on _derived data_ by the system
+
+|_Distributed in-memory data storage_
+|*redis*
+|Storage of intermediate data during the execution of business processes
+
+|_Distributed object data storage_
+|*ceph*
+|Storage of intermediate data / documents during the execution of business processes
+
+|===
+
+//=== Налаштування політик міжсервісної взаємодії
+=== Configuring interservice interaction policies
+
+//В рамках реалізації вимог, необхідно додати відповідні мережеві політики _NetworkPolicy_, які дозволяють взаємодію для наступних компонентів:
+
+As part of the implementation of the requirements, it is necessary to add the appropriate network policies _NetworkPolicy_, which allow interaction for the following components:
+
+- *bpms* -> *redis*
+- *bpms* -> *digital-documents*
+- *user-task-management* -> *redis*
+- *user-process-management* -> *redis*
+- *bp-webservice-gateway* -> *redis*
+- *registry-rest-api* -> *redis*
+- *excerpt-service-api* -> *redis*
+
+[WARNING]
+//Актуалізація та видалення застарілих політик мережевого доступу у разі необхідності проводити на *N+1* оновленні версії Платформи.
+
+Updating and removing outdated network access policies, if necessary, should be carried out on *N+1* updates of the Platform version.
+
+//=== Структурна діаграма компонентів системи
+=== Structural diagram of system components
+
+
+//Забезпечення стандартизації у роботі з проміжними даними між сервісами Платформи, фіксації контрактів та повторного використання коду реалізується через введення наступних модулів:
+Ensuring standardization in working with intermediate data between Platform services, fixing contracts and code reuse is implemented through the introduction of the following modules:
+
+- _ddm-form-data-storage_
+- _ddm-file-storage_
+- _ddm-bpm-message-payload-storage_
+
+//На даній структурній діаграмі зображено сервіси платформи та їх взаємодію зі сховищами тимчасових даних за допомогою службових модулів наведених вище.s
+This structural diagram shows the services of the platform and their interaction with temporary data stores using the service modules listed above.
+
+image::architecture/registry/operational/bpms/bpm-interim-storage-structural.svg[bpm-interim-storage-structural, 800]
+
+//=== Генерація ключів для проміжних даних
+
+//Для збереження даних за допомогою _Redis Hash_-структури, використовується підхід сегрегації об'єктів через _Keyspaces_-префікси (_<keyspace>:<original-key>_):
+To save data using the _Redis Hash_-structure, the approach of segregation of objects through _Keyspaces_-prefixes is used (_<keyspace>:<original-key>_):
+
+- *bpm-form-submissions*
+- *bpm-message-payloads*
+
+[WARNING]
+//На даному етапі, алгоритм генерації _<original-key>_ залишається без змін для забезпечення коректності міграції даних при переході з Ceph на Redis.
+At this stage, the _<original-key>_ generation algorithm remains unchanged to ensure the correctness of data migration when switching from Ceph to Redis.
+
+//.Приклад паттерну ключа для даних задачі:
+.An example of a key pattern for the task data:
+
+[source]
+----
+bpm-form-submissions:process/${processInstanceId}/task/{taskDefinitionKey}
+----
+
+//.Приклад паттерну ключа для даних тіла повідомлення міжпроцесної взаємодії:
+.An example of a key pattern for the body data of an interprocess communication message:
+
+[source]
+----
+bpm-message-payloads:process-definition/{processDefinitionKey}/start-message/{uuid}
+----
+
+//=== Структура даних _bpm-form-submissions_ keyspace
+=== Data structure of _bpm-form-submissions_ keyspace
+
+.bpm-form-submissions
+[source, json]
+----
+{
+  "x-access-token": "...",
+  "data": {
+    ...
+  },
+  "signature": "..."
+}
+----
+
+[plantuml]
+////
+----
+@startuml Структура даних
+skinparam monochrome true
+
+map "form-submission" as submission {
+  key => Автоматично згенерований ідентифікатор
+  xAccessToken => Токен користувача, від імені якого вносилися / підписувалися дані
+  data => [Map] Дані користувача
+  signature => [String] Згенерований підпис
+}
+----
+////
+
+----
+@startuml Data structure
+skinparam monochrome true
+
+map "form-submission" as submission {
+  key => Automatically generated ID
+  xAccessToken => Token of the user on whose behalf the data was entered / signed
+  data => [Map] User`s data
+  signature => [String] Generated signature
+}
+----
+
+
+//=== Структура даних _bpm-message-payloads_ keyspace
+=== Data structure of _bpm-message-payloads_ keyspace
+
+.bpm-message-payloads
+[source, json]
+----
+{
+  "data": {
+    ...
+  }
+}
+----
+
+[plantuml]
+////
+----
+@startuml Структура даних
+skinparam monochrome true
+
+map "message-payload" as payload {
+  key => Автоматично згенерований ідентифікатор
+  data => [Map] Дані тіла повідомлення
+}
+----
+////
+----
+@startuml Структура даних
+skinparam monochrome true
+
+map "message-payload" as payload {
+  key => Автоматично згенерований ідентифікатор
+  data => [Map] Дані тіла повідомлення
+}
+----
+
+//=== Автоматичне видалення проміжних даних бізнес-процесів
+=== Automatic deletion of intermediate business process data
+
+//Система повинна проводити автоматичне видалення проміжних даних зі сховища по завершенню бізнес-процесів (переходу в стан _COMPLETED_ або _EXTERNALLY_TERMINATED_), в рамках яких вони були отримані або породжені.
+
+The system must automatically remove intermediate data from the storage upon completion of the business processes (transition to the _COMPLETED_ or _EXTERNALLY_TERMINATED_ state) within which they were received or generated.
+
+==== _lowcode-file-storage_ Ceph-bucket
+
+//- Файли, які були завантажені через UI-форми задач користувачами
+- Files that have been uploaded through the task UI forms by users
+
+==== _bpm-form-submissions_ Redis keyspace
+////
+- Дані, отримані через UI-форми задач від користувачів
+- Дані підписів, отримані через UI-форми задач від користувачів
+- Дані, які використовувались у якості вхідних при ініціюванні бізнес-процесу користувачем
+- Дані, які використовувались у якості вхідних при ініціюванні бізнес-процесу зовнішніми системами
+- Дані системних підписів, які були згенеровані на похідні дані
+////
+- Data received through task UI forms from users
+- Signature data received through task UI forms from users
+- Data used as input when initiating a business process by the user
+- Data used as input when initiating a business process by external systems
+- Data of system signatures that were generated on derived data
+
+==== _bpm-message-payloads_ Redis keyspace
+
+//- Дані, які були породжені у результаті міжпроцесної взаємодії
+- Data that was generated as a result of interprocess interaction
+
+//== Відмовостійке key-value сховище даних на базі _Redis Sentinel_
+[#key-value-storage-redis-sentinel]
+== Fault-tolerant key-value data storage based on Redis Sentinel
+
+
+//У якості _key-value_ сховища _проміжних даних БП_ використовується _Redis_, а відмовостійкість забезпечується за допомогою механізму _Redis Sentinel_.
+_Redis_ is used as a _key-value_ storage of _intermediate BP data_, and fault tolerance is ensured by means of the _Redis Sentinel_ mechanism.
+
+//_Redis Sentinel_ є розподіленою системою, яка складається з _N_ екземплярів _Sentinel_ процесів, які взаємодіють один з одним.
+_Redis Sentinel_ is a distributed system that consists of _N_ instances of _Sentinel_ processes that interact with each other.
+
+
+//_Redis Sentinel_ має наступні особливості:
+_Redis Sentinel_ has the following features:
+
+////
+- факт відмови мастер вузла підтверджується декількома екземплярами _Sentinel_, які формують кворум, що зменшує кількість хибних спрацювань
+- _Sentinel_ сам по собі є відмовостійкою системою, яка може виконувати свої функції навіть у разі, якщо частина _Sentinel_ екземплярів не працюють.
+////
+- the fact of failure of the master node is confirmed by several instances of _Sentinel_, which form a quorum, which reduces the number of false positives
+- _Sentinel_ itself is a fault-tolerant system that can perform its functions even if some _Sentinel_ instances are down.
+
+//_Redis Sentinel_ надає наступні можливості:
+_Redis Sentinel_ provides the following capabilities:
+////
+- _Моніторинг_ - _Sentinel_ слідкує за тим, щоб екземпляри _Redis-мастера_ та _реплік_ працювали коректно
+
+- _Алертинг_ - _Sentinel_ надає можливості відправки повідомлень адміністратору у разі ідентифікації збоїв екземплярів _Redis_
+
+- _Автоматичне відновлення_ - У разі, якщо екземпляр _Redis-мастер_ починає працювати некоректно, _Sentinel_ ініціює процес визначення нового _Redis-мастер_ екземпляру та реконфігурації інших _Redis-реплік_ на взаємодію з новим _мастером_.
+////
+- _Monitoring_ - _Sentinel_ monitors that instances of _Redis-master_ and _replica_ work correctly
+
+- _Alerting_ - _Sentinel_ provides the ability to send messages to the administrator in case of identification of failures of _Redis_ instances
+
+- _Automatic recovery_ - In the event that the _Redis-master_ instance starts working incorrectly, _Sentinel_ initiates the process of determining a new _Redis-master_ instance and reconfiguring other _Redis-replicas_ to interact with the new _master_.
+
+[NOTE]
+//Детальну інформацію можно знайти в офіційній іехнічній документації https://redis.io/docs/manual/sentinel/[Redis Sentinel].
+Detailed information can be found in the official technical documentation https://redis.io/docs/manual/sentinel/[Redis Sentinel].
+
+image::architecture/registry/operational/bpms/redis-sentinel.svg[redis-sentinel]
+
+//=== Розгортання _Redis Sentinel_
+=== Deploying _Redis Sentinel_
+
+//Для автоматизації розгортання та управління _Redis Sentinel_ сховищем використовується окремий _Kubernetes_-оператор https://github.com/spotahome/redis-operator[Redis Operator by Spotahome].
+
+A separate _Kubernetes_ operator https://github.com/spotahome/redis-operator [Redis Operator by Spotahome] is used to automate the deployment and management of the _Redis Sentinel_ repository.
+
+//Особливості розгортання:
+Deployment features:
+////
+* Взаємодія з _Redis Sentinel_ потребує аутентифікації клієнтів
+* Взаємодія з _Redis_ потребує аутентифікації клієнтів
+* Обмін даними між _Sentinel_ та _Redis_-екземплярами захищено за допомогою _TLS_
+* Розроблено *3* можливих конфігурації розгортання _Redis Sentinel_ в залежності від вимог відмовостійкості та наявних ресурсів:
+////
+* Interaction with _Redis Sentinel_ requires client authentication
+* Interaction with _Redis_ requires client authentication
+* Data exchange between _Sentinel_ and _Redis_ instances is secured using _TLS_
+* Developed *3* possible _Redis Sentinel_ deployment configurations depending on fault tolerance requirements and available resources:
+** _Minimal_
+** _Recommended_
+** _CI/CD_
+
+//=== Конфігурація _Redis Sentinel_
+=== _Redis Sentinel_ Configuration
+////
+|===
+|Налаштування|Значення|Опис
+
+|*sentinel.replicas*
+|3
+|Кількість екземплярів _Sentinel_-процесів
+
+|*redis.replicas*
+|2
+|Кількість екземплярів _Redis_-реплік
+
+|*sentinel.quorum*
+|2
+|Кількість _Sentinel_-процесів, яка необхідна для підтвердження непрацездатності / недоступності _Redis-мастера_
+
+|*sentinel.customConfig."down-after-milliseconds"*
+|60000
+|Час в мілісекундах, протягом якого екземпляр _Redis_ має бути недоступним, щоб _Sentinel_ почав вважати його непрацездатним
+
+|*sentinel.customConfig."failover-timeout"*
+|180000
+|Час в мілісекундах, який використовується у якості затримки при підтвердженні недоступності _Redis-мастера_
+
+|*sentinel.customConfig."parallel-syncs"*
+|1
+|Кількість _Redis-реплік_, які є одночасно недоступними у процесі реконфігурації на використання нового _Redis-мастера_ у разі автоматичного відновлення
+
+|*sentinel.customConfig."min-replicas-to-write"*
+|1
+|Мінімальна кількість реплік, доступних _Redis-мастеру_, для того, щоб він приймав операції зміни даних
+
+|*sentinel.customConfig."min-replicas-max-lag"*
+|10
+|Мінімальний час в секундах, який використовується як показник недоступності репліки при проведенні асинхронної реплікації або перевірок доступності
+|===
+////
+
+|===
+|Settings|Value|Description
+
+|*sentinel.replicas*
+|3
+|The number of _Sentinel_ process instances
+
+|*redis.replicas*
+|2
+|The number of _Redis_-replica instances
+
+|*sentinel.quorum*
+|2
+|The number of _Sentinel_-processes, which is necessary to confirm the inoperability / unavailability of the _Redis-master_
+
+|*sentinel.customConfig."down-after-milliseconds"*
+|60000
+|The time, in milliseconds, that a _Redis_ instance must be unavailable for _Sentinel_ to consider it down
+
+|*sentinel.customConfig."failover-timeout"*
+|180000
+|The time in milliseconds used as a delay when confirming the unavailability of the _Redis-master_
+
+|*sentinel.customConfig."parallel-syncs"*
+|1
+|The number of _Redis replicas_ that are simultaneously unavailable while reconfiguring to use a new _Redis master_ in case of automatic recovery
+
+|*sentinel.customConfig."min-replicas-to-write"*
+|1
+|The minimum number of replicas available to the _Redis master_ to accept data modification operations
+
+|*sentinel.customConfig."min-replicas-max-lag"*
+|10
+|The minimum time, in seconds, used as a replica unavailability indicator when performing asynchronous replication or availability checks
+|===
+
+//=== Конфігурація клієнтських сервісів
+=== Configuration of client services
+
+//.Приклад конфігурації підключення до _Redis Sentinel_ для _Сервісу обслуговування запитів на внесення змін даних реєстру_
+.Redis Sentinel Connection Configuration Example for the Registry Change Request Service
+[source, yaml]
+----
+lowcode-form-data-storage:
+  type: redis
+  backend:
+    redis:
+      keyspace: 'bpm-form-submissions'
+      username: ${redis-secret:redis.username} [redis data node auth]
+      password: ${redis-secret:redis.password} [redis data node auth]
+      sentinel:
+        master: <sentinel-redis-master-group-name>
+        nodes: <redis-sentinel-service>:<redis-sentinel:port>
+        username: ${redis-secret:redis.sentinel.username} [sentinel auth]
+        password: ${redis-secret:redis.sentinel.password} [sentinel auth]
+lowcode-file-storage:
+  type: ceph
+  backend:
+    ceph:
+      http-endpoint: ${lowcode-file-ceph.http-endpoint}
+      access-key: ${lowcode-file-ceph.access-key}
+      secret-key: ${lowcode-file-ceph.secret-key}
+      bucket: ${lowcode-file-ceph.bucketName}
+datafactory-form-data-storage:
+  type: ceph
+  backend:
+    ceph:
+      http-endpoint: ${datafactoryceph.http-endpoint}
+      access-key: ${datafactoryceph.access-key}
+      secret-key: ${datafactoryceph.secret-key}
+      bucket: ${datafactoryceph.bucketName}
+----
+
+//.Приклад конфігурації підключення до _Redis Sentinel_ для _Сервісу виконання бізнес-процесів_
+.Example configuration of connection to _Redis Sentinel_ for _Business Process Execution Service_
+[source, yaml]
+----
+storage:
+  form-data:
+    type: redis
+    keyspace: 'bpm-form-submissions'
+  message-payload:
+    type: redis
+    keyspace: 'bpm-message-payloads'
+  backend:
+    redis:
+      username: ${redis-secret:redis.username} [redis data node auth]
+      password: ${redis-secret:redis.password} [redis data node auth]
+      sentinel:
+        master: <sentinel-redis-master-group-name>
+        nodes: <redis-sentinel-service>:<redis-sentinel:port>
+        username: ${redis-secret:redis.sentinel.username} [sentinel auth]
+        password: ${redis-secret:redis.sentinel.password} [sentinel auth]
+
+----
+////
+//== Шифрування проміжних даних (_"data-at-rest"_ )
+== Encryption of intermediate data (_"data-at-rest"_ )
+
+//=== Шифрування файлів у Ceph-бакеті _lowcode-file-storage_
+=== File encryption in the Ceph bucket _lowcode-file-storage_
+
+Для збереження даних у зашифрованому вигляді, рекомендовано розглянути підхід https://docs.ceph.com/en/quincy/radosgw/encryption/[Ceph Server-Side Encryption] з використанням https://docs.ceph.com/en/quincy/radosgw/vault/[HashiCorp Vault] у якості сервісу управління ключами та шифрування даних.
+
+[WARNING]
+Розділ потребує доповнення
+
+=== Шифрування даних у Redis
+
+Для збереження даних у зашифрованому вигляді, рекомендовано розглянути підхід реалізації спеціальних механізмів серіалізації/десеріалізації даних на базі _org.springframework.data.redis.serializer.RedisSerializer_ з використанням https://learn.hashicorp.com/collections/vault/encryption-as-a-service[HashiCorp Vault Encryption as a Service].
+
+[WARNING]
+Розділ потребує доповнення
+
+== Бекапування та відновлення проміжних даних
+
+Створення резервної копії та відновлення даних, які зберігаються у сховищах _Ceph_ та _Redis_ виконується згідно до загальної процедури з використанням захищеного сховища бекапів.
+
+[TIP]
+Детальніше можно ознайомитись у розділі xref:admin:backup-restore/control-plane-backup-restore.adoc[Бекап та відновлення реєстру].
+
+== Міграція _проміжних даних БП_
+
+Зміна типу сховища проміжних даних впливає на бізнес-процеси, які знаходяться в одному зі станів:
+
+- _ACTIVE_
+- _SUSPENDED_
+
+Для забезпечення коректності функціонування системи після встановлення нової версії, необхідно мігрувати дані, описані у розділі <<_опис_складових_проміжних_даних_бп, Опис складових проміжних даних БП>> з *lowcode-form-data-storage* _Ceph_-бакету до _Redis_ _Hash_-структури з урахуванням сегрегації за _keyspaces_ *bpm-form-submissions* / *bpm-message-payloads* та алгоритму генерації ключів згідно розділу <<_генерація_ключів_для_проміжних_даних, Генерація цлючів для проміжних даних>>.
+////

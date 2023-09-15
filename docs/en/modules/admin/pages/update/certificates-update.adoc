@@ -1,0 +1,139 @@
+:toc-title: On this page:
+:toc: auto
+:toclevels: 5
+:experimental:
+:sectnums:
+:sectnumlevels: 5
+:sectanchors:
+:sectlinks:
+:partnums:
+
+//= Оновлення сертифікатів кластера OpenShift
+= Updating OpenShift cluster certificates
+
+//Цей документ описує процедуру оновлення сертифікатів роутера та API OpenShift 4.х кластера з використанням сертифікатів https://letsencrypt.org/[Let's Encrypt].
+
+This document provides instructions on updating the certificates for the OpenShift 4.x cluster's router and API server using https://letsencrypt.org/[Let's Encrypt] service.
+
+//== Передумови
+== Prerequisites
+
+//Для проведення процедури оновлення сертифікатів мають бути виконані наступні умови:
+
+Before updating certificates, make sure you have the following:
+
+//. Роль в кластері має бути `cluster-admin`.
+. Your cluster role is `cluster-admin`.
+//. Встановлено `oc cli`.
+. OpenShift CLI (`oc cli`) is installed.
+//. Є можливість створення та редагування DNS-записів у hosted zone, до якої відноситься доменне ім'я кластера (далі -- `DNS_WILDCARD`).
+. You can create and edit DNS records in the hosted zone which contains the domain name of the cluster. In this document, we'll refer to this domain name as `DNS_WILDCARD`.
+//. Встановлено Certbot. +
+. Certbot is installed. +
+//Для інсталювання Certbot зверніться до https://certbot.eff.org/lets-encrypt/osx-other[офіційного сайту].
+//TODO: Certbot URL doesn't open, so I modified it.
+To learn how to install Certbot, refer to https://certbot.eff.org/instructions[Certbot instructions].
++
+[NOTE]
+====
+//При цьому слід обрати опцію *"My HTTP website is running: None of the above on <Ваша операційна система>"*.
+On the Certbot instructions page, select the following options:
+
+//TODO: Seems like they replace "None of the above" in the first dropdown to "Other" -- we probably need to update ua instructions and a screenshot (you can copy certificates-update-1.png from en).
+* *My HTTP website is running*: select *Other*.
+* *on*: select your operating system (for example, *macOS*).
+
+//Змінну `<Ваша операційна система>` заповніть значенням вашої операційної системи (наприклад, `macOS`).
+====
++
+//.Сторінка завантаження certbot
+.Certbot instructions page
+image::certificates-update/certificates-update-1.png[Certbot instructions page]
++
+//CAUTION: Виконувати будь-які кроки інструкції, крім власне інсталяції сertbot, не є необхідним.
+//TODO: Can we provide at least one example here to be clear? For example, for macOS, installing Homebrew is required, but setting up automatic renewal is not required?
+CAUTION: Performing any instructions other than installing Certbot is not necessary.
+
+//== Процедура оновлення
+== Updating certificates
+
+//1. Запустіть консоль з правами адміністратора / `sudo`.
+. Start the console as a user with `sudo` privileges.
+//2. Виконайте наступну команду:
+. Run the following command:
++
+[source, bash]
+----
+certbot certonly --manual
+----
+//[start=3]
+//3. На вимогу, **тільки при першому запуску**, введіть свій Email і погодьтеся з умовами використання, та погодьтеся або відмовтеся від поширення вашого Email з Electronic Frontier Foundation. +
+. _First run only_: when prompted, enter your email address and agree to the terms of use, then choose whether you wish to share your email with the Electronic Frontier Foundation.
++
+//*Вкажіть доменні імена для сертифікатів:*
+//TODO: Shouldn't this be a separate numbered step instead of being part of step 3?
+Specify domain names for certificates:
++
+* `*.<DNS_WILDCARD>`.
++
+//TIP: Наприклад, доменне ім'я може виглядати наступним чином: `*.openshift.example.com`.
+TIP: For example: `*.openshift.example.com`.
+//[start=b]
+* `*.apps.<DNS_WILDCARD>`.
++
+//TIP: Наприклад, доменне ім'я може виглядати наступним чином: `*.apps.openshift.example.com`.
+TIP: For example: `*.apps.openshift.example.com`.
+//[start=4]
+//. *Опціонально:* +
+. Perform this optional step:
++
+//Якщо ви бачите повідомлення зі змістом: +
+//`"You have an existing certificate that has exactly the same domains or certificate name you requested and isn't close to expiry."`, +
+//слід обрати варіант **Renew & replace the certificate**.
+If you get the following message: `"You have an existing certificate that has exactly the same domains or certificate name you requested and isn't close to expiry."`, select the *Renew & replace the certificate* option.
+//[start=5]
+//. У hosted zone, до якої відноситься `DNS_WILDCARD` кластера, створіть TXT-записи, що вимагає certbot. При цьому, перед тим, як продовжувати (вводити `Enter`), перевірте, що запис створено і він актуальний, за допомогою виконання наступної команди в іншій, одночасно відкритій консолі:
+. In the hosted zone which contains the `DNS_WILDCARD` of the cluster, create the TXT records required by Certbot. Before you hit kbd:[Enter], make sure the record exists and is up-to-date by running the following command in a different console window:
++
+[source,bash]
+----
+nslookup -type=txt <dns_record>
+----
+//.Перевірка створеного запису
+.Verifying the record
+image::certificates-update/certificates-update-2.png[Checking the record]
+//[start=6]
+//. У випадку успішної видачі сертифікату, ви отримаєте відповідне повідомлення, в якому можна побачити шлях до файлів із ключем і ланцюжком сертифікатів:
+. If the certificate is issued successfully, you will get a corresponding message with the path to the key and certificate chain files:
++
+//.Успішне отримання сертифікату
+.Certificate saved successfully
+image::certificates-update/certificates-update-3.png[Certificate saved successfully]
+//[start=7]
+//. Видаліть старий `secret` роутера та API, виконавши наступні команди:
+. Delete the old router and API `secret` by running these commands:
++
+[#id-for-listing-block]
+----
+oc delete secret router-certs -n openshift-ingress
+oc delete secret router-certs -n openshift-config
+----
+//[start=8]
+//. Створіть новий `secret` роутера і API, виконавши наступні команди:
+. Create the new router and API `secret` by running these commands:
++
+[#id-for-listing-block]
+----
+oc create secret tls router-certs --cert=<fullchain.pem>
+--key=<privkey.pem> -n openshift-ingress
+oc create secret tls router-certs --cert=<fullchain.pem>
+--key=<privkey.pem> -n openshift-config
+----
+//[start=9]
+//. Видаліть поди роутера за допомогою наступної команди:
+. Delete router pods by running the following command:
++
+[#id-for-listing-block]
+----
+oc delete pods --all -n openshift-ingress
+----

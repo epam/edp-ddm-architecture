@@ -1,0 +1,429 @@
+:toc-title: On this page:
+:toc: auto
+:toclevels: 5
+:experimental:
+:sectnums:
+:sectnumlevels: 5
+:sectanchors:
+:sectlinks:
+:partnums:
+
+= Registry operational database
+
+NOTE: 🌐 This document is available in both English and Ukrainian. Use the language toggle in the top right corner to switch between versions.
+
+//== Загальний опис
+== General description
+////
+База даних `registry` містить як службові таблиці сервісів так і всі таблиці реєстру змодельовані адміністратором регламенту.
+
+Службові таблиці створюються в схемі public при створенні реєстру. Таблиці реєстру створюються в схемі `registry` при розгортанні регламенту.
+
+У цьому документі розглянуті службові таблиці сервісів.
+////
+
+The `registry` database contains both official service tables and all registry tables modeled by the regulation administrator.
+
+Service tables are created in the public schema when the registry is created. Registry tables are created in the `registry' scheme when deploying the regulation.
+
+This document deals with service tables.
+
+//== Схема бази даних
+== Database schema
+
+[plantuml, registry-public-schema, svg]
+----
+@startuml
+hide circle
+skinparam linetype ortho
+skinparam monochrome true
+
+entity "**ddm_liquibase_metadata**" {
+  + ""metadata_id"": //integer [PK]//
+  --
+  *""change_type"": //text //
+  *""change_name"": //text //
+  *""attribute_name"": //text //
+  *""attribute_value"": //text //
+  *""created_at"": //timestamp with time zone //
+}
+
+entity "**ddm_rls_metadata**" {
+  + ""rls_id"": //integer [PK]//
+  --
+  *""name"": //text //
+  *""type"": //text //
+  *""type"": //text //
+  *""jwt_attribute"": //text //
+  *""check_column"": //text //
+  *""check_table"": //text //
+}
+
+entity "**ddm_role_permission**" {
+  + ""permission_id"": //integer [PK]//
+  --
+  *""role_name"": //text //
+  *""object_name"": //text //
+  ""column_name"": //text //
+  *""operation"": //type_operation //
+  *""created_at"": //timestamp with time zone //
+}
+
+entity "**ddm_source_application**" {
+  + ""application_id"": //uuid [PK]//
+  --
+  *""application_name"": //text //
+  *""created_by"": //text //
+  *""created_at"": //timestamp with time zone //
+}
+
+entity "**ddm_source_business_process**" {
+  + ""business_process_id"": //uuid [PK]//
+  --
+  *""business_process_name"": //text //
+  *""created_by"": //text //
+  *""created_at"": //timestamp with time zone //
+}
+
+entity "**ddm_source_system**" {
+  + ""system_id"": //uuid [PK]//
+  --
+  *""system_name"": //text //
+  *""created_by"": //text //
+  *""created_at"": //timestamp with time zone //
+}
+@enduml
+----
+//.Умовні позначення
+.Legend
+[%collapsible]
+====
+include::partial$architecture-workspace/documentation-templates/component-design-template/db-schema-legend.adoc[]
+====
+
+//== Структури даних
+== Data structure
+
+=== ddm_liquibase_metadata
+////
+Метадані отримані з моделі даних регламенту. На їх основі будується API даних.
+
+Наразі кожен тип зміни моделі даних використовує свій формат запису метаданих, тому в більшості випадків вміст колонок не відповідає їх початковому призначенню.
+////
+The metadata is obtained from the data model of the regulation. Data API is built on their basis.
+
+Currently, each type of data model change uses its own metadata recording format, so in most cases the contents of the columns do not correspond to their original purpose.
+
+////
+[options="header",cols="a"]
+|======
+|Ім'я колонки +
+Опис
+| `*metadata_id* _integer_ *(PK)*` + 
+Ідентифікатор рядка 
+| `*change_type* _text_` + 
+Тип зміни 
+| `*change_name* _text_` + 
+Назва зміни
+| `*attribute_name* _text_` + 
+Ім'я атрибуту
+| `*attribute_value* _text_` + 
+Значення атрибуту
+| `*created_at* _timestamp with time zone_` + 
+Час створення запису
+////
+
+[options="header",cols="a"]
+|======
+|Column name +
+Description
+Row ID
+| `*change_type* _text_` +
+Type of change
+| `*change_name* _text_` +
+Name of change
+| `*attribute_name* _text_` +
+Attribute name
+| `*attribute_value* _text_` +
+Attribute value
+| `*created_at* _timestamp with time zone_` +
+Record creation time
+
+
+
+|======
+[options="header",cols="a"]
+|======
+|Uniqueness constraint
+
+|`change_name, change_type, attribute_name, attribute_value`
+|======
+
+
+
+=== ddm_rls_metadata
+
+//Налаштування правил Row-Level Security для запитів до API даних
+Configuring Row-Level Security Rules for Data API Requests
+
+////
+[options="header",cols="a"]
+|======
+|Ім'я колонки +
+Опис
+| `*rls_id* _integer_ *(PK)*` + 
+Ідентифікатор рядка 
+| `*name* _text_` + 
+Назва правила 
+| `*type* _text_` + 
+Тип операції
+
+* read
+* write
+| `*jwt_attribute* _text_` + 
+Ім'я атрибуту jwt-токену, в якому передаються значення за якими відбувається фільтрація 
+| `*check_column* _text_` + 
+Ім'я колонки-дискримінатору по якій відбувається фільтрація
+| `*check_table* _text_` + 
+Назва таблиці або представлення критерію пошуку, до яких застосовується правило 
+|======
+////
+
+[options="header",cols="a"]
+|======
+|Column name +
+Description
+| `*rls_id* _integer_ *(PK)*` +
+Row ID
+| `*name* _text_` +
+Name of rule
+| `*type* _text_` +
+Type of operation
+
+* read
+* write
+| `*jwt_attribute* _text_` +
+The name of the attribute of the jwt-token, in which the values by which the filtering takes place are transferred
+| `*check_column* _text_` +
+The name of the discriminator column on which the filtering takes place
+| `*check_table* _text_` +
+The name of the table or representation of the search criteria to which the rule applies
+|======
+
+////
+[options="header",cols="a"]
+|======
+|Обмеження унікальності
+|`name, type`
+|`check_table, type`
+|======
+////
+
+[options="header",cols="a"]
+|======
+|Uniqueness constraint
+|`name, type`
+|`check_table, type`
+|======
+
+
+=== ddm_role_permission
+
+//Каталог прав виданих для ролі. Використовується для рольового контролю доступу (RBAC) до даних реєстру.
+Catalog of rights issued for the role. Used for role-based access control (RBAC) to registry data.
+
+////
+[options="header",cols="a"]
+|======
+|Ім'я колонки +
+Опис
+| `*permission_id* _integer_ *(PK)*` + 
+Ідентифікатор рядка 
+| `*role_name* _text_` + 
+Назва ролі користувача 
+| `*object_name* _text_` + 
+Ім'я таблиці чи критерію пошуку для яких надається дозвіл
+| `column_name _text_` + 
+Ім'я колонки для якої надається дозвіл
+| `*operation* _enum_` + 
+Тип операції на яку надається дозвіл
+
+* S - читання
+* I - створення
+* U - оновлення
+* D - видалення
+| `*created_at* _timestamp with time zone_` + 
+Час створення дозволу 
+////
+
+[options="header",cols="a"]
+|======
+|Column name +
+Description
+| `*permission_id* _integer_ *(PK)*` +
+Row ID
+| `*role_name* _text_` +
+User role name
+| `*object_name* _text_` +
+The name of the table or search criteria for which the permission is granted
+| `column_name _text_` +
+The name of the column for which permission is granted
+| `*operation* _enum_` +
+The type of operation for which permission is granted
+
+* S - reading
+* I - creating
+* U - updating
+* D - deleting
+| `*created_at* _timestamp with time zone_` +
+Permission creation time
+
+
+|======
+[options="header",cols="a"]
+|======
+|Uniqueness constraint
+|`role_name,object_name,operation,column_name`
+|======
+
+
+=== ddm_source_application
+
+//Каталог додатків - джерел даних. Записи в каталог додаються автоматично коли від додатка вперше надходять дані до реєстру.
+Catalog of applications - data sources. Entries to the directory are added automatically when data is first sent to the registry from the application.
+
+////
+[options="header",cols="a"]
+|======
+|Ім'я колонки +
+Опис
+| `*application_id* _uuid_ *(PK)*` + 
+Ідентифікатор рядка 
+| `*application_name* _text_` + 
+Назва додатку 
+| `*created_by* _text_` + 
+Ідентифікатор користувача за запитом якого створено запис 
+| `*created_at* _timestamp with time zone_` + 
+Час створення запису 
+
+|======
+[options="header",cols="a"]
+|======
+|Обмеження унікальності
+|`application_name`
+|======
+////
+
+[options="header",cols="a"]
+|======
+|Column name +
+Description
+| `*application_id* _uuid_ *(PK)*` +
+Row ID
+| `*application_name* _text_` +
+Application name
+| `*created_by* _text_` +
+The ID of the user at whose request the record was created
+| `*created_at* _timestamp with time zone_` +
+Record creation time
+
+|======
+[options="header",cols="a"]
+|======
+|Uniqueness constraint
+|`application_name`
+|======
+
+
+=== ddm_source_business_process
+
+//Каталог бізнес-процесів - джерел даних. Записи в каталог додаються автоматично коли від бізнес-процесу вперше надходять дані до реєстру.
+Catalog of business processes - data sources. Entries to the directory are added automatically when data is first sent to the registry from the business process.
+
+////
+[options="header",cols="a"]
+|======
+|Ім'я колонки +
+Опис
+| `*business_process_id* _uuid_ *(PK)*` + 
+Ідентифікатор рядка 
+| `*business_process_name* _text_` + 
+Назва  бізнес-процесу
+| `*created_by* _text_` + 
+Ідентифікатор користувача за запитом якого створено запис 
+| `*created_at* _timestamp with time zone_` + 
+Час створення запису 
+
+|======
+[options="header",cols="a"]
+|======
+|Обмеження унікальності
+|`business_process_name`
+|======
+////
+
+[options="header",cols="a"]
+|======
+|Column name +
+Description
+| `*business_process_id* _uuid_ *(PK)*` +
+Row ID
+| `*business_process_name* _text_` +
+Business process name
+| `*created_by* _text_` +
+The ID of the user at whose request the record was created
+| `*created_at* _timestamp with time zone_` +
+Record creation time
+
+|======
+[options="header",cols="a"]
+|======
+|Uniqueness constraint
+|`business_process_name`
+|======
+
+=== ddm_source_system
+
+//Каталог систем - джерел даних. Записи в каталог додаються автоматично коли від системи вперше надходять дані до реєстру.
+Catalog of systems - data sources. Entries in the catalog are added automatically when data is first received from the system to the registry.
+////
+[options="header",cols="a"]
+|======
+|Ім'я колонки +
+Опис
+| `*system_id* _uuid_ *(PK)*` + 
+Ідентифікатор рядка 
+| `*system_name* _text_` + 
+Назва системи
+| `*created_by* _text_` + 
+Ідентифікатор користувача за запитом якого створено запис 
+| `*created_at* _timestamp with time zone_` + 
+Час створення запису 
+
+|======
+[options="header",cols="a"]
+|======
+|Обмеження унікальності
+|`system_name`
+|======
+////
+
+[options="header",cols="a"]
+|======
+|Column name +
+Description
+| `*system_id* _uuid_ *(PK)*` +
+Row ID
+| `*system_name* _text_` +
+System name
+| `*created_by* _text_` +
+The ID of the user at whose request the record was created
+| `*created_at* _timestamp with time zone_` +
+Record creation time
+
+|======
+[options="header",cols="a"]
+|======
+|Uniqueness constraint
+|`system_name`
+|======

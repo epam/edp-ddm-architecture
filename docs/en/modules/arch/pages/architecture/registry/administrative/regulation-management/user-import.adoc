@@ -1,0 +1,135 @@
+include::ROOT:partial$templates/document-attributes/arch-set-en.adoc[]
+
+= Importing users into Keycloak
+
+include::ROOT:partial$admonitions/language-en.adoc[]
+
+The Platform offers a valuable feature to efficiently add numerous officer users to the registry at a time. You can easily import these users into Keycloak directly from a CSV file.
+
+
+image:architecture/registry/administrative/regulation-management/ImportUsersFlow.drawio.png[User importing process]
+//image:architecture/registry/administrative/regulation-management/ImportUsersFlow.drawio.png[Процес імпорту користувачів]
+
+. The Access administrator, using the web interface of the administrator portal, downloads a CSV file containing a list of users to import into the registry.
+//. Адміністратор Доступу з допомогою веб-інтерфейсу порталу адміністратора завантажує CSV файл що містить перелік користувачів для імпорту в реєстр.
+. The administrative portal makes the initial validation of the downloaded file: size, format, and encoding. In case of a validation error, the user sees a message with the error details on the file download page. The user import process stops.
+//. Адміністративний портал проводить первинну валідацію файла що завантажується: розмір, формат, кодування. В разі валідаційної помилки користувач бачить повідомлення з деталями помилки на сторінці завантаження файлу. Процес імпорту користувачів зупиняється.
+. In case of successful initial validation,  
+//. В разі успішно проходження первинної валідації, 
+. The encrypted file is stored in the registry object store (Ceph).
+//. Зашифрований файл зберігається в об'єктне сховище реєстру (Ceph)
+. The administrative portal starts importing users into KeyCloak ("Import Users" Kubernetes job). 
+//. Адміністративний портал запускає процес імпорту користувачів в KeyCloak ("Import Users" Kubernetes job). 
+. Using the Kubernetes service account, the process gets credentials to access the Ceph object store and reads the encrypted CSV file from there. In this case, the file is moved to the archive in Ceph.
+//. Процес з допомогою сервісного екаунта Kubernaetes отримує облікові дані для доступу до об'єктного сховища Ceph та вичитує звідти зашифрований CSV файл. При цьому в Ceph файл переміщається до архіву.
+. The process decrypts the file using Vault and retrieves user data for import.
+//. Процес дешифрує файл з допомогою Vault та отримує дані користувачів для імпорту.
+. The process starts processing the data in the file and creates users in KeyCloak using the administrative REST API (partial Import API). Users are created in groups of m records. The value of m is set in the process settings. All attributes from the file are set for a user, and the appropriate roles are assigned. The value of the username field is generated automatically and contains the SHA-256 hash of the sum of the string formed as the result of concatenation of 3 key attributes of a user: fullName, edrpou, drfo. And the order of the attributes is essential.
+//. Процес починає обробку даних в файлі та створює користувачів в KeyCloak використовуючи адміністративне REST API (partial Import API). Створення користувачів відбувається групами по m записів. Значення m задається в налаштуваннях процесу. Користувачу встановлються всі атрибути з файла та присвоюються відповідні ролі. Значення поля username генерується автоматично та містить SHA-256 хеш суму стрічки утвореної внаслдок конкатинації 3-х ключових атрибутів користувача: fullName, edrpou, drfo. При  цьому порядок атрибутів має значення
+.. The technical log of the process is written to the Kibana technical log repository.
+//.. Технічний лог процесу звписується в сховище технічних логів Kibana.
+.. The audit of the logging process (which users are created, and who created them) is recorded to the corresponding Kafka topic from where it enters the audit database.
+//.. Аудит лог процесу (яких саме користувачі створено та ким) записується у відповідний Kafka topic звідки він потрапляє у БД аудиту.
+. The access administrator can view the result of the import process and possible errors in the technical logs using the web interface of the Kibana service. In case of errors, their cause must be eliminated, and the import process has to be repeated.
+//. Адміністратор доступу має змогу переглянути результат виконання процесу імпорту та можливі помилки в технічних логах з допомогою веб-інтерфейсу сервіса Kibana. В разі наявності помилок, їх причину необхідно усунути та повторити процес імпорту.
+. Upon completion of the import process, if at least one user has been created, the CSV file used for importing is moved to the archive where it is stored for audit purposes and is no longer processed.
+//. Після завершення процесу імпорту, у випадку якщо було створено хоча би одиного користувача, CSV файл з якого проводився імпорт переміщається в архів де зберігається з метою аудиту та більше не обробляється. 
+. Also, if necessary, the Security administrator has the opportunity to view the process audit log containing information about created users (user ID, creation time, ID of the incoming CSV file and its hash), and download the CSV file used for importing the user.
+//. Також в разі необхідності Адміністратор безпеки має можливість переглянути аудит лог процесу де зафіксовано інформацію про користувачів що були створені (ідентифікатор користувача, час створення, ідентифікатор вхідного CSV файлу та його хешсума) та завантажити CSV файл з якого було імпортовано користувача.
+
+== Audit
+
+All information about users created during the importing process must get to the platform audit, where the Security Administrator can view it.
+
+To add information about an event to the audit, generating a message according to the scheme and writing it to the Kafka audit-events topic is necessary.
+//Для того щоб додати інформацію про подію в аудит необхідно сформувати повідомлення згідно схеми та записати його в audit-events топік Kafka.
+
+Message structure:
+//Структура повідомлення:
+
+[%header,cols="1,1"]
+|===
+|Parameter name|Parameter value
+//|Назва параметру|Значення параметру
+|requestId|Request ID from MDC
+//|requestId|Ідентифікатор запиту з MDC
+|name|"USER_CREATE"
+|applicationName|"Keycloak"
+|sourceSystem|-
+|sourceApplication|Name of the import job
+//|sourceApplication|Назва джоби по імпорту користувачів (pod_name)
+|sourceBusinessProcess|-
+|sourceBusinessProcessDefinitionId|-
+|sourceBusinessProcessInstanceId|-
+|sourceBusinessActivity|-
+|type|"SYSTEM_EVENT"
+|timestamp|Time stamp
+//|timestamp|Мітка часу
+|userName|Full name of the user who started the import process
+//|userName|ПІБ користувача який запустив процес імпорту
+|userKeycloakId|Keycloak ID of the user who started the import process
+//|userKeycloakId|Keycloak ідентифікатор користувача який запустив процес імпорту
+|userDrfo|DRFO code of the user who started the import process
+//|userDrfo|ДРФО код користувача який запустив процес імпорту
+|context|JSON containing deltane information about the newly created user
+//|context|JSON що містить дельтану інформацію про новоствореного користувача
+|===
+
+[NOTE]
+The quoted values are the same for all events of this type and are set as values of the corresponding unchanged attributes. "-" corresponds to an empty value.
+//Значення в лапках є однаковими для всіх подій даного типу та встановлються як значення відповідних атрибутів без змін. "-" відповідає порожньому значенню
+
+The context field structure:
+//Структура поля context:
+[%header,cols="1,1"]
+|===
+|Parameter name|Parameter value
+//|Назва параметру|Значення параметру
+|userId	Keycloak|ID of a created user
+//|userId	Keycloak|ідентифікатор створеного користувача
+|username|username of a created user
+//|username|username створеного користувача
+|enabled|true/false
+|realmId|Keycloak identifier of the realm where a user was created
+//|realmId|Keycloak  ідентифікатор реалму в якому був створений користувач
+|realmName|Name of the realm where a user was created
+//|realmName|Ім'я  реалму в якому був створений користувач
+|clientId|The "Client ID" value of the realm attribute on behalf of which a user was created
+//|clientId|Значення "Client ID" атрибуту реалма від імені якого був створений користувач
+|keycloakClientId|Keycloak client id on behalf of which a user was created
+//|keycloakClientId|Keycloak  ідентифікатор клієнта від імені якого був створений користувач
+|roles|Roles of the created user
+//|roles|Ролі створеного користувача
+|sourceFileId|CSV file ID in the Ceph bucket
+//|sourceFileId|Ідентифікатор CSV файлу у Ceph бакеті
+|sourceFileName|Name of the original CSV file used for importing users
+//|sourceFileName|Оригінальне ім'я CSV файлу, з якого проводився імпорт користувачів
+|sourceFileSHA256Checksum|Checksum of the CSV file uploaded by the user (non-encrypted)
+//|sourceFileSHA256Checksum|Чек сума завантаженого користувачем CSV файлу (незашиврованого)
+|===
+
+Example of the context field value
+//Приклад значення поля context
+[source,json]
+----
+{
+   "userId":"946693c7-181f-41c3-88e8-fcca20962b6a",
+   "username":"anna.perez",
+   "enabled":true,
+   "realmId":"de972f63-9a2a-47b4-bb18-aa84dd7423fa",
+   "realmName":"dev-officer-portal",
+   "clientId":"import-users-job",
+   "keycloakClientId":"8f123b53-6745-4162-a19e-85659bbc76c6",
+   "roles":[
+      "officer",
+      "head-officer"
+   ],
+   "sourceFileId":"9a07c7cd-a1cd-4fdf-8d93-fab6a0988369",
+   "sourceFileName":"users.csv",
+   "sourceFileSHA256Checksum":"a3d08b7833480e561f99cd1180e76fea13baedd59d726eacf2af30643678e968"
+}
+----
+
+[NOTE]
+You can find the general information about the audit structure in the section "Platform/Technical Documentation/Subsystems/Data Factory/Event Audit"
+//Загальну інформацію про структуру аудиту можна переглянути в розділі "Платформа/Технічна документація/Підсистеми/Фабрика даних/Аудит подій"

@@ -1,0 +1,33 @@
+@startuml
+skinparam responseMessageBelowArrow true
+
+participant "Web клієнт" as client order 1
+participant "Модуль роботи\nз версіями" as versionModule order 2
+participant "Модуль роботи\nз Gerrit" as gerritModule order 3
+
+title Застосування версії-кандидату до майстер-версії
+
+client-> versionModule: застосувати версію-кандидат\nдо майстер-версії
+activate versionModule
+  versionModule -> gerritModule: надіслати запит на approve\nchange request за ідентифікатором
+  note left: Approve згодом повинен бути\nокремою операцією
+  activate gerritModule
+    alt версії-кандидата не існує
+      versionModule <-- gerritModule: помилка операції submit\nчерез те що не існує такого\nchange request
+      client <-- versionModule: помилка зі статусом\n404 Not Found
+    end
+  versionModule <-- gerritModule
+  deactivate gerritModule
+
+  versionModule -> gerritModule: надіслати запит на submit\nchange request за ідентифікатором
+  activate gerritModule
+    alt наявні конфліктуючі зміни з майстер-версією
+      versionModule <-- gerritModule: помилка операції submit\nчерез те що наявні конфлікти\nз майстер-версією
+      client <-- versionModule: помилка зі статусом\n409 Conflict
+    end
+    versionModule <-- gerritModule
+  deactivate gerritModule
+
+  client <-- versionModule: відповідь зі статусом\n204 No Content
+deactivate versionModule
+@enduml

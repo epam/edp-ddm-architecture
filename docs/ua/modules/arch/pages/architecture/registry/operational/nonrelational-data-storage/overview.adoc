@@ -1,0 +1,142 @@
+= Підсистема управління нереляційними базами даних
+
+include::platform:ROOT:partial$templates/document-attributes/arch-set-ua.adoc[]
+
+include::platform:ROOT:partial$admonitions/language-ua.adoc[]
+
+== Загальний опис
+
+Підсистема, призначенням якої є зберігання складових регламенту реєстру та проміжних даних, які продукуються системою у процесі взаємодії користувача з системою.
+
+== Функції підсистеми
+
+* Довготривале зберігання схем UI-форм бізнес-процесів
+* Короткострокове зберігання проміжних даних бізнес-процесів
+* Короткострокове зберігання JWT-токенів аутентифікованих користувачів
+
+== Технічний дизайн підсистеми
+
+image::architecture/registry/operational/nonrelational-data-storage/redis.svg[float="center",align="center"]
+
+_Підсистема управління нереляційними базами даних_ використовує  _Redis_ в якості key-value сховища, а відмовостійкість забезпечується за допомогою механізму _Redis Sentinel_.
+
+Для автоматизації розгортання та управління кластером _Redis_ з _Redis Sentinel_ використовується _Kubernetes_-оператор https://github.com/spotahome/redis-operator[Redis Operator by Spotahome].
+
+_Redis Sentinel_ є розподіленою системою, яка складається з декількох екземплярів _Sentinel_ процесів, які взаємодіють один з одним.
+
+_Redis Sentinel_ має наступні особливості:
+
+- факт відмови мастер вузла підтверджується декількома екземплярами _Sentinel_, які формують кворум, що зменшує кількість хибних спрацювань
+- _Sentinel_ сам по собі є відмовостійкою системою, яка може виконувати свої функції навіть у разі, якщо частина _Sentinel_ екземплярів не працюють.
+
+_Redis Sentinel_ надає наступні можливості:
+
+- _Моніторинг_ - _Sentinel_ слідкує за тим, щоб екземпляри _Redis-мастера_ та _реплік_ працювали коректно
+
+- _Алертинг_ - _Sentinel_ надає можливості відправки повідомлень адміністратору у разі ідентифікації збоїв екземплярів _Redis_
+
+- _Автоматичне відновлення_ - У разі, якщо екземпляр _Redis-мастер_ починає працювати некоректно, _Sentinel_ ініціює процес визначення нового _Redis-мастер_ екземпляру та реконфігурації інших _Redis-реплік_ на взаємодію з новим _мастером_.
+
+[TIP]
+--
+Детальну інформацію можно знайти в офіційній технічній документації https://redis.io/docs/manual/sentinel/[Redis Sentinel].
+--
+
+== Складові підсистеми
+
+
+[options="header",cols="a,a,a,a,a"]
+|===
+|Назва компоненти|Представлення в реєстрі|Походження|Репозиторій|Призначення
+
+| _Сервіс Sentinel_
+|`rfs-redis-sentinel`
+|3rd-party
+|https://gerrit-mdtu-ddm-edp-cicd.apps.cicd2.mdtu-ddm.projects.epam.com/admin/repos/mdtu-ddm/infrastructure/redis-sentinel[gerrit:/mdtu-ddm/infrastructure/redis-sentinel]
+|Керування високою доступністю та автоматичним переключенням між серверами Redis
+
+| _Key-value сховище Redis_
+|`rfr-redis-sentinel`
+|3rd-party
+|https://github.com/redis/redis[github:/redis/redis]
+|Збереження даних у пам'яті у форматі ключ-значення
+
+| _Kubernetes оператор для Redis_
+|`redis-operator`
+|3rd-party
+|https://github.com/epam/edp-ddm-redis-operator[github:/epam/edp-ddm-redis-operator]
+|Розгортання та конфігурація ресурсів Redis Sentinel
+
+|===
+
+== Класифікація даних, що зберігаються у _Redis_
+
+|===
+|Простір імен|Підсистема власник|Опис
+
+|xref:arch:architecture/registry/operational/ext-api-management/redis-storage.adoc#_sessions[sessions]
+|xref:arch:architecture/registry/operational/ext-api-management/overview.adoc[Підсистема управління зовнішнім трафіком операційної зони реєстру]
+|Користувацькі JWT-токени
+
+|xref:arch:architecture/registry/administrative/ext-api-management/redis-storage.adoc#_sessions_admin_tools[sessions_admin_tools]
+|xref:arch:architecture/registry/administrative/ext-api-management/overview.adoc[Підсистема управління зовнішнім трафіком адміністративної зони реєстру]
+|Користувацькі JWT-токени
+
+|xref:arch:architecture/registry/operational/bpms/redis-storage.adoc#_bpm_form_submissions[bpm-form-submissions]
+.4+.^|xref:arch:architecture/registry/operational/bpms/overview.adoc[Підсистема виконання бізнес-процесів]
+|Дані, отримані через UI-форми
+|xref:arch:architecture/registry/operational/bpms/redis-storage.adoc#_bpm_message_payloads[bpm-message-payloads]
+|Дані, які були породжені у результаті міжпроцесної взаємодії
+|xref:arch:architecture/registry/operational/bpms/redis-storage.adoc#_bpm_form_schemas[bpm-form-schemas]
+|Схеми UI-форм
+|xref:arch:architecture/registry/operational/bpms/redis-storage.adoc#_bpm_form_scripts[bpm-form-scripts]
+|Зовнішні скрипти для UI-форм
+
+|xref:arch:architecture/registry/operational/user-settings/redis-storage.adoc#_channel_verification_codes[channel-verification-codes]
+|xref:arch:architecture/registry/operational/user-settings/overview.adoc[Підсистема управління налаштуваннями користувачів]
+|OTP-коди для підтвердження каналу зв'язку з користувачем
+|===
+
+== Технологічний стек
+
+При проектуванні та розробці підсистеми, були використані наступні технології:
+
+* xref:arch:architecture/platform-technologies.adoc#redis[Redis]
+* xref:arch:architecture/platform-technologies.adoc#redis-sentinel[Redis Sentinel]
+* xref:arch:architecture/platform-technologies.adoc#redis-operator[Redis Operator]
+
+== Атрибути якості підсистеми
+
+=== _Scalability_
+
+_Підсистема управління нереляційними базами даних_ підтримує вертикальне масштабування у разі збільшення навантаження шляхом виділення додаткових ресурсів для подів підсистеми.
+
+Також підсистема підтримує горизонтальне масштабування шляхом додавання реплік та можливість балансування читання між ними.
+
+=== _Security_
+
+_Підсистема управління нереляційними базами даних_ забезпечує захист каналу інформаційної взаємодії між сервісами підсистеми за допомогою _SSL/TLS_ шифрування трафіку. 
+
+Взаємодія з сервісами підсистеми потребує аутентифікації клієнтів.
+
+Дані зберігаються у _Підсистемі розподіленого зберігання файлів_ та використовують її можливості забезпечення безпеки.
+
+=== _Availability_
+
+_Підсистема управління нереляційними базами даних_ сконфігурована для роботи у режимі високої доступності за допомогою _Redis Sentinel_.
+
+=== _Observability_
+
+_Підсистема управління нереляційними базами даних_ підтримує журналювання вхідних запитів та збір метрик продуктивності для подальшого аналізу через веб-інтерфейси відповідних підсистем Платформи.
+
+[TIP]
+--
+Детальніше з дизайном підсистем можна ознайомитись у відповідних розділах:
+
+* xref:arch:architecture/platform/operational/logging/overview.adoc[]
+* xref:arch:architecture/platform/operational/monitoring/overview.adoc[]
+--
+
+===  _Reliability_
+Надійність _Підсистеми управління нереляційними базами даних_ забезпечується 
+xref:architecture/platform/operational/backup-recovery/overview.adoc[підсистемою резервного копіювання та відновлення] яка включає у себе резервне копіювання файлових систем сховища Redis.

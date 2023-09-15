@@ -1,0 +1,61 @@
+== Опис реалізації
+
+Реалізація кожного з tail це набір зконфігурованих певним чином maven plugins.
+В якості механізму для багаторазового повторного використання конфігурацій maven plugins використовується https://github.com/repaint-io/maven-tiles[maven-tiles plugin].
+Кожен модуль містить `tile.xml` з описом конфігурацій maven plugins.
+
+Maven tiles plugin дозволяє робити композицію декількох незалежних частин pom.xml в один pom.xml. Таким чином немає необхідності виносити все, що може бути common, в parent pom та використовувати все, що в parent pom в кожному із підмодулів.
+
+=== openapi-generator-tile
+
+Tile створює OpenAPI `swagger.json` файл використовуючи раніше запущений spring boot rest api додаток.
+
+Послідовність виконання maven plugins:
+|===
+| Назва Maven plugin | Опис
+
+|org.springframework.boot:spring-boot-maven-plugin
+|Запуск spring boot додатку.
+
+|org.springdoc:springdoc-openapi-maven-plugin
+|Створення OpenAPI документу `swagger.json` використовуючи запущений раніше spring boot додаток. `${apiDocsUrl}` налаштування відповідає за http адресу, на якому доступний додаток.
+
+|org.springframework.boot:spring-boot-maven-plugin
+|Зупинка spring boot додатку.
+|===
+
+=== rest-api-adoc-generator-tile
+Генерація asciidoc документу по існуючому в `target` директорії `swagger.json` OpenAPI definition. Генерація використовує `snippets` створені після виконання unit тестів controller layer та includes з директорії `docs/modules/<repository-name>/pages/rest-api/rest-api-includes`.
+
+Послідовність виконання maven plugins:
+|===
+| Назва Maven plugin | execution-id | Опис
+
+| org.apache.maven.plugins:maven-resources-plugin
+| copy-rest-api-includes
+| Копіювання розширень до rest-api документації в target директорію
+
+| org.apache.maven.plugins:maven-resources-plugin
+| copy-generated-snippets
+| Копіювання generated-snippets (request/response payloads отримані після виконання unit тестів rest api controller layer) до rest-api документації в target директорію
+
+| org.openapitools:openapi-generator-maven-plugin
+| generate-ascii-docs
+| Генерація adoc документу по `swagger.json` файлу в `docs/modules/${project.artifactId}/pages/rest-api/rest-api-generated` директорію.
+
+| org.apache.maven.plugins:maven-resources-plugin
+| copy-generated-rest-api-to-codebase
+| Копіювання згенерованої документації разом з доповненнями та прикладами визовів RestAPI в `docs/modules/${project.artifactId}/pages/rest-api/rest-api-generated` директорію.
+|===
+
+=== rest-api-adoc-generator-clean-tile
+
+Tile може використовуватись для видалення існуючої сгенерованої доументації з codebase (наприклад під час виконання clean фази в maven).
+
+Послідовність виконання maven plugins:
+|===
+| Назва Maven plugin | Опис
+
+| org.apache.maven.plugins:maven-clean-plugin
+| Видалення раніше згенерованих документів в `docs/modules/<repository name>/pages/rest-api/rest-api-generated` пакеті.
+|===

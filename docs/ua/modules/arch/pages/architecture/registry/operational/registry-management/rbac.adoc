@@ -1,0 +1,278 @@
+= Розмежування прав доступу до даних, RBAC
+
+== Опис рішення
+//[%collapsible]
+//====
+
+Доступ до даних реєстру мають декілька компонентів: Аналітика (Redash), та Портал, що забезпечує інтерфейс користувача (Lowcode). Розмежування рівнів доступу до даних з боку Аналітики більш детально описано на сторінці xref:mdtuddm:data-model:analytics.adoc[Побудова аналітичних звітів]. Цей документ фокусується на розмежуванні прав доступу до операційних даних з боку користувачів реєстру з інтерфейсу порталу.
+
+.Розмежування прав доступу до даних
+[plantuml, general, svg]
+----
+include::partial$architecture/registry/operational/registry-management/rbac_overview.puml[]
+----
+//====
+Операційні дані будуть захищені картою ролей, в імплементації — <<Службова таблиця,службовою таблицею>>, створену окремим <<XML Шаблон,тегом>> Liquibase розширення. Створена таблиця задаватиме набір можливих операцій над кожною сутністю реєстру для ролей користувачів.
+
+Структура тегу використовується для формування службової таблиці *_ddm_role_permission_* в операційній базі даних та наповненню її даними.
+
+
+Запит та оновлення всіх колонок таблиці можливий через CRUD операції, часткове звернення або оновлення можливе через додавання до моделі тегів searchCondition та partialUpdate.
+
+Роль для користувача визначається на певному реалмі Keycloak під час автентифікації й передається у JWT токені Lowcode'у. Кожен API запит Lowcode до Datafactory містить отриману з JWT токену роль та назву реалму.
+
+NOTE: Для передачі реалму в JWT токен слід додати до клієнта Keycloak мапер hardcoded claim
+
+Звернення Datafactory до даних реєстру відбувається за наступною схемою:
+
+* Запити на будь-яку *зміну даних* (Insert/Update/Delete) відбуваються через відповідну службову процедуру реєстру. Окремим параметром передається масив ролей користувача. Перевірка прав відбувається до моменту зміни даних і виконуються у випадку якщо:
+
+.. дозвіл на операцію над необхідними колонками таблиці для переданих ролі й реалму присутні в *_ddm_role_permission_* явним чином
+.. існує дозвіл на операцію для внутрішньої ролі isAuthenticated
+.. карта доступів не містить інформації щодо таблиці, в яку вносяться зміни, взагалі
+
+* Перед запитом на *отримання даних* Datafactory робить виклик функції *_f_permission_check_*, що перевіряє наявність права доступу на читання всіх колонок необхідної таблиці для ролі користувача. Відсутність запису про таблицю, що містить запитувані дані у карті доступів *_ddm_role_permission_*, є ознакою того що RBAC не застосовується до відповідної таблиці. В такому випадку функція має давати дозвіл на запит даних.
+
+Більш детально процес перевірки рівня доступу описано на діаграмі <<access_check>> нижче.
+
+NOTE: Всі <<CRUD>>-операції та <<Search Conditions>> також враховують роль користувача, перевіряючи наявний доступ у *_ddm_role_permission_* згідно зазначеної схеми.
+
+Liquibase-шаблон знаходиться в Gerrit репозитарії: _data-model/role_permission.xml_. Будь-які зміни прав доступу проходять через процес перевірки, після чого імплементуються через Jenkins pipeline:
+
+* перестворюється таблиця *_ddm_role_permission_* відповідно до шаблону
+
+* перестворюються <<API>> відповідно до заданих у шаблоні ролей.
+
+Детальніше процес зміни прав доступу до таблиць реєстру описано на діаграмі <<roles_update>>
+
+[#xml-temp]
+== XML Шаблон
+
+[source, xml]
+----
+<changeSet id="roles" author="registry owner">
+    <comment>SET PERMISSIONS</comment>
+    <ext:rbac>
+
+        <ext:role name="isAuthenticated">
+            <ext:table name="person">
+                <ext:column name="first_name" read="true"/>
+                <ext:column name="last_name" read="true"/>
+            </ext:table>
+        </ext:role>
+
+        <ext:role name="officer" realm="officer_realm">
+            <ext:table name="person">
+                <ext:column name="first_name" read="true" update="true"/>
+                <ext:column name="last_name" read="true" update="true"/>
+                <ext:column name="passport" read="true"/>
+            </ext:table>
+        </ext:role>
+
+        <ext:role name="officer_realm.passport_officer">
+            <ext:table name="person">
+                <ext:column name="passport" update="true"/>
+            </ext:table>
+        </ext:role>
+
+        <ext:role name="inn_officer" realm="officer_realm">
+            <ext:table name="person">
+                <ext:column name="inn" update="true"/>
+            </ext:table>
+        </ext:role>
+
+        <ext:role name="officer_realm.birth_officer">
+            <ext:table name="person" insert="true"/>
+        </ext:role>
+
+        <ext:role name="death_officer" realm="officer_realm">
+            <ext:table name="person" delete="true"/>
+        </ext:role>
+
+    </ext:rbac>
+</changeSet>
+----
+
+== Службова таблиця
+Таблиця ролей створюється під час розгортання регламенту реєстру. Приклад значень карти доступів для зазначеного вище <<XML Шаблон, шаблону>>
+
+.Приклад заповненої ddm_role_permission
+image::architecture/registry/operational/registry-management/rbac-table.svg[]
+
+== Процес перевірки рівня доступу
+//[%collapsible]
+//====
+[[access_check]]
+.перевірка рівня доступу
+[plantuml, process, svg]
+----
+include::partial$architecture/registry/operational/registry-management/rbac_process.puml[]
+----
+//====
+
+== API 
+
+Для кожної точки інтеграції встановлюються ролі які є сумою всіх необхідних ролей для доступу до полів цієї точки інтеграції.
+У випадку коли одна і та сама операція над полем дозволена для декількох ролей то застосовується логічне АБО для таких ролей.
+
+=== CRUD
+
+hasRole('officer_realm.birth_officer')
+[source]
+----
+POST /person
+{
+   "first_name": "...",
+   "last_name": "...",
+   "passport": "...",
+   "inn": "..."
+}
+----
+
+hasRole('officer_realm.death_officer')
+[source]
+----
+DELETE /person/{id}
+----
+
+denyAll
+[source]
+----
+GET /person/{id}
+----
+
+hasRole('officer_realm.officer') && hasRole('officer_realm.passport_officer') && hasRole('officer_realm.inn_officer')
+[source]
+----
+PUT /person/{id}
+{
+   "first_name": "...",
+   "last_name": "...",
+   "passport": "...",
+   "inn": "..."
+}
+----
+
+=== Додаткові ендпоінти
+
+[NOTE]
+Для забезпечення більшої стабільності на прогнозованості контракту Дата Фабрики додаткові точки інтеграції не створюються. При необхідності реалізації часткового читання сутностей слід явно використовувати searchCondition, а для зміни частин сутностей - partialUpdate.
+
+isAuthenticated()
+[source]
+----
+GET /person/public/{id}
+
+{
+   "first_name": "...",
+   "last_name": "...",
+}
+----
+
+hasRole('officer_realm.officer')
+[source]
+----
+GET /person/officer/{id}
+
+{
+   "first_name": "...",
+   "last_name": "...",
+   "passport": "..."
+}
+----
+
+hasRole('officer_realm.officer')
+[source]
+----
+PATCH /person/officer/{id}
+
+{
+   "first_name": "...",
+   "last_name": "...",
+}
+----
+
+hasRole('officer_realm.passport_officer')
+[source]
+----
+PATCH /person/passport-officer/{id}
+
+{
+   "passport": "..."
+}
+----
+
+hasRole('officer_realm.inn_officer')
+[source]
+----
+PATCH /person/inn-officer/{id}
+
+{
+   "inn": "..."
+}
+----
+
+=== Search Conditions
+
+У зазначеному прикладі такий SearchConditions буде мати права доступу denayAll оскільки в жодної ролі нема права читання поля `inn`
+
+Але у разі додавання такого права `inn_officer` права доступу будуть виглядати - так
+hasRole('officer_realm.inn_officer') AND (hasAnyRole('officer_realm.officer') OR isAuthenticated())
+
+[source]
+----
+GET /name-and-inn-by-inn/{inn}
+
+{
+    "inn": "...",
+    "first_name": "..."
+}
+----
+
+isAuthenticated() 
+[source]
+----
+GET /name-by-inn/{inn}
+
+{
+    "first_name": "..."
+}
+----
+
+=== Partial update
+
+hasRole('officer_realm.passport_officer')
+[source]
+----
+PATH /partial/person-passport/{id}
+{
+    "passport": "..."
+}
+----
+
+hasRole('officer_realm.passport_officer') AND hasRole('officer_realm.officer')
+[source]
+----
+PATH /partial/change-identity/{id}
+{
+    "first_name": "...",
+    "last_name": "...",
+    "passport": "..."
+}
+----
+
+== Процес зміни прав доступу
+[[roles_update]]
+.зміна прав доступу
+[plantuml, deployment, svg]
+----
+include::partial$architecture/registry/operational/registry-management/rbac_change_permissions.puml[]
+----
+
+== Kafka API
+
+=== Читання даних
+Для перевірки можливості того чи іншого запиту перед його виконанням викликається процедура в яку передається список полів які будуть викликані та перелік ролей користувача. Процедура повертає true або false. У разі true відбувається запит, а у разі false користувачу буде відправлена 403 помилка.
+
+=== Модифікація даних
+Для операцій модифікації механізм перевірки RBAC вбудований в процедури, і вимагає лише передачі переліку ролей користувача і відповідного реалму Keycloak

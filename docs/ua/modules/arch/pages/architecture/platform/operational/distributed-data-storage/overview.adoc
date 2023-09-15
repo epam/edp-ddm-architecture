@@ -1,0 +1,191 @@
+= Підсистема розподіленого зберігання даних
+include::platform:ROOT:partial$templates/document-attributes/arch-set-ua.adoc[]
+
+include::platform:ROOT:partial$admonitions/language-ua.adoc[]
+
+== Загальний опис
+
+Підсистема, що забезпечує функціонування об’єктного (S3 сумісного), блочного та файлового сховища в Платформі.
+
+== Функції підсистеми
+
+* Підтримка функціонування обʼєктного, файлового та блочного сховища
+* Моніторинг сховища
+* Масштабування та аварійне відновлення обʼєктного, файлового та блочного сховища
+
+== Технічний дизайн підсистеми
+
+На даній діаграмі зображено компоненти, які входять в _Підсистему розподіленого зберігання даних_ та їх взаємодію з іншими підсистемами.
+
+image::architecture/platform/operational/distributed-data-storage/distributed-data-storage.drawio.svg[width=800,float="center",align="center"]
+
+TIP: Для більш детальної інформації про компоненти _ceph_ та _rook_ зверніться до офіціальної документації
+https://docs.ceph.com/en/quincy/architecture/[ceph architecture] та https://rook.io/docs/rook/v1.10/Getting-Started/storage-architecture/[rook architecture]
+
+Основними типами сховищ широко використовуємих в Платформі є
+
+* Object Storage — масштабована, розподілена система зберігання для неструктурованих даних, що доступна через сумісні з протоколом S3 API.
+* Block Storage — високопродуктивне, розподілене блокове сховище для використання віртуальними серверами або контейнерами.
+
+== Глосарій підсистеми
+
+RGW:: Акронім від "RADOS Gateway", що є інтерфейсом об'єктного сховища для Ceph. Надає RESTful API для зберігання та отримання даних у кластерах Ceph.
+OSD:: Пристрій об'єктного сховища (Object Storage Device), є фундаментальним компонентом системи зберігання Ceph. OSD відповідає за зберігання та отримання даних на фізичних пристроях зберігання в кластері Ceph. Кожен OSD керує власним локальним сховищем, і дані розподіляються по кількох OSD в кластері, щоб забезпечити надійність та стійкість до відмов.
+OCS:: Акронім від "OpenShift Container Storage" — рішення для зберігання даних, що базується на технології Ceph та інтегрується з платформою оркестрації контейнерів OpenShift.
+MDS:: Акронім від "Metadata Server" — компонент файлової системи CephFS. MDS відповідає за керування метаданими для CephFS.
+cephFS:: Файлова система Ceph (CephFS).
+CSI:: Акронім від "Container Storage Interface" — це стандартний інтерфейс для забезпечення сумісності різних систем зберігання даних з платформами оркестрації контейнерів Kubernetes або OpenShift.
+RBD:: Блочне сховище (RADOS Block Device) — це блокове сховище, яке використовує технологію Ceph для зберігання даних.
+OSD Map:: Cтруктура даних у ceph, що містить інформацію про стан та розташування OSD у кластері Ceph. OSD Map відображає стан кожного OSD (активний, відключений або не функціонує), взаємозв'язки між OSD та групування OSD у розподіленій системі зберігання.
+MDS Map:: Cтруктура даних у ceph, що містить інформацію про MDS мапу на конкретний проміжок часу, її час створення та останню зміну, також містить пул для зберігання метаданих, список серверів метаданих та сервери метаданих, які працюють та включені.
+
+== Складові підсистеми
+
+|===
+|Назва компоненти|Namespace|Deployment|Походження|Репозиторій|Призначення
+
+|_Ceph дашборд_
+|openshift-storage
+|rook-ceph-dashboard
+|3rd-party
+.14+|https://github.com/red-hat-storage/ocs-operator[github:/red-hat-storage/ocs-operator]
+
+https://github.com/rook/rook[github:/rook-operator]
+
+https://gerrit-mdtu-ddm-edp-cicd.apps.cicd2.mdtu-ddm.projects.epam.com/admin/repos/mdtu-ddm/infrastructure/storage[gerrit:/infrastructure/storage]
+|Переглядання основних Ceph метрик, стану сховища та логів підсистеми розподіленого зберігання файлів
+
+|_Rook Ceph Operator_
+|openshift-storage
+|rook-ceph-operator
+|3rd-party
+|Допоміжне програмне забезпечення, яке виконує функції оркестрування Ceph сховища.
+
+|_OpenShift Container Storage Operator_
+|openshift-storage
+|ocs-operator
+|3rd-party
+|Допоміжне програмне забезпечення, яке виконує функції оркестрування ресурсів OpenShift Storage.
+
+|_Ceph Metadata Server_
+|openshift-storage
+|rook-ceph-mds
+|3rd-party
+|Компонент, що керує метаданими файлів в Ceph сховищі
+
+|_Ceph Manager_
+|openshift-storage
+|rook-ceph-mgr
+|3rd-party
+|Компонент, що працює для забезпечення моніторингу сховища Ceph та взаємодії із зовнішніми системами моніторингу та керування.
+
+|_Ceph Monitor_
+|openshift-storage
+|rook-ceph-mon
+|3rd-party
+|Компонент, що підтримує "мапу" стану Ceph сховища та мапу OSD (Object Storage Device)
+
+|_Ceph Object Storage Device_
+|openshift-storage
+|rook-ceph-osd
+|3rd-party
+|Програмне забезпечення Ceph сховища, яке взаємодіє з логічними дисками кластера OpenShift.
+
+|_Ceph Object Gateway_
+|openshift-storage
+|rook-ceph-rgw
+|3rd-party
+|Компонент Ceph сховища, який забезпечує шлюз до об’єктного Amazon S3 API сховища
+
+|_Ceph RBD CSI Driver_
+|openshift-storage
+|rook-ceph-rgw
+|3rd-party
+|Драйвер, що забезпечує інтеграцію Ceph-сумісних об'єктів зберігання, такі як блочні пристрої RBD або CephFS з системою
+оркестрації контейнерів OKD.
+
+|_CephFS CSI Driver_
+|openshift-storage
+|rook-ceph-rgw
+|3rd-party
+|Драйвер, що забезпечує інтеграцію Ceph-сумісних об'єктів зберігання, такі як блочні пристрої RBD або CephFS з системою
+оркестрації контейнерів OKD.
+
+|_OCS Metrics Exporter_
+|openshift-storage
+|ocs-metrics-exporter
+|3rd-party
+|Prometheus експортер, що збирає метрики OCS та ceph для моніторингу та подальшого аналізу.
+
+|_Rook Ceph Crash Collector_
+|openshift-storage
+|ocs-metrics-exporter
+|3rd-party
+|Компонент Rook Ceph Crash Collector слугує для збирання та агрегування інформації про аварійні завершення в Ceph
+
+|===
+
+== Класифікація даних, що зберігаються в об'єктному сховищі
+
+|===
+|Бакет|Підсистема власник|Опис
+
+|xref:arch:architecture/registry/operational/bpms/ceph-storage.adoc#_lowcode_file_storage[lowcode-file-storage]
+|xref:arch:architecture/registry/operational/bpms/overview.adoc[Підсистема виконання бізнес-процесів]
+|Тимчасове зберігання цифрових документів, завантажених в рамках виконання БП
+
+|xref:arch:architecture/registry/operational/registry-management/ceph-storage.adoc#_datafactory_ceph_bucket[datafactory-ceph-bucket]
+.3+|xref:arch:architecture/registry/operational/registry-management/overview.adoc[Підсистема управління даними реєстру]
+|Зберігання підписаних даних при внесенні в реєстр
+
+|xref:arch:architecture/registry/operational/registry-management/ceph-storage.adoc#_file_ceph_bucket[file-ceph-bucket]
+|Зберігання цифрових документів реєстру
+
+|xref:arch:architecture/registry/operational/registry-management/ceph-storage.adoc#_response_ceph_bucket[response-ceph-bucket]
+|Тимчасове зберігання даних для передачі в рамках міжсервісної взаємодії
+
+|xref:arch:architecture/registry/operational/excerpts/ceph-storage.adoc#_file_excerpt_bucket[file-excerpt-bucket]
+.3+|xref:arch:architecture/registry/operational/excerpts/overview.adoc[Підсистема формування витягів реєстру]
+|Зберігання згенерованих та підписаних витягів з реєстру
+
+|xref:arch:architecture/registry/operational/excerpts/ceph-storage.adoc#_excerpt_signature_bucket_deprecated[excerpt-signature-bucket (deprecated)]
+|Зберігання підписаних витягів з реєстру
+
+|xref:arch:architecture/registry/operational/excerpts/ceph-storage.adoc#_excerpt_templates[excerpt-templates]
+|Зберігання шаблонів витягів
+
+|xref:arch:architecture/registry/administrative/regulation-management/ceph-storage.adoc#_user_import[user-import]
+.2+|xref:arch:architecture/registry/administrative/regulation-management/overview.adoc[Підсистема моделювання регламенту реєстру]
+|Зберігання файлів з переліком посадових осіб для імпорту в реєстр
+
+|xref:arch:architecture/registry/administrative/regulation-management/ceph-storage.adoc#_user_import_archive[user-import-archive]
+|Зберігання файлів з переліком посадових осіб, які було імпортовано в реєстр
+
+|===
+
+== Технологічний стек
+
+* xref:arch:architecture/platform-technologies.adoc#ceph[Ceph]
+* xref:arch:architecture/platform-technologies.adoc#rook-operator[Rook]
+* xref:arch:architecture/platform-technologies.adoc#okd[okd]
+
+== Атрибути якості підсистеми
+
+=== _Scalability_
+Підсистема розподіленого зберігання даних розроблена для горизонтального масштабування на сотні або навіть тисячі вузлів
+зберігання даних, забезпечуючи при цьому величезні обсяги зберігання даних. Підсистема має динамічну здатність
+масштабування що дозволяє кластерам зростати або зменшуватися за потреби.
+
+=== _Reliability_
+Підсистема розподіленого зберігання даних використовує реплікацію даних та _erasure coding (EC)_ методи для захисту від
+втрати даних та забезпечення відмовостійкості підсистеми. У разі відмови вузла або пристрою зберігання, підсистема
+автоматично реплікує втрачені дані на інших робочіх вузлах для підтримання надійного збереження даних.
+
+=== _Resilience_
+Підсистема розподіленого зберігання даних залишається працездатною, навіть коли стикається з проблемами мережі або
+відмовами вузлів зберігання даних. Завдяки динамічному балансуванню навантаження та методам розподілу даних в поєднанні
+з відмовостійким проєктуванням забезпечується стійкість в умовах апаратних або програмних проблем.
+
+=== _Performance_
+Завдяки паралельному доступу для читання та запису обʼєктів в сховищі (завдяки розподілу даних на маленькі шматки та реплікації їх між декількома OSD та алгоритму CRUSH) та адаптивному балансуванню навантаження підсистема розподіленого зберігання даних
+забезпечує високу пропускну здатність та продуктивність.

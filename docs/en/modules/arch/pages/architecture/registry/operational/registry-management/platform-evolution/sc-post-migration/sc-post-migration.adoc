@@ -1,0 +1,131 @@
+//= Додавання генерації POST-методів для пошуку даних
+= Adding POST methods generation for retrieving the data
+include::platform:ROOT:partial$templates/document-attributes/arch-set-en.adoc[]
+
+include::platform:ROOT:partial$admonitions/language-en.adoc[]
+
+//== Загальний опис
+== General overview
+
+//При поточній реалізації з виконанням GET-запитів для пошуку даних, виникли проблеми з пошуком по типу _IN_/_NOT_IN_.
+In the current implementation, issues have arisen with searching data using GET requests, specifically related to the _IN/NOT_IN_ type of search.
+
+//Вони пов'язані з неможливістю коректно обробити випадок, коли приходить запит типу _GET /search?inParam=value1,value2_ , де параметр inParam є єдиним значенням _value1,value2_, а не масивом значень _["value1", "value2"]_. Подібні структури в запиті Spring Web фреймворк парсить саме як масив _[value1, value2]_.
+These problems are associated with the inability to correctly handle cases where a request of the form _GET /search?inParam=value1,value2_ is received, where the parameter `inParam` is a single value _value1,value2_, rather than an array of values _["value1", "value2"]_. Spring Web framework parses such structures in the request as an array _[value1, value2]_.
+
+//В якості воркераунду можливим виявилось формувати запит у форматі _GET /search?inParam=value1,value2&inParam=_. В такому випадку Spring формує параметри у масив _["value1,value2", ""]_, що є коректним для пошуку за типом IN/NOT_IN.
+As a workaround, it became possible to format the request as _GET /search?inParam=value1,value2&inParam=_. In this case, Spring constructs the parameters as an array _["value1,value2", ""]_, which is valid for searching with the IN/NOT_IN type.
+
+//Проте використання подібного воркераунду є можливим тільки для випадків, де клієнт може явно сконфігурувати запит HTTP-запит з необхідними пошуковими параметрами у правильному форматі.
+However, the use of such a workaround is only feasible for cases where the client can explicitly configure the HTTP request with the necessary search parameters in the correct format.
+
+//Такими сценаріями є:
+These scenarios include:
+
+//* Інтеграція через UI-форми
+//* xref:arch:architecture/registry/operational/registry-management/platform-evolution/public-api/public-api.adoc[Публічний API]
+//* xref:arch:architecture/registry/operational/external-integrations/cross-registry.adoc#_інтеграція_з_сторонніми_системами[Інтеграція з зовнішніми системами]
+* Integration through UI forms
+* xref:arch:architecture/registry/operational/registry-management/platform-evolution/public-api/public-api.adoc[Public API]
+* xref:arch:architecture/registry/operational/external-integrations/cross-registry.adoc#_інтеграція_з_сторонніми_системами[Integration with external systems]
+
+//Проте для сценаріїв, де запити пошуку даних формуються програмно всередині мікросервісів системи, таких як:
+However, for scenarios where data search requests are generated programmatically within microservices of the system, such as:
+
+include::ROOT:partial$admonitions/ua-specific.adoc[]
+
+//* виставлення ендпоінтів пошуку даних через Трембіту (через _soap-api_)
+* Setting up data search endpoints through Trembita (UA-specific) secure exchange gateway (via _soap-api_)
+//* використання ендпоінтів пошуку даних через делегати у бізнес-процесах (через _bpms_)
+* Using data search endpoints through delegates in business processes (via _bpms_)
+
+//наявний воркераунд використати неможливо або це створить суттєві проблеми для розробки та підтримки такого рішення, що в майбутньому може призвести до блокуючих проблем у команд розробки.
+The existing workaround cannot be applied, or it will create significant issues for the development and maintenance of such a solution, potentially leading to blocking problems within development teams.
+
+//Як вирішення таких проблем було вирішено додатково до генерації GET-інтерфейсу для пошуку даних також генерувати і POST-інтерфейс, при використанні якого необхідні пошукові параметри будуть формуватись у тілі запиту формату _JSON_, який дозволяє коректно відрізняти окремі одиночні значення від масивів.
+To address such issues, it was decided that in addition to generating a GET interface for data search, a POST interface should also be generated. When using the POST interface, the required search parameters will be formatted in the request body in _JSON_ format, which allows for a proper differentiation between individual values and arrays.
+
+//== Загальні принципи та положення
+== General principles and provisions
+
+//* GET і POST ендпоінти мають генеруватись разом
+* GET and POST endpoints should be generated together
+//* Для внутрішніх інтеграцій всередині системи перейти на використання POST
+* For internal integrations within the system, transition to using POST is recommended
+//* Використання GET методів залишається для зворотньої сумісності при використанні клієнтами сценаріїв _Пошук з UI-форм_, _Публічний API_ та _Інтеграція з зовнішніми системами_
+* The use of GET methods remains for backward compatibility when used by clients in scenarios such as _Search with UI forms_, _Public API_, and _Integration with external systems_.
+//* Використання POST-методів для сценаріїв _Публічний API_ та _Інтеграція з зовнішніми системами_ стане можливим
+* The use of POST methods for scenarios involving _Public API_ and __Integration with external system__s will become possible.
+//* Використання POST-запитів для пошуку даних не впливає на сценарії модифікації даних, де також використовується метод POST (залишаються актуальними усі Network Policy, а також перевірка HTTP-заголовків при збереженні даних)
+* The use of POST requests for retrieving the data does not affect scenarios involving data modification, where the POST method is also used (all Network Policies remain valid, and HTTP header checks during data saving remain applicable).
+//* Перехід UI-форм на використання POST методу наразі не потребується та є поза скоупом
+* Transitioning UI forms to use the POST method is currently not required and is beyond the scope
+
+//== Високорівневий план розробки
+== High-level development plan
+
+//=== Приклад
+=== Example
+
+//Для критерію пошуку
+For the search criterion:
+
+[source, xml]
+
+<changeSet author="registry owner" id="create SC registration_equal_laboratory_id_solution">
+    <ext:createSearchCondition name="some_sc">
+        <ext:table name="some_table" alias="r">
+            <ext:column name="some_id" />
+            <ext:column name="some_equal_column" searchType="equal"/>
+            <ext:column name="some_in_column" searchType="in"/>
+        </ext:table>
+    </ext:createSearchCondition>
+</changeSet>
+
+---
+
+//разом з існуючим GET-ендпоінтом повинен згенеруватись POST
+Together with the existing GET endpoint, a POST should be generated:
+
+//.Новий API
+.New API
+[%collapsible]
+====
+swagger::{attachmentsdir}/architecture/registry/operational/registry-management/sc-post-migration/swagger.yml[]
+====
+
+//=== Технічні експертизи
+=== Technical expertise
+
+* BE
+
+//=== План розробки
+=== Development plan
+
+[cols="3,5,5"]
+|===
+//| Компонент | Необхідне розширення | Мета
+| Component | Required extension | Goal
+//| service-generation-utility | додати генерацію POST ендпоінтів пошуку даних | виклик нових ендпоінтів з _soap-api_ та _bpms_
+| service-generation-utility | Add generation of POST endpoints for data search | Invoke new endpoints with _soap-api_ and _bpms_
+//| service-generation-utility | змінити генерацію коду soap-api на відправку запитів до rest-api, перейти на POST | уникнути проблем з виставленням SC з пошуком через IN/NOT_IN через Трембіту
+| service-generation-utility | Change generation of soap-api code to send requests to rest-api, transition to POST | Avoid issues with setting up SC for IN/NOT_IN search through Trembita
+//| service-generation-utility | змінити AuthPolicy для зовнішніх інтеграцій з rest-api-ext, дозволити обробку POST для ендпоінтів пошуку даних (не має впливати на ендпоінти модифікації даних) | можливість викликати POST ендпоінт для сценарію _Пошук даних без Трембіта_
+| service-generation-utility | Modify AuthPolicy for external integrations with rest-api-ext, allow handling of POST for data search endpoints (should not affect data modification endpoints) | Enable calling POST endpoint for _Data search without Trembita_ scenario.
+//| rest-api-core-base-image | для пошукових POST запитів прибрати валідацію специфічних заголовків (_X-Digital-Signature_, _X-Source-Business-Process_ etc.) | у поточній реалізації валідація заголовків налаштована за HTTP-методом, а не за викликаним ендпоінтом, внаслідок чого всі POST-запити валідуються. З новим підходом цю логіку необхідно змінити
+| rest-api-core-base-image | Remove validation of specific headers (_X-Digital-Signature_, _X-Source-Business-Process_ etc.) | In the current implementation, header validation is set based on the HTTP method, not the invoked endpoint. With the new approach, this logic needs to be changed
+//| bpms | змінити делегати пошуку (_DataFactoryConnectorSearchDelegate_, _RegistryDataFactoryConnectorSearchDelegate_), додавши можливість приймати як параметр пошуку _Map<String, Object>_ (зараз - _Map<String, String>_) | для коректного пошуку за типом IN у POST запиті необхідно буде передати список допустимих значень, вони відправляться з bpms як string ключ - list значення. Не має виникнути проблем зі зворотньою сумісністю, оскільки Map<String, Object> є ширшим, ніж поточне Map<String, String>
+| bpms | Modify search delegates (_DataFactoryConnectorSearchDelegate_, _RegistryDataFactoryConnectorSearchDelegate_), adding possibility to accept _Map<String, Object>_ as a search parameter (now - _Map<String, String>_) | For proper _IN type_ search in POST request, a list of valid values will need to be passed. These will be sent from bpms as a string key - list value. There should be no compatibility issues, as Map<String, Object> is broader than the current Map<String, String>.
+//| ddm-data-factory-client | оновити Feign-клієнти, які використовуються делегатами, на POST метод | використання в bpms клієнту
+| ddm-data-factory-client | Update Feign clients used by delegates to use POST method | Use in bpms client
+//| platform-gateway | додати обробку POST-запитів пошуку замість GET | оскільки сценарій пошуку без Трембіти перемикається на POST метод, у проксі-сервісі platform-gateway теж необхідно перемкнутись на обробку запитів саме цього методу
+| platform-gateway | Add handling of POST search requests instead of GET | As the Trembita-less search scenario switches to POST, the proxy service platform-gateway also needs to switch to handling requests of this method
+|===
+
+//Також важливим є документування функціональності:
+It is also important to document the functionality:
+
+//* Задокументувати особливості використання GET-методів при пошуку з IN/NOT_IN
+* Document the specifics of using GET methods for IN/NOT_IN search
+//* Задокументувати рекомендації щодо формування тіла POST запиту (особливо при пошуку IN/NOT_IN)
+* Document recommendations for forming the body of a POST request (especially for IN/NOT_IN search)

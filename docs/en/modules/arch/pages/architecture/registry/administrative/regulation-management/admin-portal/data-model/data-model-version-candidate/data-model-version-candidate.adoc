@@ -1,0 +1,313 @@
+= View the list of registry data model tables in the read mode for candidate versions
+include::platform:ROOT:partial$templates/document-attributes/arch-set-en.adoc[]
+
+include::platform:ROOT:partial$admonitions/language-en.adoc[]
+
+== General description
+//== Загальний опис
+The development of registry regulations involves the creation of a registry data model. The administrative portal provides functionality for viewing the list of tables of the registry data model and their structure.
+//Розробка регламенту реєстру передбачає розробку моделі даних реєстру. Адміністративний портал надає функціонал по перегляду переліку таблиць моделі даних реєстру та їх структури.
+
+== Problem description
+//== Опис проблеми
+The admin portal allows you to view the list of data model tables only for the master version of registry regulations. This functionality allows you to get a list of tables of regulations, which is deployed in the production environment, but does not allow viewing the registry regulations data model tables of a candidate version.
+//Адмін портал дозволяє перегляд переліку таблиць моделі даних тільки для мастер версії регламенту реєстру. Цей функціонал дозволяє отримати перелік таблиць регламенту, що розгорнутий на прод оточенні, але не дозволяє перегляд таблиць регламенту реєстру моделі даних версії-кандидату.
+
+- When developing a data model of the registry regulations, it is necessary to use the list of data model tables described in the liquibase candidate version configuration.
+//- Під час розробки моделі даних регламенту реєстру необхідно оперувати переліком таблиць моделі даних, що описані в liquibase конфігурації версії-кандидату.
+
+- When registry developers edit a data model by pushing changes to gerrit, it is necessary to display up-to-date information with a list of data model tables in the administrative portal.
+//- Під час редагування моделі даних розробниками реєстру шляхом внесення змін в gerrit, необхідно показувати актуальну інформацію зі списком таблиць моделі даних в адміністративному порталі.
+
+- Undefined state of changes in a data model until the registry regulations are published.
+//- Невизначений стан змін в моделі даних до моменту публікації регламенту реєстру
+
+== Actors
+//== Актори
+- Registry regulations developer
+//- Розробник регламенту реєстру
+
+== Glossary
+//== Глосарій
+- rrm: registry-regulation-management backend service
+- DataModelSnapshot - a file for storing the state of the registry data model.
+//- DataModelSnapshot - файл для зберігання стану моделі даних регламенту реєстру
+- DataModelSnapshot files: A set of files (one file per table) showing the state of the registry regulations data model for each of the tables.
+//- DataModelSnapshot files - набір файлів (файл per table), що показують стан моделі даних регламенту реєстру по кожній із таблиць
+
+== Functional scenarios
+//== Функціональні сценарії
+- Review the current state of the registry regulations data model (a list of tables) being developed (within the framework of a candidate version).
+//- Перегляд поточного стану моделі даних регламенту реєстру (перелік таблиць), що розробляється (в рамках версії-кандидату)
+- Review the value of the "subjectivity" attribute in the list of tables.
+//- Перегляд значення атрибута "суб'єктність" в переліку таблиць
+- Get the result of checking whether the data model can be successfully deployed.
+//- Отримання результату перевірки можливості успішного розгортання моделі даних
+
+== Design of the existing solution
+//== Дизайн існуючого рішення
+
+image::architecture/registry/administrative/regulation-management/admin-portal/data-model/data-model-version-candidates/current-design.svg[]
+
+- A database is deployed in 2 stages:
+//- Розгортання БД відбувається в 2 етапи:
+* * OKD run-db-scripts job that runs during Citus deployment. It deploys preconditions to deploy the actual detailed behavior out of the scope data model.
+//** OKD run-db-scripts job, що запускається під час розгортання Citus. Розгортає preconditions для розгортання моделі даних регламенту реєстру (actual detailed behaviour out of scope)
+* * Jenkins pipeline deployment of the registry regulations, namely the <registry-name>-data-model job. It deploys the registry regulations model.
+//** Jenkins pipeline розгортання регламенту реєстру, а саме <registry-name>-data-model job. Розгортає модель регламенту реєстру.
+
+- registry-regulations-management reads and stores the database structure in the `xref: arch: architecture/registry/administrative/regulation-management/admin-portal/data-model/admin-portal-data-model-json-schema -description.adoc [DataModelSnapshot]` file separately for each table. The process of creating files occurs when starting the registry-regulations-management service once.
+//- registry-regulations-management зчитує та зберігає структуру БД в файли `xref:arch:architecture/registry/administrative/regulation-management/admin-portal/data-model/admin-portal-data-model-json-schema-description.adoc[DataModelSnapshot]` файл окремо для кожної таблиці. Процес створення файлів відбувається під час запуску registry-regulations-management сервісу один раз
+- Rest API through DataModelSnapshot access services reads the list of tables by reading the list of `DataModelSnapshot table file` files.
+//- Rest API через сервіси доступу до DataModelSnapshot зчитують перелік таблиць шляхом зчитування переліку файлів `DataModelSnapshot table file`.
+
+== General principles
+//== Загальні принципи
+- Changes to the data model of the registry regulation are made by amending the corresponding liquibase files.
+//- Внесення змін в модель даних регламенту реєстру відбувається шляхом внесення змін у відповідні liquibase файли
+- The structure of liquibase registry rules files in the file system (and in Git) does not change
+//- Структура liquibase файлів регламенту реєстру на файловій системі (та в git) не змінюється
+- Each candidate version uses its dedicated database to deploy the data model.
+//- Кожна версія-кандидат використовує свою виділену БД для розгортування моделі даних
+- The reference database is used to create temporary databases for candidate versions of the registry regulations. Reference database does not contain the registry data.
+//- Використання еталонної БД для створення тимчасових БД для версій-кандидатів регламенту реєстру. Еталонна БД не містить даних реєстру
+- The registry regulations deployment subsystem (Jenkins) creates a database structure by deploying liquibase of the registry regulation configurations.
+//- Підсистема розгортання регламенту реєстру (регламентний jenkins) створює структуру БД шляхом розгортання liquibase конфігурацій регламенту реєстру
+- registry-regulation-management reads the deployment state of the registry regulations (liquibase deployment) from Gerrit of the corresponding MR. The execution state of the corresponding Jenkins job is displayed in Gerrit MR as a candidate version using the specific label (Verified + 1).
+//- registry-regulation-management зчитує стан розгортання регламенту реєстру (розгортання liquibase) з gerrit відповідного MR. Стан виконання відповідної jenkins job відображається в Gerrit MR по версії-кандидату за допомогою specific label (Verified +1)
+
+
+== Solution technical design
+//== Технічний дизайн рішення
+
+image::architecture/registry/administrative/regulation-management/admin-portal/data-model/data-model-version-candidates/target-design.svg[]
+
+- OKD run-db-script job creates a reference database when creating and deploying a database according to the settings in the citus repository. The reference database must contain only the database structure without any data from the registry.
+//- OKD run-db-script job створює еталонну БД під час створення та розгортання БД згідно з налаштування в citus repository. Еталонна БД повинна містити тільки структуру БД без будь-яких даних з реєстру.
+- The registry regulations deployment subsystem deploys the registry regulations for candidate versions after making any changes to the corresponding Gerrit MR.
+//- Підсистема розгортання регламенту реєстру проводить розгортання регламенту реєстру для версій кандидатів після внесення будь-яких змін в відповідний Gerrit MR.
+- The registry regulations deployment subsystem creates temporary databases for each of the candidate versions in work.
+//- Підсистема розгортання регламенту реєстру створює тимчасові БД для кожної з версій-кандидатів, що знаходяться в роботі.
+- Registry regulations deployment subsystem deploys the registry regulations data model by using liquibase configurations from the registry regulations.
+//- Підсистема розгортання регламенту реєстру розгортає модель даних регламенту реєстру шляхом використання liquibase конфігурацій з регламенту реєстру
+- rrm reads the data structure from the temporary database and uses the xref:arch:architecture/registry/administrative/regulation-management/admin-portal/data-model/admin-portal-data-model-json-schema-description.adoc[`DataModelSnapshot`] json data schema for communication (at the RestAPI level).
+//- rrm зчитує структуру даних з тимчасової БД та оперує xref:arch:architecture/registry/administrative/regulation-management/admin-portal/data-model/admin-portal-data-model-json-schema-description.adoc[`DataModelSnapshot`] json схемою даних для комунікації (на рівні RestAPI)
+- The `registry` database is used for reading the database structure for the master version. Temporary files are not used in the file system in the `DataModelSnapshot` format.
+//- Зчитування структури БД для мастер версії використовує `registry` БД. Тимчасові файли на файловій системі у форматі `DataModelSnapshot` не використовуються
+
+
+[CAUTION]
+The reference and temporary databases must be created only in DEV environment.
+//Еталонна та тимчасова БД повинні бути створені тільки на DEV оточенні
+
+=== Sequence diagrams
+//=== Діаграми послідовності
+
+.Getting a list of tables of a candidate version
+//.Отримання переліку таблиць версії-кандидату
+[plantuml, data-model-version-candidates data-model-version-candidate-sequence, svg]
+----
+include::partial$architecture/registry/administrative/regulation-management/admin-portal/data-model-version-candidates/data-model-version-candidate-create-sequence.puml[]
+----
+
+=== Extension of the registry regulation deployment subsystem:
+//=== Розширення підсистеми розгортання регламенту реєстру:
+
+It is necessary to extend the routine jenkins with a new deployment mechanism:
+//Необхідно розширити регламентний jenkins новим механізмом розгортання:
+
+- When creating a new MR for the candidate version, create and deploy a temporary database for the corresponding candidate version.
+//- При створенні нового MR для версії-кандидату - створити та розгорнути тимчасову БД для відповідної версії-кандидату
+- When saving changes to the candidate version (new patchset in gerrit), rebuild the temporary database for the corresponding candidate version and deploy liquibase changelog from the corresponding master version, and then from the candidate version.
+//- При збереженні змін версії-кандидату (новий patchset в gerrit) - перестворити тимчасову БД для відповідної версії-кандидату і розгорнути liquibase changelog з відповідної мастер-версії, а потім з версії-кандидату
+- The process of deploying the data model of the registry regulations uses a mechanism to check for changes in the registry regulations publishing pipeline (namely the `get-changes` step). Temporary databases are deployed only if there are new changes in the data model and when creating a candidate version.
+//- Процес розгортання моделі даних регламенту реєстру використовує механізм перевірки наявності змін пайплайну публікації регламенту реєстру (а саме `get-changes` кроку). Тимчасові БД розгортаються тільки при наявності нововнесених сзмін в моделі даних та при створенні версії-кандидату.
+
+[NOTE]
+A single jenkins codereview pipeline is responsible for the above actions.
+//За вищенаведені дії відповідає єдиний jenkins codereview pipeline
+
+[CAUTION]
+Only one temporary database deployment process can be run at a time within one candidate version.
+//Одночасно може виконуватись тільки один процес розгортання тимчасової БД в рамках однієї версії-кандидату
+
+==== Description of work with temporary databases
+//==== Опис роботи з тимчасовими БД
+
+Logic of work:
+//Логіка роботи:
+
+- Create a temporary database for the candidate version using the reference database.
+//- Створити тимчасову БД для версії кандидату використовуючи еталонну БД.
+
+[source,sql]
+----
+CREATE DATABASE [registry-dev-<vcid>] WITH TEMPLATE registry-template OWNER [our owner user?];
+----
+
+[NOTE]
+`registry-template` is the name of the reference database received as a result of OKD run-db-script-job. `registry-dev-<vcid>` is the template of the temporary database name for the candidate version.
+//`registry-template` - ім'я еталонної БД, отриманої після роботи OKD run-db-script-job. `registry-dev-<vcid>` - шаблон імені тимчасової БД для версії-кандидату.
+
+- Deployment of the liquibase structure from the corresponding registry regulations version (the state of the master version from which the candidate version was created, or to which the rebase operation was last performed).
+//- Розгортання liquibase структури з відповідної версії регламенту реєстру (стан майстер версії, з якої було створено версію-кандидат, або на яку останній раз відбувалась rebase операція)
+- Deploy the current liquibase structure from the candidate version.
+//- Розгортання поточної liquibase структури з версії-кандидату
+
+For the access of registry-regulation-management to temporary databases, you must create a separate registry_dev_role user. The user must have the following rights:
+//Для доступу registry-regulation-management до тимчасових БД необхідно створити окремого користувача registry_dev_role. Користувач повинен мати права:
+
+- READ temporary databases
+//- READ тимчасових БД
+- READ the reference database
+//- READ еталонної БД
+
+==== Periodic reconciliation process
+//==== Періодичний reconciliation процес
+The reconciliation process is required for deleting out-of-date temporary databases for candidate versions (versions of candidates that were integrated into the master version or those that were deleted without integration). You must create a separate jenkins pipeline for the reconciliation process.
+//Reconciliation процес необхідний для видалення застарілих тимчасових БД по версіям-кандидатам (версії кандидати що були інтегровані в мастер версію або ті, що були видалені без інтеграції). Необхідно створити окремий jenkins pipeline для reconciliation процесу.
+
+==== Reconciliation process logics
+//==== Логіка роботи reconciliation процесу
+
+- Get a list of candidate versions in gerrit.
+//- Отримати перелік версій-кандидатів в gerrit
+- Get a list of temporary databases for candidate versions in the database.
+//- Отримати перелік тимчасових БД для версій-кандидатів в БД
+- Delete temporary databases of candidate versions having no open MRs in gerrit.
+//- Видалити тимчасові БД версій-кандидатів для яких не існує відкритих MR в gerrit
+
+==== Schedule settings
+//==== Schedule налаштування
+
+- Calling the reconciliation process can be selected individually and configured at the level of the pipeline's jenkins trigger.
+//- Виклик процесу reconciliation може обиратись індивідуально та налаштовуватись на рівні тригеру jenkins пайплайну.
+
+=== Using AbstractRoutingDatasource to access temporary databases
+//=== Використання AbstractRoutingDatasource для доступу до тимчасових БД
+
+==== Description of the problem
+//==== Опис проблеми
+
+To access the temporary databases, you must use the `DataSource` bean for each temporary database. The existing code that provides work with the master version database uses Spring bean of the DataSource type.
+//Для доступу до тимчасових БД необхідно використовувати `DataSource` bean для кожної тимчасової БД. Існуючий код, що забезпечує роботу з БД мастер версії, використовує Spring bean типу DataSource.
+To reuse the mechanism for reading the database structure in the DataModelSnapshot file, it is suggested to use the https://docs.spring.io/spring-framework/docs/current/javadoc-api/org/springframework/jdbc/datasource/lookup/AbstractRoutingDataSource.html[`AbstractRoutingDatasource`] mechanism, which allows you to create a DataSource dynamically, depending on the candidate version with which you are currently working.
+//Для перевикористання механізму зчитування структури БД в DataModelSnapshot file пропонується використати https://docs.spring.io/spring-framework/docs/current/javadoc-api/org/springframework/jdbc/datasource/lookup/AbstractRoutingDataSource.html[`AbstractRoutingDatasource`] механізм, що дозволяє створювати DataSource динамічно, в залежності від версії-кандидату, з якою наразі ведеться робота.
+
+=== RestAPI
+The current RestAPI is extended by the ability to obtain a list of tables of the registry regulations data model.
+//Поточний RestAPI розширюється можливістю отримувати перелік таблиць моделі даних регламенту реєстру.
+The request structure is the same as for the corresponding queries for the master version ('GET/versions/master/tables').
+//Структура запитів повторює відповідних запитів для мастер версії (`GET /versions/master/tables`)
+
+==== Example of requests and responses to receive a list of data model tables of the candidate version
+//==== Приклад запитів та відповідей на отримання переліку таблиць моделі даних версії-кандидату
+
+Request:
+//Запит:
+
+[source,http,options="nowrap"]
+----
+GET /versions/candidates/{versionCandidateId}/tables/
+----
+
+Response structure:
+//Структура відповіді:
+
+[source,http,options="nowrap"]
+----
+[
+    {"name":"Table 1","description":"Table 1 description","objectReference":true},
+    {"name":"Table 2","description":"Table 2 description","objectReference":true},
+    ...
+    {"name":"Table n","description":"Table 2 description","objectReference":true},
+]
+----
+
+[CAUTION]
+You have to use the same data structures and error codes for the requests and responses used to get the list of data model tables in the master version.
+//Необхідно використати ті ж самі структури даних та коди помилок для запитів та відповідей, що використовуються для отримання переліку таблиць моделі даних в мастер версії
+
+== Extension of the candidate version status display unit with information on the status of the temporary database deployment process
+//== Розширення блоку відображення стану версії-кандидату інформацією про стан процесу розгортання тимчасових БД
+
+During the deployment of temporary databases, the health of the existing liquibase changelog configuration of the registry regulations is also checked. If there are any problems during this process, you must pass this information to the client application to be displayed to the registry developer.
+//Під час розгортання тимчасових БД проводиться також перевірка працездатності існуючої конфігурації liquibase changelog регламенту реєстру. При виниканні будь-яких проблем під час цього процесу необхідно передати цю інформацію в клієнтський додаток для відображення її розробнику реєстру.
+
+To get the deployment status information, it is necessary to read the `Verified +1` label from the corresponding MR in Gerrit.
+//Для отримання інформації про стан розгортання необхідно зчитувати `Verified +1` label з відповідного MR в Gerrit
+
+It is necessary to extend the `VersionInfoDetailed` (Data structure in RestAPI) with the information about the status of the registry regulations deployment to the temporary environment by adding a new type of validation to the `Validation` bean.
+//Необхідно розширити `VersionInfoDetailed` (Структура даних в RestAPI) інформацією про стан розгортання регламенту реєстру на тимчасове оточення шляхом додавання нового типу валідації в `Validation` bean.
+
+Change `ResultValues` to:
+//Змінити `ResultValues` на:
+
+- UNKNOWN: the deployment and validation process is running/did not run (no Verified label).
+//- UNKNOWN: процес розгортання та перевірки відбувається/не відбувався (відсутня Verified label)
+- SUCCESS: the deployment and validation process is successful (Verified + 1).
+//- SUCCESS: процес розгортання та перевірки успішний (Verified +1)
+- FAILED: the deployment and validation process has failed (Verified -1).
+//- FAILED:  процес розгортання та перевірки не успішний (Verified -1)
+
+Add to resultDetails the information (link) to the corresponding gerrit MR (Optional).
+//Додати в resultDetails інформацію (link) на відповідний gerrit MR (Optional)
+
+[NOTE]
+TODO: work out UI design
+//TODO: пропрацювати UI дизайн
+
+== Extension of the env cleanup process
+//== Розширення env cleanup процесу
+It is necessary to extend the existing environment cleanup mechanism by adding changes to the `delete-registry` stage.
+//Необхідно розширити існуючий механізм cleanup оточення шляхом додавання змін в `delete-registry` stage.
+It is required to delete all temporary databases for candidate versions. Changes involve making appropriate instructions to remove temporary databases in `CleanupRegistry.sql` or creating a separate corresponding sql file with instructions. Deletion is possible using the database name mask `registry-dev-*`. It is also necessary to delete the reference database named `registry-template`.
+//Необхідно видалити всі тимчасові БД для версій-кандидатів. Зміни передбачають внесення відповідних інструкцій по видаленню тимчасових БД в `CleanupRegistry.sql` або створення окремого відповідного sql файлу з інструкціями. Видалення можливе по масці імені БД `registry-dev-*`. Також необхідно видалити еталонну БД з іменем `registry-template`.
+
+== High level development plan
+//== Високорівневий план розробки
+=== Required expertise
+//=== Необхідні експертизи
+- DevOps
+- BE
+- FE
+- QA/AQA
+- DBA
+
+=== DBA
+- Extend the database deployment mechanism in the citus repository to create a reference database.
+//- Розширити механізм розгортування БД в citus repository для створення еталонної БД
+
+=== DevOps
+
+- Create a user in the database for the registry-regulation-management service. Permissions:
+//- Створити користувача в БД для registry-regulation-management сервісу. Permissions:
+** READ the temporary databases.
+//** READ тимчасові БД
+
+- Extend the cleanup env by removing temporary databases and reference databases.
+//- Розширити механізм cleanup env видаленням тимчасових БД та еталонної БД
+- Extend the registry regulations deployment subsystem with the deployment mechanism of the registry regulations liquibase configurations to temporary databases.
+//- Розширити підсистему розгортання регламенту реєстру механізмом розгортування liquibase конфігурацій регламенту реєстру в тимчасові БД
+- Add the reconciliation and cleanup mechanism between the list of versions of candidates and temporary databases.
+//- Додати reconciliation and cleanup механізм між переліком версій кандидатів та тимчасовими БД
+- Add the mechanism for publishing the DB temporary deployment status to corresponding MR in Gerrit.
+//- Додати механізм публікації статусу розгортання тимчасової БД до відповідного MR в Gerrit
+
+=== Backend
+- Create a database reading mechanism for a given DataSource.
+//- Створити механізм зчитування БД по заданому DataSource
+- Create DataSource spring bean for each candidate version and master version separately.
+//- Забезпечити створення DataSource spring bean для кожної версії-кандидату та майстер версії окремо
+- Extend RestAPI to handle data model requests for candidate versions.
+//- Розширити RestAPI для опрацювання запитів по моделі даних для версій-кандидатів
+- Delete the mechanism of using the file system to store the `DataModelSnapshot` files for the master version. Reading the structure of the master version must occur every time the request is processed at the RestAPI levels.
+//- Видалити механізм використання файлової системи для зберігання `DataModelSnapshot` файлів для мастер версії Зчитування структури мастер версії повинно відбуватись кожного разу при обробці запиту на RestAPI рівні
+- Add reading of the data model deployment state to the temporary database in `GET /versions/candidates/{versionCandidateId}`
+//- Додати зчитування стану розгортання дата моделі в тимчасову БД в `GET /versions/candidates/{versionCandidateId}`
+
+=== Frontend
+- Add the display of the temporary database deployment status to the block with the results of the candidate version checking.
+//- Додати відображення стану розгортання тимчасової БД в блок з результатами перевірки версії-кандидату
+- Create a page with a list of tables for candidate versions.
+//- Створити сторінку з переліком таблиць для версій-кандидатів

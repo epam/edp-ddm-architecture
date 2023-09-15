@@ -1,0 +1,296 @@
+:toc-title: ЗМІСТ
+:toc: auto
+:toclevels: 5
+:experimental:
+:important-caption:     ВАЖЛИВО
+:note-caption:          ПРИМІТКА
+:tip-caption:           ПІДКАЗКА
+:warning-caption:       ПОПЕРЕДЖЕННЯ
+:caution-caption:       УВАГА
+:example-caption:           Приклад
+:figure-caption:            Зображення
+:table-caption:             Таблиця
+:appendix-caption:          Додаток
+:sectnums:
+:sectnumlevels: 5
+:sectanchors:
+:sectlinks:
+:partnums:
+
+= Управління профілем користувача
+
+Профіль користувача системи містить набір атрибутів, які ідентифікують отримувача послуг, або посадову особу в процесі
+автентифікації та спрощують користування в системі завдяки розширенню контексту виконання операцій.
+
+== Структура профілю
+
+Профіль користувача Кабінету отримувача послуг, або посадової особи складають наступні атрибути:
+
+* `*ПІБ*`
+* `*РНОКПП*`
+* `*ЄДРПОУ*`
+* `*Ознака представника юридичної особи*` (лише для отримувачів послуг)
+* `*Тип суб'єкта*` (лише для отримувачів послуг)
+
+[NOTE]
+ Профіль користувача Кабінету посадової особи створює заздалегідь адміністратор доступу, перед першим
+входом до системи. Профіль користувача Кабінету отримувача послуг заповнюється автоматично при першому вході,
+відповідно до інформації з КЕП (деталі дивіться xref:architecture/platform/operational/user-management/citizen-authentication.adoc[за посиланням]).
+
+=== Атрибути профілю у Keycloak
+
+Атрибути профілю користувача налаштовуються у Keycloak-реалмі, у секції *Attributes* відповідного
+користувача, і мають такі значення:
+
+* `*fullName*` -- для [.underline]#*ПІБ*#;
+* *drfo* -- для [.underline]#*РНОКПП*#;
+* *edrpou* -- для [.underline]#*ЄДРПОУ*#;
+* *representative* -- для [.underline]#ознаки представника юридичної особи# (для отримувача послуг);
+* *subjectType* -- для [.underline]#типу суб'єкта# (для отримувача послуг):
+** `individual` -- [.underline]#фізична особа#;
+** `entrepreneur` -- [.underline]#ФОП#;
+** `legal` -- [.underline]#юридична особа#.
+
+Для показу імені поточного користувача в Кабінеті використовуються вбудовані властивості у профілі
+Keycloak для імені та прізвища. Ці атрибути необхідно додати при ручному створенні користувача-посадову особу. Для отримувача послуг вони створюються автоматично на базі атрибута `ПІБ`.
+
+.Атрибути в Keycloak для імені та прізвища користувача
+====
+* `*given_name*` - Ім'я користувача;
+* `*family_name*` - Прізвище користувача.
+====
+
+[NOTE]
+ Наразі атрибути профілю зберігаються у Keycloak без шифрування, котре буде додано у наступних версіях Платформи.
+
+==== Протокол-мапери Keycloak (Keycloak Protocol Mappers)
+
+Для того, щоб атрибути користувача стали доступні при формуванні токена чи відповіді, на API-метод `*/userinfo*`
+налаштовуються відповідні мапери у клієнтах *officer-portal* та *citizen-portal* на кожен атрибут профілю.
+Таблиця з маперами надана нижче.
+
+.Протокол-мапери Keycloak
+|===
+|Назва маперу |Тип маперу |Назва атрибута |Назва поля |Додати до Access Token |Додати до Userinfo |Профіль чиновника |Профіль людини
+
+|edrpou
+|User Attribute
+|edrpou
+|edrpou
+|так
+|так
+|так
+|так
+
+|drfo
+|User Attribute
+|drfo
+|drfo
+|так
+|так
+|так
+|так
+
+|fullName
+|User Attribute
+|fullName
+|fullName
+|так
+|так
+|так
+|так
+
+|representative
+|User Attribute
+|representative
+|representative
+|так
+|так
+|ні
+|так
+
+|subjectType
+|User Attribute
+|subjectType
+|subjectType
+|так
+|так
+|ні
+|так
+
+|family name
+|User Property
+|lastName
+|family_name
+|так
+|так
+|так
+|так
+
+|given name
+|User Property
+|firstName
+|given_name
+|так
+|так
+|так
+|так
+
+|===
+
+Мапери налаштовуються автоматично, при розгортанні системи з використанням https://github.com/epam/edp-keycloak-operator/tree/master#keycloak-operator[Keycloak Operator API], а
+саме створенням відповідного *KeycloakClient CR*.
+
+==== Атрибути профілю в Access Token
+
+Атрибути профілю користувача додаються до Access Token в процесі автентифікації та мають наступну
+структуру:
+
+[source, json]
+.Поля атрибутів в Access Token
+----
+{
+  "edrpou": "1110011000",
+  "drfo": "220011000",
+  "fullName": "Гупало Василь Миколайович",
+  "representative": true,
+  "subjectType": "individual"
+}
+----
+[NOTE]
+Структура токена у схемі спрощена та відображує лише атрибути профілю
+
+=== API для отримання профілю користувача
+Інформація про профіль користувача доступна за методом на Kong API Gateway. Всі операції вимагають
+аутентифікацію. Отримання налаштувань можливе лише для поточного користувача.
+
+*GET /userinfo*
+
+Приклад відповіді:
+[source, json]
+----
+{
+    "sub": "e9972cc8-53c5-4d50-ab5e-cd7d617d9180",
+    "email_verified": true,
+    "edrpou": "1110011000",
+    "roles": [
+        "officer"
+    ],
+    "drfo": "220011000",
+    "name": "Василь Гупало",
+    "fullName": "Гупало Василь Миколайович",
+    "preferred_username": "vasyl_gypalo",
+    "given_name": "Василь",
+    "family_name": "Гупало",
+    "email": "vasyl_gypalo@gov.ua",
+    "representative": true,
+    "subjectType": "individual"
+}
+----
+
+Цей метод використовується для відображення профілю користувача у кабінеті чиновника. Змінити
+профіль має можливість лише адміністратор доступу.
+
+[plantuml]
+----
+@startuml
+
+actor "Людина/Чиновник" as person
+participant "Кабінет людини/чиновника" as ui
+participant "Kong API Gateway" as kong
+participant "Keycloak" as keycloak
+
+person -> ui: Запит сторінки з профілем
+ui -> kong: Запит /userinfo\n(ідентифікатор сесії Kong)
+kong -> keycloak: Запит /userinfo\n(Access Token)
+keycloak --> kong: Профіль користувача
+kong --> ui: Профіль користувача
+ui --> person: Сторінка з профілем
+
+@enduml
+----
+
+[#jwt-token]
+== JWT-токен доступу користувача
+
+*JSON Web Token* -- це стандарт токена доступу на основі JSON. Токен використовується для передачі даних для аутентифікації користувачів. Токени створюються сервером, підписуються секретним ключем і передаються клієнту, який надалі використовує цей токен для підтвердження своєї особи. JWT стандартизовано в https://www.rfc-editor.org/rfc/rfc7519[RFC 7519].
+
+.Приклад JWT-токена (Base64Url)
+====
+----
+eyJhbGciOiJSUzI1NiIsInR5cCIgOiAiSldUIiwia2lkIiA6ICI5QWw3QlVTNFJJLXlKUlRSOFZuSF9ubzZvb3RNWThoYWZoVkVRRmJUZlhjIn0.ewogICJleHAiOiAxNjI4NTEyMjQxLAogICJpYXQiOiAxNjI4NTExOTQxLAogICJqdGkiOiAiM2ExNjRhOGQtOTJlOC00YzM3LTgwMTEtODM5ZjMyY2M0ZjBmIiwKICAiaXNzIjogImh0dHBzOi8va2V5Y2xvYWsucmVnaXN0cnktcGxhdGZvcm0uZ292LnVhL2F1dGgvcmVhbG1zL29mZmljZXItcG9ydGFsIiwKICAiYXVkIjogImFjY291bnQiLAogICJzdWIiOiAiMzgwYWQzZDYtZTcxZi00OTNhLTk0NDktMThjMGI5NGRhNWIwIiwKICAidHlwIjogIkJlYXJlciIsCiAgImF6cCI6ICJvZmZpY2VyLXBvcnRhbCIsCiAgInNlc3Npb25fc3RhdGUiOiAiNDgyMmE2ZTktMjRiOS00Nzc2LWI1NWItZDcxN2Y0ZWYzZjgyIiwKICAiYWNyIjogIjEiLAogICJhbGxvd2VkLW9yaWdpbnMiOiBbCiAgICAiaHR0cHM6Ly9rZXljbG9hay5yZWdpc3RyeS1wbGF0Zm9ybS5nb3YudWEiCiAgXSwKICAicmVhbG1fYWNjZXNzIjogewogICAgInJvbGVzIjogWwogICAgICAib2ZmaWNlciIsCiAgICAgICJvZmZsaW5lX2FjY2VzcyIsCiAgICAgICJ1bWFfYXV0aG9yaXphdGlvbiIKICAgIF0KICB9LAogICJyZXNvdXJjZV9hY2Nlc3MiOiB7CiAgICAiYWNjb3VudCI6IHsKICAgICAgInJvbGVzIjogWwogICAgICAgICJtYW5hZ2UtYWNjb3VudCIsCiAgICAgICAgIm1hbmFnZS1hY2NvdW50LWxpbmtzIiwKICAgICAgICAidmlldy1wcm9maWxlIgogICAgICBdCiAgICB9CiAgfSwKICAic2NvcGUiOiAicHJvZmlsZSBlbWFpbCIsCiAgImVtYWlsX3ZlcmlmaWVkIjogdHJ1ZSwKICAiZWRycG91IjogIjM0NTU0MzYyIiwKICAicm9sZXMiOiBbCiAgICAib2ZmaWNlciIsCiAgICAib2ZmbGluZV9hY2Nlc3MiLAogICAgInVtYV9hdXRob3JpemF0aW9uIgogIF0sCiAgIm5hbWUiOiAiYXV0b21hdGlvbiB1c2VyIiwKICAiZHJmbyI6ICIxMDEwMTAxMDE0IiwKICAiZnVsbE5hbWUiOiAi0KHQuNC00L7RgNC10L3QutC-INCS0LDRgdC40LvRjCDQm9C10L7QvdGW0LTQvtCy0LjRhyIsCiAgInByZWZlcnJlZF91c2VybmFtZSI6ICJhdXRvbWF0aW9uX3VzZXIiLAogICJnaXZlbl9uYW1lIjogImF1dG9tYXRpb24iLAogICJmYW1pbHlfbmFtZSI6ICJ1c2VyIiwKICAiZW1haWwiOiAiYXV0b21hdGlvbl91c2VyQGVwYW0uY29tIgp9.O4ByqtTh-n7708zAjFv7Lvs1SogWux4Hwwz_oPsfepcZ3iKaqPaaZUuw_exc4pAYIY4swXeUhm2GqhQFSYWGC6nK9HZloxuQboGy1SUAMvfmfSunNilUevjopBgCiOaCKuZPc5LC73Xegg9_zO9Nl0eFTSLA6_Wb-dFcGLBryYlXa-pmyOaLIecH4fGSugzTx-PDWLNF_tc1nyT7bQESThfnJl13qhQEC9zIr9_CRMCHKcwOpy33DrU2qkZpSql5YrneIVSP_jhwFUAMLtOAVOzNlJeL2HpFir6T3Ysf_orq848PsSuJKMLJTc52orrtSjmwGUJH62uDYAhCRgpRIg
+----
+====
+
+.Складові токена після розкодування
+====
+.Заголовок (Header)
+[source,json]
+----
+{
+  "alg": "RS256",
+  "typ": "JWT",
+  "kid": "9Al7BUS4RI-yJRTR8VnH_no6ootMY8hafhVEQFbTfXc"
+}
+----
+
+.Дані (Payload)
+[source,json]
+----
+{
+  "exp": 1628512241,
+  "iat": 1628511941,
+  "jti": "3a164a8d-92e8-4c37-8011-839f32cc4f0f",
+  "iss": "https://keycloak.registry-platform.gov.ua/auth/realms/officer-portal",
+  "aud": "account",
+  "sub": "380ad3d6-e71f-493a-9449-18c0b94da5b0",
+  "typ": "Bearer",
+  "azp": "officer-portal",
+  "session_state": "4822a6e9-24b9-4776-b55b-d717f4ef3f82",
+  "acr": "1",
+  "allowed-origins": [
+    "https://keycloak.registry-platform.gov.ua"
+  ],
+  "realm_access": {
+    "roles": [
+      "officer",
+      "offline_access",
+      "uma_authorization"
+    ]
+  },
+  "resource_access": {
+    "account": {
+      "roles": [
+        "manage-account",
+        "manage-account-links",
+        "view-profile"
+      ]
+    }
+  },
+  "scope": "profile email",
+  "email_verified": true,
+  "edrpou": "34554362",
+  "roles": [
+    "officer",
+    "offline_access",
+    "uma_authorization"
+  ],
+  "name": "automation user",
+  "drfo": "1010101014",
+  "fullName": "Сидоренко Василь Леонідович",
+  "preferred_username": "automation_user",
+  "given_name": "automation",
+  "family_name": "user",
+  "email": "automation_user@test.com"
+}
+----
+
+* `sub` - унікальний ідентифікатор користувача
+
+Окрім стандартних атрибутів (claims) токен також містить додаткові:
+
+* `edrpou` -- унікальний ідентифікаційний номер юридичної особи в Єдиному державному реєстрі підприємств та організацій України. Присутній лише у юридичних осіб. У випадку ФОП містить ДРФО.
+* `drfo` -- індивідуальний ідентифікаційний номер в Державному Реєстрі Фізичних Осіб - платників податків. Або серія і номер паспорта у разі відсутності у людини ідентифікаційного номера.
+* `fullName` - Повне ім'я користувача (ПІБ)
+====
+

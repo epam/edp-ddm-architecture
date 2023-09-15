@@ -1,0 +1,122 @@
+= Modeling UI forms using the web editor
+include::platform:ROOT:partial$templates/document-attributes/arch-set-en.adoc[]
+
+include::platform:ROOT:partial$admonitions/language-en.adoc[]
+
+== Functional scenarios
+
+- Create new UI form schemes.
+//- Створення нових схем UI-форм
+- Amend existing UI form schemes.
+//- Внесення змін до існуючих схем UI-форм
+- View the _JSON_ code for representation of UI form schemes.
+//- Перегляд _JSON_-коду представлення схем UI-форм
+
+== Key requirements
+
+- Provide the administrator with a single web interface for modeling UI forms of business processes.
+//- Надання адміністратору єдиного веб-інтерфейсу моделювання UI-форм бізнес-процесів
+- The web-based modeling interface must support localization.
+//- Веб-інтерфейс моделювання має підтримувати локалізацію
+- The web-based modeling interface must support themes and styles for complete integration into the interface _Registry regulations administration system_.
+//- Веб-інтерфейс моделювання має підтримувати темування та стилізацію задля цілісної інтеграції у інтерфейс _Системи адміністрування регламенту реєстру_
+- The web-based modeling interface must generate a _JSON_ code for UI form representation compatible with the current _Form.IO_ version.
+//- Веб-інтерфейс моделювання має генерувати _JSON_-код представлення UI-форм сумісний з поточною версією _Form.IO_
+
+== Technology stack
+
+|===
+|Technology / Library|Version|License|Documentation|Description
+//|Технологія / Бібліотека|Версія|Ліцензія|Документація|Опис
+
+|https://reactjs.org[ReactJS]
+|17.0.2
+|MIT
+|https://reactjs.org/docs/getting-started.html[]
+|The JavaScript library for building user interfaces
+//|JavaScript бібліотека для побудови інтерфейсів користувача
+
+|https://www.typescriptlang.org[TypeScript]
+|4.1.6
+|Apache-2.0
+|https://www.typescriptlang.org/docs/[]
+|Strongly typed programming language based on JavaScript
+//|Строго типізована мова програмування на базі JavaScript
+
+|https://formio.github.io/formio.js[formio.js]
+|4.13.12
+|MIT
+|https://github.com/formio/formio.js/wiki[]
+|The library for creating and displaying forms based on JSON schemes
+//|Бібліотека для створення та відображення форм на базі JSON схем
+
+|===
+
+== Support of themes and styles
+//== Підтримка темування та стилізації
+
+There are 3 approaches for implementation the form-modeler stylization:
+//Для виконання стилізації form-modeler є 3 підходи
+
+. *Stylization by adding _CSS_ styles.* It is suitable for simple non-interactive components. For example, "Button". It takes little time, but is very limited in its capabilities.
+//. *Стилізація шляхом додавання _CSS_ стилів.* Підходить для простих не інтерактивних компоненті. Наприклад "Button". Займає не багато часу, але дуже лімітований в своїх можливостях
+    . *Development of customized components.* It has no restrictions on the level of styling, since the component is created from scratch. In the case of interactive components with a lot of logic, it can be time-consuming. On the example of the form-modeler interface, _API_ _Formio_ does not allow stylizing its interface in parts. That means that to style it, you need to create the entire form-modeler from scratch.
+//. *Розробка кастомізованих компонентів.* Не має обмежень по рівню стилізації, так як компонент створюється з нуля. У випадку інтерактивних компонентів з великою кількістю логіки, може займати багато часу. На прикладні інтерфейсу form-modeler, _API_ _Formio_ не дозволяє стилізувати його інтерфейс частинами. Тобто для його стилізації потрібно повністю створити з нуля весь form-modeler
+. *Substitution of the builder component _HTML_ templates.* form-modeler consists of a large number of small templates, which is convenient for gradual stylization. The interface for adding Formio plugins allows you to substitute the _HTML_ templates used to build the form-modeler interface. To do this, it needs to pass the line from _HTML_ to the corresponding interface.
+//. *Підміна _HTML_ шаблонів компонентів білдера.* form-modeler складається з великої кількості дрібних шаблонів, що зручно для поступової стилізації. Інтерфейс додавання плагінів Formio дозволяє підміняти _HTML_ шаблони, які використовуються для побудови інтерфейсу form-modeler. Для цього йому необхідно передати строку с _HTML_ у відповідний інтерфейс.
++
+[source,javascript]
+----
+export default {
+  components: '...',
+  builders: {
+    webform: Builder
+  },
+  templates: {
+    bootstrap: {
+      builderSidebar: {
+        form: BuilderSidebarTemplate
+      },
+      dialog: {
+        form: BuilderDialogTemplate
+      }
+    }
+  }
+};
+----
+This approach, in turn, can also be divided into 2 approaches:
+//Цей підхід в свою чергу також можна розділити на 2 підходи:
+.. *Substitution of a template with the original modified one.* This approach is useful when you need to add your own _CSS_ class to an existing template, or make a minor modification of a template. Existing stylized components cannot be used. Theming is possible by using the _JSS_ styles at the _React_ level of the builder component.
+//.. *Підміна шаблону на оригінальний модифікований.* Цей підхід корисний, коли треба додати свій _CSS_ клас в існуючий шаблон, або зробити незначну модифікацію шаблону. Використання існуючих стилізованих компонентів неможливе. Темізація можлива за рахунок використання _JSS_ стилів на рівні  _React_ компонента білдера
+.. *Render _React_ into the line.* To support the use of the existing components and the mechanisms of styling and theming, the capability of _React_ to be rendered into a line was used, and then to be activated using the _hydrate_ mechanism (usually used for the _React_ server rendering). This approach fully supports existing stylized components and the existing theming mechanism. This approach can also be used partially, by rendering React without hydration. Such a mode can be useful if there is a need to stylize a template that does not have an interactive component (static _HTML_), and some of the content is filled with internal form-modeler mechanisms (as an example, the modal window for editing the properties of the _Formio_ component).
+//.. *Рендер _React_ в строку.* Для підтримки використання інсуючих компонентів, та механізмів стилізації і темування була використана можливість _React_ бути зрендереним в строку, а потім бути активованим через механізм _hydrate_ (зазвичай використовуються для серверного рендерингу _React_). Цей підхід повністю підтримує існуючі стилізовані компоненти та існуючий механізм темування. Також цей підхід можна використовувати частково, шляхом рендеру React без гідратації. Такий режим може бути корисний якщо є потреба стилізувати шаблон, який не має інтерактивної складової (статичний _HTML_), і частина контенту наповнюється внутрішніми механізмами form-modeler (як приклад модальне вікно редагування властивостей компонента _Formio_)
+
+== Localization support
+//== Підтримка локалізації
+
+[TIP]
+Describe the mechanism for implementation of the requirement.
+//Описати механізм реалізації вимоги
+
+== Modeling interface
+//== Інтерфейс моделювання
+
+[TIP]
+Add screens to the visualize modeling experience according to the functional scenarios.
+//Додати екрани для візуалізації досвіду моделювання згідно функціональних сценаріїв
+
+=== Creating and editing a form
+//=== Створення та редагування форми
+
+image:architecture/registry/administrative/regulation-management/admin-portal/forms/form-modeler-create.png[]
+
+=== Editing a form component
+//=== Редагування компонента форми
+
+image:architecture/registry/administrative/regulation-management/admin-portal/forms/form-modeler-edit-comp.png[]
+
+=== Viewinf the _JSON_ code for representing UI form schemes
+//=== Перегляд _JSON_-коду представлення схем UI-форм
+
+This is consideren in the separate task -- xref:architecture-workspace/research/admin-portal/json-editor-tech-evaluation.adoc[Analysis of JSON editors for compliance].
+//Розглядається в окремій задачі xref:architecture-workspace/research/admin-portal/json-editor-tech-evaluation.adoc[Аналіз JSON-редакторів на відповідність]

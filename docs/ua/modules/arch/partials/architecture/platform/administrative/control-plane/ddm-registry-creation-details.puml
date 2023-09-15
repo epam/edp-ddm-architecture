@@ -1,0 +1,101 @@
+@startuml
+actor "Адмінстратор реєстру" as registry_admin order 10
+participant "DDM CP App" as ddm_cp_app  order 20
+participant "Reconciler" as reconciler  order 30
+participant "Codebase operator" as codebase_operator  order 40
+participant "OKD project для DDM CP App" as okd_project_cp  order 50
+participant "DDM CP DB" as ddm_cp_db  order 60
+participant "Gerrit operator" as gerrit_operator  order 70
+participant "Gerrit" as gerrit  order 80
+participant "Jenkins operator" as jenkins_operator  order 90
+participant "Jenkins" as jenkins  order 100
+participant "OKD project для нового реєстру" as okd_project_cp_registry  order 110
+
+autonumber
+
+title Діаграма послідовностей по стовренню реєстру через DDM control plane
+
+group Ініціація створення реєстру
+  registry_admin -> ddm_cp_app: Заповнює форму для створення реєстра
+  activate ddm_cp_app
+    ddm_cp_app -> okd_project_cp: Зберігає EDP Codebase CR з інформацією про реєстр
+    ddm_cp_app -> okd_project_cp: Зберігає EDP CodebaseBranch CR дял master branch з інформацією про реєстр
+  return: підтвердження про створення реєстру
+end
+
+group Збереження даних до БД про створений реєстр
+  reconciler -> okd_project_cp: Зчитує оновлення EDP Codebase CR з інформацією про реєстр
+  activate reconciler
+    activate okd_project_cp
+    return:
+    activate ddm_cp_db
+      reconciler -> ddm_cp_db: Зберігає EDP Codebase CR з інформацією про реєстр до БД
+      reconciler <-- ddm_cp_db: підвердження про збереження даних у БД
+    deactivate ddm_cp_db
+  deactivate reconciler
+end
+
+group Створення реєстру
+  codebase_operator -> okd_project_cp: Зчитує оновлення EDP Codebase CR з інформацією про реєстр
+  activate codebase_operator
+    codebase_operator -> gerrit: Створює репозиторій registry-tenant-xxx
+    activate gerrit
+      codebase_operator -> gerrit: Клонує репозиторій згідно інструцій в EDP Codebase CR
+      codebase_operator -> gerrit: Пушить файли CreateRelease.groovy, Build.groovy, CodeReview.groovy, створює папку deploy-templates
+      codebase_operator <-- gerrit:
+    deactivate gerrit
+    codebase_operator -> okd_project_cp: Створює JenkinsFolder для Jenkins Job асоційованих з EDP Codebase CR
+    activate okd_project_cp
+    return
+  deactivate codebase_operator
+
+  jenkins_operator -> okd_project_cp: Зчитує оновлення JenkinsFolder
+  activate jenkins_operator
+    jenkins_operator -> jenkins: Запускає JobProvisioner згідно з інструкціями у JenkinsFolder
+    activate jenkins
+      jenkins -> jenkins: Створює Folder у Jenkins
+      jenkins -> jenkins: Створює CreateRelease Job у JenkinsFolder згідно логіки JobProvisioner, асоційований з CreateRelease.groovy
+      jenkins_operator <-- jenkins:
+    deactivate jenkins
+  deactivate jenkins_operator
+
+  codebase_operator -> okd_project_cp: Зчитує оновлення EDP CodebaseBranch CR
+  activate codebase_operator
+    codebase_operator -> jenkins: Запускає CreateRelease Job
+    activate jenkins
+      jenkins -> jenkins: Створює основний пайплайн для реєстру, асоційований з Build.groovy
+      jenkins -> jenkins: Запускає основний пайплайн для реєстру
+      jenkins -> okd_project_cp_registry: Створює реєстр
+      activate okd_project_cp_registry
+      return
+      codebase_operator <-- jenkins:
+    deactivate jenkins
+  deactivate codebase_operator
+
+
+end
+
+group Внесмення змін до конфігурації реєстру
+  registry_admin -> gerrit: Коміт зі змінами до репозиторіє registry-tenant-xxx
+  activate gerrit
+  jenkins -> gerrit: Реагує на зміну
+  deactivate gerrit
+  activate jenkins
+      jenkins -> jenkins: Запускає Jenkins Job Build.groovy
+      jenkins -> okd_project_cp_registry: Вносить змни до конфігурації
+      activate okd_project_cp_registry
+      return
+  deactivate jenkins
+end
+
+
+group Отримання списку створених реєстрів
+  registry_admin -> ddm_cp_app: Переглядає список створених реєстрів
+  activate ddm_cp_app
+    ddm_cp_app -> ddm_cp_db: select * from codebase where type='registry_tenant'
+    activate ddm_cp_db
+    return
+  return: список створенних реэстрыв
+end
+
+@enduml

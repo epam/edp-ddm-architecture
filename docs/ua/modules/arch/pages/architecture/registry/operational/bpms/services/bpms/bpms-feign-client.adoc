@@ -1,0 +1,119 @@
+= BPMS Feign клієнт
+
+== Ієрархія клієнтів
+
+Feign клієнти використовуются для простого доступу до ендпоінтів камунди -
+https://docs.camunda.org/manual/latest/reference/rest/[Camunda REST API]
+
+[plantuml,feign-client,svg]
+----
+@startuml
+interface BaseFeignClient  #back:lightblue;line:green;text:black
+interface CamundaTaskRestClient #back:lightblue;line:green;text:black
+interface HistoryTaskRestClient  #back:lightblue;line:green;text:black extends BaseFeignClient
+interface HistoryVariableInstanceClient  #back:lightblue;line:green;text:black extends BaseFeignClient
+interface ProcessInstanceHistoryRestClient  #back:lightblue;line:green;text:black extends BaseFeignClient
+interface ProcessDefinitionRestClient  #back:lightblue;line:green;text:black extends BaseFeignClient
+interface ProcessInstanceRestClient  #back:lightblue;line:green;text:black extends BaseFeignClient
+interface TaskPropertyRestClient  #back:lightblue;line:green;text:black
+interface StartFormRestClient #back:lightblue;line:green;text:black extends BaseFeignClient
+
+CamundaTaskRestClient -|> BaseFeignClient
+BaseFeignClient <|- TaskPropertyRestClient
+ProcessInstanceRestClient <-[hidden]- ProcessDefinitionRestClient
+HistoryTaskRestClient  --[hidden]> HistoryVariableInstanceClient
+@enduml
+----
+
+- `BaseFeignClient` - базовий клієнт з базовими налаштуваннями на error decoder
+- `TaskRestClient` - клієнт який надає доступ до ресурсу `/api/task` (задачі користувача)
+- `ProcessDefinitionRestClient` - клієнт який надає доступ до ресурсу `/api/process-definition` (бізнес-процеси)
+- `ProcessInstanceRestClient` - клієнт який надає доступ до ресурсу `/api/process-instance` (екземпляри бізнес-процесу)
+
+== Декодинг помилок
+
+Декодинг помилок в BPMS Feign клієнті виконуєься на базі аннотацій
+
+=== Ієрархія помилок
+
+[plantuml,feign-client-exception,svg]
+----
+@startuml
+class ValidationException #back:lightgreen;line:green;text:black extends RuntimeException
+class SystemException #back:lightgreen;line:green;text:black extends RuntimeException
+class RestSystemException #back:lightgreen;line:green;text:black extends SystemException
+
+class ClientValidationException #back:lightblue;line:green;text:black extends ValidationException
+
+class AuthenticationException #back:lightblue;line:green;text:black extends RestSystemException
+class AuthorizationException #back:lightblue;line:green;text:black extends RestSystemException
+class BadRequestException #back:lightblue;line:green;text:black extends RestSystemException
+class NotFoundException #back:lightblue;line:green;text:black extends RestSystemException
+class CamundaCommunicationException #back:lightblue;line:green;text:black extends RestSystemException
+class InternalServerErrorException #back:lightblue;line:green;text:black extends RestSystemException
+
+class ProcessDefinitionNotFoundException #back:lightblue;line:green;text:black extends NotFoundException
+class ProcessInstanceNotFoundException #back:lightblue;line:green;text:black extends NotFoundException
+class ProcessInstanceVariableNotFoundException #back:lightblue;line:green;text:black extends NotFoundException
+class TaskNotFoundException #back:lightblue;line:green;text:black extends NotFoundException
+@enduml
+----
+
+- `ValidationException`, `SystemException` і `RestSystemException` - базові виключення з ddm-actuator-error-handling
+- `RestSystemException` містить httpStatus для exception handling на рівні користувача клієнту
+
+.Декодинг HTTP статусів на виключення
+- 400 -> `BadRequestException`
+- 401 -> `AuthenticationException`
+- 403 -> `AuthorizationException`
+- 404 -> `NotFoundException`
+* process-definition 404 -> `ProcessDefinitionNotFoundException`
+* process-instance 404 -> `ProcessInstanceNotFoundException`
+* process-instance/variable 404 -> `ProcessInstanceVariableNotFoundException`
+* task 404 -> `TaskNotFoundException`
+- 422 -> `ClientValidationException`
+- 500 -> `InternalServerErrorException`
+- 502, 503, 504 -> `CamundaCommunicationException`
+
+=== Реалізація декодингу помилок
+
+[plantuml,feign-client-decoder,svg]
+----
+@startuml
+interface Decoder {
+  decode()
+}
+
+class BpmsResponseDecoder #back:lightblue;line:green;text:black implements Decoder {
+  decode()
+}
+
+interface ErrorDecoder {
+  decode()
+}
+
+class BpmsAnnotationErrorDecoder #back:lightblue;line:green;text:black implements ErrorDecoder {
+  List<BaseFeignClients> clients
+  decode()
+}
+
+class AnnotationErrorDecoder implements ErrorDecoder {
+  decode()
+}
+
+class BaseFeignClient #back:lightblue;line:green;text:black
+
+Decoder <-- AnnotationErrorDecoder : uses as default response decoder
+ErrorDecoder <-- AnnotationErrorDecoder : uses as default error decoder
+AnnotationErrorDecoder <-- BpmsAnnotationErrorDecoder : creates
+BpmsAnnotationErrorDecoder o- BpmsResponseDecoder
+BaseFeignClient -o BpmsAnnotationErrorDecoder
+@enduml
+----
+
+- `BpmsResponseDecoder` - перевантажує метод `decode` для того щоб на 404 відповідь повертати розшифровану відповідь замість пустої
+- `BpmsAnnotationErrorDecoder` - містить в собі список всіх клієнтів для того, щоб згенерувати список `AnnotationErrorDecoder` та зформувати з них ланцюг з `ErrorDecoder` за замовчуванням в кінці (який повертає `FeignException`).
+Таким чином якщо у нас 2 клієнти `Client1`, `Client2` та `Client3` то збудований ланцюг буде такий:
+. `Сlient3Decoder` з `Сlient2Decoder` як декодер помилок за замовчуванням
+. `Сlient2Decoder` з `Сlient1Decoder` як декодер помилок за замовчуванням
+. `Сlient1Decoder` з `DefaultErrorDecoder` як декодер помилок за замовчуванням

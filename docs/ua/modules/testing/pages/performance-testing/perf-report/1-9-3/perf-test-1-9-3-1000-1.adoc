@@ -1,0 +1,489 @@
+:toc-title: ЗМІСТ
+:toc: auto
+:toclevels: 5
+:experimental:
+:important-caption:     ВАЖЛИВО
+:note-caption:          ПРИМІТКА
+:tip-caption:           РЕСУРС
+:warning-caption:       ПОПЕРЕДЖЕННЯ
+:caution-caption:       УВАГА
+:example-caption:           Приклад
+:figure-caption:            Зображення
+:table-caption:             Таблиця
+:appendix-caption:          Додаток
+:sectnums:
+:sectnumlevels: 5
+:sectanchors:
+:sectlinks:
+
+= Тестування продуктивності Платформи 1.9.3 при навантаженні 1000 користувачів на 1 годину
+
+Тестування продуктивності Платформи проводиться на базі потужностей «EPAM» під конкретний реліз із використанням попередньо визначеної конфігурації кластера Openshift для 1-го розгорнутого реєстру із 1000-ма активними користувачами при плановому повному навантаженні в робочий час.
+
+== Конфігурація кластера Openshift на базі інфраструктури «EPAM»
+
+Конфігурація кластера *Openshift* на базі інфраструктури «EPAM» наведена нижче в таблиці та подана у розрізі за типом пристроїв та їх призначенням.
+
+.Типи пристроїв та їх призначення
+[width="99%",cols="23%,11%,8%,34%,7%,6%,11%",options="header",]
+|===
+|*Пристрій* |*Кількість* |*ОС* |*Призначення* |*vCPU* |*RAM (GB)* |*Сховище*
+|Ceph |3 |Fedora |Функціонування об'єктного сховища Ceph |16 |128 |642 GB x3
+|Control plane |3 |Fedora |Функціонування панелі управління Openshift |8 |64 a|
+212 Gb
+
+280 GB
+
+295 Gb
+
+|Infra Nodes |3 |Fedora |Функціонування централізованих сервісів Платформи |4 |32 |80 GB x3
+|Logging |3 |Fedora |Функціонування сховища логів ElasticSearch |8 |32 |453 GB x3
+a|
+Registry Node
+
+(r5.2xlarge)
+
+|8 |Fedora |Функціонування сервісів реєстру |8 |32 |80 GB x4
+|Load generator – perf-testing |1 |Ubuntu |Запуск JMeter |4 |32 |50 GB
+|Vault |1 |Ubuntu |Менеджмент секретів |1 |1 |18 GB
+|Minio |1 |Ubuntu |Об'єктне сховище |1 |1 |308 GB
+|===
+
+
+== Результати запуску тестів навантаження
+
+=== Умови виконання тесту
+
+.Умови виконання тесту
+[width="100%",cols="51%,49%",options="header",]
+|===
+|*Умова* |*Метрика*
+|Кількість користувачів (осіб) |1000
+|Час виконання (години) |1
+|Оточення (інфраструктура) |AWS
+|Кількість реєстрів (шт.) |1
+|Вебпортал, що перевіряється |Officer-portal
+|===
+
+=== Конфігурація Реєстру
+
+.Конфігурація реєстру
+[width="100%",cols="72%,28%",options="header",]
+|===
+|Admin portal/Officer portal/Citizen portal |1 instance
+|BPMS |3 instances
+|BP WS gateway |1 instance
+|BP admin portal |1 instance
+|DB/DB read replica |1 instance
+|Digital document service |1 instance
+|Digital signature service |2 instances
+|Excerpt services |1 instance
+|Form schema provider |2 instances
+|Form schema validator |2 instances
+|Istio gateway |1 instance
+|Infra (jenkins/gerrit/nexus etc.) |1 instance
+|Kafka cluster services |1 instance
+|Kafka cluster nodes |1 instance
+|Kong |2 instance
+|Language server |1 instance
+|Process history rest api |2 instances
+|Process history persistence service |1 instance
+|Redash services |1 instance
+|Registry rest api |3 instances
+|Registry kafka api |3 instances
+|Redis rfr (1000m) |2 instances
+|Redis rfs |3 instances
+|User settings rest api |1 instance
+|User task management |2 instances
+|User process management |2 instances
+|===
+
+=== Загальний опис виконання запитів з Carrier
+
+[TIP]
+====
+URL запита: +
+`https://public.getcarrier.io/report/backend?report_id=1970`
+====
+
+.Загальні характеристики сценарію
+image::testing:perf-test/1-9-3/1000-1/img-1.png[]
+
+.Основний графік виконання
+image::testing:perf-test/1-9-3/1000-1/img-2.png[]
+
+.Графік кількості запитів за одиницю часу
+image::testing:perf-test/1-9-3/1000-1/img-3.png[]
+
+=== Таблиця параметрів за кожним типом запитів
+
+.Параметри за кожним типом запитів
+[width="99%",cols="35%,9%,11%,10%,7%,10%,8%,10%",options="header",]
+|===
+|Назва (*NAME*) |Кількість запитів (*TTL REQ, COUNT*) |Пропускна здатність, кількість запитів/с (*THRGHPT, REQ/SEC*) |Кількість помилок (*ERRORS, COUNT*) |Найменша кількість часу на запит (*MIN, MS*) |Середнє значення, час на запит (*MEDIAN, MS*) |95-й процентиль (*PCT95, MS*) |Найбільша кількість часу на запит (*MAX, MS*)
+|add_lab_form |2931 |0.834 |0 |8 |12 |46 |597
+|start_update_personnel_task |2657 |0.756 |0 |28 |42 |118 |576
+|start_update_lab_task |2775 |0.79 |0 |479 |785 |1510 |3379
+|start_update_chem_dict_task |2483 |0.707 |0 |108 |186 |393 |1458
+|start_search_task |14109 |4.015 |0 |7 |11 |52 |1132
+|start_read_personnel_task |2000 |0.569 |0 |27 |45 |130 |896
+|start_add_personnel_task |2657 |0.756 |0 |63 |95 |223 |829
+|start_add_lab_task |2931 |0.834 |0 |196 |308 |615 |2285
+|start_add_bio_phys_labor_factors_task |4671 |1.329 |0 |38 |61 |163 |949
+|sign |23117 |6.579 |0 |452 |729 |1106 |22735
+|shared_view_lab_form |4775 |1.359 |0 |61 |223 |537 |2084
+|shared_add_application |6677 |1.9 |0 |78 |142 |306 |1652
+|home_page |3000 |0.854 |0 |58 |89 |247 |956
+|complete_update_personnel_task |2657 |0.756 |0 |192 |321 |655 |2240
+|complete_update_lab_task |2775 |0.79 |0 |497 |812 |1457 |3650
+|complete_update_chem_dict_task |2483 |0.707 |0 |200 |327 |674 |2329
+|complete_search_task |14109 |4.015 |0 |86 |205 |385 |1760
+|complete_read_personnel_task |2000 |0.569 |0 |210 |382 |696 |1864
+|complete_read_lab_task |2000 |0.569 |0 |221 |386 |696 |2937
+|complete_letter_data_task |6677 |1.9 |0 |186 |341 |687 |2378
+|complete_decision_include_task |4671 |1.329 |0 |178 |307 |621 |2138
+|complete_create_app_primary_task |2441 |0.695 |0 |152 |250 |514 |1948
+|complete_create_app_expanse_task |2230 |0.635 |0 |151 |258 |533 |2110
+|complete_create_app_exclude_task |2006 |0.571 |0 |193 |338 |687 |2103
+|complete_create_app_exclude_decision_task |2006 |0.571 |0 |179 |324 |653 |2097
+|complete_create_app_exclude_check_task |2006 |0.571 |0 |196 |324 |652 |2160
+|complete_check_complience_task |4671 |1.329 |0 |191 |405 |936 |2302
+|complete_add_personnel_task |2657 |0.756 |0 |206 |333 |627 |2098
+|complete_add_lab_task |2931 |0.834 |0 |338 |538 |957 |2504
+|complete_add_factors_task |4671 |1.329 |0 |144 |298 |631 |1978
+|update_chem_dict |2483 |0.707 |0 |46 |87 |190 |1205
+|start-with-form |24650 |7.015 |0 |86 |190 |370 |2838
+|post_sign_form |23117 |6.579 |0 |409 |665 |993 |22550
+|complete_task |49174 |13.994 |0 |111 |222 |456 |2694
+|complete |2483 |0.707 |0 |118 |197 |428 |1630
+|user_info |29053 |8.268 |0 |6 |15 |76 |1027
+|update-personnel-bp-update-personnel-form |2657 |0.756 |0 |9 |14 |38 |720
+|tasks_count |7000 |1.992 |0 |16 |25 |80 |617
+|tasks |101891 |28.996 |0 |19 |31 |92 |1144
+|task |100688 |28.653 |0 |15 |42 |119 |1684
+|subject_form |2953 |0.84 |0 |10 |18 |60 |407
+|start_task |24650 |7.015 |0 |17 |27 |86 |1004
+|sign_form |23117 |6.579 |0 |2 |15 |70 |785
+|shared_view_lab_form |14227 |4.049 |0 |2 |11 |34 |819
+|shared_letter_data_form |6677 |1.9 |0 |2 |10 |33 |999
+|shared_decision_include_form |4671 |1.329 |0 |8 |11 |36 |834
+|shared_add_bio_phys_labor_factors_form |4671 |1.329 |0 |8 |12 |40 |537
+|search_lab_form |18766 |5.34 |0 |7 |11 |53 |1132
+|refusal_reason |82783 |23.558 |0 |7 |11 |54 |813
+|read-personnel-bp-read-personnel-form |2000 |0.569 |0 |10 |14 |46 |598
+|process_definition_count |3000 |0.854 |0 |16 |24 |79 |855
+|process_definition |3000 |0.854 |0 |23 |35 |99 |815
+|post_login_data |3000 |0.854 |0 |100 |129 |329 |1238
+|new_task_history |2797 |0.796 |0 |11 |17 |64 |817
+|new_process_instance_history |2797 |0.796 |0 |9 |15 |63 |641
+|new_process_instance_count |3000 |0.854 |0 |11 |25 |76 |326
+|new_process_instance |2797 |0.796 |0 |9 |14 |62 |398
+|logout |2000 |0.569 |0 |15 |25 |167 |984
+|login_page |3000 |0.854 |0 |2 |4 |29 |2718
+|home_page |3000 |0.854 |0 |10 |15 |77 |598
+|get_staff_status_list |7314 |2.081 |0 |7 |11 |51 |412
+|get_staff_list |4657 |1.325 |0 |7 |11 |56 |603
+|get_research_list |7314 |2.081 |0 |7 |11 |41 |620
+|get_region_list |36543 |10.399 |0 |11 |19 |59 |1143
+|get_phys_factors_list |4671 |1.329 |0 |7 |12 |53 |703
+|get_pesticides_list |4671 |1.329 |0 |7 |13 |63 |585
+|get_ownership_list |42093 |11.979 |0 |7 |11 |41 |688
+|get_labour_factors_list |4671 |1.329 |0 |7 |12 |51 |645
+|get_laboratory_list |18766 |5.34 |0 |8 |13 |52 |891
+|get_kopfg_list |47639 |13.557 |0 |8 |12 |42 |827
+|get_city_list |42093 |11.979 |0 |19 |38 |92 |956
+|get_chemical_obrb_factors_list |4671 |1.329 |0 |8 |13 |60 |1126
+|get_chemical_hygiene_factors_list |4671 |1.329 |0 |9 |14 |62 |677
+|get_chemical_host_factors_list |4671 |1.329 |0 |9 |32 |122 |1061
+|get_chemical_arbitrary_factors_list |4671 |1.329 |0 |8 |13 |62 |1039
+|get_bio_factors_list |4671 |1.329 |0 |8 |13 |56 |754
+|create_app_exclude_add_decision_exclude_form |2006 |0.571 |0 |2 |4 |23 |100
+|chem_dict_form |2483 |0.707 |0 |7 |10 |34 |615
+|check_complience_form |4671 |1.329 |0 |7 |11 |42 |578
+|app_exclude_check_form |2006 |0.571 |0 |2 |4 |28 |188
+|add_personnel_form |2657 |0.756 |0 |9 |14 |41 |706
+|add_lab_form_key |2931 |0.834 |0 |7 |10 |39 |540
+|===
+
+=== Використання ресурсів
+
+.Використання ЦП (CPU)
+image::testing:perf-test/1-9-3/1000-1/img-4.png[]
+
+.Використання пам'яті
+image::testing:perf-test/1-9-3/1000-1/img-5.png[]
+
+.Використання мережі
+image::testing:perf-test/1-9-3/1000-1/img-6.png[]
+
+=== Таблиця використання ЦП по кожному сервісу
+
+.Використання ЦП по кожному сервісу
+[width="100%",cols="30%,14%,14%,14%,14%,14%",options="header",]
+|===
+|Пода (Pod) |Використання ЦП (CPU Usage) |Запити ЦП (CPU Requests) |Запити ЦП, % (CPU Requests, %) |Ліміти ЦП (CPU Limits) |Ліміти ЦП, % (CPU Limits, %)
+|admin-portal-565fdb8978-b4bt5 |0.00 |0.10 |0.03% |0.10 |0.03%
+|analytical-instance1-2ht4-0 |0.01 |- |- |- |-
+|bp-webservice-gateway-764767899d-p7f79 |0.01 |0.85 |1.25% |0.85 |1.25%
+|bpms-775f84f44d-8gpjm |0.12 |1.35 |8.89% |1.35 |8.89%
+|bpms-775f84f44d-ldr7q |0.17 |1.35 |12.71% |1.35 |12.71%
+|bpms-775f84f44d-tp55w |0.11 |1.35 |8.01% |1.35 |8.01%
+|business-process-administration-portal-b59bf4989-b25jg |0.00 |0.50 |0.21% |0.50 |0.21%
+|citizen-portal-599ccc6555-5brjl |0.00 |0.10 |0.03% |0.10 |0.03%
+|codebase-operator-69d446fd84-z4qvd |0.00 |- |- |- |-
+|ddm-language-server-5c666c7bb8-6cjjs |0.00 |0.35 |0.91% |0.35 |0.91%
+|ddm-notification-service-7fbb4f7676-ljwzh |0.01 |0.35 |2.16% |0.35 |2.16%
+|digital-document-service-8559cd76bd-k57vp |0.05 |0.85 |6.20% |0.85 |6.20%
+|digital-signature-ops-5996ff5999-4dfb9 |0.03 |1.35 |2.52% |1.35 |2.52%
+|digital-signature-ops-5996ff5999-p9wtw |0.03 |1.35 |2.39% |1.35 |2.39%
+|excerpt-service-api-deployment-669b68f859-srr86 |0.00 |0.75 |0.52% |0.75 |0.52%
+|excerpt-worker-csv-deployment-f98bb9fdc-jrwwp |0.01 |0.75 |0.80% |0.75 |0.80%
+|excerpt-worker-deployment-574f7dc948-wr8cw |0.01 |0.75 |0.78% |0.75 |0.78%
+|excerpt-worker-docx-deployment-8c74f6d45-ppqf9 |0.00 |0.75 |0.66% |0.75 |0.66%
+|external-secrets-c6b9cf84f-6jk89 |0.00 |- |- |- |-
+|form-schema-provider-deployment-7858985965-7nj8c |0.04 |0.35 |11.03% |0.35 |11.03%
+|form-schema-provider-deployment-7858985965-f6gsr |0.03 |0.35 |8.14% |0.35 |8.14%
+|form-submission-validation-5bfbd9946d-qkwt6 |0.14 |0.35 |40.05% |0.35 |40.05%
+|form-submission-validation-5bfbd9946d-tfr98 |0.08 |0.35 |23.19% |0.35 |23.19%
+|gerrit-b5679cfd-rvk4d |0.00 |- |- |- |-
+|gerrit-operator-67b47bcff5-wt262 |0.00 |- |- |- |-
+|hashicorp-vault-0 |0.02 |- |- |- |-
+|istio-ingressgateway-perf-08-main-75b6d9cbc9-lrns8 |0.02 |0.10 |18.34% |2.00 |0.92%
+|jenkins-5b69d4b6b9-fnlsx |0.04 |- |- |- |-
+|jenkins-operator-6c46d867fd-w6mcs |0.03 |- |- |- |-
+|kafka-cluster-entity-operator-576bc8d75d-wfrcj |0.02 |- |- |- |-
+|kafka-cluster-kafka-0 |0.84 |1.00 |84.23% |2.00 |42.11%
+|kafka-cluster-kafka-1 |0.65 |1.00 |65.42% |2.00 |32.71%
+|kafka-cluster-kafka-2 |1.26 |1.00 |125.54% |2.00 |62.77%
+|kafka-cluster-kafka-exporter-65db9f958d-ll2mj |0.01 |- |- |- |-
+|kafka-cluster-zookeeper-0 |0.01 |0.50 |2.31% |1.00 |1.16%
+|kafka-cluster-zookeeper-1 |0.01 |0.50 |2.29% |1.00 |1.15%
+|kafka-cluster-zookeeper-2 |0.01 |0.50 |2.09% |1.00 |1.04%
+|kafka-connect-cluster-connect-7db74c457b-gjxcf |0.05 |- |- |- |-
+|kafka-schema-registry-59dc694687-642b5 |0.00 |- |- |- |-
+|keycloak-operator-78f5f6b7fb-hcb9h |0.00 |- |- |- |-
+|kong-admin-tools-kong-admin-tools-6dbf744c55-l5kwz |0.01 |0.90 |1.51% |0.90 |1.51%
+|kong-kong-5b8bd47f56-r48f6 |0.06 |0.90 |6.31% |0.90 |6.31%
+|kong-kong-5b8bd47f56-s9pcx |0.09 |0.90 |9.82% |0.90 |9.82%
+|nexus-97ffdbd67-689b2 |0.00 |- |- |- |-
+|nexus-operator-569bfff8cc-p55wk |0.00 |- |- |- |-
+|officer-portal-7997ff6bb9-pglff |0.00 |0.10 |0.04% |0.10 |0.04%
+|operational-instance1-7rbk-0 |0.36 |- |- |- |-
+|operational-pool-bc5dfd58f-jk2lk |0.18 |- |- |- |-
+|platform-gateway-deployment-598c679ff9-hjhrb |0.00 |0.75 |0.48% |0.75 |0.48%
+|process-history-service-api-deployment-8f47d958d-9trw8 |0.00 |0.75 |0.57% |0.75 |0.57%
+|process-history-service-api-deployment-8f47d958d-q68tq |0.00 |0.75 |0.37% |0.75 |0.37%
+|process-history-service-persistence-deployment-c6dcdf59d-lkwvx |0.38 |0.75 |50.75% |0.75 |50.75%
+|redash-exporter-786f47b89f-52df2 |0.00 |- |- |- |-
+|redash-viewer-6f479fdd7f-8zpvl |0.00 |1.00 |0.15% |1.00 |0.15%
+|redash-viewer-adhocworker-68b569f969-cthgf |0.00 |- |- |- |-
+|redash-viewer-postgresql-0 |0.00 |0.25 |1.45% |- |-
+|redash-viewer-redis-master-0 |0.01 |- |- |- |-
+|redash-viewer-scheduler-7b67c9d6d6-wphcl |0.00 |- |- |- |-
+|registry-kafka-api-deployment-68f99f68d7-n6pgv |0.02 |1.35 |1.53% |1.35 |1.53%
+|registry-kafka-api-deployment-68f99f68d7-nwc8w |0.04 |1.35 |3.06% |1.35 |3.06%
+|registry-kafka-api-deployment-68f99f68d7-xv9f9 |0.04 |1.35 |3.16% |1.35 |3.16%
+|registry-regulation-management-deployment-6fc95c99f8-pr4bg |0.00 |0.35 |1.26% |0.35 |1.26%
+|registry-rest-api-deployment-79f65fbf76-8clfl |0.04 |1.35 |2.95% |1.35 |2.95%
+|registry-rest-api-deployment-79f65fbf76-9sgn4 |0.03 |1.35 |2.44% |1.35 |2.44%
+|registry-rest-api-deployment-79f65fbf76-mnwzn |0.03 |1.35 |2.44% |1.35 |2.44%
+|report-exporter-deployment-5756454fb6-c5vxf |0.00 |0.35 |1.05% |0.35 |1.05%
+|rfr-redis-sentinel-0 |0.02 |1.02 |1.49% |1.05 |1.46%
+|rfr-redis-sentinel-1 |0.01 |1.02 |0.69% |1.05 |0.68%
+|rfs-redis-sentinel-764cb9ff7d-cffdv |0.01 |0.73 |1.33% |0.75 |1.28%
+|rfs-redis-sentinel-764cb9ff7d-l97x5 |0.00 |0.73 |0.46% |0.75 |0.45%
+|rfs-redis-sentinel-764cb9ff7d-vpm5d |0.01 |0.73 |0.93% |0.75 |0.90%
+|user-process-management-7bd6858c4-4snn5 |0.00 |0.85 |0.42% |0.85 |0.42%
+|user-process-management-7bd6858c4-h6scn |0.00 |0.85 |0.48% |0.85 |0.48%
+|user-settings-service-api-deployment-6c586575c-j5zg8 |0.00 |0.75 |0.51% |0.75 |0.51%
+|user-task-management-6964d74f6c-dl52l |0.09 |0.85 |11.12% |0.85 |11.12%
+|user-task-management-6964d74f6c-xpt75 |0.07 |0.85 |8.63% |0.85 |8.63%
+|===
+
+=== Таблиця використання пам'яті по кожному сервісу
+
+.Використання пам'яті по кожному сервісу
+[width="100%",cols="25%,9%,10%,11%,10%,10%,9%,9%,7%",options="header",]
+|===
+|Pod (Пода) |Використання пам'яті (Memory Usage) |Запити пам'яті (Memory Requests) |Запити пам'яті, % (Memory Requests, %) |Ліміти пам'яті (Memory Limits) |Ліміти пам'яті, % (Memory Limits, %) |Використання пам'яті, RSS (Memory Usage, RSS) |Використання пам'яті, Кеш (Memory Usage, Cache) |Використання пам'яті, Swap (Memory Usage, Swap)
+|admin-portal-565fdb8978-b4bt5 |1.89 MiB |256.00 MiB |0.74% |256.00 MiB |0.74% |1.48 MiB |12.00 KiB |0 B
+|analytical-instance1-2ht4-0 |430.12 MiB |- |- |- |- |43.64 MiB |463.10 MiB |0 B
+|bp-webservice-gateway-764767899d-p7f79 |551.81 MiB |896.00 MiB |61.59% |896.00 MiB |61.59% |546.36 MiB |52.00 KiB |0 B
+|bpms-775f84f44d-8gpjm |1.31 GiB |2.13 GiB |61.79% |2.13 GiB |61.79% |1.30 GiB |52.00 KiB |0 B
+|bpms-775f84f44d-ldr7q |1.28 GiB |2.13 GiB |60.45% |2.13 GiB |60.45% |1.27 GiB |52.00 KiB |0 B
+|bpms-775f84f44d-tp55w |1.29 GiB |2.13 GiB |60.58% |2.13 GiB |60.58% |1.28 GiB |52.00 KiB |0 B
+|business-process-administration-portal-b59bf4989-b25jg |581.45 MiB |768.00 MiB |75.71% |768.00 MiB |75.71% |578.52 MiB |32.00 KiB |0 B
+|citizen-portal-599ccc6555-5brjl |1.87 MiB |256.00 MiB |0.73% |256.00 MiB |0.73% |1.48 MiB |12.00 KiB |0 B
+|codebase-operator-69d446fd84-z4qvd |35.84 MiB |- |- |- |- |33.05 MiB |4.00 KiB |0 B
+|ddm-language-server-5c666c7bb8-6cjjs |1.13 GiB |1.13 GiB |100.82% |128.00 MiB |907.37% |1.13 GiB |52.00 KiB |0 B
+|ddm-notification-service-7fbb4f7676-ljwzh |1.36 GiB |128.00 MiB |1086.33% |128.00 MiB |1086.33% |1.35 GiB |52.00 KiB |0 B
+|digital-document-service-8559cd76bd-k57vp |537.16 MiB |896.00 MiB |59.95% |896.00 MiB |59.95% |532.02 MiB |52.00 KiB |0 B
+|digital-signature-ops-5996ff5999-4dfb9 |800.66 MiB |1.13 GiB |69.50% |1.13 GiB |69.50% |794.74 MiB |21.26 MiB |0 B
+|digital-signature-ops-5996ff5999-p9wtw |805.89 MiB |1.13 GiB |69.96% |1.13 GiB |69.96% |800.04 MiB |21.26 MiB |0 B
+|excerpt-service-api-deployment-669b68f859-srr86 |720.46 MiB |928.00 MiB |77.64% |928.00 MiB |77.64% |713.43 MiB |52.00 KiB |0 B
+|excerpt-worker-csv-deployment-f98bb9fdc-jrwwp |673.24 MiB |928.00 MiB |72.55% |928.00 MiB |72.55% |666.61 MiB |52.00 KiB |0 B
+|excerpt-worker-deployment-574f7dc948-wr8cw |679.68 MiB |928.00 MiB |73.24% |928.00 MiB |73.24% |672.95 MiB |52.00 KiB |0 B
+|excerpt-worker-docx-deployment-8c74f6d45-ppqf9 |673.40 MiB |928.00 MiB |72.56% |928.00 MiB |72.56% |666.79 MiB |52.00 KiB |0 B
+|external-secrets-c6b9cf84f-6jk89 |31.96 MiB |- |- |- |- |31.08 MiB |0 B |0 B
+|form-schema-provider-deployment-7858985965-7nj8c |547.03 MiB |628.00 MiB |87.11% |128.00 MiB |427.37% |540.66 MiB |52.00 KiB |0 B
+|form-schema-provider-deployment-7858985965-f6gsr |560.05 MiB |628.00 MiB |89.18% |128.00 MiB |437.54% |553.75 MiB |52.00 KiB |0 B
+|form-submission-validation-5bfbd9946d-qkwt6 |226.27 MiB |128.00 MiB |176.78% |128.00 MiB |176.78% |226.33 MiB |20.00 KiB |0 B
+|form-submission-validation-5bfbd9946d-tfr98 |222.06 MiB |128.00 MiB |173.48% |128.00 MiB |173.48% |226.68 MiB |28.00 KiB |0 B
+|gerrit-b5679cfd-rvk4d |539.72 MiB |- |- |- |- |506.48 MiB |121.57 MiB |0 B
+|gerrit-operator-67b47bcff5-wt262 |39.11 MiB |- |- |- |- |38.29 MiB |0 B |0 B
+|hashicorp-vault-0 |23.14 MiB |- |- |- |- |21.70 MiB |352.00 KiB |0 B
+|istio-ingressgateway-perf-08-main-75b6d9cbc9-lrns8 |104.73 MiB |128.00 MiB |81.82% |1.00 GiB |10.23% |101.35 MiB |99.64 MiB |0 B
+|jenkins-5b69d4b6b9-fnlsx |2.65 GiB |500.00 MiB |542.55% |- |- |2.46 GiB |629.73 MiB |0 B
+|jenkins-operator-6c46d867fd-w6mcs |25.25 MiB |- |- |- |- |24.08 MiB |0 B |0 B
+|kafka-cluster-entity-operator-576bc8d75d-wfrcj |703.05 MiB |- |- |- |- |695.08 MiB |84.00 KiB |0 B
+|kafka-cluster-kafka-0 |2.59 GiB |2.00 GiB |129.69% |4.00 GiB |64.85% |2.11 GiB |1.45 GiB |0 B
+|kafka-cluster-kafka-1 |2.58 GiB |2.00 GiB |128.96% |4.00 GiB |64.48% |2.15 GiB |1.24 GiB |0 B
+|kafka-cluster-kafka-2 |2.54 GiB |2.00 GiB |127.16% |4.00 GiB |63.58% |2.10 GiB |1.24 GiB |0 B
+|kafka-cluster-kafka-exporter-65db9f958d-ll2mj |15.69 MiB |- |- |- |- |14.75 MiB |8.00 KiB |0 B
+|kafka-cluster-zookeeper-0 |233.45 MiB |512.00 MiB |45.59% |1.00 GiB |22.80% |229.75 MiB |552.00 KiB |0 B
+|kafka-cluster-zookeeper-1 |273.16 MiB |512.00 MiB |53.35% |1.00 GiB |26.68% |269.30 MiB |552.00 KiB |0 B
+|kafka-cluster-zookeeper-2 |237.28 MiB |512.00 MiB |46.34% |1.00 GiB |23.17% |233.59 MiB |556.00 KiB |0 B
+|kafka-connect-cluster-connect-7db74c457b-gjxcf |1.23 GiB |- |- |- |- |1.22 GiB |36.00 KiB |0 B
+|kafka-schema-registry-59dc694687-642b5 |389.48 MiB |- |- |- |- |384.59 MiB |44.00 KiB |0 B
+|keycloak-operator-78f5f6b7fb-hcb9h |33.70 MiB |- |- |- |- |29.45 MiB |0 B |0 B
+|kong-admin-tools-kong-admin-tools-6dbf744c55-l5kwz |514.70 MiB |1.50 GiB |33.51% |1.50 GiB |33.51% |496.43 MiB |3.61 MiB |0 B
+|kong-kong-5b8bd47f56-r48f6 |537.79 MiB |1.50 GiB |35.01% |1.50 GiB |35.01% |511.04 MiB |5.98 MiB |0 B
+|kong-kong-5b8bd47f56-s9pcx |526.19 MiB |1.50 GiB |34.26% |1.50 GiB |34.26% |503.96 MiB |3.62 MiB |0 B
+|nexus-97ffdbd67-689b2 |1.88 GiB |- |- |- |- |1.52 GiB |1.09 GiB |0 B
+|nexus-operator-569bfff8cc-p55wk |20.23 MiB |- |- |- |- |19.48 MiB |0 B |0 B
+|officer-portal-7997ff6bb9-pglff |1.89 MiB |256.00 MiB |0.74% |256.00 MiB |0.74% |1.49 MiB |12.00 KiB |0 B
+|operational-instance1-7rbk-0 |4.68 GiB |- |- |- |- |1.16 GiB |3.61 GiB |0 B
+|operational-pool-bc5dfd58f-jk2lk |807.02 MiB |- |- |- |- |621.60 MiB |136.00 MiB |0 B
+|platform-gateway-deployment-598c679ff9-hjhrb |614.68 MiB |928.00 MiB |66.24% |928.00 MiB |66.24% |608.39 MiB |52.00 KiB |0 B
+|process-history-service-api-deployment-8f47d958d-9trw8 |705.67 MiB |928.00 MiB |76.04% |928.00 MiB |76.04% |698.95 MiB |52.00 KiB |0 B
+|process-history-service-api-deployment-8f47d958d-q68tq |710.24 MiB |928.00 MiB |76.53% |928.00 MiB |76.53% |703.58 MiB |52.00 KiB |0 B
+|process-history-service-persistence-deployment-c6dcdf59d-lkwvx |704.25 MiB |928.00 MiB |75.89% |928.00 MiB |75.89% |697.25 MiB |52.00 KiB |0 B
+|redash-exporter-786f47b89f-52df2 |13.79 MiB |- |- |- |- |12.62 MiB |0 B |0 B
+|redash-viewer-6f479fdd7f-8zpvl |805.39 MiB |1.00 GiB |78.65% |1.00 GiB |78.65% |787.41 MiB |1.36 MiB |0 B
+|redash-viewer-adhocworker-68b569f969-cthgf |616.47 MiB |- |- |- |- |601.13 MiB |1.35 MiB |0 B
+|redash-viewer-postgresql-0 |38.08 MiB |256.00 MiB |14.87% |- |- |10.30 MiB |62.33 MiB |0 B
+|redash-viewer-redis-master-0 |3.15 MiB |- |- |- |- |2.28 MiB |10.14 MiB |0 B
+|redash-viewer-scheduler-7b67c9d6d6-wphcl |203.43 MiB |- |- |- |- |193.68 MiB |1.35 MiB |0 B
+|registry-kafka-api-deployment-68f99f68d7-n6pgv |1.60 GiB |2.13 GiB |75.52% |2.13 GiB |75.52% |1.59 GiB |52.00 KiB |0 B
+|registry-kafka-api-deployment-68f99f68d7-nwc8w |1.62 GiB |2.13 GiB |76.03% |2.13 GiB |76.03% |1.60 GiB |52.00 KiB |0 B
+|registry-kafka-api-deployment-68f99f68d7-xv9f9 |1.62 GiB |2.13 GiB |76.31% |2.13 GiB |76.31% |1.61 GiB |52.00 KiB |0 B
+|registry-regulation-management-deployment-6fc95c99f8-pr4bg |578.86 MiB |628.00 MiB |92.18% |128.00 MiB |452.23% |570.49 MiB |9.96 MiB |0 B
+|registry-rest-api-deployment-79f65fbf76-8clfl |1.70 GiB |2.13 GiB |80.01% |2.13 GiB |80.01% |1.69 GiB |52.00 KiB |0 B
+|registry-rest-api-deployment-79f65fbf76-9sgn4 |1.70 GiB |2.13 GiB |80.04% |2.13 GiB |80.04% |1.69 GiB |52.00 KiB |0 B
+|registry-rest-api-deployment-79f65fbf76-mnwzn |1.69 GiB |2.13 GiB |79.70% |2.13 GiB |79.70% |1.68 GiB |52.00 KiB |0 B
+|report-exporter-deployment-5756454fb6-c5vxf |463.99 MiB |628.00 MiB |73.88% |128.00 MiB |362.49% |458.23 MiB |52.00 KiB |0 B
+|rfr-redis-sentinel-0 |41.49 MiB |1.03 GiB |3.95% |1.07 GiB |3.77% |64.25 MiB |33.04 MiB |0 B
+|rfr-redis-sentinel-1 |50.07 MiB |1.03 GiB |4.77% |1.07 GiB |4.55% |62.30 MiB |33.03 MiB |0 B
+|rfs-redis-sentinel-764cb9ff7d-cffdv |74.26 MiB |306.00 MiB |24.27% |356.00 MiB |20.86% |70.85 MiB |24.00 KiB |0 B
+|rfs-redis-sentinel-764cb9ff7d-l97x5 |74.41 MiB |306.00 MiB |24.32% |356.00 MiB |20.90% |71.19 MiB |24.00 KiB |0 B
+|rfs-redis-sentinel-764cb9ff7d-vpm5d |73.58 MiB |306.00 MiB |24.05% |356.00 MiB |20.67% |70.17 MiB |24.00 KiB |0 B
+|user-process-management-7bd6858c4-4snn5 |594.16 MiB |896.00 MiB |66.31% |896.00 MiB |66.31% |588.49 MiB |52.00 KiB |0 B
+|user-process-management-7bd6858c4-h6scn |612.15 MiB |896.00 MiB |68.32% |896.00 MiB |68.32% |606.34 MiB |52.00 KiB |0 B
+|user-settings-service-api-deployment-6c586575c-j5zg8 |703.89 MiB |928.00 MiB |75.85% |928.00 MiB |75.85% |696.89 MiB |52.00 KiB |0 B
+|user-task-management-6964d74f6c-dl52l |642.22 MiB |896.00 MiB |71.68% |896.00 MiB |71.68% |635.11 MiB |52.00 KiB |0 B
+|user-task-management-6964d74f6c-xpt75 |641.07 MiB |896.00 MiB |71.55% |896.00 MiB |71.55% |633.94 MiB |52.00 KiB |0 B
+|===
+
+=== Таблиця використання мережі по кожному сервісу
+
+[width="99%",cols="33%,11%,11%,11%,12%,11%,11%",options="header",]
+|===
+|Пода (Pod) |Поточна пропускна здатність приймання, Біт/с (Current Receive Bandwidth, bps) |Поточна пропускна здатність передачі, Біт/с (Current Transmit Bandwidth, bps) |Кількість пакетів, отриманих за секунду (Rate of Received Packets, p/s) |Кількість пакетів, переданих за секунду (Rate of Transmitted Packets, p/s) |Кількість неотриманих пакетів (Rate of Received Packets Dropped) |Кількість ненадісланих пакетів (Rate of Transmitted Packets Dropped)
+|admin-portal-565fdb8978-b4bt5 |88.40 B/s |295.00 B/s |1.00 p/s |1.00 p/s |0 p/s |0 p/s
+|analytical-instance1-2ht4-0 |39.15 kB/s |19.78 kB/s |261.97 p/s |177.50 p/s |0 p/s |0 p/s
+|bp-webservice-gateway-764767899d-p7f79 |1.13 kB/s |20.13 kB/s |7.50 p/s |6.87 p/s |0 p/s |0 p/s
+|bpms-775f84f44d-8gpjm |138.76 kB/s |561.35 kB/s |583.23 p/s |521.77 p/s |0 p/s |0 p/s
+|bpms-775f84f44d-ldr7q |83.12 kB/s |365.56 kB/s |344.57 p/s |306.03 p/s |0 p/s |0 p/s
+|bpms-775f84f44d-tp55w |126.62 kB/s |543.04 kB/s |551.40 p/s |494.77 p/s |0 p/s |0 p/s
+|business-process-administration-portal-b59bf4989-b25jg |166.50 B/s |235.80 B/s |2.10 p/s |1.90 p/s |0 p/s |0 p/s
+|citizen-portal-599ccc6555-5brjl |88.20 B/s |296.20 B/s |1.00 p/s |1.00 p/s |0 p/s |0 p/s
+|codebase-operator-69d446fd84-z4qvd |7.72 kB/s |1.66 kB/s |12.97 p/s |11.07 p/s |0 p/s |0 p/s
+|ddm-language-server-5c666c7bb8-6cjjs |1.20 kB/s |8.04 kB/s |7.87 p/s |7.13 p/s |0 p/s |0 p/s
+|ddm-notification-service-7fbb4f7676-ljwzh |8.04 kB/s |17.87 kB/s |76.87 p/s |45.67 p/s |0 p/s |0 p/s
+|digital-document-service-8559cd76bd-k57vp |18.39 kB/s |52.79 kB/s |36.17 p/s |45.43 p/s |0 p/s |0 p/s
+|digital-signature-ops-5996ff5999-4dfb9 |35.50 kB/s |46.59 kB/s |30.64 p/s |27.37 p/s |0 p/s |0 p/s
+|digital-signature-ops-5996ff5999-p9wtw |48.94 kB/s |89.87 kB/s |43.57 p/s |37.00 p/s |0 p/s |0 p/s
+|excerpt-service-api-deployment-669b68f859-srr86 |1.44 kB/s |37.58 kB/s |9.50 p/s |8.83 p/s |0 p/s |0 p/s
+|excerpt-worker-csv-deployment-f98bb9fdc-jrwwp |2.58 kB/s |22.77 kB/s |21.63 p/s |15.17 p/s |0 p/s |0 p/s
+|excerpt-worker-deployment-574f7dc948-wr8cw |2.65 kB/s |26.00 kB/s |21.47 p/s |14.83 p/s |0 p/s |0 p/s
+|excerpt-worker-docx-deployment-8c74f6d45-ppqf9 |1.29 kB/s |11.48 kB/s |11.17 p/s |7.57 p/s |0 p/s |0 p/s
+|external-secrets-c6b9cf84f-6jk89 |941.27 B/s |247.97 B/s |2.43 p/s |2.47 p/s |0 p/s |0 p/s
+|form-schema-provider-deployment-7858985965-7nj8c |183.03 kB/s |252.90 kB/s |51.77 p/s |50.10 p/s |0 p/s |0 p/s
+|form-schema-provider-deployment-7858985965-f6gsr |186.29 kB/s |218.52 kB/s |50.03 p/s |48.83 p/s |0 p/s |0 p/s
+|form-submission-validation-5bfbd9946d-qkwt6 |190.86 kB/s |76.13 kB/s |192.07 p/s |214.20 p/s |0 p/s |0 p/s
+|form-submission-validation-5bfbd9946d-tfr98 |151.93 kB/s |64.46 kB/s |153.50 p/s |170.20 p/s |0 p/s |0 p/s
+|gerrit-b5679cfd-rvk4d |950.53 B/s |16.04 kB/s |6.07 p/s |3.70 p/s |0 p/s |0 p/s
+|gerrit-operator-67b47bcff5-wt262 |2.63 kB/s |1.39 kB/s |7.57 p/s |6.90 p/s |0 p/s |0 p/s
+|hashicorp-vault-0 |0 B/s |0 B/s |0 p/s |0 p/s |0 p/s |0 p/s
+|istio-ingressgateway-perf-08-main-75b6d9cbc9-lrns8 |185.46 kB/s |255.23 kB/s |110.97 p/s |105.53 p/s |0 p/s |0 p/s
+|jenkins-5b69d4b6b9-fnlsx |33.31 kB/s |8.24 kB/s |22.37 p/s |21.17 p/s |0 p/s |0 p/s
+|jenkins-operator-6c46d867fd-w6mcs |260.21 kB/s |41.62 kB/s |164.53 p/s |157.50 p/s |0 p/s |0 p/s
+|kafka-cluster-entity-operator-576bc8d75d-wfrcj |925.40 B/s |1.02 kB/s |7.80 p/s |6.37 p/s |0 p/s |0 p/s
+|kafka-cluster-kafka-0 |602.74 kB/s |757.19 kB/s |2.68 kp/s |2.78 kp/s |0 p/s |0 p/s
+|kafka-cluster-kafka-1 |369.97 kB/s |375.19 kB/s |1.73 kp/s |1.74 kp/s |0 p/s |0 p/s
+|kafka-cluster-kafka-2 |431.27 kB/s |426.81 kB/s |2.05 kp/s |2.06 kp/s |0 p/s |0 p/s
+|kafka-cluster-kafka-exporter-65db9f958d-ll2mj |18.08 kB/s |13.27 kB/s |49.03 p/s |53.93 p/s |0 p/s |0 p/s
+|kafka-cluster-zookeeper-0 |317.53 B/s |312.63 B/s |2.87 p/s |1.70 p/s |0 p/s |0 p/s
+|kafka-cluster-zookeeper-1 |534.50 B/s |768.07 B/s |4.17 p/s |5.37 p/s |0 p/s |0 p/s
+|kafka-cluster-zookeeper-2 |515.40 B/s |556.17 B/s |4.53 p/s |3.07 p/s |0 p/s |0 p/s
+|kafka-connect-cluster-connect-7db74c457b-gjxcf |290.30 kB/s |277.82 kB/s |2.15 kp/s |1.35 kp/s |0 p/s |0 p/s
+|kafka-schema-registry-59dc694687-642b5 |1.68 kB/s |532.70 B/s |6.63 p/s |4.30 p/s |0 p/s |0 p/s
+|keycloak-operator-78f5f6b7fb-hcb9h |2.68 kB/s |1.31 kB/s |7.87 p/s |7.10 p/s |0 p/s |0 p/s
+|kong-admin-tools-kong-admin-tools-6dbf744c55-l5kwz |12.20 kB/s |30.15 kB/s |56.60 p/s |55.10 p/s |0 p/s |0 p/s
+|kong-kong-5b8bd47f56-r48f6 |176.68 kB/s |199.62 kB/s |132.20 p/s |154.50 p/s |0 p/s |0 p/s
+|kong-kong-5b8bd47f56-s9pcx |163.16 kB/s |222.49 kB/s |122.03 p/s |142.87 p/s |0 p/s |0 p/s
+|nexus-97ffdbd67-689b2 |79.93 B/s |42.53 B/s |1.17 p/s |0.60 p/s |0 p/s |0 p/s
+|nexus-operator-569bfff8cc-p55wk |2.35 kB/s |1.15 kB/s |6.90 p/s |6.17 p/s |0 p/s |0 p/s
+|officer-portal-7997ff6bb9-pglff |98.20 B/s |323.40 B/s |1.20 p/s |1.27 p/s |0 p/s |0 p/s
+|operational-instance1-7rbk-0 |762.71 kB/s |817.45 kB/s |7.74 kp/s |4.57 kp/s |0 p/s |0 p/s
+|operational-pool-bc5dfd58f-jk2lk |866.53 kB/s |1.15 MB/s |7.36 kp/s |11.56 kp/s |0 p/s |0 p/s
+|platform-gateway-deployment-598c679ff9-hjhrb |1.64 kB/s |31.02 kB/s |10.57 p/s |9.77 p/s |0 p/s |0 p/s
+|process-history-service-api-deployment-8f47d958d-9trw8 |961.60 B/s |30.52 kB/s |6.53 p/s |5.83 p/s |0 p/s |0 p/s
+|process-history-service-api-deployment-8f47d958d-q68tq |1.29 kB/s |31.74 kB/s |8.10 p/s |7.63 p/s |0 p/s |0 p/s
+|process-history-service-persistence-deployment-c6dcdf59d-lkwvx |710.55 kB/s |1.42 MB/s |4.45 kp/s |4.37 kp/s |0 p/s |0 p/s
+|redash-exporter-786f47b89f-52df2 |412.97 B/s |205.37 B/s |0.90 p/s |0.83 p/s |0 p/s |0 p/s
+|redash-viewer-6f479fdd7f-8zpvl |406.37 B/s |567.20 B/s |2.37 p/s |2.27 p/s |0 p/s |0 p/s
+|redash-viewer-adhocworker-68b569f969-cthgf |1.10 kB/s |983.90 B/s |5.33 p/s |6.00 p/s |0 p/s |0 p/s
+|redash-viewer-postgresql-0 |646.70 B/s |1.34 kB/s |3.27 p/s |2.93 p/s |0 p/s |0 p/s
+|redash-viewer-redis-master-0 |1.09 kB/s |773.43 B/s |6.13 p/s |5.00 p/s |0 p/s |0 p/s
+|registry-kafka-api-deployment-68f99f68d7-n6pgv |37.03 kB/s |100.66 kB/s |268.05 p/s |189.44 p/s |0 p/s |0 p/s
+|registry-kafka-api-deployment-68f99f68d7-nwc8w |26.89 kB/s |78.42 kB/s |196.53 p/s |139.23 p/s |0 p/s |0 p/s
+|registry-regulation-management-deployment-6fc95c99f8-pr4bg |30.38 kB/s |31.70 kB/s |10.93 p/s |10.00 p/s |0 p/s |0 p/s
+|registry-rest-api-deployment-79f65fbf76-8clfl |31.87 kB/s |141.72 kB/s |67.50 p/s |71.87 p/s |0 p/s |0 p/s
+|registry-rest-api-deployment-79f65fbf76-9sgn4 |34.42 kB/s |139.57 kB/s |68.23 p/s |74.20 p/s |0 p/s |0 p/s
+|registry-rest-api-deployment-79f65fbf76-mnwzn |31.45 kB/s |136.42 kB/s |66.30 p/s |71.50 p/s |0 p/s |0 p/s
+|report-exporter-deployment-5756454fb6-c5vxf |487.30 B/s |8.42 kB/s |3.17 p/s |2.87 p/s |0 p/s |0 p/s
+|rfr-redis-sentinel-0 |44.63 kB/s |353.86 kB/s |181.39 p/s |139.84 p/s |0 p/s |0 p/s
+|rfr-redis-sentinel-1 |44.68 kB/s |3.27 kB/s |51.00 p/s |37.93 p/s |0 p/s |0 p/s
+|rfs-redis-sentinel-764cb9ff7d-cffdv |3.70 kB/s |5.13 kB/s |30.70 p/s |18.27 p/s |0 p/s |0 p/s
+|rfs-redis-sentinel-764cb9ff7d-l97x5 |866.97 B/s |6.36 kB/s |5.63 p/s |5.03 p/s |0 p/s |0 p/s
+|rfs-redis-sentinel-764cb9ff7d-vpm5d |2.00 kB/s |7.05 kB/s |15.33 p/s |10.80 p/s |0 p/s |0 p/s
+|user-process-management-7bd6858c4-4snn5 |1.28 kB/s |39.81 kB/s |8.20 p/s |7.43 p/s |0 p/s |0 p/s
+|user-process-management-7bd6858c4-h6scn |1.68 kB/s |66.36 kB/s |10.83 p/s |9.60 p/s |0 p/s |0 p/s
+|user-settings-service-api-deployment-6c586575c-j5zg8 |1.02 kB/s |11.69 kB/s |6.30 p/s |6.13 p/s |0 p/s |0 p/s
+|user-task-management-6964d74f6c-dl52l |98.58 kB/s |200.14 kB/s |69.95 p/s |94.62 p/s |0 p/s |0 p/s
+|user-task-management-6964d74f6c-xpt75 |90.14 kB/s |181.63 kB/s |64.57 p/s |87.23 p/s |0 p/s |0 p/s
+|===
+
+=== Аналіз помилок
+
+Під час цього запуску тестів навантаження помилок виявлено не було.
+
+=== Висновки
+
+Платформа з [.underline]#`*1*` розгорнутим реєстром# атестованих лабораторій [.underline]#під навантаженням `*1000*`# користувачів протягом 1 години відпрацьовує з [.underline]#`*0.00%*` помилок# та залишається в межах виділених ресурсів.
+
+Відповідно до вимог, заданих оперативному реєстру, [.underline]#Платформа залишається у розрізі допустимих значень *_latency* (затримка) та *throughput_* _(пропускна здатність)_# для операцій читання та запису.
+
+NOTE: Цей тест демонструє приклад роботи реєстру при планованому повному навантаженні в робочий час.
+
+==== Значення затримки при повному навантаженні (95-й процентиль)
+
+* [*] [.underline]#Операції читання# (за ключем та одним полем, без запитів до сторонніх реєстрів) ~ `*60*` мс.
+* [*] [.underline]#Операції запису# ~ `*680*` мс.
+
+==== Значення пропускної здатності при повному навантаженні
+
+* [*] [.underline]#Пропускна здатність для операцій читання# -- у межах `*69.373*` запитів/с.
+* [*] [.underline]#Пропускна здатність для операції запису# -- у межах `*32.627*` запитів/с.
+* [*] [.underline]#Середня пропускна здатність# (усереднена для усіх типів запитів, включно з логіном, опрацюванням бізнес-процесів тощо) -- у межах `*271*` запитів/c.

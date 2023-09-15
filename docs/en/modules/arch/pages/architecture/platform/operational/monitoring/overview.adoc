@@ -1,0 +1,282 @@
+= Event monitoring and notification subsystem
+include::platform:ROOT:partial$templates/document-attributes/arch-set-en.adoc[]
+
+include::platform:ROOT:partial$admonitions/language-en.adoc[]
+
+== Overview
+
+The _Event monitoring and notification subsystem_ is responsible for collecting monitoring data from applications, and infrastructure stores information as a time series (`time series`). It offers capabilities for constructing search queries and allows the creation of alerts based on these queries.
+
+== Subsystem functions
+
+* Collection and storage of monitoring data from Platform and Registry components.
+* Generation of alerts based on monitoring data.
+* Visualization based on monitoring data.
+* Provision of a unified interface for metrics collection.
+
+== Technical design
+
+The following diagram depicts the components of the _Event monitoring and notification subsystem_ and their interaction with other subsystems.
+
+//TODO: Translate diagram, it is already exported as svg + embedded images
+image::architecture/platform/operational/monitoring/monitoring-subsystem.drawio.svg[width=800,float="center",align="center"]
+
+The _Event monitoring and notification subsystem_ can be expanded with custom alert receivers (Alertmanager Receivers) and the creation of custom dashboards in addition to the default ones.
+
+== Subsystem Components
+
+|===
+|Component Name|Namespace|Deployment|Origin|Repository|Purpose
+
+|_Platform Monitoring Web Interface_
+|`grafana-monitoring`
+|`grafana`
+|3rd-party
+.11+|https://github.com/epam/edp-ddm-monitoring[github:/epam/edp-ddm-monitoring]
+|Visualization and access to monitoring data
+
+|_Image Rendering Extension_
+|`grafana-monitoring`
+|`grafana-image-renderer`
+|3rd-party
+|Grafana extension for generating PNG images during chart and graph export
+
+|_Alert Service_
+|`openshift-monitoring`
+|`alertmanager-main`
+|3rd-party
+|Notification system for administrators during anomalies or issues with Platform or Registry components
+
+|_Prometheus Operator_
+|`openshift-monitoring`
+|`prometheus-operator`
+|3rd-party
+|Monitoring component providing configuration, deployment, and maintenance of Prometheus monitoring subsystem components
+
+|_Monitoring Subsystem Operator_
+|`openshift-monitoring`
+|`cluster-monitoring-operator`
+|3rd-party
+|Configuration, deployment, and maintenance of the Platform's monitoring subsystem in OpenShift.
+
+|_Prometheus Query Service_
+|`openshift-monitoring`
+|`thanos-querier`
+|3rd-party
+|Aggregates and deduplicates primary orchestration platform metrics of OpenShift and Registry metrics under a multi-user interface.
+
+|_Virtual Machine Metrics Exporters_
+|`openshift-monitoring`
+|`node-exporter`
+|3rd-party
+|Collection of metrics from the Platform and Registry virtual machines
+
+|_Monitoring Service_
+|`openshift-monitoring`
+|`prometheus-k8s`
+|3rd-party
+|Collection and storage of Platform and Registry component metrics. Central component on which the Event and Alert Monitoring Subsystem is based. Prometheus is a time-series database and metric rule engine. It also sends alerts to Alertmanager for processing.
+
+|_k8s Object Monitoring Service_
+|`openshift-monitoring`
+|`kube-state-metrics`
+|3rd-party
+|Collects metrics related to the state of resources and objects of the Kubernetes API server in the container orchestration platform.
+
+|_OpenShift Object Monitoring Service_
+|`openshift-monitoring`
+|`openshift-state-metrics`
+|3rd-party
+|Collects metrics related to the state of resources and objects of the OpenShift API server in the container orchestration platform.
+
+|_OKD Cluster Scaling Metric Integration Component_
+|`openshift-monitoring`
+|`prometheus-adapter`
+|3rd-party
+|Metrics transfer between Prometheus and the container orchestration platform's auto-scaling components.
+
+|_Resource Configuration Validation Service_
+|`openshift-monitoring`
+|`prometheus-operator-admission-webhook`
+|3rd-party
+|Interacts with the container orchestration platform's API server to check and modify monitoring subsystem resource configurations before applying them.
+
+|===
+
+== Grafana dashboards
+
+The dashboards listed below are installed immediately upon installation of the Registries Platform.
+
+This set allows Platform and registry administrators to track component performance over time and identify potential problems before they become critical.
+
+|===
+
+|*Dashboard*|*Technical name*|*Owner subsystem*|*Purpose*
+
+|Camunda dashboard
+|camunda-metrics
+|xref:arch:architecture/registry/operational/bpms/overview.adoc[Business Process Execution Subsystem]
+|Allows visibility into general metrics of business process execution and user tasks (message exchange, deletion of historical data)
+
+|Ceph dashboard
+|ceph
+|xref:arch:architecture/platform/operational/distributed-data-storage/overview.adoc[Distributed Data Storage Subsystem]
+|Allows general Ceph state metrics analysis and its components (current status, volumes of free and occupied storage, and performance metrics).
+
+|etcd dashboard
+|etcd
+.15+|xref:arch:architecture/container-platform/container-platform.adoc[Container Orchestration Platform]
+|Allows viewing general etcd storage metrics of the OKD container orchestration platform (leader election statistics by the RAFT algorithm, current status, and storage size).
+
+|OpenShift Cluster Metrics dashboard
+|cluster-total
+|General metrics for using the OKD container orchestration platform resources. It provides detailed metrics about the CPU, RAM, network, and disk load of the OpenShift cluster.
+
+|Java Management Extensions dashboard
+|jmx
+|Displays metrics related to Java applications running in the container orchestration platform.
+
+|Spring Boot dashboard
+|springboot
+|In addition to the JMX panel, it shows spring boot metrics, namely the number, response time, and errors of HTTP requests, cache usage, and other valuable metrics for analyzing the operation of Spring Boot applications.
+
+|General Kubernetes dashboard
+|k8s-resources-cluster
+|This tool enables the analysis of OpenShift cluster state metrics and resource usage at a cluster level.
+
+|Kubernetes Namespace Level dashboard
+|k8s-resources-namespace
+|Allows analysis of general resource usage metrics at the namespace level.
+
+|Kubernetes Virtual Machine Level dashboard
+|k8s-resources-node
+|Allows analysis of general resource usage metrics at the level of an individual virtual machine.
+
+|Kubernetes Pod Level dashboard
+|k8s-resources-pod
+|Allows analysis of general resource usage metrics at the level of individual pods.
+
+|Kubernetes Deployment Type dashboard
+|k8s-resources-workload
+|Allows analysis of general resource usage metrics with the possibility of filtering by specific deployment types in Kubernetes (deployments, jobs, daemonsets, statefulsets).
+
+|Kubernetes Deployment Types Dashboard
+|k8s-resources-workload-namespace
+|Allows analysis of general resource usage metrics at the level of individual deployment types in Kubernetes, presented at the namespace level.
+
+|Kubernetes Pod Level Dashboard
+|namespace-by-pod
+|Provides a comprehensive overview of pod resource usage metrics at the namespace level.
+
+|Kubernetes Disk Level Dashboard
+|volume-load
+|Allows analysis of general disk storage usage metrics at the cluster and virtual machine levels.
+
+|Kubernetes Cluster Level Dashboard
+|node-cluster-rsrc-use
+|Displays general metrics of the entire cluster.
+
+|Kubernetes Cluster Level Dashboard
+|node-rsrc-use
+|Displays general metrics of the entire cluster with the possibility of filtering by individual virtual machines.
+
+|Network Dashboard
+|pod-total
+|Displays metrics of current traffic between pods in individual namespaces.
+
+|Asynchronous Message Exchange Subsystem Dashboard
+|kafka-data
+.2+|xref:arch:architecture/registry/operational/messaging/overview.adoc[Asynchronous Message Exchange Subsystem]
+|The Kafka data dashboard is designed to display metrics related to the operation of Kafka brokers and consumers in the cluster.
+
+|Strimzi Asynchronous Message Exchange Subsystem Dashboard
+|strimzi-kafka
+|Designed to display metrics related to the operation of Kafka brokers and consumers in the cluster.
+
+|User and Role Management Subsystem Dashboard
+|keycloak-metrics
+.4+|xref:arch:architecture/platform/operational/user-management/overview.adoc[User and Role Management Subsystem]
+|Displays Keycloak metrics broken down by Realms with the possibility to filter by Keycloak instances.
+
+|User and Role Management Subsystem Dashboard
+|keycloak-x-microprofile-metrics
+|Designed to display metrics related to the operation of the Java metrics component of Keycloak.
+
+|PostgreSQL Database Dashboard
+|postgresql-db
+|Provides detailed information about the PostgreSQL database instance.
+
+|PostgreSQL Queries Dashboard
+|postgresql-queries
+|Provides additional information about queries.
+
+|Public API Dashboard for External Traffic Management Subsystem of the Operational Zone Registry
+|kong-public-api
+|xref:arch:architecture/registry/operational/ext-api-management/overview.adoc[External Traffic Management Subsystem of the Operational Zone Registry]
+|Allows viewing requests for each public search condition and their quantity, request execution trend, and performance statistics.
+
+|Monitoring, Events, and Notifications Subsystem Dashboard
+|prometheus
+|xref:arch:architecture/platform/operational/monitoring/overview.adoc[Monitoring, Events, and Notifications Subsystem]
+|Allows monitoring of the status and performance of monitoring subsystem components.
+
+|Registry Analytical Reporting Subsystem Dashboard
+|redash
+|xref:arch:architecture/registry/operational/reporting/overview.adoc[Registry Analytical Reporting Subsystem]
+|Provides statistics on queries in the Redash component.
+
+|Non-Relational Database Management Subsystem Dashboard
+|redis
+|xref:arch:architecture/registry/operational/nonrelational-data-storage/overview.adoc[Non-Relational Database Management Subsystem]
+|Provides information about a specific Redis cluster.
+
+|PostgreSQL Backup Dashboard
+|crunchy-pgbackrest
+.6+|xref:arch:architecture/registry/operational/relational-data-storage/overview.adoc[Relational Database Management Subsystem]
+|Provides information about the general status of pgBackRest backups.
+
+|Detailed PostgreSQL Pod Dashboard
+|crunchy-pod-details
+|Provides information about resource usage by specific pods used by the PostgreSQL cluster.
+
+|Detailed PostgreSQL Dashboard
+|crunchy-postgresql-details
+|Provides more information about a specific PostgreSQL cluster. It includes many critical PostgreSQL-specific metrics.
+
+|Overview PostgreSQL Dashboard
+|crunchy-postgresql-overview
+|Provides an overview of all PostgreSQL clusters deployed on the Platform.
+
+|PostgreSQL Service Dashboard
+|crunchy-postgresql-service-health
+|Contains information about Kubernetes services located in front of PostgreSQL Pods. It allows us to get information about network status.
+
+|PostgreSQL Queries Dashboard
+|crunchy-query-statistics
+|Provides information about the overall query performance.
+
+|===
+
+== Technology stack
+
+The following technologies were used during the design and development of the subsystem:
+
+* xref:arch:architecture/platform-technologies.adoc#okd[OKD]
+* xref:arch:architecture/platform-technologies.adoc#prometheus[Prometheus]
+* xref:arch:architecture/platform-technologies.adoc#prometheus-operator[Prometheus Operator]
+* xref:arch:architecture/platform-technologies.adoc#thanosquerier[Thanos Querier]
+* xref:arch:architecture/platform-technologies.adoc#grafana[Grafana]
+
+== Subsystem quality attributes
+
+=== _Scalability_
+
+The event monitoring and notification subsystem is designed with horizontal scaling in mind to support large clusters and high volumes of metrics from the Platform and registries.
+
+=== _Reliability_
+
+The event monitoring and notification subsystem employs stable and reliable components, such as Prometheus, Grafana, and Alertmanager, to provide accurate and consistent solutions for monitoring the Platform and registries and analyzing the collected metrics.
+
+=== _Extensibility_
+
+The event monitoring and notification subsystem offers flexible mechanisms and extension points for custom dashboards or custom notification channels that aren't supported by default (e.g., telegram, etc.).

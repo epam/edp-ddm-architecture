@@ -1,0 +1,504 @@
+= Technical solution design
+include::platform:ROOT:partial$templates/document-attributes/arch-set-en.adoc[]
+
+include::platform:ROOT:partial$admonitions/language-en.adoc[]
+
+//== Контейнерна діаграма
+== Container diagram
+
+//На даній діаграмі зображено залучені для реалізації вимог сервіси платформи та взаємодію між ними.
+This diagram shows the platform services involved in implementing the requirements and the interaction between them.
+
+image::architecture/registry/operational/notifications/notifications-design.svg[notifications-design,700]
+
+//== Задіяні сервіси та їх призначення в рамках дизайну рішення
+== Involved services and their purpose within the design of the solution
+
+//У даному розділі наведено перелік компонент системи, які задіяні або потребують змін/створення в рамках реалізації функціональних вимог згідно технічного дизайну рішення.
+
+This section provides a list of system components that are involved or need to be changed/created as part of the implementation of functional requirements according to the technical design of the solution.
+
+////
+|===
+|Компонент|Службова назва|Призначення
+
+|_Регламент реєстру_
+|*registry-regulation*
+|Налаштування шаблонів для відправки повідомлень за каналами зв'язку
+
+|_Пайплайн публікації регламенту_
+|*jenkins*
+|Публікація змін до шаблонів повідомлень до цільового оточення реєстру
+
+|_Утиліта публікації шаблонів_
+|*notification-template-publisher*
+|Підготовка та завантаження шаблонів повідомлень з репозиторію регламенту в окреме сховище шаблонів для використання в рамках виконання сценаріїв
+
+|_Інтерфейс адміністрування платформи_
+|*control-plane-console*
+|Внесення налаштувань доступних каналів зв'язку для цільового оточення реєстру
+
+|_Пайплайн створення реєстру_
+|*control-plane-jenkins*
+|Застосування налаштувань каналів зв'язку до цільового оточення реєстру
+
+|_Сервіс управління користувачами та доступом_
+|*keycloak*
+|Отримання атрибутів користувачів за ідентифікатором (РНОКПП)
+
+|_Кабінет громадянина_
+|*citizen-portal*
+|Перегляд in-app повідомлень в inbox Кабінету Громадянина
+
+|_Сервіс виконання бізнес-процесів_
+|*bpms*
+|Формування та публікація події про необхідність відправки повідомлення користувачам у процесі виконання бізнес-процесу
+
+|_Сервіс нотифікацій користувачів_
+|*notification-service*
+|Реагування на події про необхідність відправки повідомлення користувачам шляхом генерації повідомлення на базі вказаного шаблону та вхідних даних з послідуючою відправкою в залежності від вказаного та попередньо налаштованого каналу зв'язку. Управління шаблонами повідомлень.
+
+|_Сервіс управління налаштуваннями користувачів_
+|*user-settings-service-api*
+|Отримання налаштувань каналів зв'язку обраних користувачами для отримання повідомлень
+
+|_Платформенний поштовий сервер_
+|*platform-mail-server*
+|Поштовий сервер, який розповсюджується разом з платформою для сумісного використання реєстрами у якості опції за замовчуванням
+
+|_Зовнішній поштовий сервер_
+|*external-mail-server*
+|Поштовий сервер за вибором адміністратора реєстру у разі особливих вимог до відправки поштових повідомлень
+
+|_Сервіс нотифікацій Дія_
+|*diia-notification-service*
+|Відправки push-нотифікацій користувачам мобільного додатку Дія
+
+|_Розподілена реляційна база даних Citus_
+|*citus-master*
+|Довготривале збереження шаблонів повідомлень на цільовому оточенні реєстру. Збереження in-app повідомлень користувачів.
+
+|_Розподілений брокер повідомлень Kafka_
+|*kafka*
+|Обмін повідомленнями між компонентами системи управління реєстром
+
+|===
+////
+
+|===
+|Component|Official title|Purpose
+
+|_Registry regulation_
+|*registry-regulation*
+|Setting up templates for sending notifications by communication channels
+
+|_Regulation publication pipeline_
+|*jenkins*
+|Publishing changes to message templates to the target registry environment
+
+|_Notifications template publisher_
+|*notification-template-publisher*
+|Preparation and uploading of notification templates from the regulation repository to a separate template repository for use in script execution
+
+|_Platform administration interface_
+|*control-plane-console*
+|Setting available communication channels for the target environment of the registry
+
+|_Registry creation pipeline_
+|*control-plane-jenkins*
+|Application of communication channel settings to the registry's target environment
+
+|_User and access management service_
+|*keycloak*
+|Receiving user attributes by identifier (RNOKPP)
+
+|_Citizen portal_
+|*citizen-portal*
+|Viewing in-app notifications in the inbox of the Citizen portal
+
+|_Business process execution service_
+|*bpms*
+|Formation and publication of an event about the need to send a message to users during the execution of a business process
+
+|_User notification service_
+|*notification-service*
+|Responding to events about the need to send a notification to users by generating a notification based on the specified template and input data with subsequent sending depending on the specified and pre-configured communication channel. Manage notification templates.
+
+|_User settings management service_
+|*user-settings-service-api*
+|Receiving settings of communication channels selected by users for receiving notifications
+
+|_Platform mail server_
+|*platform-mail-server*
+|Mail server that is distributed with the platform for interoperability by registries as a default option
+
+|_External mail server_
+|*external-mail-server*
+|Mail server chosen by the registry administrator in case of special requirements for sending mail messages
+
+|_Diia notification service_ (citizen-facing solution)
+|*diia-notification-service*
+|Sending push notifications to Diia mobile application
+
+|_Distributed relational database Citus_
+|*citus-master*
+|Long-term storage of notification templates on the target registry environment. Storage of in-app user notifications.
+
+|_Distributed message broker Kafka_
+|*kafka*
+|Exchange of notifications between components of the registry management system
+
+|===
+
+
+//== Налаштування політик міжсервісної взаємодії
+== Configuring interservice interaction policies
+
+//Для коректної роботи підсистеми нотифікацій, мають бути налаштовані відповідні мережеві політики _NetworkPolicy_, які дозволяють взаємодію для наступних компонентів:
+For the correct operation of the notification subsystem, appropriate network policies _NetworkPolicy_ must be configured, which allow interaction for the following components:
+
+- *kong* -> *notification-service*
+- *bpms* -> *kafka*
+- *notification-service* -> *kafka*
+- *notification-service* -> *keycloak*
+- *notification-service* -> *user-settings-service-api*
+- *notification-service* -> *citus-master*
+- *notification-service* -> *kafka-schema-registry*
+- *notification-service* -> *platform-mail-server*
+
+//В залежності від обраної конфігурації на етапі створення/редагування налаштувань реєстру, буде автоматично створено _ServiceEntry_ для налаштування доступу до зовнішніх сервісів на рівні _Istio Service Mesh_:
+
+Depending on the selected configuration at the stage of creating/editing registry settings, a _ServiceEntry_ will be automatically created to configure access to external services at the _Istio Service Mesh_ level:
+
+- *notification-service* -> *external-mail-server*
++
+include::ROOT:partial$admonitions/ua-specific.adoc[]
++
+
+- *notification-service* -> *diia-notification-service*
+
+//== Kafka-топіки запитів на відправку повідомлень користувачам
+== Kafka topics of requests for sending notifications to users
+
+//Наразі, за обслуговування запитів на відправлення повідомлень користувачам відповідають наступні _Kafka_-топіки, сегреговані за призначенням, вимогами до масштабування та контролю навантаження на _downstream_-сервіси:
+Currently, the following _Kafka_-topics, segregated by purpose, scaling requirements, and load control for _downstream_-services, are responsible for servicing requests to send messages to users:
+////
+|===
+|Службова назва|Опис
+|_user-notifications_
+|Публікація та обробка системних запитів на відправлення повідомлень користувачам. Реалізує асинхронну взаємодію між сервісами реєстру та _Сервісом відправки повідомлень користувачам_
+
+|_user-notifications.DLT_
+|Публікація запитів на відправлення повідомлень користувачам, які не вдалося опрацювати _Сервісом відправки повідомлень користувачам_
+
+|_email-notifications_
+|Публікація та обробка запитів на відправлення поштових повідомлень користувачам через платформенний або зовнішній SMTP-сервер
+
+|_email-notifications.DLT_
+|Публікація запитів на відправлення поштових повідомлень користувачам, які не вдалося опрацювати
+
+|_diia-notifications_
+|Публікація та обробка запитів на відправлення _push_-повідомлень користувачам у мобільний застосунок Дія
+
+|_diia-notifications.DLT_
+|Публікація запитів на відправлення _push_-повідомлень користувачам у мобільний застосунок Дія, які не вдалося опрацювати
+
+|_inbox-notifications_
+|Публікація та обробка запитів на відправлення повідомлень користувачам у _Кабінет Громадянина_
+
+|_inbox-notifications.DLT_
+|Публікація запитів на відправлення повідомлень користувачам у _Кабінет Громадянина_, які не вдалося опрацювати
+|===
+////
+
+|===
+|Official title|Description
+|_user-notifications_
+|Publication and processing of system requests for sending messages to users. Implements asynchronous interaction between registry services and _User notification service_
+
+|_user-notifications.DLT_
+|Publication of requests for sending messages to users that could not be processed by the _User notification service_
+
+|_email-notifications_
+|Publication and processing of requests to send mail notifications to users through a platform or external SMTP server
+
+|_email-notifications.DLT_
+|Publication of requests for sending mail notifications to users that could not be processed
+
+|_diia-notifications_ (citizen-facing solution)
+|Publication and processing of requests for sending _push_-notifications to users in the mobile application Diia
+
+|_diia-notifications.DLT_ (citizen-facing solution)
+|Publication of requests to send _push_ notifications to users in the Diia mobile application that could not be processed
+
+|_inbox-notifications_
+|Publication and processing of requests for sending notifications to users in _Citizen portal_
+
+|_inbox-notifications.DLT_
+|Publication of requests for sending notifications to users in _Citizen portal_ that could not be processed
+|===
+
+//=== Публікація та обробка системних запитів на відправлення повідомлень
+=== Publication and processing of system requests for sending notifications
+
+//Перелік _Kafka_-топіків:
+List of _Kafka_-topics:
+
+- _user-notifications_
+- _user-notifications.DLT_
+
+//.Канонічний вигляд структури повідомлення
+
+.The canonical view of the notification structure
+[source,json]
+----
+{
+  "context": {
+    "system": "Low-code Platform",
+    "application": "<bpms.app.name>",
+    "businessProcess": "<optional>",
+    "businessProcessDefinitionId": "<optional>",
+    "businessProcessInstanceId": "<optional>",
+    "businessActivity": "<optional>",
+    "businessActivityInstanceId": "<optional>"
+  },
+  "notification": {
+    "templateName": "<notification template unique name>",
+    "ignoreChannelPreferences": "<true|false (default: false) - ignore whether channel is active or not - used for OTP verification, etc. >"
+  },
+  "recipients": [
+    {
+      "id": "<User`s ID>",
+      "channels": [
+        {
+          "channel": "diia",
+          "rnokpp": "<User's taxpayer code>"
+        },
+        {
+          "channel": "email",
+          "email": "<User`s Email>"
+        }
+      ],
+      "parameters": [
+        {
+            "key": "<key>",
+            "value": "<value>"
+        }
+      ]
+    }
+  ]
+}
+----
+
+[NOTE,caption=UA-specific]
+====
+*`diia`* channel is specific to the Ukrainian implementation and may not apply or function as described in other contexts or regions.
+
+Please consult the local guidelines or documentation if you are implementing this outside of Ukraine.
+
+.Ukrainian implementation example
+[source,json]
+----
+{
+  "channel": "diia",
+  "rnokpp": "<User's taxpayer code>"
+}
+----
+====
+
+//=== Публікація та обробка запитів на відправлення повідомлень користувачам у _Кабінет Громадянина_
+=== Publication and processing of requests to send notifications to users in _Citizen portal_
+
+//Перелік _Kafka_-топіків:
+List of _Kafka_-topics:
+
+- _inbox-notifications_
+- _inbox-notifications.DLT_
+
+//.Канонічний вигляд структури повідомлення
+.The canonical view of the notification structure
+[source,json]
+----
+{
+  "context": {
+    "system": "Low-code Platform",
+    "application": "<bpms.app.name>",
+    "businessProcess": "<optional>",
+    "businessProcessDefinitionId": "<optional>",
+    "businessProcessInstanceId": "<optional>",
+    "businessActivity": "<optional>",
+    "businessActivityInstanceId": "<optional>"
+  },
+  "notification": {
+    "subject": "<notification subject>",
+    "message": "<notification message>"
+  },
+  "recipient": {
+    "id": "<User ID>"
+  }
+}
+----
+
+//=== Публікація та обробка запитів на відправлення поштових повідомлень
+=== Publication and processing of requests for sending Email notifications
+
+//Перелік _Kafka_-топіків:
+List of _Kafka_-topics:
+
+- _email-notifications_
+- _email-notifications.DLT_
+
+//.Канонічний вигляд структури повідомлення
+.The canonical view of the notification structure
+[source,json]
+----
+{
+  "context": {
+    "system": "Low-code Platform",
+    "application": "<bpms.app.name>",
+    "businessProcess": "<optional>",
+    "businessProcessDefinitionId": "<optional>",
+    "businessProcessInstanceId": "<optional>",
+    "businessActivity": "<optional>",
+    "businessActivityInstanceId": "<optional>"
+  },
+  "notification": {
+    "subject": "<notification subject>",
+    "message": "<notification message>"
+  },
+  "recipient": {
+    "id": "<User ID - optional>",
+    "email": "<User Email>"
+  }
+}
+----
+
+//=== Публікація та обробка запитів на відправлення _push_-повідомлень у мобільний застосунок Дія
+=== Publishing and processing requests for sending _push_-notifications to the mobile application Diia
+
+include::ROOT:partial$admonitions/ua-specific.adoc[]
+
+//Перелік _Kafka_-топіків:
+List of _Kafka_-topics:
+
+- _diia-notifications_
+- _diia-notifications.DLT_
+
+//.Канонічний вигляд структури повідомлення
+.The canonical view of the notification structure
+[source,json]
+----
+{
+  "context": {
+    "system": "Low-code Platform",
+    "application": "<bpms.app.name>",
+    "businessProcess": "<optional>",
+    "businessProcessDefinitionId": "<optional>",
+    "businessProcessInstanceId": "<optional>",
+    "businessActivity": "<optional>",
+    "businessActivityInstanceId": "<optional>"
+  },
+  "notification": {
+    "templateName": "<template name>",
+    "externalTemplateId": "<external template id>"
+  },
+  "recipient": {
+    "id": "<User ID - optional>",
+    "rnokpp": "<User's taxpayer code>",
+    "parameters": [
+      {
+        "key": "<key>",
+        "value": "<value>"
+      }
+    ]
+  }
+}
+----
+
+//=== Загальні налаштування Kafka-топіків підсистеми нотифікацій
+=== General settings of Kafka topics of the notification subsystem
+
+//==== Налаштування цільових топіків запитів на відправку повідомлень
+==== Setting up target topics of requests for sending notifications
+
+////
+|===
+|Властивість|Значення|Опис
+
+|*num-partitions*
+|_1_
+|Кількість розділів в рамках топіку для збереження повідомлень
+
+|*replication-factor*
+|_1_
+|Кількість реплік цільового топіка
+
+|*retention-policy-in-days*
+|_7_
+|Кількість днів збереження повідомлення в Kafka
+|===
+////
+
+|===
+|Property|Value|Description
+
+|*num-partitions*
+|_1_
+|The number of sections within a topic to save notifications
+
+|*replication-factor*
+|_1_
+|The number of replicas of the target topic
+
+|*retention-policy-in-days*
+|_7_
+|The number of days to keep a message in Kafka
+|===
+
+//==== Налаштування _Dead-Letter-Queue_ топіків запитів на відправку повідомлень, які не вдалося опрацювати
+==== Setting _Dead-Letter-Queue_ of request topics for sending notifications that could not be processed
+
+//Службовий топік, який використовується для публікації та тимчасового збереження подій-запитів на відправку повідомлень користувачам, які не вдалося обробити з ціллю їх подальшого повторного опрацювання.
+A service topic that is used to publish and temporarily save events of requests to send notifications to users that could not be processed for the purpose of reprocessing them later.
+
+////
+|===
+|Властивість|Значення|Опис
+
+|*num-partitions*
+|_1_
+|Кількість розділів в рамках топіку для збереження повідомлень
+
+|*replication-factor*
+|_1_
+|Кількість реплік цільового топіка
+
+|*retention-policy-in-days*
+|_7_
+|Кількість днів збереження повідомлення в Kafka
+|===
+////
+
+|===
+|Property|Value|Description
+
+|*num-partitions*
+|_1_
+|The number of sections within a topic to save notification
+
+|*replication-factor*
+|_1_
+|The number of replicas of the target topic
+
+|*retention-policy-in-days*
+|_7_
+|The number of days to keep a notification in Kafka
+|===
+
+[NOTE]
+//Перегляд та моніторинг подій, які не вдалося опрацювати, можливий через окремий веб-інтерфейс *kafka-ui*.
+Viewing and monitoring of failed events is possible through a separate *kafka-ui* web interface.
+
+//TIP: У разі необхідності відправлення подій адміністратором на повторне опрацювання, розглядається опція побудови окремого службового процесу на базі _Kafka Connect_, який буде переносити події з _Dead-Letter-Queue_ у цільовий топік.
+TIP: If it is necessary to send events to the administrator for reprocessing, the option of building a separate service process based on _Kafka Connect_, which will transfer events from the _Dead-Letter-Queue_ to the target topic, is being considered.
+

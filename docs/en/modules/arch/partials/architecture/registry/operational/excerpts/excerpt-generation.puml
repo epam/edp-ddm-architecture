@@ -1,0 +1,69 @@
+@startuml
+skinparam monochrome true
+
+actor "User" as user
+participant "Client app\n user portal" as cabinet
+participant "Kong \nAPI Management" as kong
+participant "User business processes \n management service" as user_process_mngmnt
+
+box "Business processes execution"
+participant "Business processes execution service" as bpms
+end box
+
+box "Reporting subsystem" #LightBlue
+participant "Excerpt generation API" as report_generation_api
+end box
+
+skinparam responseMessageBelowArrow false
+title Initiating excerpt generation through a business process
+
+user -> cabinet: Ordering excerpt generation service
+activate cabinet
+  cabinet -> cabinet: Entering input data through the start form
+  cabinet -> kong: Request for initiating a business process
+  activate kong
+    kong -> user_process_mngmnt: Request for initiating the business process
+    activate user_process_mngmnt
+      user_process_mngmnt -> bpms: Request for initiating the business process
+      activate bpms
+        bpms -> bpms: Processing input data
+        bpms -> bpms: Determining the type of excerpt
+        bpms -> bpms: Preparing data for generating the request
+        bpms -> bpms: Applying a system signature to the request data
+        note over bpms, report_generation_api: Excerpt type, need for system signature, generation input data, and initiator user's Access Token
+        bpms -> report_generation_api: Request for excerpt generation [asyncBefore / sync]
+        report_generation_api -> bpms: Generated excerpt identifier
+        alt Returning control to cabinet for asynchronous excerpt generation request [asyncBefore]
+        bpms -> cabinet: Return control to the user
+        cabinet -> cabinet: Navigate to "Services in Progress" page
+        cabinet -> user: View services in progress with excerpt generation status
+        end
+        loop Polling excerpt generation status
+          note over bpms, report_generation_api: Excerpt identifier and System user's Access Token
+          bpms -> report_generation_api: Retrieve excerpt generation status by identifier
+          bpms -> bpms: Check excerpt generation status
+          alt Excerpt successfully generated
+            bpms -> bpms: Save identifier in variable SYS_VAR_PROCESS_EXCERPT_ID
+            bpms -> bpms: Save process result in variable SYS_VAR_PROCESS_COMPLETION_RESULT
+            bpms -> bpms: Complete business process
+          else Excerpt generation error occurred
+            bpms -> bpms: Save process result in variable SYS_VAR_PROCESS_COMPLETION_RESULT
+            bpms -> bpms: Complete business process
+          end
+        end
+        alt Locking user's cabinet access for synchronous excerpt generation request until process completion [sync]
+          bpms -> cabinet: Return control to the user
+          cabinet -> cabinet: Navigate to "Ordered services" page
+          cabinet -> user: View ordered services with excerpt download option
+        end
+
+        == Obtaining information about excerpt generation completion  ==
+        user -> cabinet: Checking status of ordered services
+        cabinet -> cabinet: Navigate to "Ordered services" page
+        cabinet -> user: View ordered services with excerpt download option
+      deactivate bpms
+    deactivate user_process_mngmnt
+  deactivate kong
+ deactivate cabinet
+
+@enduml

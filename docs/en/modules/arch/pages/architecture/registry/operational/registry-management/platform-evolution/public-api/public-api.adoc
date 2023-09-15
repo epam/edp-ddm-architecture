@@ -1,0 +1,567 @@
+:toc-title: On this page:
+:toc: preamble
+:toclevels: 5
+:experimental:
+:sectnums:
+:sectnumlevels: 5
+:sectanchors:
+:sectlinks:
+:partnums:
+
+= Public API and rate limits for reading registry data
+
+NOTE: 🌐 This document is available in both English and Ukrainian. Use the language toggle in the top right corner to switch between versions.
+
+== General description
+
+//Для забезпечення доступу широкого загалу до даних реєстру які вважаються публічними та забезпечення можливості для сторонніх систем отримувати такі дані в актуальному стані, обробляти та візуалізувати їх, надається можливість позначати окремі пошукові критерії (`search conditions`) як публічні, що дозволить надалі використовувати їх без необхідності автентифікуватись.
+In order to ensure public access to registry data that is considered public and to ensure the possibility for third-party systems to receive such data in an up-to-date state, process and visualize them, it is possible to mark individual search criteria (`search conditions') as public, which will allow their further use without need to authenticate.
+
+////
+== Функціональні сценарії
+
+* Публікація пошукових запитів
+* Конфігурація ресурсів публічного API
+* Створення точок інтеграції для публічного API технічним адміністратором реєстру.
+* Отримання документації та використання публічного API.
+* Моніторинг стану та використання публічних пошукових критеріїв.
+* Зміна `rate-limit`-ів для існуючих точок інтеграції.
+////
+
+== Functional scripts
+
+* Publication of search requests
+* Configuration of public API resources
+* Creation of integration points for the public API by the registry technical administrator.
+* Getting documentation and using the public API.
+* Status monitoring and use of public search criteria.
+* Changing `rate-limits' for existing integration points.
+
+////
+== Ролі користувачів
+
+* Не авторизований користувач або стороння система
+* Розробник регламенту
+* Технічний адміністратор реєстру
+////
+== User roles
+
+* Unauthorized user or third-party system
+* Developer of regulations
+* Technical registry administrator
+
+////
+== Загальні принципи та положення
+
+* Публічним вважаються той API який не потребує автентифікації з боку клієнта.
+* Запити до Дата Фабрики здійснюються від імені системного користувача
+* В якості публічного API може бути представлені тільки пошукові запити (`search conditions`)
+* Обмеження доступу до публічного API (ip blacklist, geoip, захист від ddos-атак) поза межами даного дизайну
+* Виставлення точок інтеграції здійснюється в два етапи - через конфігурацію регламенту моделювальником реєстру і через зміну налаштувань реєстру шляхом додавання відповідних точок інтеграції в перелік `Публічний доступ` технічним адміністратором реєстру
+* Виставлення `wildecard` посилань є забороненим
+////
+
+== General principles and provisions
+
+* An API that does not require client authentication is considered public.
+* Requests to the Data Factory are made on behalf of the system user
+* Only search queries (`search conditions') can be presented as a public API
+* Restriction of access to the public API (ip blacklist, geoip, protection against ddos attacks) outside the scope of this design
+* The integration points are set up in two stages - through the configuration of the regulation by the registry modeler and through changing the registry settings by adding the corresponding integration points to the ``Public access'' list by the technical administrator of the registry
+* Wildecard links are prohibited
+
+//== Високорівневий дизайн рішення
+== High-level solution design
+
+image::architecture/registry/operational/registry-management/platform-evolution/public-api/context.svg[]
+
+[NOTE]
+//В першій ітерації вирішено не виділяти окремий екземпляр API Gateway для публічного API.
+In the first iteration, it was decided not to allocate a separate instance of API Gateway for the public API.
+
+
+//=== Діаграма міжсервісної взаємодії
+=== Interservice interaction diagram
+
+[plantuml]
+////
+----
+autonumber
+actor "Особа" as user
+participant "API Gateway\n(Kong)" as g
+participant "Platform Gateway" as pg
+participant "Keycloack" as um
+participant "REST API\n(public)" as rest
+user -> g: /api/public/data-factory/{public-search}
+g -> pg:  /public/data-factory/{public-search}
+pg -> pg: перевірка наявності токена
+pg -> um: автентифікація публічним користувачем
+return JWT-токен
+pg -> pg: кешування токена
+pg -> rest: http://registry-rest-api-public.{registry}.svc.cluster.local:8080\n/{public-search}
+return результати запиту
+pg --> g:
+g --> user:
+----
+////
+----
+autonumber
+actor "Person" as user
+participant "API Gateway\n(Kong)" as g
+participant "Platform Gateway" as pg
+participant "Keycloack" as um
+participant "REST API\n(public)" as rest
+user -> g: /api/public/data-factory/{public-search}
+g -> pg:  /public/data-factory/{public-search}
+pg -> pg: token availability check
+pg -> um: public user authentication
+return JWT-token
+pg -> pg: token caching
+pg -> rest: http://registry-rest-api-public.{registry}.svc.cluster.local:8080\n/{public-search}
+return query results
+pg --> g:
+g --> user:
+----
+
+
+//== Моделювання регламенту реєстру
+== Simulation of the registry regulation
+
+//=== Структура регламенту
+=== Structure of the regulation
+
+//Управління доступом здійснюється на рівні конфігурації дата моделі за допомогою тегу `exposeSearchCondition`
+Access control is carried out at the data model configuration level using the `exposeSearchCondition` tag
+
+//=== Розширення для моделювання
+=== Simulation extension
+
+[source, xml]
+----
+<exposeSearchCondition public="true" name="search-laboratories-by-city"/>
+----
+////
+При виставленні API як публічне, та моделюванні `searchCondition` для них моделювальнику слід взяти до уваги наступні рекомендації:
+
+* Кожен `searchCondition` який має бути опублікований як публічний, має бути створений окремо для цього сценарію, не варто виставляти до публічного доступу `searchCondition` яки використовуються для кабінетів, бізнес процесів та інтеграцій з _ШБО Трембіта_.
+* Рекомендований тип пагінації `page`, оскільки він дає змогу бачити загальну кількість записів не відображаючи їх.
+* `limit` для таких `searchCondition` має бути підібраний в залежності від типу даних і має бути найменшим достатнім.
+////
+
+When exposing an API as public and modeling `searchCondition` for them, the modeler should take into account the following recommendations:
+
+* Each `searchCondition` that should be published as public should be created separately for this scenario, it is not necessary to expose to public access `searchCondition` that are used for offices, business processes and integrations with _SHO Trembita_.
+* Recommended pagination type `page` as it allows you to see the total number of records without displaying them.
+* `limit` for such `searchCondition` should be selected depending on the data type and should be the smallest sufficient.
+
+//== Розгортання сервісів
+== Deployment of services
+
+//Для забезпечення відмовостійкості та відокремлення публічних запитів від інших задля підвищення безпеки розгортається окремий екземпляр сервісу `rest-api`.
+To ensure fault tolerance and separate public requests from others, a separate instance of the `rest-api` service is deployed to improve security.
+
+//=== Конфігурація NetworkPolicy
+=== NetworkPolicy configuration
+////
+Публічний екземпляр `REST API` можу бути доступний лише:
+
+* Користувач `public-user` з `realm`-у `external-system`
+* Тільки за допомогою метода `GET`
+* Тільки до `url` які були виставлені публічно та посилання до OpenAPI специфікації
+* Технічні лінки для актуатора та health-check мають бути доступні тільки в середині кластеру
+////
+
+A public `REST API' instance can only be accessed:
+
+* User `public-user` from `realm` to `external-system`
+* Only using the `GET` method
+* Only to `urls' that have been exposed publicly and links to the OpenAPI specification
+* Technical links for the actuator and health-check should be available only in the middle of the cluster
+
+//== Низькорівневий дизайн сервісів
+== Low-level design of services
+
+//=== Компоненти та їх призначення
+=== Components and their purpose
+
+////
+|===
+|Компонент|Призначення
+
+|infrastructure/monitoring
+|Встановлення та конфігурація моніторингу платформи
+|data-architecture/libraries/ddm-starter-swagger
+|Бібліотека для генерації `OpenAPI`-специфікації на основі внутрішніх правил
+|general/registry-configuration
+|Конфігурація та створення ресурсів реєстру
+| general/kong-admin-tools
+|Конфігурація глабальних плагінів для API Gateway
+|===
+////
+
+|===
+|Component|Appointment
+
+|infrastructure/monitoring
+|Installation and configuration of platform monitoring
+|data-architecture/libraries/ddm-starter-swagger
+|A library for generating an OpenAPI specification based on internal rules
+|general/registry-configuration
+|Configuration and creation of registry resources
+| general/kong-admin-tools
+|Configuration of global plugins for API Gateway
+|===
+
+//=== Моніторинг стану та навантаження для публічних API
+=== Health and load monitoring for public APIs
+
+//Для моніторингу актуального стану API метрики знімаються з `API Gateway` (`Kong`) за допомогою плагіну:
+To monitor the current state of the API, metrics are downloaded from `API Gateway` (`Kong`) using the plugin:
+
+[source, yaml]
+----
+apiVersion: configuration.konghq.com/v1
+kind: KongClusterPlugin
+metadata:
+  name: kong-prometheus-plugin
+  annotations:
+    kubernetes.io/ingress.class: kong
+  labels:
+    global: "true"
+config:
+  status_code_metrics: true
+  latency_metrics: true
+  bandwidth_metrics: true
+  per_consumer: true
+plugin: prometheus
+----
+
+[WARNING]
+//Дана конфігурація буде застосована до всіх абсолютно точок інтеграції, які виставлені через `API Gateway`.
+//Згідно з документацією дані налаштування можуть призводити до погіршення швидкодії `API Gateway`-ю, тому при суттєвій деградації швидкодії перелік метрик можна переглянути в бік зменшення, і винести їх конфігурацію на рівень окремих точок інтеграції.
+
+This configuration will be applied to absolutely all integration points that are exposed through `API Gateway`.
+According to the documentation, these settings can lead to a deterioration in the performance of ``API Gateway'', therefore, in the case of significant performance degradation, the list of metrics can be revised downwards, and their configuration can be brought to the level of individual integration points.
+
+//Створення сервісу для збирання метрик
+Creating a service for collecting metrics
+[source, yaml]
+----
+apiVersion: v1
+kind: Service
+metadata:
+  name: kong-prometheus-monitoring
+  labels:
+    app: kong-prometheus-monitoring
+spec:
+  selector:
+    app.kubernetes.io/name: kong
+  type: ClusterIP
+  ports:
+  - name: metrics
+    protocol: TCP
+    port: 8100
+    targetPort: 8100
+----
+
+and `ServiceMonitor`
+[source, yaml]
+----
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: kong-service-monitor
+spec:
+  namespaceSelector:
+    any: true
+  endpoints:
+  - port: metrics
+  selector:
+    matchLabels:
+      app: kong-prometheus-monitoring
+----
+//За основу Grafana Dashboard пропонується взяти https://grafana.com/grafana/dashboards/7424-kong-official/[офіційну].
+//Створення `ConfigMap` з дашбордом для моніторингу
+It is suggested to use https://grafana.com/grafana/dashboards/7424-kong-official/[official] as a basis for the Grafana Dashboard.
+Creation of `ConfigMap` with dashboard for monitoring
+
+.monitoring/deploy-templates/dashboard/public-api.yaml
+[source, yaml]
+----
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-public-api
+data:
+  public-api-statistic.json: |-
+  ...
+----
+
+
+.monitoring/deploy-templates/values.yaml
+[source, yaml]
+----
+dashboardsConfigMaps:
+  - configMapName: grafana-public-api
+    fileName: public-api-statistic.json
+----
+
+////
+Ключові метрики:
+
+* Кількість запитів по кожній точці інтеграції
+* Кількість успішних 2хх кодів, помилок сервера 5хх, та помилок клієнту 4хх, всі інші коди можуть бути винесені в окрему групу
+* Статистика швидкодії (найдовший запит, середні, найшвидший )
+////
+Key metrics:
+
+* The number of requests for each integration point
+* The number of successful 2xx codes, 5xx server errors, and 4xx client errors, all other codes can be assigned to a separate group
+* Performance statistics (longest request, average, fastest)
+
+//=== Отримання документації до публічного API
+=== Get documentation for the public API
+
+//Отримання специфікації (`OpenAPI`) для API який був позначений як публічний. (https://springdoc.org/faq.html#how-can-i-agreagte-external-endpoints-exposing-openapi-3-spec-inside-one-single-application[приклад])
+Getting the specification (`OpenAPI`) for an API that has been marked as public. (https://springdoc.org/faq.html#how-can-i-agreagte-external-endpoints-exposing-openapi-3-spec-inside-one-single-application[example])
+
+//`Rate-limit`-и не застосовуються до посилання документації, проте для зменшення навантаження на сервіс, відповідь додатково кешується на `API Gateway` (`Kong`) за допомогою `proxy-cache` плагіна.
+`Rate-limits' are not applied to the documentation link, however, to reduce the load on the service, the response is additionally cached on the `API Gateway' (`Kong') using the `proxy-cache' plugin.
+
+//Застосовується `TTL-based` кешування.
+//Конфігурація якого здійснюється на рівні конфігурації плагіну через `Gerrit`
+
+TTL-based caching is used.
+The configuration of which is carried out at the plug-in configuration level through `Gerrit`
+////
+Загальні вимоги до конфігурації кешування:
+
+* Кешування встановлюється тільки посилання до документації та тільки `GET` методу
+* `TTL` за замовчанням 15 хвилин
+* Кеш зберігається в пам`яті `API Gateway`-ю
+////
+General caching configuration requirements:
+
+* Caching is set only by the reference to the documentation and only by the `GET` method
+* ``TTL'' is 15 minutes by default
+* The cache is stored in memory by API Gateway
+
+//=== Створення сервісного облікового запису для виконання публічних запитів.
+=== Create a service account to perform public requests.
+
+//Попри те що формально точки інтеграції є публічними, для підтримання однорідності аудиту та логування в середині платформи, такі запити будуть здійснюватись від імені службового користувача з `realm`-у `external-system`.
+//Створення службового користувача `public-user` для авторизації на рівні `platform-gateway`.
+
+Although formally the integration points are public, in order to maintain uniformity of auditing and logging in the middle of the platform, such requests will be made on behalf of the official user from `realm' to `external-system'.
+Creation of service user `public-user` for authorization at `platform-gateway` level.
+
+.general/registry-configuration/values.yaml
+[source, yaml]
+----
+    publicUser:
+      name: public-user
+      clientId: public-user
+      public: false
+      secretName: keycloak-public-user-client-secret
+      targetRealm:
+        name: external-system
+    ...
+----
+
+//=== Надання доступу та встановлення rate limit-ів на рівні конфігурації.
+=== Providing access and setting rate limits at the configuration level.
+////
+Для всіх `url` з переліку має бути вимкнена перевірка заголовків автентифікації.
+
+Налаштування сервіса мають бути такими щоб `GET` запит до https://{domin}/api/public/data-factory/search-laboratories-by-city
+здійснював запит до `registry-rest-api-public.{registry-namespace}.svc.cluster.local:8080/search-laboratories-by-city`
+////
+Authentication header checking must be disabled for all `urls' listed.
+
+The service settings should be such that ``GET'' request to https://{domin}/api/public/data-factory/search-laboratories-by-city
+made a request to `registry-rest-api-public.{registry-namespace}.svc.cluster.local:8080/search-laboratories-by-city`
+
+//.Приклад спрощеної конфігурації
+.An example of a simplified configuration
+[source, yaml]
+----
+apiVersion: v1
+kind: Service
+metadata:
+  name: public-city-lab-route
+  labels:
+    app: registry-rest-api-public
+  annotations:
+    konghq.com/plugins: post-transformer, city-lab-rate-limiting
+    konghq.com/override: registry-rest-api-public:/search-laboratories-by-city
+    konghq.com/path: /search-laboratories-by-city
+spec:
+  ports:
+  - port: 80
+    targetPort: 8080
+    protocol: TCP
+    name: registry-rest-api-public
+  selector:
+    app: registry-rest-api-public
+----
+////
+Загальні вимоги до конфігурації `rate-limit`-ів:
+
+* Лічильник запитів зберігається в пам`яті `Redis`
+* Встановлюється на рівні точок інтеграції (`роутів`)
+* Ведеться для кожної `IP`-адреси користувача
+////
+
+General requirements for the configuration of rate-limits:
+
+* The request counter is stored in ``Redis'' memory
+* Set at the level of integration points (`routes')
+* Maintained for each `IP' address of the user
+
+//.Приклад конфігурації основних аспектів
+.An example of the configuration of the main aspects
+[source, yaml]
+----
+apiVersion: configuration.konghq.com/v1
+kind: KongPlugin
+metadata:
+  name: city-lab-rate-limiting
+plugin: rate-limiting
+config:
+  second: 5
+  hour: 100
+  limit_by: ip
+  policy: redis
+  ...
+----
+
+//== Адміністративний доступ
+== Administrative access
+
+//Задля запобігання помилкового виставлення API в якості публічного, передбачається необхідність конфігурації таких точок інтеграції не тільки моделювальником регламенту, але і технічним адміністратором реєстру. Також технічний адміністратор реєстру має виставити `rate limit`-и.
+In order to prevent the API from being mistakenly presented as public, it is assumed that such integration points need to be configured not only by the modeler of the regulation, but also by the technical administrator of the registry. Also, the technical administrator of the registry should set rate limits.
+
+//== Управління конфігурацією реєстру
+== Registry configuration management
+
+//Управління здійснюється шляхом додавання технічним адміністратором реєстру шляхів до списку `Публічний доступ`,
+Management is carried out by adding the path registry to the `Public access` list by the technical administrator,
+
+//У випадку видалення існуючих точок інтеграції або тимчасове вимкнення їх при зверненні до них користувач отримує, що таких точок інтеграції не існує `HTTP 404`.
+In case of deleting existing integration points or temporarily disabling them when accessing them, the user receives `HTTP 404` that such integration points do not exist.
+
+//=== Конфігурація реєстру
+=== Registry configuration
+
+//В `Helm` чарті `registry-configurations` секція публічне `API` яка передбачає конфігурацію технічної назви для публічного `API`, відносного шляху до точки інтеграції в `public-rest-api` та лімітів.
+In `Helm`  chart `registry-configurations` section public `API` which provides configuration of technical name for public `API`, relative path to integration point in `public-rest-api` and limits.
+[source, yaml]
+----
+publicApi:
+  - name: city-lab
+    enabled: true
+    url: /search-laboratories-by-city
+    limits:
+        second: 5
+        hour: 100
+  - ...
+----
+
+//Поточні значення використовуються для створення `kong` сервісу та конфігурації `rate-limit` плагіна до нього.
+The current values are used to create the `kong` service and configure the `rate-limit` plugin for it.
+
+//При досягнені ліміту, формується відповідь від API Gateway з кодом 429 та тілом
+When the limit is reached, a response from API Gateway with code 429 and a body is generated
+[source, json]
+----
+{ "message": "API rate limit exceeded" }
+----
+
+////
+|===
+|Назва атрибута |Функціональне значення
+
+|name
+|Технічна назва правила, служить унікальним ідентифікатором правила і не може бути змінена
+
+|enabled
+|Відображає стан точки інтеграції, у випадку false роут не видаляється API Gateway формує відповідь з кодом 503
+
+|url
+|Відносний шлях до пошукового запису, може бути змінений
+
+|limits
+|Перелік лімітів які застосовуються до точки інтеграції
+
+|===
+////
+|===
+|Attribute name |Functional value
+
+|name
+|The technical name of the rule, serves as the unique identifier of the rule and cannot be changed
+
+|enabled
+|Displays the state of the integration point, if false the route is not removed API Gateway generates a response with code 503
+
+|url
+|The relative path to the search entry can be changed
+
+|limits
+|List of limits applied to the integration point
+
+|===
+
+//=== Інтерфейси адміністратора
+=== Admin interfaces
+
+
+https://www.figma.com/file/mWTVRcPrvFwsek4o4eJlFp/05-Admin-Console?type=design&node-id=4166-41260&t=jYpg90NpnfO39BIL-0[Actual mockups]
+
+image::architecture/registry/operational/registry-management/platform-evolution/public-api/public-api-add.png[]
+image::architecture/registry/operational/registry-management/platform-evolution/public-api/public-api-list.png[]
+
+//== Високорівневий план розробки
+== High-level development plan
+
+//=== Технічні експертизи
+=== Technical examinations
+
+* FE
+* BE
+
+//=== План розробки
+=== Development plan
+////
+* Публічне API
+** Розширення схеми та бібліотеки `Liquibase`.
+** Зміна шаблону розгортання для `registry-rest-api`.
+** Додавання плагіну для збирання метрик з `API Gateway`.
+** Адаптація та розгортання дашборд Grafana.
+** Додавання секції для конфігурації публічного `API` в `registry-configuration`.
+** Додавання валідація унікальності імені та `url` на пайплайні внесення змін в реєстр.
+** Додавання типу інтеграції "Публічний доступ" на рівні Технічної консолі адміністратора та конфігурації `registry-configuration` з конфігурації реєстру.
+* Rate limits
+** Зміна шаблону розгортання та створення плагінів `rate limit`-ів в `registry-configuration`
+** Розширення секції конфігурації публічне API `rate limit`-ами.
+** Додавання перевірки наявності рейт лімітів на пайплайні внесення змін в реєстр.
+** Налаштування кешування документації
+** Винесення налаштувань на рівень конфігурації реєстру.
+** Додавання можливості конфігурації через адміністративну консоль.
+////
+
+* Public API
+** Extension of ``Liquibase'' scheme and library.
+** Changed deployment template for `registry-rest-api`.
+** Adding plugin for collecting metrics from `API Gateway`.
+** Grafana dashboard adaptation and deployment.
+** Adding section to configure public `API` in `registry-configuration`.
+** Adding validation of the uniqueness of the name and `url' to the pipeline of making changes to the registry.
+** Adding "Public access" integration type at Admin Technical Console level and configuration `registry-configuration` from registry configuration.
+* Rate limits
+** Change of deployment template and creation of `rate limit' plugins in `registry-configuration'
+** Extension of the configuration section of the public API with rate limits.
+** Adding a check for the presence of rate limits on the pipeline of making changes to the register.
+** Documentation caching settings
+** Transferring settings to the registry configuration level.
+** Adding the ability to configure through the administrative console.

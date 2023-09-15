@@ -1,0 +1,171 @@
+= Автоматичне створення користувачів для надавачів послуг при першій успішній автентифікації
+
+== Загальний опис
+
+Для автентифікації в кабінеті надавача послуг користувач має бути попередньо створений. Процес створення користувача потребує вказання персональних даних і при необхідності створити велику кількість користувачів цей процес може зайняти багато часу. Задля спрощення цього процесу пропонується реалізувати механізм створення користувача при першій автентифікації за прикладом кабінету отримувачів послуг.
+
+== Функціональні сценарії
+
+* Вхід в кабінет надавача послуг без попередньо створеного користувача
+* Увімкнення створення користувачів надавачів послуг при першій автентифікації
+* Автоматичний старт бізнес-процесу верифікації автостворених надавачів послуг
+
+== Ролі користувачів
+
+* Надавачі послуг
+* Технічний адміністратор реєстру
+
+== Загальні принципи та положення
+
+* Регулювання доступу до бізнес-процесів для створених під час автентифікації надавачів послуг повністю на стороні моделювання БП.
+* Для автоматично створених надавачів послуг передбачена окрема роль `ungergistered-officer`
+* Зміна ролей для автоматично створених надавачів послуг здійснюється за допомогою бізнес-процесів
+* Бізнес-процеси для зміни ролей можуть бути ініційовані автоматично
+* Створеним під час автентифікації надавачам послуг призначаються ролі за замовченням які вказані в конфігурації реєстру.
+* Управління життєвим циклом користувача лежить поза межами даного дизайну.
+* На рівні кабінетів та сервісів доступ розширено для надавачів послуг з роллю `unregistered-officer`
+
+== Управління конфігурацією реєстру
+
+=== Конфігурація реєстру
+
+При увімкненні авто створенні надавачів послуг створюється додаткова роль `unregistered-officer` та встановлюється як роль за замовченням.
+
+
+
+.Створення системних ролей для кабінету надавачів послуг
+[source, yaml]
+----
+realmRoleBatches:
+    citizenSystemRoles:
+      name: officer-system-roles
+      realm: officer-portal
+      role:
+        batch:
+          name: citizen-system-roles
+          list:
+            - officer
+            - unregistered-officer
+----
+
+.Увімкнення можливості створення надавачів послуг під час першої автентифікації
+[source, yaml]
+----
+idGovUaOfficerRedirectorFlow:
+  name: id-gov-ua-officer-redirector
+  realm: officer-portal
+  # скорочена конфігурація
+  authenticators:
+    # скорочена конфігурація
+    officerRedirectorConfiguration:
+      # зміни конфігурації
+      authenticatorConfig:
+        selfRegistration:
+          enabled: true
+          defaultRoles: "unregistered-officer"
+
+officerAuthFlow:
+  name: officer-portal-dso-officer-auth-flow
+  realm: officer-portal
+  # скорочена конфігурація
+  authenticators:
+    # скорочена конфігурація
+    dsOfficerAuthenticator:
+      name: ds-officer-authenticator
+      # скорочена конфігурація
+      authenticatorConfig:
+        # зміни конфігурації
+        selfRegistration:
+          enabled: true
+          defaultRoles: "unregistered-officer"
+----
+
+=== Інтерфейси адміністратора
+
+image::architecture/platform/operational/user-management/officer-auto-registration/officer-auto-registration-control-plane.png[]
+
+== Низькорівневий дизайн сервісів
+
+=== Компоненти та їх призначення
+
+`keycloak-ds-officer-authenticator` - компонент розширення `Keycloak` для автентифікації надавачів послуг.
+
+`keycloak-id-gov-ua-officer-core` - модуль для автентифікації за допомогою ІІТ віджета
+
+`keycloak-ds-officer-authenticator-core` - модуль для автентифікації за допомогою сервісу `id.gov.ua`
+
+[source, java]
+.Приклад сервісу для створення надавача послуг
+----
+package com.epam.digital.data.platform.keycloak.ds.officer.authenticator.service;
+
+public class OfficerRegistrationService implements RegistrationService {
+
+    public UserModel registerUser(AbstractAuthenticationFlowContext ctx, UserAttributes attributes) {
+    UserModel newUser = super.registerUser(ctx, attributes);
+    Stream<String> roles = getRoles(ctx, FormParam.OFFICER_DEFAULT_ROLES.value());
+    roles.forEach(r -> newUser.grantRole(ctx.getRealm().getRole(r)));
+    user.setSingleAttribute(Attribute.EDRPOU.value(), attributes.getEdrpou());
+    // set data from certificate to user attributes
+    return newUser;
+  }
+}
+----
+
+[source, java]
+.Приклад можливих змін в com.epam.digital.data.platform.keycloak.ds.officer.authenticator.DsoAuthenticator та com.epam.digital.data.platform.keycloak.idgovua.officer.authenticator.IdGovUaOfficerAuthenticator
+----
+private UserModel getOrCreateUser(UserLocator userLocator,
+  RegistrationService registrationService, AuthenticationFlowContext context,
+  UserAttributes attributes) {
+    UserModel userModel = userLocator.locateUser(context, attributes);
+    if (userModel == null && !isAutoRegistration()) {
+        // create an error response
+    }
+    return userModel == null ? registrationService.registerUser(context, attributes) : userModel;
+}
+----
+
+.Приклад розширення ролей для на рівні портала constants/roles.ts
+[source, typescript]
+----
+export enum ROLES {
+  OFFICER = 'officer',
+  UNREGISTERED_OFFICER = 'unregistered-officer'
+}
+----
+
+.Приклад розширення ролей на рівін спільної бібліотеки (ddm-starter-security) com.epam.digital.data.platform.starter.security.dto.enums
+[source, java]
+----
+public enum KeycloakPlatformRole {
+
+  OFFLINE_ACCESS("offline_access"),       // default keycloak role, will be removed
+  UMA_AUTHORIZATION("uma_authorization"), // default keycloak role, will be removed
+    ...
+  UNREGISTERED_OFFICER("unregistered-officer");
+
+  private final String name;
+
+  public static boolean containsRole(String roleName) {
+    return Arrays.stream(values()).anyMatch(role -> role.getName().equals(roleName));
+  }
+}
+----
+
+== Високорівневий план розробки
+
+=== Технічні експертизи
+
+* BE (Go, Java)
+* FE
+
+=== План розробки
+
+* Додавання конфігурації на рівні компоненти (`registry-configuration`).
+* Винесення конфігурації на рівень реєстру.
+* Створення екранів в адміністративній консолі.
+* Створення механізму для автоматичного старту БП в кабінеті надавачів послуг.
+* Розширення переліку дозволених ролей.
+* Додавання гілки створення надавачів послуг в автентифікаторах `Keycloak`.
+* Створення референтних прикладів БП.

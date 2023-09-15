@@ -1,0 +1,110 @@
+@startuml
+skinparam shadowing false
+skinparam DatabaseBackgroundColor white
+skinparam DatabaseBorderColor #2688d4
+skinparam QueueBackgroundColor white
+skinparam QueueBorderColor #2688d4
+skinparam NoteBackgroundColor white
+skinparam NoteBorderColor #2688d4
+skinparam ActorBackgroundColor white
+skinparam ControlBackgroundColor white
+skinparam ControlBorderColor #2688d4
+skinparam sequence {
+    ArrowColor #2688d4
+    ActorBorderColor #2688d4
+    LifeLineBorderColor #2688d4
+    ParticipantBorderColor #2688d4
+    ParticipantBackgroundColor white
+    BoxBorderColor #2688d4
+    BoxBackgroundColor white
+}
+
+box Авторизований партнер
+participant "Сервіс \nнотифікацій \nкористувачів" as notification_service
+end box
+
+box Екосистема "Дія"
+  participant "Сервіс розсилки \npush-нотифікацій" as diia_notification_service
+end box
+
+notification_service -> diia_notification_service: **Аутентифікація партнера** \n/api/v1/auth/partner/{partnerToken}
+diia_notification_service --> notification_service: **200** - Токен авторизації: <authorization token>
+note right
+{
+  "token": "<authorization token>"
+}
+end note
+
+group Сеанс взаємодії з використанням отриманого токену авторизації - 2 години
+  notification_service -> diia_notification_service: **Створення шаблону нотифікації** \nPOST /api/v1/notification/template \n*Authorization: "Bearer <authorization token>"
+  note left
+  {
+    "actionType": "message",
+    "templateType": "attention",
+    "title" : "Українське бюро кредитних історій",
+    "shortText" : "Новий кредитний договір...",
+    "fullText" : "У кредитну історію надійшла..."
+  }
+  end note
+
+  diia_notification_service --> notification_service: **201** - Ідентифікатор шаблону
+  note right
+  {
+    "templateId": "6132008a2db328003c5d1d43"
+  }
+  end note
+
+  notification_service -> diia_notification_service: **Реєстрація розсилки push-нотифікацій за заданим шаблоном** \nPOST /api/v1/notification/distribution/push \n*Authorization: "Bearer <authorization token>"
+  note left
+  {
+      "templateId": "6132008a2db328003c5d1d43",
+      "recipients": [
+          {
+              "rnokpp": "314...",
+              "id": "string",
+              "parameters": [
+                  {
+                      "key": "string",
+                      "value": "string"
+                  }
+              ]
+          }
+      ]
+  }
+  end note
+
+  diia_notification_service --> notification_service: **201** - Ідентифікатор розсилки
+  note right
+  {
+    "distributionId": "12345678901"
+  }
+  end note
+
+  notification_service -> diia_notification_service: **Отримання статусу розсилки push-нотифікацій** \nGET /api/v1/notification/distribution/push/{distributionId}/status \n*Authorization: "Bearer <authorization token>"
+
+  diia_notification_service --> notification_service: **200** - Статус розсилки
+  note right
+  {
+    "status": "enum ['pending', 'in-progress', 'sent', 'closed']"
+  }
+  end note
+
+  notification_service -> diia_notification_service: **Отримання результату розсилки push-нотифікацій** \nGET /api/v1/notification/distribution/push/{distributionId} \n*Authorization: "Bearer <authorization token>"
+
+  diia_notification_service --> notification_service: **200** - Результат розсилки
+  note right
+  {
+    "recipients": [
+      {
+        "id": "string",
+        "rnokpp": "314...",
+        "status": "enum ['not-found', 'sent', 'read', 'error']"
+      }
+    ]
+  }
+  end note
+
+  notification_service -> diia_notification_service: **Зупинка розсилки push-нотифікацій** \nDELETE /api/v1/notification/distribution/push/{distributionId} \n*Authorization: "Bearer <authorization token>"
+  diia_notification_service --> notification_service: **204** - Результат зупинки або видалення розсилки
+end
+@enduml

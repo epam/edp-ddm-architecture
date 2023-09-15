@@ -1,0 +1,360 @@
+= Uploading and editing a file
+//= Завантаження файлу та його редагування
+include::platform:ROOT:partial$templates/document-attributes/default-set-en.adoc[]
+
+include::platform:ROOT:partial$admonitions/language-en.adoc[]
+
+The Platform team developed the reference examples of regulations modeling that can help developers to understand better the specifics of interaction with the system when working with digital documents.
+//Команда Платформи розробила референтні приклади моделювання регламенту, які допоможуть розробникам краще розуміти специфіку взаємодії із системою при роботі із цифровими документами.
+
+== Preconditions
+//== Передумови
+
+. Use the reference examples of regulations modeling.
+//. Скористайтеся референтними прикладами моделювання регламенту.
++
+[NOTE]
+====
+Examples of reference business process diagrams and UI forms are available in the demo registry regulations under the corresponding names with the *`reference-`* prefix:
+//Приклади схем референтного бізнес-процесу та UI-форм доступні у регламенті демо-реєстру за відповідними назвами із префіксом :
+
+* _reference-upload-update-digital-document.bpmn_
+* _reference-digital-document-upload.json_
+* _reference-digital-document-edit.json_
+* _reference-digital-document-review.json_
+
+TIP: Visit the xref:registry-admin/cp-deploy-consent-data.adoc[] page to learn how to deploy a demo registry and get reference examples of regulations modeling.
+//TIP: Як розгорнути демо-реєстр та отримати референтні приклади моделювання регламенту, дивіться на сторінці xref:registry-admin/cp-deploy-consent-data.adoc[].
+====
+
+. Model the Liquibase changeset to create the `parent_data` table according to your logical data model. In our reference example, the following logical model is used:
+//. Змоделюйте Liquibase changeset для створення таблиці `parent_data` відповідно до вашої логічної моделі даних. У нашому референтному прикладі використано наступну логічну модель:
++
+[plantuml]
+----
+@startuml
+entity "parent_data" as parent_data {
+  *id: UUID <<PK>>
+  --
+  *parent_full_name: TEXT
+  *phone_number: TEXT
+  additional_phone_number: TEXT
+}
+@enduml
+
+----
++
+The Liquibase template of the physical model will look as follows: ::
++
+.Creating the parent_data table
+[source,xml]
+----
+<changeSet id="create_table_parent_data" author="your_author_name">
+        <comment>CREATE TABLE parent_data</comment>
+        <createTable tableName="parent_data" ext:historyFlag="true">
+            <column name="id" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="pk_parent_data"/>
+            </column>
+            <column name="parent_full_name" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="phone_number" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="additional_phone_number" type="TEXT"/>
+        </createTable>
+</changeSet>
+----
++
+TIP: For more information on creating registry data model tables and other tags, see xref:data-modeling/data/physical-model/liquibase-ddm-ext.adoc[].
+//TIP: Детальну інформацію про створення таблиць моделі даних реєстру та інші теги ви можете переглянути на сторінці xref:data-modeling/data/physical-model/liquibase-ddm-ext.adoc[].
+
+. Prepare the corresponding CSV file for uploading to the system.
+//. Підготуйте відповідний CSV-файл до завантаження у систему.
++
+.Example of the CSV file content containing one record
+----
+parents_full_name;phone_number;additional_phone_number
+Bruce Don Walker;38(000)111 11 11;
+----
++
+[TIP]
+====
+The initial table filling with data uses the PL/pgSQL database procedure.
+//Первинне наповнення таблиць даними відбувається за допомогою БД-процедури PL/pgSQL.
+
+* For a detailed description of the procedure on the initial data loading, read the xref:data-modeling/initial-load/data-initial-data-load-pl-pgsql.adoc[] page.
+//* Детальний опис процедури для первинного завантаження даних читайте на сторінці xref:data-modeling/initial-load/data-initial-data-load-pl-pgsql.adoc[].
+
+* Also see xref:study-project/study-tasks/task-1-registry-db-modeling.adoc[] for practical application of the initial loading when modeling the regulations.
+//* Також перегляньте xref:study-project/study-tasks/task-1-registry-db-modeling.adoc[] для ознайомлення із практичним застосуванням первинного завантаження при моделюванні регламенту.
+====
+
+. Model your own business process using the following example.
+//. Змоделюйте власний бізнес-процес за наведеними прикладом.
+
+== Business Process Modeling
+//== Моделювання бізнес-процесу
+
+.The general view of a business process for downloading and editing files
+//.Загальний вигляд бізнес-процесу завантаження та редагування файлів
+image::best-practices/bp-upload-edit-file/bp-upload-edit-file-1.png[]
+
+. Simulate the *User Task* and the corresponding UI form using which you can download prepared files. In our example, that is `CSV`.
+//. Змоделюйте користувацьку задачу (*User Task*) та відповідну UI-форму, через яку ви зможете завантажувати підготовлені файли. У нашому прикладі -- це `CSV`.
++
+[TIP]
+====
+You can learn more about uploading digital documents on the business process forms on the page xref:bp-modeling/forms/components/file/component-file-multiple-values.adoc[].
+//Детальніше про завантаження цифрових документів на формах бізнес-процесу ви можете ознайомитися на сторінці xref:bp-modeling/forms/components/file/component-file-multiple-values.adoc[].
+====
++
+Pass the file parameter to the script task for further processing.
+//Параметри з файлу передайте до скрипт-задачі для подальшої обробки.
+
+. Model the Script Task and generate a script for processing, loading, and retrieving the metadata of a digital document. For that, the script uses two JUEL functions:
+//. Змоделюйте скрипт-задачу (Script Task) та сформуйте скрипт для обробки, завантаження та отримання метаданих цифрового документа. Для цього у скрипті використані дві JUEL-функції:
+
+* xref:bp-modeling/bp/modeling-facilitation/modelling-with-juel-functions.adoc#load-digital-document[load_digital_document()]
+* xref:bp-modeling/bp/modeling-facilitation/modelling-with-juel-functions.adoc#get-digital-document-metadata[get_digital_document_metadata()]
+
+//Розглянемо більш детально Groovy-скрипт. Ви можете переглянути його у редакторі скриптів на скрипт-задачі: ::
+Let's take a closer look at the Groovy script. You can view it in the script editor for script tasks: ::
++
+._The script for processing a CSV file that user adds using a user task_
+//._Скрипт обробки CSV-файлу, який користувач додає через користувацьку задачу_
+[%collapsible]
+====
+[source,groovy]
+----
+def file = submission('UserTask_AddDocument').formData.prop('file').elements().get(0)
+        def id = file.prop('id').value();
+
+        def document = load_digital_document(id)
+        def originalMetadata = get_digital_document_metadata(id)
+
+        def csvData = new String(document, 'UTF-8')
+        if (csvData.startsWith("\ufeff")) {
+          csvData = csvData.substring(1)
+        }
+
+        def records = csvData.readLines()
+
+        def headers = records[0].split(';')
+
+        set_variable("originalHeaders", headers)
+
+        def jsonData = []
+        for (int i = 1; i < records.size(); i++) {
+          def record = records[i].split(';', -1)
+          def recordData = [:]
+          for (int j = 0; j < headers.size(); j++) {
+            recordData[headers[j]] = record[j]
+          }
+          jsonData.add(recordData)
+        }
+
+        def output = [:]
+        output['csvFile'] = jsonData
+
+        set_variable('originalMetadata', S(originalMetadata, 'application/json'))
+        set_variable('csvFile', S(output, 'application/json'))
+----
+
+This script processes the CSV file that the user adds using the `UserTask_AddDocument` task. Let's see how it works:
+//Цей скрипт обробляє CSV-файл, який користувач додає через задачу `UserTask_AddDocument`. Розгляньмо, як він працює:
+
+. The script first receives a file with data that the user downloaded in the UI form of the portal:
+//. Скрипт спочатку отримує файл із даними, який користувач завантажив на UI-формі Кабінету:
++
+[source,groovy]
+----
+def file = submission('UserTask_AddDocument').formData.prop('file').elements().get(0)
+def id = file.prop('id').value();
+----
+
+. Then the `load_digital_document(id)` function is used to load a digital document with the specified ID, and we also get the metadata of this document:
+//. Потім використовується функція `load_digital_document(id)`, щоб завантажити цифровий документ зі вказаним ID, а також отримуємо метадані цього документа:
++
+[source,groovy]
+----
+def document = load_digital_document(id)
+def originalMetadata = get_digital_document_metadata(id)
+----
+
+. The digital document we receive is converted from bytes to a string using the `UTF-8` encoding. If the string starts with `BOM` (byte order mark), it is deleted:
+//. Цифровий документ, який ми отримали, перетворюється з байтів у рядок (стрічку) з використанням кодування `UTF-8`. Якщо стрічка починається з `BOM` (позначка порядку байтів), вона видаляється:
++
+[source,groovy]
+----
+def csvData = new String(document, 'UTF-8')
+if (csvData.startsWith("\ufeff")) {
+  csvData = csvData.substring(1)
+}
+----
+
+. Data from the CSV file is read line by line. The first line contains headers that are stored into the variable:
+//. Дані з CSV-файлу читаються рядок за рядком. Перший рядок містить заголовки, які зберігаються в змінну:
++
+[source,groovy]
+----
+def records = csvData.readLines()
+def headers = records[0].split(';')
+----
+
+. Then the script goes through each line of the CSV file (except the first line), divides the line into separate values using the `;` separator and creates an associative array (`map`), where the keys correspond to CSV headers, and the values correspond to the specific values in the line. All these associative arrays are compiled into the list:
+//. Потім скрипт проходить по кожному рядку CSV-файлу (крім першого), ділить рядок на окремі значення за допомогою розділювача (`;`) і створює асоціативний масив (`map`), де ключі відповідають заголовкам CSV, а значення -- конкретним значенням в рядку. Всі ці асоціативні масиви збираються у список:
++
+[source,groovy]
+----
+def jsonData = []
+for (int i = 1; i < records.size(); i++) {
+  def record = records[i].split(';', -1)
+  def recordData = [:]
+  for (int j = 0; j < headers.size(); j++) {
+    recordData[headers[j]] = record[j]
+  }
+  jsonData.add(recordData)
+}
+----
+
+. At the final stage, the script saves the original document metadata and processed CSV file data into the `originalMetadata` and `csvFile` variables that can be used elsewhere in the business process:
+//. На завершальному етапі скрипт зберігає оригінальні метадані документа та оброблені дані CSV-файлу до змінних `originalMetadata` та `csvFile`, які можуть використовуватися в інших місцях бізнес-процесу:
++
+[source,groovy]
+----
+set_variable('originalMetadata', S(originalMetadata, 'application/json'))
+set_variable('csvFile', S(output, 'application/json'))
+----
+
+In the event that you receive a CSV file from a user and want to process it in a workflow, this script is a good example of how this can be done.
+//У випадку, якщо ви отримуєте CSV-файл від користувача і хочете обробити його в робочому процесі, цей скрипт -- хороший приклад того, як це можна зробити.
+====
+
+. Pass the CSV file data to the next custom form. This can be done by entering in the *Form data pre-population* the `${csvFile}` variable, obtained as a result of executing the Groovy script in a previous script task. This UI form involves editing the data of a digital document (_here, entering the new data_).
+//. Передайте дані CSV-файлу до наступної користувацької форми. Зробити це можна, вказавши у полі *Form data pre-population* змінну `${csvFile}`, отриману в результаті виконання Groovy-скрипту у попередній скриптовій задачі. Ця UI-форма передбачає редагування даних цифрового документа (_тут -- додавання нових даних_).
++
+image:best-practices/bp-upload-edit-file/bp-upload-edit-file-2.png[]
+
+. Model a Script Task and generate a script to save the digital document to an intermediate repository. To do this, the script uses the xref:bp-modeling/bp/modeling-facilitation/modelling-with-juel-functions.adoc#save-digital-document[save_digital_document()] JUEL function.
+//. Змоделюйте скрипт-задачу (Script Task) та сформуйте скрипт для збереження цифрового документа до проміжного сховища. Для цього у скрипті використана JUEL-функція xref:bp-modeling/bp/modeling-facilitation/modelling-with-juel-functions.adoc#save-digital-document[save_digital_document()].
+
+Let's take a closer look at the Groovy script. You can view it in the script editor for script tasks: ::
++
+._The script for saving a downloaded file to an intermediate data storage_
+[%collapsible]
+====
+[source,groovy]
+----
+import groovy.json.JsonSlurper
+
+        def payload = submission('UserTask_EditDocumentData').formData.prop('csvFile').elements()
+        def records = new JsonSlurper().parseText(payload.toString())
+        def csvData = "\uFEFF" + originalHeaders.join(';')
+
+        records.each { record ->
+          def values = originalHeaders.collect { header -> record.get(header) }
+          def csvRow = values.join(';')
+          csvData += '\n' + csvRow
+        }
+
+        def content = csvData.getBytes('UTF-8')
+
+        def fileName = originalMetadata.prop('name').value()
+        def metadata = save_digital_document(content, fileName)
+
+        def result = [:]
+        result['uploadedFile'] = [metadata]
+
+        set_variable('result', S(result, 'application/json'))
+----
+This Groovy script performs several steps, including:
+//Цей Groovy скрипт виконує декілька кроків, зокрема:
+
+. It gets data from the form named `UserTask_EditDocumentData`, which is a JSON object, and converts it into the Groovy object using `JsonSlurper`.
+//. Отримує дані з форми під назвою `UserTask_EditDocumentData`, які являють собою JSON об'єкт, та конвертує їх в об'єкт Groovy за допомогою `JsonSlurper`.
++
+[source,groovy]
+----
+def payload = submission('UserTask_EditDocumentData').formData.prop('csvFile').elements()
+def records = new JsonSlurper().parseText(payload.toString())
+----
+
+. It initiates the `csvData` variable with the header values from the original file separated by the `;` symbol.
+//. Ініціює змінну `csvData` зі значеннями заголовків з оригінального файлу, що розділені символом `;`.
++
+[source,groovy]
+----
+def csvData = "\uFEFF" + originalHeaders.join(';')
+----
+
+. It sorts through the JSON records (which were CSV) and forms a CSV string for each record, adding it to `csvData`.
+//. Перебирає записи JSON (що були CSV) та для кожного запису формує рядок CSV, додаючи його до `csvData`.
++
+[source,groovy]
+----
+records.each { record ->
+  def values = originalHeaders.collect { header -> record.get(header) }
+  def csvRow = values.join(';')
+  csvData += '\n' + csvRow
+}
+----
+
+. It converts `csvData` into a byte array with the `UTF-8` encoding.
+//. Конвертує `csvData` в байтовий масив із кодуванням `UTF-8`.
++
+[source,groovy]
+----
+def content = csvData.getBytes('UTF-8')
+----
+
+. It saves the updated document in the digital document service and retrieves the metadata of the document.
+//. Зберігає оновлений документ в сервісі цифрових документів та отримує метадані документа.
++
+[source,groovy]
+----
+def fileName = originalMetadata.prop('name').value()
+def metadata = save_digital_document(content, fileName)
+----
+
+. It creates an object that contains the metadata of the loaded document and stores it in the `result` variable of the process.
+//. Створює об'єкт, який містить метадані завантаженого документа, та зберігає його у змінній `result` процесу.
++
+[source,groovy]
+----
+def result = [:]
+result['uploadedFile'] = [metadata]
+set_variable('result', S(result, 'application/json'))
+----
++
+Collectively, this script performs the task of converting the JSON format back to CSV, stores the updated CSV document in the digital document service, and stores the metadata of the new document into the process variable.
+//В сукупності, цей скрипт виконує задачу конвертації JSON формату назад у CSV, зберігає оновлений CSV документ в сервісі цифрових документів, та зберігає метадані нового документа в змінній процесу.
+====
+
+. Similar to step 3, pass the data from the updated file to the UI form, but this time in the *Form data pre-population* field, enter the `${result}` variable obtained in the previous script. This form will show you information about the file.
+//. Аналогічно до кроку 3, передайте дані з оновленого файлу на UI-форму, лише на цей раз у полі *Form data pre-population* вкажіть змінну `${result}`, отриману у попередньому скрипті. Ця форма покаже вам інформацію про файл.
+
+. Model a script task and use the script to prepare the data obtained from a digital document to be stored in the registry data storage.
+//. Змоделюйте скрипт-задачу та використайте скрипт, щоб підготувати дані, отримані з цифрового документа, для збереження до сховища даних реєстру.
++
+----
+set_transient_variable('payload', submission('UserTask_ViewEditedFileAndSign').formData.prop('uploadedFile').elements().first())
+----
++
+The script receives data from the `UserTask_ViewEditedFileAndSign` task via the `submission()` function, processes it, and saves it to the `payload` temporary variable using the `set_transient_variable()` function.
+//Скрипт отримує дані із задачі `UserTask_ViewEditedFileAndSign` через функції `submission()`, обробляє їх та зберігає до тимчасової змінної `payload` за допомогою функції `set_transient_variable()`.
+
+. Save the data to the permanent storage. To do this, create the *Service Task* and use the *Batch creation of entities in data factory* delegate.
+//. Збережіть дані до постійного сховища. Для цього створіть сервісну задачу (*Service Task*) та використайте делегат *Batch creation of entities in data factory*.
++
+TIP: The use of the delegate when loading files is described in detail here: xref:bp-modeling/bp/element-templates/bp-element-templates-installation-configuration.adoc#batch-creation-entities-v2[Batch creation of entities in data factory v2].
+//TIP: Використання делегата при завантаженні файлів детально описано тут: xref:bp-modeling/bp/element-templates/bp-element-templates-installation-configuration.adoc#batch-creation-entities-v2[Створення сутностей масивом у фабриці даних (Batch creation of entities in data factory v2)].
++
+image::best-practices/bp-upload-edit-file/bp-upload-edit-file-3.png[]
+
+== Related pages
+//== Пов'язані сторінки
+
+* xref:bp-modeling/bp/modeling-facilitation/modelling-with-juel-functions.adoc[]
+* xref:bp-modeling/forms/components/file/component-file-multiple-values.adoc[]
+* xref:bp-modeling/bp/loading-data-from-csv.adoc[]

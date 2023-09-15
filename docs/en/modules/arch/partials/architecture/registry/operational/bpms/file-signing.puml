@@ -1,0 +1,106 @@
+@startuml
+skinparam monochrome true
+
+actor "User" as user
+participant "User portal client application" as cabinet
+participant "Kong \nAPI Management" as kong
+participant "User tasks management service" as user_task_mngmnt
+participant "Business processes management service" as bpms
+participant "QES operations service" as dso
+participant "Ceph object storage \n(bucket: lowcode-form-data-storage)" as form_data_ceph
+participant "Data Factory" as data_factory
+
+skinparam responseMessageBelowArrow false
+title Signing form data with file attachments through the user portal
+
+user -> cabinet: Switch to the task of applying a signature to form data with file attachments
+activate cabinet
+  cabinet -> cabinet: Prepare the UI form for display
+  cabinet --> user: Return control
+deactivate cabinet
+
+user -> cabinet: Confirm data signing task
+activate cabinet
+  cabinet -> cabinet: Client validation of form data
+  cabinet -> cabinet: Bring the values of the "File" type fields in accordance to the interaction contract with the server application
+  note left
+    {
+      "data": {
+        "<file_property_name>": [
+          {
+            "id": "{UUID}",
+            "checksum": "{SHA256-hash}"
+          }
+        ]
+      }
+    }
+  end note
+  cabinet -> cabinet: Generate digital signature for the form data JSON document with SHA256 hash and UUIDs
+  cabinet -> kong: Confirm data signing: \nPOST "/{realm}/task/{id}/sign-form" \n* Kong session ID \n* Form data with SHA256 hash / File attachment UUIDs\n* Form data digital signature
+  activate kong
+    note left
+      {
+        "data": {
+          "<file_property_name>": [
+            {
+              "id": "{UUID}",
+              "checksum": "{SHA256-hash}"
+            }
+          ]
+        },
+        "signature": "${signature}"
+      }
+    end note
+    kong -> user_task_mngmnt: Confirm data signing: \nPOST "/{realm}/task/{id}/sign-form" \n* X-Access-Token \n* Form data with SHA256 hash / File attachment UUIDs\n* Form data digital signature
+    activate user_task_mngmnt
+      user_task_mngmnt -> user_task_mngmnt: Check if the Assignee of the task corresponds to the current user
+      user_task_mngmnt -> user_task_mngmnt: Set the X-Access-Token for the JSON document of the form data
+      user_task_mngmnt -> user_task_mngmnt: Prepare data for digital signature validation
+      user_task_mngmnt -> dso: Validate digital signature ("data", "signature")
+      dso -> user_task_mngmnt: Validation result
+
+      user_task_mngmnt -> user_task_mngmnt: Generate Ceph document ID \nto save document with signature \n(processInstanceId, taskDefinitionKey)
+
+      user_task_mngmnt -> form_data_ceph: Save form data JSON document with a signature  \n* Document name \n* Form data JSON document with a signature
+      note right
+        {
+          "data": {
+            "<file_property_name>": [
+              {
+                "id": "{UUID}",
+                "checksum": "{SHA256-hash}"
+              }
+            ]
+          },
+          "x-access-token": {X-Access-Token}
+          "signature": "{signature}"
+        }
+      end note
+      form_data_ceph --> user_task_mngmnt
+
+      user_task_mngmnt -> bpms: Confirm task completion
+      activate bpms
+        bpms -> form_data_ceph: Get UI form data JSON document \nusing task ID (processInstanceId, taskDefinitionKey)
+        form_data_ceph --> bpms: JSON document with document UUIDs
+        bpms -> bpms: Prepare data to form a storage request to the Data Factory
+        bpms -> data_factory: Save data to the registry \n* X-Access-Token \n* X-Digital-Signature \n* X-Source-Business-Process-Instance-Id
+        note left
+          {
+            "data": {
+              "<file_property_name>": [
+                {
+                  "id": "{UUID}",
+                  "checksum": "{SHA256-hash}"
+                }
+              ]
+            }
+          }
+        end note
+        data_factory --> bpms: Operation result
+      return Return control
+      user_task_mngmnt --> user: Return control to user
+    deactivate
+  deactivate
+deactivate
+
+@enduml

@@ -1,0 +1,365 @@
+= JUEL functions in business processes
+include::platform:ROOT:partial$templates/document-attributes/default-set-en.adoc[]
+
+include::platform:ROOT:partial$admonitions/language-en.adoc[]
+
+== General overview
+
+//У https://camunda.com/products/camunda-platform/modeler/[Camunda] ви можете використовувати скрипти в різних місцях xref:registry-develop:bp-modeling/bp/bp-modeling-instruction.adoc[бізнес-процесу]. Наприклад, при роботі зі https://docs.camunda.org/manual/7.4/reference/bpmn20/tasks/script-task/[Script Task]. Camunda Engine підтримує скриптування мовами JavaScript, Groovy або JUEL тощо.
+
+In https://camunda.com/products/camunda-platform/modeler/[Camunda], you can use scripts in various locations xref:registry-develop:bp-modeling/bp/bp-modeling-instruction.adoc[in the business process]. For example, when working with the https://docs.camunda.org/manual/7.4/reference/bpmn20/tasks/script-task/[Script Task]. Camunda Engine supports scripting languages such as JavaScript, Groovy, JUEL, etc.
+
+//У розрізі Платформи реєстрів реалізовано підтримку скриптування за допомогою Groovy та http://juel.sourceforge.net/[JUEL (Java Unified Expression Language)] -- уніфікованої скриптової мови виразів Java -- з використанням спеціальних розроблених JUEL-функцій.
+
+In the context of the Registry Platform, scripting support is implemented using Groovy and http://juel.sourceforge.net/[JUEL (Java Unified Expression Language)] -- a unified scripting language for Java expressions - using specially developed JUEL functions.
+
+//Використовуйте платформні JUEL-функції для спрощення моделювання бізнес-процесів. Наразі імплементовано такі функції та їх автодоповнення у візуальному редакторі коду:
+Use the platform JUEL functions to simplify business process modeling. Currently, the following functions and their auto-completion are implemented in the visual code editor:
+
+* xref:#fn-intiator[*`initiator()`*]
+* xref:#fn-completer[*`completer()`*]
+* xref:#submission-fn[*`submission()`*]
+* xref:#fn-sign-submission[*`sign_submission()`*]
+* xref:#fn-system-user[*`system_user()`*]
+* *`get_variable()`*
+* *`set_variable()`*
+* *`set_transient_variable()`*
+* *`process_caller()`*
+* *`message_payload()`*
+* xref:#load-digital-document[*`load-digital-document()`*]
+* xref:#get-digital-document-metadata[*`get-digital-document-metadata()`*]
+* xref:#save-digital-document[*`save-digital-document()`*]
+* xref:#fn-save-digital-document-from-url[*`save_digital_document_from_url()`*].
+
+
+[TIP]
+====
+//Детальніше про використання редактор коду ви можете переглянути на сторінці xref:registry-admin/admin-portal/registry-modeling/process-models/components/edit-groovy-scripts.adoc[].
+You can find more information about using the code editor on the following page:
+xref:registry-admin/admin-portal/registry-modeling/process-models/components/edit-groovy-scripts.adoc[].
+====
+
+[#fn-intiator]
+== Initiator function()
+
+//Функція `initiator()` призначена для отримання та подальшого використання xref:registry-develop:bp-modeling/bp/bp-modeling-instruction.adoc#initial-event[ініціатора] (`initiator`) в процесі. +
+//Повертає клас `UserDto`.
+The `initiator()` function is intended to obtain and further use the xref:registry-develop:bp-modeling/bp/bp-modeling-instruction.adoc#initial-event[initiator] (`initiator`) in the process.
+Returns the `UserDto` class.
+
+//TIP: `UserDto` -- клас, що є обгорткою даних користувача (тут -- ініціатора).
+//Завжди містить у собі `userName`, токен і `JwtClaimsDto` (дані для авторизації) до першої задачі користувача.
+Always contains `userName`, token, and `JwtClaimsDto`  (authorization data) for the first user task
+
+TIP: `UserDto` -- is a class that is a wrapper for user data (in this case - the initiator). Always contains `userName`, token, and `JwtClaimsDto` (authentication data) up to the user's first task.
+
+[initiator-methods]
+=== Methods of interaction
+
+//Функція надає наступні методи:
+The function provides the following methods:
+////
+* `getUserName()` -- повертає ім'я користувача, що можна використовувати в полях `Assignee` та `Candidate Users` задач користувача.
+* `getAccessToken()` -- повертає токен користувача, що можна використовувати в інтеграційних конекторах для інтеграції від імені користувача.
+* `getDrfo()` -- делегує виклик на `JwtClaimsDto` та повертає Keycloak-атрибут `drfo` користувача.
+* `getEdrpou()` -- делегує виклик на `JwtClaimsDto` та повертає Keycloak-атрибут `edrpou` користувача.
+* `getFullName()` -- делегує виклик на `JwtClaimsDto` та повертає Keycloak-атрибут `fullName` користувача.
+////
+* `getUserName()` -- returns the username that can be used in the `Assignee` and `Candidate Users` fields of user tasks.
+* `getAccessToken()` -- returns the user token that can be used in integration connectors to integrate on behalf of the user.
+* `getFullName()` -- delegates the call to `JwtClaimsDto` and returns the Keycloak attribute `fullName` of the user
+
++
+====
+include::ROOT:partial$admonitions/ua-specific.adoc[]
+
+* `getDrfo()` -- delegates the call to `JwtClaimsDto` and returns the Keycloak attribute `drfo` (State Register of Individuals – Taxpayers) of the user.
+* `getEdrpou()` -- delegates the call to `JwtClaimsDto` and returns the Keycloak attribute `edrpou` (Unified state register of enterprises and organizations of Ukraine) of the user.
+====
+
+
+//NOTE: Токен ініціатора, а разом з ним і всі атрибути Keycloak, будуть доступні тільки до першої користувацької задачі (**User Task**) у бізнес-процесі.
+NOTE: The initiator token, along with all Keycloak attributes, will only be available up to the user's first user task (**User Task**) in the business process
+
+[#fn-completer]
+== Completer function()
+
+//Функція `completer(<task_id>)` дозволяє отримати виконавця користувацької задачі для подальшого використання у процесі. +
+//Повертає клас `UserDto`.
+The `completer(<task_id>)` function allows retrieving the performer of a user task for further use in the process.
+Returns the `UserDto` class.
+
+//TIP: `UserDto` -- клас, що є обгорткою даних користувача (тут -- ініціатора).
+//Завжди містить у собі `userName`, токен і `JwtClaimsDto` (дані для авторизації).
+TIP: `UserDto` --  is a class that is a wrapper for user data (in this case -- the initiator).
+Always contains userName, token, and `JwtClaimsDto` (authentication data).
+
+
+[completer-methods]
+=== Methods of interaction
+
+//Функція надає наступні методи:
+The function provides the following methods:
+////
+* `getUserName()` -- повертає ім'я користувача, що можна використовувати в полях `Assignee` та `Candidate Users` задач користувача.
+* `getAccessToken()` -- повертає токен користувача, що можна використовувати в інтеграційних конекторах для інтеграції від імені користувача.
+* `getDrfo()` -- делегує виклик на `JwtClaimsDto` та повертає Keycloak-атрибут `drfo` користувача.
+* `getEdrpou()` -- делегує виклик на `JwtClaimsDto` та повертає Keycloak-атрибут `edrpou` користувача.
+* `getFullName()` -- делегує виклик на `JwtClaimsDto` та повертає Keycloak-атрибут `fullName` користувача.
+////
+* `getUserName()` -- returns the username that can be used in the `Assignee` and `Candidate Users` fields of user tasks.
+* `getAccessToken()` -- -- returns the user token that can be used in integration connectors to integrate on behalf of the user.
+* `getFullName()` -- Delegates the call to `JwtClaimsDto` and returns the Keycloak attribute `fullName` of the user
++
+====
+include::ROOT:partial$admonitions/ua-specific.adoc[]
+
+* `getDrfo()` -- delegates the call to `JwtClaimsDto` and returns the Keycloak attribute `drfo` (State Register of Individuals – Taxpayers) of the user.
+* `getEdrpou()` -- delegates the call to `JwtClaimsDto` and returns the Keycloak attribute `edrpou` (Unified state register of enterprises and organizations of Ukraine) of the user.
+====
+
+//NOTE: Функція `completer(<task_id>)` доступна для використання після успішного завершення користувацької задачі.
+
+NOTE: The `completer(<task_id>)` function is available for use after a user task has been successfully completed.
+
+[#submission-fn]
+== Submission function()
+
+//Функція `submission(<activity_id|event_id>)` дозволяє отримати дані форми користувацької задачі та повертає клас `UserFormDataDto`.
+The `submission(<activity_id|event_id>)` function allows retrieving user task form data and returns the `UserFormDataDto` class.
+
+//TIP: `UserFormDataDto` -- _клас, що є обгорткою даних форми користувача._
+TIP: `UserFormDataDto` -- _a class that is a wrapper for user task form data._
+
+//NOTE: Функція `submission(<activity_id|event_id>)` доступна для використання після успішного завершення користувацької задачі або стартової форми.
+NOTE: The `submission(<activity_id|event_id>)` function is available for use after a user task or start form has been successfully completed.
+
+[#fn-sign-submission]
+== Sign_submission function()
+
+//Функція `sign_submission(<activity_id|event_id>)` використовується для отримання підпису та даних форми користувацьких задач. +
+The `sign_submission(<activity_id|event_id>)` function is used to obtain the signature and user task form data. +
+//Повертає клас `SignUserFormDataDto`.
+Returns the `SignUserFormDataDto` class.
+
+//TIP: `SignUserFormDataDto` -- _клас, що є обгорткою для даних форми користувача, підпису та ключа CEPH-документа, де зберігається підпис._
+TIP: `SignUserFormDataDto` -- _a class that is a wrapper for user task form data, signature, and the CEPH document key where the signature is stored._
+
+//NOTE: _Функція `sign_submission(<activity_id|event_id>)` доступна для використання після успішного завершення задачі, що потребує валідації підписом користувача, або стартової форми._
+NOTE: _The `sign_submission(<activity_id|event_id>)`function is available for use after a user task requiring user signature validation has been successfully completed or a start form._
+
+[#fn-system-user]
+== System_user function()
+
+//Функція `system_user()` необхідна для отримання системного користувача з Keyclock. +
+//Повертає клас `UserDto`.
+The `system_user()` function required to obtain a system user from Keycloak. +
+Returns the `UserDto`class. +
+
+//TIP: `UserDto` -- _клас, що є обгорткою даних користувача (тут -- ініціатора).
+//Завжди містить у собі `userName`, токен і `JwtClaimsDto`._
+TIP: `UserDto` -- _a class that is a wrapper for user data (in this case - the initiator).
+Always contains `userName`, token, and `JwtClaimsDto`._
+
+[system-user-methods]
+=== Methods of interaction
+
+//Функція надає наступні методи:
+The function provides the following methods:
+////
+* `getUserName()` -- повертає ім'я користувача, що можна використовувати в полях `Assignee` та `Candidate Users` задач користувача.
+* `getAccessToken()` -- повертає токен користувача, що можна використовувати в інтеграційних конекторах для інтеграції від імені користувача.
+* `getDrfo()` -- делегує виклик на `JwtClaimsDto` та повертає Keycloak-атрибут `drfo` користувача.
+* `getEdrpou()` -- делегує виклик на `JwtClaimsDto` та повертає Keycloak-атрибут `edrpou` користувача.
+* `getFullName()` -- делегує виклик на `JwtClaimsDto` та повертає Keycloak-атрибут `fullName` користувача.
+////
+
+* `getUserName()` -- returns the username that can be used in the `Assignee` and `Candidate Users` fields of user tasks.
+* `getAccessToken()` -- -- returns the user token that can be used in integration connectors to integrate on behalf of the user.
+* `getFullName()` -- Delegates the call to `JwtClaimsDto` and returns the Keycloak attribute `fullName` of the user
++
+====
+include::ROOT:partial$admonitions/ua-specific.adoc[]
+
+* `getDrfo()` -- delegates the call to `JwtClaimsDto` and returns the Keycloak attribute `drfo` (State Register of Individuals – Taxpayers) of the user.
+* `getEdrpou()` -- delegates the call to `JwtClaimsDto` and returns the Keycloak attribute `edrpou` (Unified state register of enterprises and organizations of Ukraine) of the user.
+====
+
+
+////
+[#fn-get-trembita-auth-token]
+== Функція get_trembita_auth_token()
+
+Функція *`get_trembita_auth_token()`* дозволяє отримати токен авторизації для доступу до сервісів СЕВ ДЕІР "Трембіта", з якими попередньо налаштовано взаємодію. Така взаємодія конфігурується в інтерфейсі адміністративної панелі Control Plane (_див. детальніше -- xref:registry-admin/external-integration/cp-integrate-trembita.adoc[]_).
+
+Функція застосовується у скрипт-задачах (*Script Task*) бізнес-процесів і приймає один параметр (*`String`*) -- назву системи/сервісу, до якої необхідно виконати запит. Наприклад:
+
+.Використання get_trembita_auth_token() у скрипті
+====
+[source,groovy]
+----
+def registryAuthSecretValue = get_trembita_auth_token('trembita-registry-test')
+----
+
+* `trembita-registry-test` -- назва системи у СЕВ ДЕІР "Трембіта".
+====
+
+[TIP]
+====
+Детальніше про роботу функції та її використання у бізнес-процесах ви можете переглянути у статті xref:registry-develop:bp-modeling/external-integration/api-call/connectors-external-registry.adoc#trembita-connector[Загальний Trembita SOAP-конектор].
+====
+////
+
+
+//== Робота з цифровими документами
+== Working with digital documents
+
+[#load-digital-document]
+=== Load_digital_document function()
+
+//JUEL-функція *`load_digital_document(String documentId): byte[]`* призначена для завантаження цифрових документів. Ця функція використовує ідентифікатор документа (`documentId`), який передається як вхідний параметр для отримання відповідного документа через внутрішній API сервісу цифрових документів.
+JUEL function *`load_digital_document(String documentId): byte[]`*  is designed to load digital documents. This function uses the document identifier (`documentId`), which is passed as an input parameter to obtain the corresponding document through the internal API of the digital document service.
+
+//.Службовий API сервісу цифрових документів
+.Internal API of the digital document service.
+[source,http]
+----
+GET /internal-api/documents/{processInstanceId}/{id} (binary response)
+----
+
+//Функція повертає документ у форматі байтів -- `byte[]`, що дозволяє працювати з даними документа на низькому рівні. Ця функція може бути корисна для розробників, яким потрібно працювати з цифровими документами, використовуючи скриптування Groovy.
+The function returns the document in byte format -- `byte[]`, which allows working with document data at a low level. This function can be useful for developers who need to work with digital documents using Groovy scripting.
+
+//TIP: Застосування функції `load_digital_document()` детально представлено у референтному прикладі на сторінці xref:best-practices/bp-upload-edit-file.adoc[].
+TIP: The usage of the `load_digital_document()` function is detailed in the reference example on the following page: xref:best-practices/bp-upload-edit-file.adoc[].
+
+[#get-digital-document-metadata]
+=== Get_digital_document_metadata function()
+
+//JUEL-функція *`get_digital_document_metadata(String documentId): DocumentMetadata`* використовується для отримання метаданих документа, які зберігаються в сервісі цифрових документів.
+JUEL function  *`get_digital_document_metadata(String documentId): DocumentMetadata`* is used to obtain document metadata stored in the digital document service.
+
+//.Службовий API сервісу цифрових документів
+.Internal API of the digital document service.
+[source,http]
+----
+GET /internal-api/documents/{processInstanceId}/{id}/metadata (DocumentMetadata)
+
+class DocumentMetadata {
+  String id
+  String name
+  String type
+  String checksum
+  Long size
+}
+----
+
+//Ця функція приймає на вхід ідентифікатор документа (`documentId`) і повертає об'єкт типу `DocumentMetadata`, що містить наступну інформацію:
+This function takes the document identifier (`documentId`) as input and returns an object of type `DocumentMetadata`, which includes the following information:
+////
+* `id`: ідентифікатор документа.
+* `name`: ім'я документа.
+* `type`: тип документа.
+* `checksum`: контрольна сума документа. Використовується для перевірки цілісності документа після його передачі або збереження.
+* `size`: розмір документа.
+////
+* `id`: the identifier of the document.
+* `name`: the name of the document.
+* `type`: the type of the document.
+* `checksum`: the document checksum. Used for checking the integrity of the document after it has been transmitted or saved.
+* `size`: the size of the  document.
+
+//Ця функція може бути корисною, коли вам потрібно отримати метадані документа в рамках вашого бізнес-процесу. Вона дозволяє вам працювати з документами в сервісі цифрових документів, не здійснюючи прямі запити до API цього сервісу. Замість цього, ви можете використовувати цю JUEL-функцію безпосередньо в Groovy-редакторі.
+This function can be useful when you need to obtain document metadata within your business process. It allows you to work with documents in the digital document service without making direct requests to the API of this service. Instead, you can use this JUEL function directly in the Groovy editor.
+
+
+//TIP: Застосування функції `get_digital_document_metadata()` детально представлено у референтному прикладі на сторінці xref:best-practices/bp-upload-edit-file.adoc[].
+TIP: The usage of the `get_digital_document_metadata()` function is detailed in the reference example on the following page: xref:best-practices/bp-upload-edit-file.adoc[].
+
+[#save-digital-document]
+=== Save_digital_document function()
+
+//JUEL-функція *`save_digital_document(byte[] content, String targetFileName): DocumentMetadata`* використовується для збереження документа в сервісі цифрових документів.
+JUEL function *`save_digital_document(byte[] content, String targetFileName): DocumentMetadata`* is used to save a document in the digital document service."
+
+//Ця функція приймає два аргументи:
+This function takes two arguments:
+////
+* `content`: це байтовий масив, що представляє вміст документа, який потрібно зберегти.
+* `targetFileName`: це ім'я файлу, під яким буде збережено документ.
+////
+* `content`: the byte array that represents the contents of the document that needs to be saved.
+* `targetFileName`: the name of the file under which the document will be saved.
+
+//.Службовий API сервісу цифрових документів
+.Internal API of the digital document service.
+[source,http]
+----
+POST /internal-api/documents/{processInstanceId} (multipart file + filename) : DocumentMetadata
+
+class DocumentMetadata {
+  String id
+  String name
+  String type
+  String checksum
+  Long size
+}
+----
+
+//Після виконання, ця функція повертає об'єкт типу `DocumentMetadata`, що містить метадані новозбереженого документа. Ці метадані включають:
+After execution, this function returns an object of type DocumentMetadata, which contains the metadata of the newly saved document. These metadata include:
+////
+* `id`: ідентифікатор нового документа.
+* `name`: ім'я нового документа (це буде те саме ім'я, що було передано як `targetFileName`).
+* `type`: тип нового документа.
+* `checksum`: контрольна сума нового документа, що використовується для перевірки його цілісності.
+* `size`: розмір нового документа в байтах.
+////
+* `id`: the identifier of the new document.
+* `name`: the name of the new document (will be the same as the `targetFileName` that was passed).
+* `type`: the type of the new document.
+* `checksum`: the checksum of the new document, which is used to verify its integrity.
+* `size`: the size of the new document in bytes.
+
+//Ця функція дуже корисна, коли вам потрібно зберегти документ в рамках ваших бізнес-процесів. Замість того, щоб робити прямі запити до API сервісу цифрових документів, ви можете використовувати цю JUEL-функцію прямо в Groovy-редакторі.
+This function is very useful when you need to save a document within your business processes. Instead of making direct requests to the API of the digital document service, you can use this JUEL function directly in the Groovy editor.
+
+//TIP: Застосування функції `save_digital_document()` детально представлено у референтному прикладі на сторінці xref:best-practices/bp-upload-edit-file.adoc[].
+TIP: The usage of the `save_digital_document()` function is detailed in the reference example on the following page: xref:best-practices/bp-upload-edit-file.adoc[].
+
+[#fn-save-digital-document-from-url]
+=== Save_digital_document_from_url function()
+
+//Функція `*save_digital_document_from_url()*` дозволяє отримувати цифрові файли/документи за віддаленою адресою від публічних API, тобто таких, що не потребують автентифікації. ЇЇ можна використовувати для спрощення моделювання бізнес-процесів у скриптах.
+`*save_digital_document_from_url()*` function allows you to obtain digital files/documents from a remote address from public APIs, i.e. those that do not require authentication. It can be used to simplify business process modeling in scripts.
+
+//Функція може приймати 2 вхідні параметри: ::
+The function can take 2 input parameters: ::
+
+////
+* URL цифрового документа
+* Назва файлу
+////
+* The URL of the digital document
+
+* The name of the file
+
++
+//NOTE: Можливо отримати лише один документ за один запит до зовнішнього джерела.
+NOTE: It is possible to obtain only one document per request from an external source.
++
+//Обидва параметри є рядком (`String`), тому моделювальник може передати функції фактично будь-який аргумент:
+Both parameters are of type (`String`), so the modeler can actually pass any argument to the function:
++
+.Template of function
+====
+----
+save_digital_document_from_url(String remoteFileUrl, String targetFileName)
+----
+====
+
+[TIP]
+====
+//Детальніше про роботу функції та її використання у бізнес-процесах ви можете переглянути на сторінці xref:bp-modeling/bp/save-digital-doc-remote-url.adoc[].
+You can learn more about how the function works and its usage in business processes on the following page: xref:bp-modeling/bp/save-digital-doc-remote-url.adoc[].
+====

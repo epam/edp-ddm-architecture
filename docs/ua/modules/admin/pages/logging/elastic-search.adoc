@@ -1,0 +1,101 @@
+= Розширення місця в Elastic Search
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+include::platform:ROOT:partial$admonitions/language-ua.adoc[]
+
+Цей документ надає докладні інструкції, як розширити місце на дисках EFK-стека, а також, як видаляти індекси для оптимізації дискового простору.
+
+== Розширення місця в ElasticSearch
+
+Якщо місце на дисках *Elastic Search* закінчилося і вам потрібно його розширити, виконайте наступні кроки:
+
+. Увійдіть до *Openshift*-консолі відповідного кластера, знайдіть проєкт *`openshift-logging`* та відкрийте *Persistent Volume Claims*.
++
+image:admin:logging/elastich-search-menu.png[]
+
+. Оберіть *Persistent Volume* та натисніть кнопку *`Expand PVC`*.
++
+image:admin:logging/elastic-search-expand.png[]
+
+[#expand-persistent-volume-claim]
+[start=3]
+. Вкажіть бажаний розмір у вікні *Expand Persistent Volume Claim* та натисніть *`Expand`*.
++
+image:admin:logging/elastic-search-volume-claim.png[]
+
+. Перейдіть до розділу *Administration* > *Custom resource definitions* та знайдіть *ClusterLogging*.
++
+image:admin:logging/cluster-logging.png[]
+
+. Відкрийте *ClusterLogging* та перейдіть до *Instances*.
++
+image:admin:logging/cluster-loggin-instances.png[]
+
+. Натисніть *Instance* проєкту *openshift-logging*.
++
+image:admin:logging/cluster-logging-instances2.png[]
+
+. Відкрийте *YAML*-налаштування, знайдіть параметр `storage.size` та змініть розмір диска на встановлений у вікні xref:#expand-persistent-volume-claim[Expand Persistent Volume Claim].
++
+._Приклад 1. Cluster Logging instance YAML_
+[%collapsible]
+====
+[source,yaml]
+----
+      storage:
+        size: 600G
+        storageClassName: gp2
+      tolerations:
+        - effect: NoSchedule
+          key: platform/logging
+          operator: Equal
+          value: 'true'
+    retentionPolicy:
+      application:
+        maxAge: 5d
+      audit:
+        maxAge: 5d
+      infra:
+        maxAge: 5d
+    type: elasticsearch
+  managementState: Managed
+----
+====
++
+image:admin:logging/cluster-logging-yaml-edit.png[]
+
+. Натисніть *`Save`*, щоб зберегти зміни.
+
+== Видалення індексів в Elastic Search
+
+Якщо необхідно видалити індекси в *ElasticSearch*, виконайте наступні кроки:
+
+. В *Openshift* відповідного кластера відкрийте проєкт *`openshift-logging`* > *Workloads* > *Pods*.
++
+image:admin:logging/elastic-search-pods.png[]
+
+. Відкрийте одну з трьох под `elasticsearch-cdm-iv...` та перейдіть на вкладку *Terminal*.
++
+image:admin:logging/elastc-search-terminal.png[]
+
+. Перегляньте список усіх наявних індексів. Для цього виконайте команду:
++
+[source,curl]
+----
+curl -XGET -s --cacert /etc/elasticsearch/secret/admin-ca --cert /etc/elasticsearch/secret/admin-cert --key /etc/elasticsearch/secret/admin-key -H "Content-Type: application/json" https://localhost:9200/_cat/indices?h=h,s,i,id,p,r,dc,dd,ss,creation.date.string
+----
++
+image:admin:logging/elastic-searxh-remove-index.png[]
+
+. Оберіть індекс, який потрібно видалити.
+Наприклад, видалимо індекс `infra-000004`. Для цього виконайте наступну команду:
++
+[source,curl]
+----
+curl -s --cacert /etc/elasticsearch/secret/admin-ca --cert /etc/elasticsearch/secret/admin-cert --key /etc/elasticsearch/secret/admin-key -XDELETE -H "Content-Type: application/json" https://localhost:9200/infra-000004
+----
++
+image:admin:logging/elastic-search-delete.png[]
+
++
+WARNING: Усі створені попередньо індекси також будуть видалені, а всі інші -- залишаться.

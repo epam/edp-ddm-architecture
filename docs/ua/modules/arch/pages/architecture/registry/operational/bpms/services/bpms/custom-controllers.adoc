@@ -1,0 +1,139 @@
+= Кастомні контролери
+
+== TaskPropertyController
+
+Контролер для отримання доступу до розширених властивостей задачі
+
+=== Отримати список розширених властивостей задачі
+
+[plantuml,getTaskProperty,svg]
+----
+@startuml
+participant "BPMS Клієнт" as client  order 10
+participant "Сервіс виконання бізнес-процесів" as bpms order 20
+participant "Camunda Task Service" as taskService  order 30
+participant "Camunda Repository Service" as repositoryService order 40
+skinparam responseMessageBelowArrow true
+
+title Отримати список розширених властивостей задачі
+  client -> bpms : Отримати список розширених\n властивостей за ідентифікатором задачі
+  activate bpms
+  bpms -> taskService : Отримати задачу за ідентифікатором
+  activate taskService
+  alt Задачу не знайдено
+  bpms <-- taskService : задачу не знайдено
+  client <-- bpms : Пустий список розширених властивостей\n задачі, 200 OK
+  end
+  bpms <-- taskService : Задачу знайдено
+  deactivate taskService
+  bpms -> bpms : Отримати ідентифікатор\n бізнес-процесу зі знайденої задачі
+  bpms -> repositoryService : Отримати опис бізнес-процесу за ідентифікатором
+  activate repositoryService
+  bpms <- repositoryService : знайдений опис бізнес-процесу
+  deactivate repositoryService
+  bpms -> bpms : Отримати опис задачі з бізнес-процесу за ідентифікатором задачі
+  bpms -> bpms : Отримати список розширених властивостей задачі з опису задачі
+  return : Список розширених властивостей задачі, 200 OK
+@enduml
+----
+
+Запит:
+
+[source]
+----
+GET /api/extended/task/<task-id>/extension-element/property --header 'X-Access-Token: token'
+
+----
+
+Відповідь:
+
+* 200 OK
+
+Тіло відповіді:
+
+[source,json]
+----
+{
+  "propertyName1": "propertyValue1",
+  "propertyName2": "propertyValue2",
+  ...
+  "propertyNameN": "propertyValueN"
+}
+----
+
+== StartFormController
+
+Контролер для отримання доступу до списку стартових форм бізнес-процесів
+
+=== Отримати список стартових форм бізнес-процесів
+
+[plantuml,getStartForms,svg]
+----
+@startuml
+participant "BPMS Клієнт" as client  order 10
+participant "Сервіс виконання бізнес-процесів" as bpms order 20
+participant "Camunda Repository Service" as repositoryService order 30
+participant "Camunda Form Service" as formService  order 40
+skinparam responseMessageBelowArrow true
+
+title Отримати список стартових форм бізнес-процесів
+  client -> bpms : Отримати список стартових форм бізнес-процесів \nза списком ідентифікаторів бізнес-процесів
+  activate bpms
+  bpms -> repositoryService : Отримати список бізнес-процесів \nза списком ідентифікаторів бізнес-процесів
+  activate repositoryService
+  bpms <-- repositoryService : Знайдені бізнес-процеси
+  deactivate repositoryService
+  bpms -> bpms : Отримати список бізнес-процесів які мають стартові форми
+
+  group Для кожного знайденого бізнес-процесу
+  bpms -> formService : Отримати стартову форму за ідентифікатором бізнес-процесу
+  activate formService
+  bpms <-- formService : Знайдена стартова форма
+  deactivate formService
+  end group
+  bpms -> bpms : Покласти всі знайдені стартові форми у список
+
+  note right
+  Список з ключем //processDefinitionId//
+  та значенням //processDefinitionFormKey//
+  end note
+  return Список стартових форм бізнес-процесів, 200 OK
+@enduml
+----
+
+Запит:
+
+[source]
+----
+GET /api/extended/start-form --header 'X-Access-Token: token'
+----
+
+Тіло запиту:
+
+[source,json]
+----
+{
+  "processDefinitionIdIn": [
+    "processDefinitionId1",
+    "processDefinitionId2",
+    ...
+    "processDefinitionIdN"
+  ]
+}
+----
+
+Відповідь:
+
+* 200 OK
+
+Тіло відповіді:
+
+[source,json]
+----
+{
+  "processDefinitionId1": "startFormKey1",
+  "processDefinitionId2": "startFormKey2",
+  ... // не існуючі бізнес-процеси та процеси без стартових форм будуть пропущені
+  "processDefinitionIdN": "startFormKeyN"
+}
+----

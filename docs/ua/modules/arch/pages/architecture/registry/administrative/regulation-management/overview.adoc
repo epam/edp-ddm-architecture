@@ -1,0 +1,169 @@
+= Підсистема моделювання регламенту реєстру
+include::platform:ROOT:partial$templates/document-attributes/arch-set-ua.adoc[]
+
+include::platform:ROOT:partial$admonitions/language-ua.adoc[]
+
+== Загальний опис
+
+Підсистема, яка реалізує можливості розробки функціональності реєстру за принципами _Lowcode_ у вигляді
+xref:architecture/registry/administrative/regulation-management/registry-regulation/registry-regulation.adoc[_цифрового регламенту реєстру_]
+та надає можливості по управлінню обліковими записами посадових осіб.
+
+== Функції підсистеми
+
+* Моделювання
+xref:architecture/registry/administrative/regulation-management/registry-regulation/registry-regulation.adoc[складових регламенту реєстру]
+за принципами _Lowcode_
+* Пакетне завантаження користувачів
+* Внесення змін у декларативний опис регламенту реєстру
+* Версіонування регламенту реєстру з історією внесення змін
+* Проведення інспекції змін перед внесенням їх до регламенту реєстру
+* Перегляд результатів перевірки змін в регламент реєстру
+xref:architecture/registry/administrative/regulation-publication/overview.adoc[Підсистемою розгортання регламенту реєстру]
+
+== Технічний дизайн підсистеми
+
+.Компонентна діаграма підсистеми моделювання регламенту. Загальна
+image::architecture/registry/administrative/regulation-management/regulation-management-design.svg[]
+
+* _(1)_ - Архів звіту - це zip архів який в собі містить перелік запитів та налаштування звітів в декларативному форматі.
+* _(2)_ - Сценарії які релевантні для моделювання
+* _(3)_ - Внутрішня структура компонентів Redash описана у xref:arch:architecture/registry/operational/reporting/overview.adoc[Підсистемі аналітичної звітності реєстру]
+
+=== Аудит та журналювання подій
+
+Події відправки повідомлень користувачам системою фіксуються у журналі аудиту з повним контекстом.
+
+|===
+|Тип події|Службова назва|Опис
+
+|SYSTEM_EVENT|USER_CREATE|Подія створення нового користувача під час імпорту.
+|===
+
+[NOTE]
+--
+Детальніше з дизайном _Підсистеми журналювання подій аудиту_ можна ознайомитися
+xref:arch:architecture/registry/operational/audit/overview.adoc[за посиланням].
+--
+
+== Складові підсистеми
+
+|===
+|Назва компоненти|Представлення в реєстрі|Походження|Репозиторій|Призначення
+
+|_Веб-інтерфейс моделювання регламенту_
+|`admin-portal`
+|origin
+|https://gerrit-mdtu-ddm-edp-cicd.apps.cicd2.mdtu-ddm.projects.epam.com/admin/repos/mdtu-ddm/low-code-platform/platform/frontend/applications/common-web-app[github:/mdtu-ddm/low-code-platform/platform/frontend/applications/common-web-app]
+|Клієнтський вебдодаток для моделювання регламенту реєстру за принципами _Lowcode_
+
+|_Веб-інтерфейс моделювання звітів_
+a|
+* `redash-admin`
+* `redash-admin-adhocworker`
+* `redash-admin-scheduler`
+* `redash-admin-postgresql`
+* `redash-admin-redis-master`
+|fork
+a|
+* https://gerrit-mdtu-ddm-edp-cicd.apps.cicd2.mdtu-ddm.projects.epam.com/admin/repos/mdtu-ddm/data-architecture/devops-application/redash-chart[gerrit:/mdtu-ddm/data-architecture/devops-application/redash-chart]
+* https://gerrit-mdtu-ddm-edp-cicd.apps.cicd2.mdtu-ddm.projects.epam.com/admin/repos/mdtu-ddm/data-architecture/application/redash[gerrit:/mdtu-ddm/data-architecture/application/redash]
+* https://github.com/getredash/redash[github:/getredash/redash]
+|Клієнтський вебдодаток для створення та налаштування аналітичних звітів та дашбордів
+
+|_Сервіс інспекції та зберігання змін регламенту_
+a|
+* `gerrit`
+* `gerrit-operator`
+|3rd-party
+a|
+* https://gerrit-mdtu-ddm-edp-cicd.apps.cicd2.mdtu-ddm.projects.epam.com/admin/repos/mdtu-ddm/devops/operators/gerrit-operator[gerrit:/mdtu-ddm/devops/operators/gerrit-operator]
+* https://gerrit.googlesource.com/gerrit/[gerrit:/googlesource/gerrit]
+|Програмний інструмент, що дозволяє зберігати та керувати версіями регламентів реєстрів.
+
+|_Сервіс управління регламентом_
+|`registry-regulation-management`
+|origin
+|https://github.com/epam/edp-ddm-registry-regulation-management[github:/epam/edp-ddm-registry-regulation-management]
+|Сервіс який надає REST API для роботи з версіями регламенту реєстру та його складовими
+
+|_Language сервер_
+|`ddm-language-server`
+|origin
+|https://gerrit-mdtu-ddm-edp-cicd.apps.cicd2.mdtu-ddm.projects.epam.com/admin/repos/mdtu-ddm/low-code-platform/platform/backend/applications/ddm-language-server[gerrit:/mdtu-ddm/low-code-platform/platform/backend/applications/ddm-language-server]
+|Сервіс який надає функціональність підказок, автодоповнення функцій та перевірки при редагуванні коду у
+_Вебінтерфейсі моделювання регламенту_
+
+|_Сервіс вивантаження звітів_
+|`report-exporter`
+|origin
+|https://github.com/epam/edp-ddm-report-exporter[github:/epam/edp-ddm-report-exporter]
+|Сервіс який надає REST API доступ для експорту звітів з _Вебінтерфейсу моделювання звітів_
+
+|_Утиліта завантаження надавачів послуг_
+|`publish-users-job`
+|origin
+|https://github.com/epam/edp-ddm-user-publisher[github:/epam/edp-ddm-user-publisher]
+|Сервіс який надає REST API доступ для експорту звітів з _Вебінтерфейсу моделювання звітів_
+
+|xref:architecture/registry/administrative/regulation-management/ceph-storage.adoc#_user_import[Операційне сховище файлів з користувачами]
+|`ceph:user-import`
+|origin
+|https://github.com/epam/edp-ddm-registry-configuration/blob/main/deploy-templates/templates/CephObjectBucketClaim.yaml[github:/epam/edp-ddm-registry-configuration/blob/main/deploy-templates/templates/CephObjectBucketClaim.yaml]
+|Зберігання файлу з користувачами для імпорту
+
+|xref:architecture/registry/administrative/regulation-management/ceph-storage.adoc#_user_import_archive[Архівне сховище файлів з користувачами]
+|`ceph:user-import-archive`
+|origin
+|https://github.com/epam/edp-ddm-registry-configuration/blob/main/deploy-templates/templates/CephObjectBucketClaim.yaml[github:/epam/edp-ddm-registry-configuration/blob/main/deploy-templates/templates/CephObjectBucketClaim.yaml]
+|Архів файлів з користувачами для імпорту
+
+|xref:architecture/registry/administrative/regulation-management/registry-regulation/registry-regulation.adoc[Git репозиторій Цифрового регламенту реєстру]
+|`gerrit:registry-regulations`
+|origin
+|https://github.com/epam/edp-ddm-empty-template-registry-regulation[github:/epam/edp-ddm-empty-template-registry-regulation]
+|Git репозиторій Цифрового регламенту реєстру у сервісі інспекцій та зберігання змін регламенту
+
+|===
+
+== Технологічний стек
+
+При проєктуванні та розробці підсистеми, були використані наступні технології:
+
+* xref:arch:architecture/platform-technologies.adoc#java[Java]
+* xref:arch:architecture/platform-technologies.adoc#spring[Spring]
+* xref:arch:architecture/platform-technologies.adoc#spring-boot[Spring Boot]
+* xref:arch:architecture/platform-technologies.adoc#javascript[JavaScript]
+* xref:arch:architecture/platform-technologies.adoc#typescript[TypeScript]
+* xref:arch:architecture/platform-technologies.adoc#reactjs[ReactJS]
+* xref:arch:architecture/platform-technologies.adoc#redux[Redux]
+* xref:arch:architecture/platform-technologies.adoc#material-ui[Material UI]
+* xref:arch:architecture/platform-technologies.adoc#bpmn[BPMN JS]
+* xref:arch:architecture/platform-technologies.adoc#leaflet[Leaflet]
+* xref:arch:architecture/platform-technologies.adoc#formio[Form.IO SDK]
+* xref:arch:architecture/platform-technologies.adoc#i18next[i18next]
+* xref:arch:architecture/platform-technologies.adoc#redash[Redash]
+* xref:arch:architecture/platform-technologies.adoc#liquibase[Liquibase]
+* xref:arch:architecture/platform-technologies.adoc#nginx[Nginx]
+* xref:arch:architecture/platform-technologies.adoc#gerrit[Gerrit]
+* xref:arch:architecture/platform-technologies.adoc#edp-gerrit-operator[EDP Gerrit Operator]
+
+== Атрибути якості підсистеми
+
+=== Security
+Доступ до вебінтерфейсів підсистеми можливий тільки для авторизованих користувачів. Для авторизації використовуються
+стандартні механізми системи, зокрема https://openid.net/developers/how-connect-works/[OpenID Connect] та
+https://saml.xml.org/saml-specifications[SAML] інтеграція з xref:architecture/platform/operational/user-management/overview.adoc[Підсистемою управління користувачами та ролями].
+
+=== Usability
+
+Моделювання регламенту у вебінтерфейсах підсистеми здійснюється за принципами _Lowcode_ з впровадженням автопідказок
+для користувача, автодоповнення та валідації введеної інформації що дозволяє зменшити час на розробку регламенту та
+збільшити навченість користувачів.
+
+=== Modifiability
+
+Структура xref:architecture/registry/administrative/regulation-management/registry-regulation/registry-regulation.adoc[_цифрового регламенту реєстру_]
+підсистеми розділена на окремі елементи, які слабо пов'язані один з одним (принцип Low coupling) та використовують
+принципи _Lowcode_ для розробки, що спрощує внесення нових змін до регламенту, прискорює швидкість розробки та зменшує
+необхідну експертизу моделювальника.

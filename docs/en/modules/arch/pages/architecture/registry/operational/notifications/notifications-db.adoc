@@ -1,0 +1,187 @@
+//= Операційна БД нотифікацій
+= Notifications operational database
+include::platform:ROOT:partial$templates/document-attributes/arch-set-en.adoc[]
+
+include::platform:ROOT:partial$admonitions/language-en.adoc[]
+
+//== Загальний опис
+== General overview
+
+//Призначенням бази даних `notifications` є зберігання службових даних шаблонів та записів про відправлені користувачам _inbox_-нотифікації.
+The purpose of the `notifications` database is to store operational data related to templates and records of sent _inbox_ notifications to users.
+
+//== Схема бази даних
+== Database schema
+
+[plantuml, notifications-schema, svg]
+----
+@startuml
+hide circle
+skinparam linetype ortho
+skinparam monochrome true
+
+entity "**inbox_notification**" {
+  + ""id"": //uuid [PK]//
+  --
+  *""recipient_id"": //text //
+  *""subject"": //text //
+  *""message"": //text //
+  *""is_acknowledged"": //boolean //
+  *""created_at"": //timestamp with time zone //
+  *""updated_at"": //timestamp with time zone //
+}
+
+entity "**notification_template**" {
+  + ""id"": //uuid [PK]//
+  --
+  *""name"": //text //
+  *""channel"": //text //
+  *""content"": //text //
+  *""checksum"": //text //
+  *""created_at"": //timestamp with time zone //
+  *""updated_at"": //timestamp with time zone //
+  ""title"": //text //
+  ""ext_template_id"": //text //
+  ""ext_published_at"": //timestamp with time zone //
+}
+
+entity "**notification_template_attr**" {
+  + ""id"": //uuid [PK]//
+  --
+  *""template_id"": //uuid [FK]//
+  *""name"": //text //
+  *""value"": //text //
+}
+
+"**notification_template_attr**"   }--  "**notification_template**"
+@enduml
+----
+//.Умовні позначення
+.Legend
+[%collapsible]
+====
+include::partial$architecture-workspace/documentation-templates/component-design-template/db-schema-legend.adoc[]
+====
+
+//== Структури даних
+== Data structures
+
+=== inbox_notification
+
+//In-app повідомлення користувачів для відображення у Кабінеті Громадянина
+In-app user messages for display in the Citizen portal
+
+[options="header",cols="a"]
+|======
+//|Ім'я колонки +
+//Опис
+|Column name +
+Description
+| `*id* _uuid_ *(PK)*` + 
+//Ідентифікатор рядка
+Row identifier
+| `*recipient_id* _text_` + 
+//Ідентифікатор користувача, який має отримати повідомлення
+Identifier of the user receiving the message
+| `*subject* _text_` + 
+//Заголовок повідомлення
+Message subject
+| `*message* _text_` + 
+//Зміст повідомлення
+Message content
+| `*is_acknowledged* _boolean_` + 
+//Статус повідомлення (прочитане/не прочитане)
+Message status (read/unread)
+| `*created_at* _timestamp with time zone_` + 
+//Дата/Час створення повідомлення
+Date/time of message creation
+| `*updated_at* _timestamp with time zone_` + 
+//Дата/Час оновлення повідомлення
+Date/time of message update
+
+|======
+
+=== notification_template
+
+//Дані шаблонів повідомлень
+Notification template data
+
+[options="header",cols="a"]
+|======
+//|Ім'я колонки +
+//Опис
+|Column name +
+Description
+| `*id* _uuid_ *(PK)*` + 
+//Ідентифікатор рядка
+Row identifier
+| `*name* _text_` + 
+//Службова назва шаблону повідомлення. Є унікальною в комбінації з `*channel*`
+Template message internal name. Unique in combination with *`channel`*.
+| `*channel* _text_` + 
+//Канал зв’язку для використання шаблону повідомлення. Є унікальним в комбінації з `*name*`
+
+//* inbox - Кабінеті Громадянина
+//* email - електронна пошта
+//* diia - застосунок Дія
+Communication channel for using the message template. Unique in combination with `*name*`.
+
+* inbox - Citizen portal
+* email - email
+* diia - Diia application (Ukrainian citizen-facing solution, UA-specific)
+| `*content* _text_` + 
+//Текстовий шаблон тіла повідомлення для подальшого заповнення даними
+Text template of the message body for future data filling
+| `*checksum* _text_` + 
+//SHA-256 чек-сума, згенерована на вміст поля CONTENT
+SHA-256 checksum generated for the CONTENT field
+| `*created_at* _timestamp with time zone_` + 
+//Дата/Час створення/публікації шаблону
+Date/time of template creation/publication
+| `*updated_at* _timestamp with time zone_` + 
+//Дата/Час останньої зміни в рамках публікації шаблону
+Date/time of last change within template publication
+| `title _text_` + 
+//Текстовий заголовок повідомлення
+Textual message title
+| `ext_template_id _text_` + 
+//Унікальний ідентифікатор копії шаблона, яку було збережено у зовнішній системі для подальшої відправки повідомлень з його використанням
+Unique identifier of the template copy saved in an external system for further message sending using it
+| `ext_published_at _timestamp with time zone_` + 
+//Дата/Час останньої публікації запису у зовнішню системуBD
+Date/Time of the last publication of the record in the external systemBD
+
+|======
+[options="header",cols="a"]
+|======
+//|Обмеження унікальності
+|Uniqueness constraints
+|`ext_template_id`
+|`name,channel`
+|======
+
+=== notification_template_attr
+
+//Додаткові атрибути шаблонів в залежності від вимог окремого каналу зв'язку
+Additional attributes of templates based on the requirements of a specific communication channel
+
+[options="header",cols="a"]
+|======
+//|Ім'я колонки +
+//Опис
+|Column name +
+Description
+| `*id* _uuid_ *(PK)*` + 
+//Ідентифікатор рядка
+Row identifier
+| `*template_id* _uuid_` (references <<_notification_template>>.id) + 
+//Ідентифікатор шаблону повідомлень
+Identifier of the message template
+| `*name* _text_` + 
+//Службова назва атрибуту
+Attribute's operational name
+| `*value* _text_` + 
+//Значення атрибуту
+Attribute's value
+
+|======

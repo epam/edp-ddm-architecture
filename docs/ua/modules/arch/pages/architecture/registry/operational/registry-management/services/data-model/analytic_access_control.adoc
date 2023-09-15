@@ -1,0 +1,66 @@
+= Права доступу до аналітичних даних
+
+== Загальний опис
+Одним з елементів механізму розмежування прав доступу до даних аналітичної БД є визначення переліку представлень (views), доступних для кожної зі створених аналітичних ролей в БД. Цей перелік визначається адміністратором реєстру (моделювальником) через додатковий XML шаблон для Liquibase.
+
+== Передумови
+Для видачі або відкликання прав запиту даних з представлень для певної ролі мають бути виконані наступні умови:
+
+* Команда має виконуватись лише на аналітичній БД
+* Роль для якої видається доступ має існувати на рівні аналітичної бази даних
+* Представлення до якого видається доступ має існувати на рівні аналітичної бази даних
+
+Порушення цих передумов має генерувати помилку.
+
+== XML шаблони
+
+Наступна конструкція має видати право запиту даних з представлень _registry_data_v_ та _registry_info_v_ для ролі _analytic_officer_level_1_ а також заборонити доступ до цих же представлень ролі _analytic_officer_level_2_
+
+.Приклад XML шаблону для зміни прав доступу аналітичним ролям
+[source, xml]
+----
+<changeSet author="registry owner" id="grant/revoke analytic rights">
+    <ext:grant>
+        <ext:role name="analytic_officer_level_1">
+            <ext:view name="registry_data_v"/>
+            <ext:view name="registry_info_v"/>
+        </ext:role>
+    </ext:grant>
+    <ext:revoke>
+        <ext:role name="analytic_officer_level_2">
+            <ext:view name="registry_data_v"/>
+            <ext:view name="registry_info_v"/>
+        </ext:role>
+    </ext:revoke>
+</changeSet>
+----
+Результатом виконання зазначеного шаблону Liquibase має бути наступні DCL
+[source, sql]
+----
+GRANT SELECT ON registry_data_v TO analytic_officer_level_1;
+GRANT SELECT ON registry_info_v TO analytic_officer_level_1;
+
+REVOKE SELECT ON registry_data_v FROM analytic_officer_level_2;
+REVOKE SELECT ON registry_info_v FROM analytic_officer_level_2;
+----
+
+=== Теги на доступ до всіх представлень
+На випадок, якщо певній ролі слід мати доступ до всіх наявних аналітичних представлень теги `grantAll` та `revokeAll` мають видавати та відбирати прав на запит всіх даних представлених у вьюхах репліки.
+
+NOTE: Дані теги мають вимагати застосування `runAlways="true"` на рівні чейнджсету та падати з помилкою на false або дефолт
+
+.Приклад XML шаблона для видачі прав на всі аналітичні дані
+[source, xml]
+----
+<changeSet author="registry owner" id="grant all" runAlways="true">
+    <ext:grantAll>
+        <ext:role name="analytic_officer_level_1"/>
+    </ext:grantAll>
+    <ext:revokeAll>
+        <ext:role name="analytic_officer_level_2"/>
+    </ext:revokeAll>
+</changeSet>
+----
+
+Така конструкція має виконати DCL видачі прав запиту даних на кожне з представлень що існує в аналітичній БД ролі analytic_officer_level_1 і відібрати у analytic_officer_level_2.
+

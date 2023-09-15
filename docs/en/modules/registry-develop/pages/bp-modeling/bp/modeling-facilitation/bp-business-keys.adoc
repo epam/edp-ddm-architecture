@@ -1,0 +1,424 @@
+:toc-title: On this page:
+:toc: auto
+:toclevels: 5
+:experimental:
+:sectnums:
+:sectnumlevels: 5
+:sectanchors:
+:sectlinks:
+:partnums:
+
+//= Налаштування бізнес-ключів у бізнес-процесах
+= Configuring business keys in business processes
+
+//== Загальний опис
+== Overview
+
+//_Бізнес-ключ_ або _Ключ бізнес-процесу_ (*Business Key*) -- це специфічний для домену ідентифікатор екземпляра бізнес-процесу у https://camunda.com/bpmn/reference[Camunda BPM]. Він є додатковим атрибутом, що застосовується при моделюванні бізнес-процесів для їх однозначної ідентифікації, а також ідентифікації користувацьких задач процесу.
+A _business key_ or _business process key_ is a domain-specific identifier of a business process instance in https://camunda.com/bpmn/reference[Camunda BPM]. A business key is an additional attribute that identifies business processes and user tasks during modeling.
+
+//.Приклад. Пошук екземпляра процесу за бізнес-ключем
+.Searching for the business process using the business key
+====
+//Розглянемо абстрактний приклад: ::
+Let's consider an example: ::
+
+//У нас є процес, який відправляє замовлення книжок, і ми керуємо своїми замовленнями у вторинній базі даних, де кожне замовлення ідентифікується за ID. Тепер, коли ми починаємо процес доставлення замовлення, ми можемо пов'язати екземпляр процесу безпосередньо із замовленням, використовуючи _ідентифікатор замовлення як бізнес-ключ_.
+We have a process for shipping book orders, and we manage our orders in a secondary database where every order is identified by an ID. When we start the shipping process, we can link the process instance directly to the order by using the order ID as the business key.
++
+//Коли необхідно знайти екземпляр процесу, ми можемо просто зробити запит за ідентифікатором нашого замовлення:
+To find the process instance, we can simply query by the order ID:
++
+[source, java]
+----
+RuntimeService runtimeService = ..;
+String orderId = ..;
+
+ProcessInstance shipmentInstance = runtimeService
+  .createProcessInstanceQuery()
+  .processInstanceBusinessKey(orderId)
+  .singleResult();
+----
+//TIP: Аргумент `orderId` і є _бізнес-ключем_ для пошуку замовлення.
+TIP: The `orderId` argument is the _business key_ for finding the order.
+
+//В реальному житті доставка замовлення може бути набагато складнішим процесом та включати кілька процесів або підпроцесів. Ми можемо пов'язати їх усі разом за допомогою одного бізнес-ключа.
+//Таким чином, ми можемо знайти всі екземпляри процесу, пов’язані з конкретним замовленням клієнта, за допомогою простого запита.
+In reality, shipping an order may be more complex and involve multiple process instances. We can link them all together by the same business key. This way, we can find all process instances related to a particular customer order with a simple query.
+
+====
+
+//Бізнес-ключем може виступати будь-який один атрибут або сполучення бізнес-значимих атрибутів конкретного бізнес-процесу чи користувацької задачі.
+//TODO: What is бізнес-значимих?
+Any single attribute or a combination of business-significant attributes of a specific business process or user task can serve as a business key.
+
+//За допомогою бізнес-ключа користувач може відрізнити один бізнес-процес від іншого (або одну користувацьку задачу від іншої) _в переліку бізнес-задач особистих Кабінетів посадової особи та отримувача послуг_.
+Business keys allow users to distinguish one business process or user task from another in the list of business tasks in the user portals.
+
+//TIP: Детальніше про бізнес-ключі -- за https://camunda.com/blog/2018/10/business-key/[посиланням].
+TIP: For details on business keys, refer to this Camunda blog post: https://camunda.com/blog/2018/10/business-key/[How to Use Business Keys?]
+
+[use-cases]
+//Випадки використання бізнес-ключів ::
+Business keys use cases ::
+
+//При моделюванні бізнес-ключ може застосовуватись для:
+During modeling, you can use business keys to:
+
+//. xref:#bp-key-start[Ідентифікації бізнес-процесу на старті процесу].
+. xref:#bp-key-start[Identify the business process at the start of the process].
+//. xref:#bp-key-start-message-event[Ідентифікації бізнес-процесу на старті процесу, що ініційований стартовою подією «Повідомлення»].
+. xref:#bp-key-start-message-event[Identify the business process at the start of the process initiated by a message start event].
+//. xref:#bp-key-bp-stage[Ідентифікації бізнес-процесу на етапі виконання процесу].
+. xref:#bp-key-bp-stage[Identify the business process at the execution stage].
+
+[#bp-key-start]
+//== Налаштування бізнес-ключа на старті процесу
+== Configuring a business key at the start of the process
+
+//Для налаштування бізнес-ключа на старті бізнес-процесу необхідно виконати наступні кроки:
+To configure a business key at the start of the business process, perform these steps:
+
+//. Відкрийте додаток **Camunda Modeler** та створіть нову **діаграму BPMN**, натиснувши кнопку `BPMN diagram`.
+. Open the *Camunda Modeler* app and create a new BPMN diagram by clicking the *`BPMN diagram`* button.
++
+//В результаті з`явиться вікно нової діаграми.
+A new diagram window opens.
++
+image:registry-develop:bp-modeling/bp/modeling-instruction/bp-1.png[]
++
+//[start=2]
+//. Перетягніть елемент *Create Pool/Participant* до панелі моделювання (_див. xref:registry-develop:bp-modeling/bp/bp-modeling-instruction.adoc#create-pool-participant[Додавання елемента Create pool/Participant]_).
+. Drag the *Create Pool/Participant* element to the diagram canvas. For details, see xref:registry-develop:bp-modeling/bp/bp-modeling-instruction.adoc#create-pool-participant[Adding the Create pool/Participant element].
++
+//NOTE: Моделювання діаграми бізнес-процесу має відбуватися в рамках елемента *Create Pool/Participant*.
+NOTE: Modeling the business process diagram must take place within the *Create Pool/Participant* element.
++
+//[start=3]
+//. Додайте та налаштуйте початкову подію:
+. Add and configure the start event:
+//* З панелі інструментів зліва перетягніть елемент коло (*Create StartEvent*) до панелі моделювання.
+* From the toolbar on the left, drag the *Create StartEvent* element (a circle) to the diagram canvas.
++
+image::registry-develop:bp-modeling/bp/bp-keys/bp-keys-create-start-event.png[]
++
+image::registry-develop:bp-modeling/bp/bp-keys/bp-keys-create-start-event-1.png[]
+//* Виділіть елемент *Create StartEvent* та на панелі налаштувань справа сконфігуруйте початкову подію:
+* Select the *Create StartEvent* element and configure the start event in the properties panel on the right:
+//** На вкладці *General* налаштуйте основні параметри для старту бізнес-процесу (_див. xref:registry-develop:bp-modeling/bp/bp-modeling-instruction.adoc#initial-event[Налаштування початкової події]_).
+** In the *General* tab, configure the main parameters of starting the business process. For details, see xref:registry-develop:bp-modeling/bp/bp-modeling-instruction.adoc#initial-event[Configuring the start event].
+//** На вкладці *Forms*, у полі `Form key`, вкажіть службову назву форми, параметри якої передаватимуться функції `submission()` при виконанні процесу.
+** In the *Forms* tab > *Form Key* field, specify the service name of the form whose parameters will be passed to the `submission()` function when executing the process.
++
+image::bp-modeling/bp/bp-keys/bp-keys-create-start-event-02.png[]
+//** На вкладці *Extensions* налаштуйте параметри бізнес-ключів:
+** In the *Extensions* tab, configure the business keys parameters:
+//*** У полі `Add Property` натисніть `+` (позначку плюса) та зазначте такі налаштування:
+*** In the *Add Property* field, click the plus icon and specify the following options:
+//**** для параметра `Name` вкажіть `businessKeyExpression`;
+**** *Name*: Enter `businessKeyExpression`.
+//**** у полі `Value` вкажіть вираз, що встановлює значення бізнес-ключа, використовуючи функцію `submission()` (_див. xref:registry-develop:bp-modeling/bp/modeling-facilitation/modelling-with-juel-functions.adoc#submission-fn[Функція submission()]_).
+**** *Value*: Specify an expression to set the value of the business key using the `submission()` function. For details, see xref:registry-develop:bp-modeling/bp/modeling-facilitation/modelling-with-juel-functions.adoc#submission-fn[The submission() function].
++
+image::bp-modeling/bp/bp-keys/bp-keys-create-start-event-2.png[]
++
+.The submission() function
+====
+[source, juel]
+----
+${submission('<start event ID>').formData.prop('<Property Name attribute1>').value()+" "+submission('<start event ID>').formData.prop('<Property Name attribute2>').value()}
+----
+====
+
++
+[CAUTION]
+====
+//Для створення виразу `businessKeyExpression` необхідно попередньо визначити, який саме атрибут чи сполучення атрибутів ідентифікуватиме цей бізнес-процес.
+To create the `businessKeyExpression` expression, you need to determine which attribute or combination of attributes will identify this business process.
+
+//Для Кабінетів користувача (посадової особи та отримувача послуг реєстру) результатом виразу `businessKeyExpression` є текстове поле, що складається із конкатенованих, тобто поєднаних, значень атрибутів полів, вказаних у виразі.
+In user portals (for officers and citizens), the result of the `businessKeyExpression` expression is a text field with concatenated values of the attributes specified in the expression.
+====
+
+[#example]
+//.Приклад. Налаштування бізнес-ключів у процесі внесення паспортних даних особи
+.Configuring business keys in the process of entering a person's passport data
+====
+
+Let's consider an example: ::
+
+//Налаштуємо бізнес-ключі у процесі внесення паспортних даних особи із використанням функції `submission()`.
+Let's configure the business keys in the process of entering a person's passport data using the `submission()` function.
+
+//. При моделюванні вказуємо для параметра `businessKeyExpression` (вираз бізнес-ключа) наступне значення:
+. When modeling the event, set the `businessKeyExpression` parameter to the following expression:
++
+.The submission() function with placeholders
+[source, juel]
+----
+${submission('<start event ID>').formData.prop('<Property Name attribute1>').value()+" "+submission('start event ID').formData.prop('<Property Name attribute2>').value()}
+----
++
+//* Змінній `<Property Name  атрибут1>` може відповідати, наприклад, параметр `surname` (прізвище користувача).
+* The `<Property Name attribute1>` placeholder, for example, can correspond to the person's `surname` parameter.
+//* Змінній `<Property Name  атрибут2>` може відповідати, наприклад, параметр `name` (ім'я користувача).
+* The `<Property Name attribute2>` placeholder, for example, can correspond to the person's `name` parameter.
+//* Змінна `<id початкової події>` повинна містити ідентифікатор початкової події, в рамках якої застосовуються бізнес-ключі. ID призначається автоматично при моделюванні події, але може також визначатися вручну (наприклад, `StartEvent_1`).
+* The `<start event ID>` placeholder must contain the ID of the start event for which the business keys are applied. The ID may be assigned automatically when modeling the event, or it can be defined manually--for example, `StartEvent_1`.
++
+//[start=2]
+//. Підставимо необхідні значення змінних та отримаємо такий вираз:
+. After substituting the placeholders, we get the following expression:
++
+.The submission() function with proper parameters
+[source, juel]
+----
+${submission('StartEvent_1').formData.prop('surname').value()+" "+submission('StartEvent_1').formData.prop('name').value()}
+----
++
+//[start=3]
+//. В результаті, на xref:#user-form-bp-keys-settings[інтерфейсі користувацьких форм] сформований бізнес-ключ буде представлено двома полями: `Прізвище` (API-атрибут -- `surname`) та `Ім'я` (API-атрибут -- `name`).
+. The resulting business key will be represented by two fields: surname (API `surname` attribute) and name (API `name` attribute) in the xref:#user-form-bp-keys-settings[user forms interface].
+====
+
+[#bp-key-start-message-event]
+//== Налаштування бізнес-ключа на старті процесу, що ініційований стартовою подією «Повідомлення»
+== Configuring a business key at the start of the process initiated by a message start event.
+
+//Для налаштування бізнес-ключа на старті бізнес-процесу, що ініційований стартовою подією «Повідомлення», необхідно виконати наступні кроки:
+To configure a business key at the start of the process initiated by a message start event, perform these steps:
+
+//. Відкрийте додаток **Camunda Modeler** та створіть нову **діаграму BPMN**, натиснувши кнопку `BPMN diagram`.
+. Open the *Camunda Modeler* app and create a new BPMN diagram by clicking the *`BPMN diagram`* button.
++
+//В результаті з`явиться вікно нової діаграми.
+A new diagram window opens.
++
+image:registry-develop:bp-modeling/bp/modeling-instruction/bp-1.png[]
++
+//[start=2]
+//. Перетягніть елемент *Create Pool/Participant* до панелі моделювання (_див. xref:registry-develop:bp-modeling/bp/bp-modeling-instruction.adoc#create-pool-participant[Додавання елемента Create pool/Participant]_).
+. Drag the *Create Pool/Participant* element to the diagram canvas. For details, see xref:registry-develop:bp-modeling/bp/bp-modeling-instruction.adoc#create-pool-participant[Adding the Create pool/Participant element].
++
+//NOTE: Моделювання діаграми бізнес-процесу має відбуватися в рамках елемента *Create Pool/Participant*.
+NOTE: Modeling the business process diagram must take place within the *Create Pool/Participant* element.
++
+//[start=3]
+//. Додайте та налаштуйте початкову подію:
+. Add and configure the start event:
+//* З панелі інструментів зліва перетягніть елемент коло (*Create StartEvent*) до панелі моделювання.
+* From the toolbar on the left, drag the *Create StartEvent* element (a circle) to the diagram canvas.
++
+image::registry-develop:bp-modeling/bp/bp-keys/bp-keys-create-start-event.png[]
++
+image::registry-develop:bp-modeling/bp/bp-keys/bp-keys-create-start-event-1.png[]
++
+//* Виділіть елемент *Create StartEvent*, натисніть на іконку ключа та оберіть тип стартової події, що ініціює бізнес-процес, -- *Message Start Event*.
+* Select the *Create StartEvent* element, click the wrench icon, and select the start event type to initiate the business process: *Message Start Event*.
++
+image:bp-modeling/bp/bp-keys/bp-keys-create-start-message-event.png[]
++
+//* На панелі налаштувань справа сконфігуруйте початкову подію:
+* Configure the start event in the properties panel on the right:
+//** На вкладці *General* налаштуйте параметри події.
+** In the *General* tab, configure the event's parameters.
++
+//TIP: За детальною інформацією щодо налаштування події «Повідомлення» зверніться до сторінки xref:registry-develop:bp-modeling/bp/bpmn/events/message-event.adoc#message-start-event[Налаштування стартової події «Повідомлення»].
+TIP: For details, see xref:registry-develop:bp-modeling/bp/bpmn/events/message-event.adoc#message-start-event[Configuring the message start event].
++
+//** На вкладці *Extensions* налаштуйте параметри бізнес-ключа:
+** In the *Extensions* tab, configure the business keys parameters:
+//*** У полі `Add Property` натисніть `+` (позначку плюса) та вкажіть такі налаштування:
+*** In the *Add Property* field, click the plus icon and specify the following options:
+//**** для параметра `Name` вкажіть `businessKeyExpression`;
+**** *Name*: Enter `businessKeyExpression`.
+//**** у полі `Value` вкажіть вираз, що встановлює значення бізнес-ключа, використовуючи функцію `submission()` (_див. xref:registry-develop:bp-modeling/bp/modeling-facilitation/modelling-with-juel-functions.adoc#submission-fn[Функція submission()]_).
+**** *Value*: Specify an expression to set the value of the business key using the `submission()` function. For details, see xref:registry-develop:bp-modeling/bp/modeling-facilitation/modelling-with-juel-functions.adoc#submission-fn[The submission() function].
++
+image:bp-modeling/bp/bp-keys/bp-keys-create-start-message-event-1.png[]
+
+//TIP: Приклад використання бізнес-ключів за допомогою функції `submission()` дивіться у розділі xref:#example[].
+TIP: For an example of using the business keys via the `submission()` function, jump to xref:#example[].
+
+//TODO: Clarify with dev
+////
+[IMPORTANT]
+====
+Параметри функції `submission()` можуть братися з інтерфейсної форми попереднього бізнес-процесу, але також можуть використовуватися і параметри, надіслані за допомогою події Message Event. Такі параметри можуть приходити на стартову форму у вигляді пар певних параметрів та їх значень -- в такому разі функція `submission()` братиме дані не з користувацької форми, а з тих параметрів, які надійшли у повідомленні Message Event.
+The `submission()` function parameters can come from the UI form of the previous business process, or they can be sent using the message event. These parameters can come to the start form as key-value pairs--in this case the `submission()` function will take data from the message event parameters, not the user form.
+====
+////
+
+[#bp-key-bp-stage]
+//== Налаштування бізнес-ключа на етапі виконання процесу
+== Configuring a business key at the process execution stage
+
+//Існує також можливість змоделювати та налаштувати бізнес-ключ на етапі виконання бізнес-процесу.
+You can model and configure a business key at the business process execution stage.
+
+[IMPORTANT]
+====
+//Для моделювання та налаштування бізнес-ключа, бізнес-процес має містити хоча б одну попередньо змодельовану користувацьку форму (xref:registry-develop:bp-modeling/bp/bp-modeling-instruction.adoc#create-user-task-add-dict[користувацька задача] або стартова подія).
+Modeling and configuring a business key requires the business process to contain at least one user form (xref:registry-develop:bp-modeling/bp/bp-modeling-instruction.adoc#create-user-task-add-dict[user task] or start event).
+====
+
+//Для налаштування бізнес-ключа на етапі виконання процесу, необхідно виконати наступні кроки:
+To configure a business key at the process execution stage, perform these steps:
+
+//. Додайте  сервісну задачу  до бізнес-процесу:
+. Add a service task to your business process:
+//* Вкажіть тип задачі, натиснувши іконку ключа (*Change type*) та оберіть з меню пункт *Service Task*.
+* Select the task, click the wrench icon (*Change type*), and select the *Service Task* item from the menu.
++
+image::bp-modeling/bp/bp-keys/bp-keys-process-stage-service-task.png[]
++
+//. Виділіть сервісну задачу, відкрийте вкладку *General* та перейдіть до каталогу шаблонів. Для цього у полі *Template* натисніть кнопку `Open Catalog` та оберіть відповідний шаблон *Define process business key*.
+//. Натисніть `Apply` для підтвердження.
+. Select the service task.
+. In the properties panel on the right, open the *General* tab and go to the templates catalog by clicking the *`Open Catalog`* button in the *Template* field.
+. Select the *Define process business key* template.
+. Click *`Apply`* to confirm your action.
++
+image::bp-modeling/bp/bp-keys/bp-keys-process-stage.png[]
++
+image::bp-modeling/bp/bp-keys/bp-keys-process-stage-1.png[]
++
+//. На панелі налаштувань сконфігуруйте наступні параметри:
+. In the properties panel, configure the following parameters:
++
+//* У полі `Name` введіть назву сервісної задачі (тут -- `Сервісна задача 1`).
+* *Name*: Specify the name of the service task--for example, `Service task 1`.
+//* У полі `Business key` вкажіть вираз, що встановлює значення бізнес-ключа, використовуючи функцію `submission()` (_див. xref:registry-develop:bp-modeling/bp/modeling-facilitation/modelling-with-juel-functions.adoc#submission-fn[Функція submission()]_):
+* *Business key*: Specify an expression to set the value of the business key using the `submission()` function. For details, see xref:registry-develop:bp-modeling/bp/modeling-facilitation/modelling-with-juel-functions.adoc#submission-fn[The submission() function].
++
+.The submission() function example
+====
+[source, juel]
+//TODO: In ua version, the second _submission('<start event ID/ user form ID>')_ is missing a closing angle bracket
+----
+${submission('<start event ID/ user form ID>').formData.prop('<Property Name attribute1>').value()+" "+submission('<start event ID/ user form ID>').formData.prop('<Property Name attribute2>').value()}
+----
+====
++
+//TIP: Приклад використання бізнес-ключів у функції `submission()` дивіться у розділі xref:#example[].
+TIP: For an example of using the business keys via the `submission()` function, jump to xref:#example[].
++
+image:bp-modeling/bp/bp-keys/bp-keys-process-stage-template-params.png[]
+
+//В результаті сервісна задача є налаштованою та доступною у бізнес-процесі.
+As a result, the configured service task becomes available in the business process.
+
+[#bp-keys-forms-usage]
+//== Налаштування бізнес-ключів на прикладі екземпляра користувацької задачі
+== An example of configuring the business keys in a user task
+
+//=== Налаштування бізнес-ключів за допомогою функції submission()
+=== Configuring the business keys using the submission() function
+
+//Ключі бізнес-процесів, налаштовані в рамках моделювання BPMN-діаграм, відображаються у користувацьких формах під час проходження процесу користувачем.
+Business process keys configured in the BPMN diagram are displayed in user forms as the users walk through the process.
+
+//Розглянемо приклад такого відображення бізнес-ключів у користувацьких формах із застосуванням JUEL-функції `submission()`, що використовується при моделюванні бізнес-процесів.
+Let's consider an example of displaying business keys in a user form using the JUEL `submission()` function.
+
+//TIP: Застосування такої функції у процесі наочно показано в рамках розділу xref:#bp-key-start[].
+TIP: For an example of using this function in the process, jump to xref:#bp-key-start[].
+
+//.Приклад. Використання атрибутів бізнес-ключів у функції submission()
+.Using the business key attributes in the submission() function
+====
+[source, juel]
+----
+${submission('Usertask').formData.prop('<Property Name attribute1>').value()+" "+submission('Usertask').formData.prop('<Property Name attribute2>').value()}
+----
+
+//Параметр `Usertask` є ідентифікатором користувацької задачі `Користувацька задача 1` (_див. зображення нижче_).
+The `Usertask` parameter is the identifier for the user task `User task 1` (see the diagram below).
+
+//Таким чином для бізнес-ключів, що налаштовуються у xref:#bp-key-bp-stage[`Сервісній задачі 1`], використовуються атрибути із `Користувацької задачі 1`. Дані налаштовуються за допомогою функції `submission()`.
+This way, you can use the attributes from `User task 1` for the business keys in xref:#bp-key-bp-stage[`Service task 1`]. The data is configured using the `submission()` function.
+
+//Заповніть поле `Form key` значенням службової назви попередньо xref:#user-form-bp-keys-settings[змодельованої форми] -- `add-usertask`.
+In the *Form key* field, enter the service name of the previously modeled form: `add-usertask`.
+
+image:bp-modeling/bp/bp-keys/bp-keys-process-stage-template-params-userform.png[]
+
+//Змінні `<Property Name атрибут1>` та `<Property Name атрибут2>` -- параметри поля `Property Name`, що використовуються для API-форм користувача (вкладка *API*) в Кабінеті адміністратора регламентів.
+The `<Property Name attribute1>` and `<Property Name attribute2>` placeholders are the parameters of the *Property Name* field used for the user forms' API (the *API* tab) in the regulations administrator portal.
+====
+
+[#user-form-bp-keys-settings]
+//=== Моделювання користувацьких форм для налаштування бізнес-ключів
+=== Configuring business keys when modeling user forms
+
+//TIP: За детальною інформацією щодо процесу моделювання форм дивіться на сторінці  xref:bp-modeling/forms/registry-admin-modelling-forms.adoc[].
+TIP: For details, see xref:bp-modeling/forms/registry-admin-modelling-forms.adoc[].
+
+//Щоб змоделювати користувацькі форми для подальшого налаштування ключів бізнес-процесу, необхідно виконати наступні кроки:
+To model user forms for further configuration of business process keys, perform these steps:
+
+//. Увійдіть до [blue]#Кабінету адміністратора регламентів# та створіть користувацьку форму до бізнес-процесу.
+. Sign in to the regulations administrator portal and create a user form for your business process.
+//. На панелі компонентів зліва оберіть компонент *Text Field* та перетягніть його до панелі моделювання.
+. In the components panel on the left, select the *Text Field* component and drag it onto the modeling canvas.
++
+image:bp-modeling/bp/bp-keys/bp-keys-admin-portal-form-1.png[]
++
+//. У вікні, що відкрилося, перейдіть на вкладку *Display* та у полі `Label` введіть значення змінної `<Property Name атрибут 1>` -- `Прізвище`.
+. In the window that opens, open the *Display* tab and enter the value of the `<Property Name attribute1>` variable in the *Label* field: `Surname`.
++
+image:bp-modeling/bp/bp-keys/bp-keys-admin-portal-form-4.png[]
+
+//. Перейдіть на вкладку *API* та у полі `Property Name` введіть службову назву атрибута `Прізвище`, що використовуватиметься у функції `submission()` при моделюванні бізнес-процесу в Camunda, тобто параметр для API-ендпоінту (тут -- `surname`).
+. In the *API* tab > *Property Name* field, enter the service name of the `Surname` attribute, which will be used in the `submission()` function when modeling the business process in Camunda, i.e., the parameter for the API endpoint--in our example, `surname`.
+//. Натисніть кнопку `Save`, щоб зберегти зміни.
+. Click *`Save`* to save your changes.
++
+image:bp-modeling/bp/bp-keys/bp-keys-admin-portal-form-5.png[]
++
+//. На панелі компонентів зліва оберіть новий компонент *Text Field* та перетягніть його до панелі моделювання.
+. In the components panel on the left, select a new *Text Field* component and drag it onto the modeling canvas.
+//. У вікні, що відкрилося, на вкладці *Display*, у полі `Label` введіть значення змінної `<Property Name атрибут 2>` -- `Ім'я`.
+. In the window that opens, open the *Display* tab and enter the value of the `<Property Name attribute2>` variable in the *Label* field: `Name`.
++
+image:bp-modeling/bp/bp-keys/bp-keys-admin-portal-form-2.png[]
++
+//. Перейдіть на вкладку *API* та у полі `Property Name` введіть службову назву атрибута `Ім'я`, що використовуватиметься у функції `submission()` при моделюванні бізнес-процесу в Camunda, тобто параметр для API-ендпоінту (тут -- `name`).
+. In the *API* tab > *Property Name* field, enter the service name of the `Name` attribute, which will be used in the `submission()` function when modeling the business process in Camunda, i.e., the parameter for the API endpoint--in our example, `name`.
+//. Натисніть кнопку `Save`, щоб зберегти зміни.
+. Click *`Save`* to save your changes.
++
+image:bp-modeling/bp/bp-keys/bp-keys-admin-portal-form-3.png[]
++
+//В результаті отримаємо форму бізнес-процесу із двома полями для вводу даних користувача, що виконуватимуть роль бізнес-ключів (`surname` та `name`).
+As a result, we get a business process form with two fields for user data, which will act as business keys (`surname` and `name`).
++
+//. Збережіть змодельовану користувацьку форму, натиснувши кнопку `Створити форму` у правому верхньому куті.
+. Click the *`Create form`* button in the upper right corner to save your user form.
++
+image:bp-modeling/bp/bp-keys/bp-keys-admin-portal-form-6.png[]
++
+//. Приєднайте створену форму до бізнес-процесу за службовою назвою форми:
+. Link your user form to your business process using the form's service name:
+//* У полі `Form key` при моделюванні бізнес-процесу введіть значення параметра `Службова назва форми` (тут -- `add-usertask`).
+* When modeling the business process, enter the value of the `Form's service name` parameter into the *Form key* field: `add-usertask`.
+
+//== Відображення бізнес-ключів у Кабінеті користувача
+== Displaying business keys in user portals
+
+//Як було зазначено у попередніх розділах, бізнес-ключ є додатковим атрибутом, що застосовується при моделюванні бізнес-процесів для їх однозначної ідентифікації, а також ідентифікації користувацьких задач процесу.
+As mentioned before, a business key is an additional attribute that identifies business processes and user tasks during modeling.
+
+//Бізнес-ключі визначаються та налаштовуються на формах, і застосовуються при моделюванні процесів із використанням JUEL-функцій. В результаті змодельовані ключі відображатимуться у Кабінеті користувача як _ідентифікатори послуг або задач_.
+Business keys are defined and configured in forms and are used when modeling processes using JUEL functions. As a result, the keys are displayed in the user portals as _identifiers of services or tasks_.
+
+//TIP: Таким чином, користувач має змогу швидко відрізнити бізнес-процес, за виконання якого він відповідає, або виокремити певну задачу у цьому процесі, серед тисяч інших записів, що доступні на сторінках інтерфейсу.
+TIP: Business keys allow users to distinguish the business processes they are responsible for or single out a specific task in these processes among thousands of other records available in their accounts.
+
+//.Приклад. Відображення бізнес-ключа/ідентифікатора послуги в Кабінеті посадової особи
+.An example of displaying a business key/service identifier in the officer portal
+image:bp-modeling/bp/bp-keys/bp-keys-officer-portal-bp.png[]
+
+//.Приклад. Відображення бізнес-ключа/ідентифікатора задачі бізнес-процесу в Кабінеті посадової особи
+.An example of displaying a business key/business process task identifier in the officer portal
+image:bp-modeling/bp/bp-keys/bp-keys-officer-portal-task.png[]

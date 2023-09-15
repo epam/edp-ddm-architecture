@@ -1,0 +1,67 @@
+== Functional capabilities
+
+//🌐 This document is available in both English and Ukrainian. Use the language toggle in the top right corner to switch between versions.
+
+//З метою надання можливості використання власного DNS імені для публічних кабінетів чиновника або громадянина, в платформі є можливість їх налаштувань за допомогою інтерфейсу адміністрування.
+To allow for the use of custom DNS name for the public citizen and officer Portals, the *Platform for state registries* provides the means to configure DNS in the administration UI.
+
+//=== Початкові вимоги
+=== Prerequisites
+
+//. Мати зареєстроване доменне імʼя. Наприклад `registry.example.com`
+. Must have a registered domain name. For example, `registry.example.com`
+//. Мати SSL-сертифікат для домену/субдомену `registry.example.com` або одночасно для всіх субдоменів першого рівня `*.example.com.
+. Must have an SSL-certificate for the `registry.example.com` domain/subdomain, or all the first level `*.example.com` subdomains.
+
+//=== Процес налаштування
+=== Configuration process
+// За допомогою інтерфейсу адміністрування платформи реєстрів, на сторінці редагування реєстру, адміністратор може ввести власне DNS імʼя та завантажити PEM (Privacy Encoded Mail) сертифікат.
+Using *Platform for state registries* administration UI, an administrator can enter DNS name and upload PEM (Privacy Encoded Mail) certificate on the registry editing page.
+//. Інтерфейс адміністрування розділяє отриманий сертифікат на CA (Certificate Authority), сертифікат і ключ та зберігає їх в центральному HashiCorp Vault використовуючи KV engine та додає отримані DNS імена до `values.yaml` в форматі:
+. The administration UI divides the received certificate into CA (Certificate Authority), certificate, and key. It stores them in the central HashiCorp Vault, using KV engine, and adds the received DNS names to `values.yaml` in the following format:
++
+[source, yaml]
+----
+global:
+  customDNS:
+    officerPortal: "officer.example.com"
+    citizenPortal: "citizen.example.com"
+----
+
+//. Реєстровий пайплайн отримує з HashiCorp Vault дані  сертифікату та створює додаткові кастомні ресурси типу `Ingress` для конфігурації Kong Gateway та кастомний роут на istio-ingressgateway з доданим сертифікатом. Приклад:
+. The registry pipeline receives certificate data from HashiCorp, and creates additional custom resources of the `Ingress` type for Kong Gateway configuration, and a custom route to istio-ingressgateway with the added certificate. Example:
++
+[source,yaml]
+----
+kind: Route
+apiVersion: route.openshift.io/v1
+metadata:
+  name: custom-host-registry-kong-proxy
+  namespace: registry
+spec:
+  host: registry.example.com
+  to:
+    kind: Service
+    name: istio-ingressgateway-main
+    weight: 100
+  port:
+    targetPort: http2
+  tls:
+    termination: edge
+    certificate: |
+      -----BEGIN CERTIFICATE-----
+      -----END CERTIFICATE-----
+    key: |-
+      -----BEGIN PRIVATE KEY-----
+      -----END PRIVATE KEY-----
+    caCertificate: |-
+      -----BEGIN CERTIFICATE-----
+      -----END CERTIFICATE-----
+      -----BEGIN CERTIFICATE-----
+      -----END CERTIFICATE-----
+    insecureEdgeTerminationPolicy: Redirect
+  wildcardPolicy: None
+----
+
+//. Виконати зовнішню конфігурацію за межами OpenShift кластеру та реєстру.
+. Perform external configuration outside of the OpenShift cluster and registry.

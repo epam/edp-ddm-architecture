@@ -1,0 +1,66 @@
+@startuml
+
+autoactivate on
+
+skinparam shadowing false
+skinparam DatabaseBackgroundColor white
+skinparam DatabaseBorderColor #2688d4
+skinparam QueueBackgroundColor white
+skinparam QueueBorderColor #2688d4
+skinparam NoteBackgroundColor white
+skinparam NoteBorderColor #2688d4
+skinparam sequence {
+    ArrowColor #2688d4
+    ActorBorderColor #2688d4
+    LifeLineBorderColor #2688d4
+    ParticipantBorderColor #2688d4
+    ParticipantBackgroundColor white
+    BoxBorderColor #2688d4
+    BoxBackgroundColor white
+}
+
+skinparam responseMessageBelowArrow true
+
+actor "Registry\n developer" as Dev
+
+participant "Registry Regulation\nManagement" as rrm
+participant "Gerrit" as gerrit
+participant "Jenkins" as jenkins
+database "Template\nDB Schema" as TemplateDB
+database "Registry dev VC\nDB Schema" as VCTemplateDB
+participant "run-db-scripts" as OkdJob
+
+OkdJob -> TemplateDB ** : Creates and deploys
+
+Dev -> rrm: Creates candidate version
+  rrm -> gerrit: Creates MR
+  gerrit --> rrm: result
+rrm --> Dev: candidate version
+
+gerrit -> jenkins: run regulations verification pipeline
+
+  group "Creating temporary DB"
+    jenkins -> TemplateDB: gets the reference DB
+    jenkins <-- TemplateDB: result
+    jenkins -> VCTemplateDB ** : Creates temporary DB scheme
+    jenkins <-- VCTemplateDB: result
+  end group
+
+  group "Deployment of a temporary database by the registry regulation data model"
+    jenkins -> VCTemplateDB: Deploying the data model according to liquibase changelog's master version
+    jenkins <-- VCTemplateDB: result
+    jenkins -> VCTemplateDB: Deploying the data model according to liquibase changelog's candidate version
+    jenkins <-- VCTemplateDB: result
+  end group
+
+jenkins --> gerrit: publishing the deployment result (Verified +1)
+
+Dev -> rrm: Gets the list of the data model tables
+  rrm -> gerrit: reads the regulations deployment status
+  rrm <-- gerrit: result
+
+  rrm -> VCTemplateDB: Reading the structure of\nthe temporary DB
+  VCTemplateDB --> rrm: result
+rrm --> Dev: the list of tables
+
+@enduml
