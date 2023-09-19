@@ -1,0 +1,65 @@
+@startuml
+skinparam shadowing false
+skinparam DatabaseBackgroundColor white
+skinparam DatabaseBorderColor #2688d4
+skinparam QueueBackgroundColor white
+skinparam QueueBorderColor #2688d4
+skinparam NoteBackgroundColor white
+skinparam NoteBorderColor #2688d4
+skinparam sequence {
+    ArrowColor #2688d4
+    ActorBorderColor #2688d4
+    LifeLineBorderColor #2688d4
+    ParticipantBorderColor #2688d4
+    ParticipantBackgroundColor white
+    BoxBorderColor #2688d4
+    BoxBackgroundColor white
+}
+
+actor "Користувач" as user
+participant "Клієнтський додаток\n кабінету користувача" as cabinet
+participant "Kong \nAPI Management" as kong
+participant "Сервіс для роботи \nз inbox повідомленнями" as inbox_message_service
+
+database "Сховище inbox повідомлень" as inbox_db
+
+title Сценарії користувача з inbox повідомленнями
+
+== Отримання користувачем повідомлень ==
+
+user -> cabinet: Перехід на вкладку \n'Повідомлення'
+activate cabinet
+  cabinet -> kong: Запит даних \nПараметри: \nІдентифікатор сесії Kong
+  activate kong
+    kong -> kong: Перевірка сесії
+    kong -> inbox_message_service: Запит даних \n**GET /api/notifications/inbox \nПараметри: X-Access-Token
+    activate inbox_message_service
+      inbox_message_service -> inbox_db: Запит до БД на отримання \nповідомлень за <idFromToken>
+      inbox_db --> inbox_message_service: Результат запиту
+    deactivate inbox_message_service
+    inbox_message_service --> kong
+  deactivate kong
+  kong --> cabinet
+deactivate cabinet
+cabinet --> user: Відображення скорочених \nповідомлень на сторінці
+
+== Читання користувачем повідомлення ==
+
+user -> cabinet: Натискає "Показати повне повідомлення"
+activate cabinet
+    cabinet --> user: Відображення повного повідомлення
+  cabinet -> kong: Запит даних \nПараметри: \nІдентифікатор сесії Kong
+  activate kong
+    kong -> kong: Перевірка сесії
+    kong -> inbox_message_service: Запит на маркування повідомлення як прочитаного \n**POST /api/notifications/inbox/{id}/ack \nПараметри: X-Access-Token
+    activate inbox_message_service
+      inbox_message_service -> inbox_db: Запит до БД на \nоновлення повідомлення
+      inbox_db --> inbox_message_service: Результат запиту
+    deactivate inbox_message_service
+    inbox_message_service --> kong
+  deactivate kong
+  kong --> cabinet
+deactivate cabinet
+cabinet --> user: Повідомлення перестає \nвідображатись як 'Нове'
+
+@enduml

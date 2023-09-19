@@ -1,0 +1,91 @@
+@startuml
+skinparam shadowing false
+skinparam DatabaseBackgroundColor white
+skinparam DatabaseBorderColor #2688d4
+skinparam QueueBackgroundColor white
+skinparam QueueBorderColor #2688d4
+skinparam NoteBackgroundColor white
+skinparam NoteBorderColor #2688d4
+skinparam sequence {
+    ArrowColor #2688d4
+    ActorBorderColor #2688d4
+    LifeLineBorderColor #2688d4
+    ParticipantBorderColor #2688d4
+    ParticipantBackgroundColor white
+    BoxBorderColor #2688d4
+    BoxBackgroundColor white
+}
+
+queue "'inbox-notifications-channel'\n Kafka Topic" as inbox_notifications_channel_kafka_topic
+
+box "Сервіс відправки повідомлень"
+  participant "Inbox Event \nSubscriber" as notification_kafka_subscriber
+  participant "Inbox Notification \nService" as inbox_notification_service
+  participant "Audit Service" as audit_service
+end box
+
+queue "'audit-events'\n Kafka Topic" as audit_events_kafka_topic
+
+queue "'inbox-notifications-channel.DLT'\n Kafka Topic" as inbox_notifications_channel_dlt_kafka_topic
+
+database "Сховище inbox повідомлень" as inbox_db
+
+alt Відправка повідомлення (вдалий кейс)
+loop Виконання N спроб на відправку згідно налаштувань у разі помилки обробки повідомлення
+notification_kafka_subscriber -> inbox_notifications_channel_kafka_topic: Зчитування події
+note left
+  {
+    "context": {
+      "system": "Low-code Platform",
+      "application": "<bpms.app.name>",
+      "businessProcess": "<optional>",
+      "businessProcessDefinitionId": "<optional>",
+      "businessProcessInstanceId": "<optional>",
+      "businessActivity": "<optional>",
+      "businessActivityInstanceId": "<optional>"
+    },
+    "notification": {
+      "subject": "<notification subject>",
+      "message": "<notification message>"
+    },
+    "recipient": {
+      "id": "Ідентифікатор користувача в системі"
+    }
+  }
+  end note
+activate notification_kafka_subscriber
+notification_kafka_subscriber -> notification_kafka_subscriber: Підготовка повідомлення \nдо збереження в БД
+notification_kafka_subscriber -> inbox_notification_service: Збереження in-app повідомлення
+inbox_notification_service -> inbox_db: Збереження повідомлення до БД
+inbox_db --> inbox_notification_service: Результат збереження
+inbox_notification_service --> notification_kafka_subscriber
+  alt Помилка при збереженні
+    notification_kafka_subscriber --> inbox_notifications_channel_kafka_topic
+  end
+end
+    notification_kafka_subscriber -> notification_kafka_subscriber: Формування події аудиту
+    notification_kafka_subscriber -> audit_service: Фіксація події аудиту **SEND_USER_NOTIFICATION** (success)
+    note left
+    {
+      "notification": {
+        "channel:": "inbox",
+        "subject": "<Заголовок повідомлення>",
+        "message": "<Повідомлення>",
+        "recipient": {
+          "id": "<Ідентифікатор користувача>"
+        }
+      }
+    }
+    end note
+    audit_service -> audit_events_kafka_topic: Публікація події аудиту
+    audit_events_kafka_topic --> audit_service
+    audit_service --> notification_kafka_subscriber
+    notification_kafka_subscriber --> inbox_notifications_channel_kafka_topic: Подію опрацьовано
+
+else Повідомлення не відправлено
+    notification_kafka_subscriber -> inbox_notifications_channel_dlt_kafka_topic: Публікації події в Dead Letter Topic
+    inbox_notifications_channel_dlt_kafka_topic --> notification_kafka_subscriber
+    notification_kafka_subscriber --> inbox_notifications_channel_kafka_topic: Подію опрацьовано
+end
+deactivate notification_kafka_subscriber
+@enduml

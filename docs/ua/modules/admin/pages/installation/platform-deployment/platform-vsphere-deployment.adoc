@@ -3,7 +3,11 @@ include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc
 
 include::platform:ROOT:partial$admonitions/language-ua.adoc[]
 
-== Підготовка інфраструктури vSphere для встановлення OKDfootnote:[**OKD** - це дистрибутив Kubernetes, оптимізований для неперервної розробки додатків та розгортання декількох екземплярів ізольованого контейнерного середовища (у нашому випадку -- екземплярів реєстру). За детальною інформацією зверніться до https://docs.okd.io/[офіційного джерела].]
+IMPORTANT: Будь ласка, зверніться до вашого постачальника, щоб отримати необхідний _vSphere_-інсталятор.
+
+== Підготовка інфраструктури vSphere для встановлення OKD
+
+*OKD* -- це дистрибутив Kubernetes, оптимізований для неперервної розробки додатків та розгортання декількох екземплярів ізольованого контейнерного середовища (у нашому випадку -- екземплярів реєстру). За детальною інформацією зверніться до https://docs.okd.io/[офіційного джерела].
 
 === Налаштування довіреного інтерфейсу vCenter API
 
@@ -15,7 +19,7 @@ include::platform:ROOT:partial$admonitions/language-ua.adoc[]
 
 Сертифікати можуть бути завантажені з домашньої сторінки vCenter.
 
-За замовчуванням сертифікати зберігаються за посиланням `<vCenter>/certs/download.zip`. Після завантаження і розархівування буде створено директорію, що містить сертифікати для ОС Linux, MacOS та Windows.
+За замовчуванням сертифікати зберігаються за посиланням `<vCenter>/certs/download.zip`. Після завантаження і розархівування буде створено директорію, що містить сертифікати для ОС Linux, macOS та Windows.
 
 ==== Приклад перегляду структури
 
@@ -252,41 +256,40 @@ $ cd acme.sh
 
 === Запит на отримання сертифікатів
 
-1) Для того, щоб полегшити процес отримання сертифікатів, необхідно задати дві змінні середовища. Перша змінна повинна вказувати на API Endpoint. Переконайтесь, що ви увійшли до OKD як `system:admin` і використовуєте CLI-консоль Openshift, щоб знайти API Endpoint URL.
-
+. Щоб полегшити процес отримання сертифікатів, необхідно задати дві змінні середовища. Перша змінна повинна вказувати на API Endpoint. Переконайтесь, що ви увійшли до OKD як `system:admin` і використовуєте CLI-консоль Openshift, щоб знайти API Endpoint URL.
++
 [source,bash]
 ----
 $ oc whoami --show-server
 ----
-
-**Приклад отриманої відповіді**:
++
+.Приклад отриманої відповіді
 ----
 https://api.e954.ocp4.opentlc.com:6443
 ----
 
-2) Тепер встановіть змінну `LE_API` для повністю визначеного доменного імені API:
-
+. Тепер встановіть змінну `LE_API` для повністю визначеного доменного імені API:
++
 [source,bash]
 ----
 $ export LE_API=$(oc whoami --show-server | cut -f 2 -d ':' | cut -f 3 -d '/' | sed 's/-api././')
 ----
 
-3) Встановіть другу змінну `LE_WILDCARD` для вашого Wildcard Domain:
-
+. Встановіть другу змінну `LE_WILDCARD` для вашого Wildcard Domain:
++
 [source,bash]
 ----
 $ export LE_WILDCARD=$(oc get ingresscontroller default -n openshift-ingress-operator -o jsonpath='{.status.domain}')
 ----
 
-4) Запускаємо скрипт acme.sh:
-
+. Запустіть скрипт `acme.sh`:
++
 [source,bash]
 ----
 $ ${HOME}/acme.sh/acme.sh --issue -d ${LE_API} -d *.${LE_WILDCARD} --dns
 ----
-
-**Приклад отриманої відповіді**:
-
++
+.Приклад отриманої відповіді
 [source, bash]
 ----
 $  ./acme.sh --issue -d  ${LE_API} -d \*.${LE_WILDCARD} --dns --yes-I-know-dns-manual-mode-enough-go-ahead-please
@@ -310,33 +313,32 @@ $  ./acme.sh --issue -d  ${LE_API} -d \*.${LE_WILDCARD} --dns --yes-I-know-dns-m
 [Wed Jul 28 18:37:38 EEST 2021] Please add the TXT records to the domains, and re-run with --renew.
 [Wed Jul 28 18:37:38 EEST 2021] Please add '--debug' or '--log' to check more details.
 ----
-
++
 CAUTION: DNS-записи з попередньої відповіді необхідно додати на DNS-сервері, що відповідає за зону `e954.ocp4.opentlc.com` (**значення зони тут є прикладом**). Таким чином, TXT-записи повинні мати наступний вигляд:
-
-**TXT-запис 1**
++
+.TXT-запис 1
 [source,bash]
 ----
 _acme-challenge.api.e954.ocp4.opentlc.com TXT value: 'VZ2z3XUe4cdNLwYF7UplBj7ZTD8lO9Een0yTD7m_Bbo'
 ----
-
-**TXT-запис 2**
++
+.TXT-запис 2
 [source,bash]
 ----
 _acme-challenge.apps.e954.ocp4.opentlc.com TXT value: 'f4KeyXkpSissmiLbIIoDHm5BJ6tOBTA0D8DyK5sl46g'
 ----
 
-6) Після цього необхідно повторно запустити команду `acme.sh`:
-
+. Після цього необхідно повторно запустити команду `acme.sh`:
++
 [source,bash]
 ----
 $ acme.sh --renew -d e954.ocp4.opentlc.com --yes-I-know-dns-manual-mode-enough-go-ahead-please
 ----
 
-7) Після успішного виконання попередніх пунктів необхідно запустити наступні команди.
-
-Зазвичай, хорошим підходом є перенесення сертифікатів із шляху acme.sh за замовчуванням (default path) до більш зручної директорії. Для цього можна використати `—install-cert`-ключ скрипта `acme.sh` для копіювання сертифікатів до `$HOME/certificates`, для прикладу:
-
-
+. Після успішного виконання попередніх пунктів необхідно запустити наступні команди.
++
+Зазвичай, хорошим підходом є перенесення сертифікатів зі шляху acme.sh за замовчуванням (default path) до більш зручної директорії. Для цього можна використати `—install-cert`-ключ скрипту `acme.sh` для копіювання сертифікатів до `$HOME/certificates`, для прикладу:
++
 [source,bash]
 ----
 $ export CERTDIR=$HOME/certificates
@@ -359,7 +361,9 @@ $ oc create secret tls router-certs --cert=${CERTDIR}/fullchain.pem --key=${CERT
 $ oc patch ingresscontroller default -n openshift-ingress-operator --type=merge --patch='{"spec": 	{ "defaultCertificate": { "name": "router-certs" }}}'
 ----
 
-== Створення MachineSetfootnote:[**Ресурси MachineSet** - це групи машин. Набори машин призначені для машин як набори копій (реплік) для Pods, в яких розгорнуто контейнери. Якщо вам потрібно більше машин або, навпаки, необхідно зменшити їх кількість, можна змінити значенням поля реплік на рівні MachineSet, щоб задовольнити ваші обчислювальні потреби. Для детальної інформації щодо створення MachineSet зверніться до https://docs.openshift.com/container-platform/4.6/machine_management/creating_machinesets/creating-machineset-vsphere.html[офіційного джерела.]] для інфраструктури Ceph
+== Створення MachineSet для інфраструктури Ceph
+
+TIP: _Ресурси **MachineSet**_ -- це групи машин. Набори машин призначені для машин як набори копій (реплік) для Pods, в яких розгорнуто контейнери. Якщо вам потрібно більше машин або, навпаки, необхідно зменшити їх кількість, можна змінити значенням поля реплік на рівні MachineSet, щоб задовольнити ваші обчислювальні потреби. Для детальної інформації щодо створення MachineSet зверніться до https://docs.openshift.com/container-platform/4.6/machine_management/creating_machinesets/creating-machineset-vsphere.html[офіційного джерела.]
 
 Для розгортання Платформи необхідно створити MachineSet для системи зберігання даних https://ceph.io/en/[Ceph]. Для цього необхідно використати конфігураційний файл `machine-set-ceph.yaml`, в якому необхідно змінити назву кластера.
 
@@ -427,7 +431,9 @@ spec:
 
 TIP: У нашому випадку назва кластера визначена в _.yaml_-файлі як `mdtuddm-b86zw`.
 
-== Підготовка та запуск Інсталераfootnote:[_Інсталер_ -- набір команд (скрипт) для розгортання Платформи.] для розгортання Платформи на цільовому OKD-кластері
+== Підготовка та запуск Інсталера для розгортання Платформи на цільовому OKD-кластері
+
+TIP: _Інсталер_ -- набір команд (скрипт) для розгортання Платформи.
 
 Для запуску Інсталера, необхідно виконати ряд умов з підготовки робочої станції, з якої запускатиметься Інсталер. Нижче розглянуто приклад такої підготовки на базі Ubuntu 20.04 LTS.
 

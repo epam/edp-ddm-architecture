@@ -5,132 +5,112 @@ include::platform:ROOT:partial$admonitions/language-en.adoc[]
 
 == Overview
 
-//Підсистема, призначенням якої є візуалізація даних реєстру у вигляді інформаційних панелей (_дашбордів_) змодельованих за допомогою _Підсистеми моделювання регламенту реєстру_.
-The _Registry analytical reporting subsystem_ visualizes registry data through the dashboards modeled using the _Registry regulations modeling subsystem_.
+The *_Registry analytical reporting subsystem_* visualizes registry data through the dashboards modeled using the _Registry regulations modeling subsystem_.
 
-//Інформаційні панелі можуть складатися з табличних форм представлення даних, діаграм та графіків, елементів фільтрації та іншими елементами управління відображенням даними.
 Dashboards can contain tables and charts with filters and other data control elements.
 
 [TIP]
 --
-//Детальніше з підходом до обробки аналітичних запитів до даних реєстру можна ознайомитись у розділі xref:arch:architecture/registry/operational/relational-data-storage/rdbms-analytical-workload.adoc[]
+
 To learn more about the processing of analytical requests to registry data, see xref:arch:architecture/registry/operational/relational-data-storage/rdbms-analytical-workload.adoc[].
 --
 
-//== Функції підсистеми
 == Subsystem functions
 
-//* Перегляд та маніпуляція відображенням даних реєстру на інформаційних панелях
-//* Перегляд та аналіз даних журналу подій аудиту реєстру на інформаційних панелях
 * Viewing and configuring dashboards with registry data.
 * Viewing and analyzing dashboards with registry audit events log data.
 
-//== Технічний дизайн підсистеми
 == Technical design
 
 image::architecture/registry/operational/reporting/reporting.drawio.svg[float="center",align="center"]
 
-//Підсистема побудована на основі https://redash.io/help/[Redash], відкритого програмного забезпечення для візуалізації та дослідження даних, яке дозволяє користувачам підключатися до різних джерел даних, запитувати та візуалізувати дані, а також створювати інтерактивні інформаційні панелі та звіти. Воно використовує архітектуру мікросервісів і складається з таких компонентів:
-The subsystem is built on https://redash.io/help/[Redash], an open-source data visualization and exploration tool that enables users to connect to various data sources, query and visualize data, and create interactive dashboards and reports. Redash uses microservices architecture and consists of the following components:
+The subsystem is built on https://redash.io/help/[Redash], an open-source data visualization and exploration tool that enables users to connect to various data sources, query and visualize data, and create interactive dashboards and reports. Redash uses microservice architecture and consists of the following components:
 
-//* _Redash Server_: Сервер Redash відповідає за обробку запитів користувачів, управління аутентифікацією та авторизацією користувачів, а також надання веб-інтерфейсу Redash та адміністративного API. Користувачі взаємодіють з Redash через веб-інтерфейс, а підсистеми розгортання регламенту та розгортання реєстру, через API. _Redash Server_ асинхронно взаємодіє з іншими сервісами за допомогою черги завдань https://python-rq.org/[RQ (Redis Queue)], для виконання запитів та отримання даних.
 * _Redash server_: The Redash server processes user requests, manages user authentication and authorization, and provides the Redash web interface and administrative API. Users interact with Redash through the web interface, while the regulations and registry deployment subsystems use the API. The Redash server interacts with other services asynchronously using https://python-rq.org/[RQ (Redis Queue)] to handle requests and receive data.
-//* _Обробники черги завдань_: Redash використовує робочі процеси для виконання завдань з черги асинхронно. Обробники черги виконують завдання, такі як виконання запитів до джерел даних, генерація результатів запитів та надсилання оновлень виконання запиту до інтерфейсу користувача.
+
 * _Queue processors_: Redash uses worker processes to handle tasks from the queue asynchronously. Queue processors perform tasks such as querying the data sources, generating query results, and sending query execution updates to the user interface.
-//** _Redash Worker_: Обробник що відповідає за виконання завдань, які надійшли в чергу з сервера Redash в результаті взаємодії з користувачем. Наприклад завдання запиту на отримання даних з джерела даних, коли користувач відкриває інформаційну панель.
-** _Redash worker_: This queue processor handles tasks lined up from the Redash server as a result of user interactions -- for example, querying a data source when a user opens a dashboard.
-//** _Redash Scheduler_: Цей обробники черги відповідає за виконання запитів з певною періодичністю за заданим графіком. Наприклад виконання завдань оновлення даних для збережених запитів для яких налаштовано розклад.
-** _Redash scheduler_: This queue processor handles requests according to a schedule -- for example, performing data update tasks for saved requests with a defined schedule.
-//* _Redash DB_: Redash використовує реляційну базу даних PostgreSQL, як основне сховище метаданих. База даних зберігає різні метадані, пов'язані з користувачами, запитами, інформаційними панелями та візуалізаціями. Вона також зберігає результати запитів та кешовані дані. Сервіси Redash взаємодіють з базою даних для отримання та збереження необхідної інформації.
+
+** _Redash worker_: This queue processor handles tasks lined up from the Redash server as a result of user interactions—for example, querying a data source when a user opens a dashboard.
+
+** _Redash scheduler_: This queue processor handles requests according to a schedule—for example, performing data update tasks for saved requests with a defined schedule.
+
 * _Redash DB_: Redash uses a PostgreSQL relational database as its primary metadata store. The database stores metadata related to users, requests, dashboards, and visualizations. It also stores request results and cached data. Redash services interact with the database to obtain and store the necessary information.
-//* _Redis Queue_: База даних черги завдань в Redis - це сховище даних у пам'яті, яке Redash використовує для керування загальними блокуваннями виконання запитів та розподілу завдань між робочими процесами.
+
 * _Redis queue_: The Redis queue database is an in-memory data store that Redash uses to manage shared query execution locks and distribute tasks between worker processes.
 
-//Взаємодія між цими компонентами підсистеми може бути узагальнена наступним чином:
 The interaction between these components of the subsystem can be summarized as follows:
 
-//* Коли користувач взаємодіє з веб-інтерфейсом Redash, їх запити обробляються сервером Redash. Сервер аутентифікує користувача, за допомогою _підсистеми управління користувачами та ролями_, перевіряє запит і взаємодіє з відповідними сервісами на основі дій користувача.
 * When users interact with the Redash web interface, their requests are processed by the Redash server. The server authenticates the user via the _Users and roles management subsystem_, verifies the request, and interacts with the appropriate services based on the user's actions.
-//* Коли користувач виконує запит, сервер отримує запит та відправляє його до робочого процесу через систему черги завдань (Redis Queue). Робочий процес Redash Worker бере завдання і виконує запит асинхронно, періодично оновлюючи стан запиту та надсилаючи оновлення до інтерфейсу користувача.
+
 * When a user executes a request, the server receives the request and sends it to the workflow through the Redis queue. A Redash worker accepts the task and executes the request asynchronously while periodically updating the state of the request and sending updates to the UI.
-//* Після завершення виконання запиту робочий процес зберігає кінцевий результат, і сервер отримує його для відображення користувачу.
+
 * Once the request is processed, the workflow saves the final result, and the server receives it to display to the user.
 
-//== Складові підсистеми
-//TODO: Do we need the Repository column for en version?
 [#subsystem-components]
 == Subsystem components
 
 [options="header",cols="a,a,a,a,a"]
 |===
-//|Назва компоненти|Представлення в реєстрі|Походження|Репозиторій|Призначення
+
 |Component name |Registry representation |Source |Repository |Function
 
 |_Redash server_
 |`redash-viewer`
 |3rd-party
-.7+a|https://gerrit-mdtu-ddm-edp-cicd.apps.cicd2.mdtu-ddm.projects.epam.com/admin/repos/mdtu-ddm/data-architecture/application/redash[gerrit:/mdtu-ddm/data-architecture/application/redash]
+.7+a|* https://github.com/epam/edp-ddm-redash-chart[github:/epam/edp-ddm-redash-chart]
+* https://github.com/epam/edp-ddm-redash[github:/epam/edp-ddm-redash]
 
-https://gerrit-mdtu-ddm-edp-cicd.apps.cicd2.mdtu-ddm.projects.epam.com/admin/repos/mdtu-ddm/data-architecture/devops-application/redash-chart[gerrit:/mdtu-ddm/data-architecture/devops-application/redash-chart]
-//| Надання користувацького Web UI та адміністративного API
 |Providing the Redash web interface and administrative API.
 
 |_Redash worker_
 |`redash-viewer-adhocworker`
 |3rd-party
-//| Обробка завдань із черги
+
 |Processing queued tasks.
 
 |_Redash scheduler_
 |`redash-viewer-scheduler`
 |3rd-party
-//| Обробка завдань за розкладом
+
 |Processing scheduled tasks.
 
 |_Prometheus exporter_
 |`redash-exporter`
 |3rd-party
-//| Збір метрик для моніторингу і їх публікація у форматі Prometheus
+
 |Collecting metrics for monitoring and publishing them in the Prometheus format.
 
-//|_Сховище черги завдань_
 |_Task queue storage_
 |`redash-viewer-redis-master`
 |3rd-party
-//| Зберігання черги завдань
+
 |Storing the task queue.
 
-//| _Сховище метаданих_
 |_Metadata storage_
 |`redash-viewer-postgresql`
 |3rd-party
-//| Зберігання бази метаданих Redash (запитів, інформаційних панелей, налаштувань тощо)
+
 |Redash metadata storage (requests, dashboards, settings, and so on).
 
 |===
 
-//== Джерела даних
 == Data sources
 
 |===
-//|Назва компоненти|Представлення в реєстрі
+
 |Component name |Registry representation
 
-//|_Аналітична БД реєстру_
 |_Registry analytical database_
 a|
 * `analytical:registry`
 
-//|_Операційна БД подій аудиту_
 |_Audit events operational database_
 a|
 * `operational:audit`
 |===
 
-//== Технологічний стек
 == Technological stack
 
-//При проектуванні та розробці підсистеми, були використані наступні технології:
 The following technologies were used when designing and developing the subsystem:
 
 * xref:arch:architecture/platform-technologies.adoc#redash[Redash]
@@ -139,17 +119,15 @@ The following technologies were used when designing and developing the subsystem
 * xref:arch:architecture/platform-technologies.adoc#redis[Redis]
 * xref:arch:architecture/platform-technologies.adoc#helm[Helm]
 
-//== Атрибути якості підсистеми
 == Subsystem quality attributes
 
 === _Observability_
 
-//_Підсистема аналітичної звітності реєстру_ підтримує журналювання та збір метрик продуктивності для подальшого аналізу через веб-інтерфейси відповідних підсистем Платформи.
 The _Registry analytical reporting subsystem_ supports logging and collecting performance metrics for analysis through the web interfaces of respective Platform subsystems.
 
 [TIP]
 --
-//Детальніше з дизайном підсистем можна ознайомитись у відповідних розділах:
+
 For details on the subsystem design, see:
 
 * xref:arch:architecture/platform/operational/logging/overview.adoc[]
@@ -158,14 +136,10 @@ For details on the subsystem design, see:
 
 === _Security_
 
-//_Підсистема аналітичної звітності реєстру_ розмежована на користувацький інтерфейс та адміністративний з додатковим мережевим захистом що сприяє безпеці керування підсистемою та зменшує поверхню атаки.
 The _Registry analytical reporting subsystem_ is divided into a user interface and an administrative interface with additional network protection, promoting secure management of the subsystem and reducing the attack surface.
 
-//Автентифікація та розмежування прав виконуєтсья централізовано xref:architecture/platform/operational/user-management/overview.adoc[підсистемою управління користувачами та ролями].
 Authentication and authorization are centrally managed by the xref:architecture/platform/operational/user-management/overview.adoc[_Users and roles management subsystem_].
 
-//За замовчуванням користувачу надаються мінімальні права необхідні для виконання поставлених завдань. Також підсистема обмежує доступ до інформаційних панелей та до джерел даних на основі рольової моделі. Таким чином користувач може бачити тільки ті інформаційні панелі та дані тільки з тих джерел які дозволені для його ролі.
 By default, users are granted the minimal privileges necessary to perform the assigned tasks. The subsystem also restricts access to dashboards and data sources based on the role model. This way, the user can see only those dashboards and data from only those sources that their role allows.
 
-//Використовується багаторівнева система мережевого захисту між компонентами підсистеми а самі компоненти постійно скануються на відомі вразливості.
 A multi-level network protection system is used between subsystem components, and the components themselves are constantly scanned for known vulnerabilities.

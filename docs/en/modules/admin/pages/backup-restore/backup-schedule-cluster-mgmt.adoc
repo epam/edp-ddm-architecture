@@ -1,224 +1,172 @@
-:toc-title: On this page:
-:toc: auto
-:toclevels: 5
-:experimental:
-:sectnums:
-:sectnumlevels: 5
-:sectanchors:
-:sectlinks:
-:partnums:
-
 = Setting up the central components backup schedule and retention time
+include::platform:ROOT:partial$templates/document-attributes/default-set-en.adoc[]
+
+include::platform:ROOT:partial$admonitions/language-en.adoc[]
 
 == General description
 
-//Платформа дозволяє [.underline]#керувати розкладом створення резервних копій центральних компонентів, а також часом зберігання таких резервних копій у сховищі бекапів#.
 The platform allows for [.underline]#managing the schedule of creating backups for central components and the time for storing such backups in the backup repository#.
 
-//Резервні копії компонентів створюються за допомогою інструмента *`velero`* та зберігаються у захищеному сховищі бекапів *`minio`* поза межами кластера Платформи.
-The backups of components are created using the *`velero`* tool and stored in a secure backup repository called *`minio`*, located outside of the Platform cluster.
-
-//[NOTE]
-//====
-//Розклад резервного копіювання налаштовується у форматі https://uk.wikipedia.org/wiki/Cron[*unix-cron*] на інтерфейсі адміністративної панелі *Control Plane*.
-//Час зберігання резервних копій має бути більшим за або дорівнювати одиниці, бути цілим числом та не містити спеціальних символів.
+The backups of components are created using the *`velero`* tool and stored in a secure backup repository called *`minio`*, located outside the Platform cluster.
 
 [NOTE]
 ====
 The backup schedule is configured in the https://uk.wikipedia.org/wiki/Cron[*unix-cron*] format on the *Control Plane* administrative panel interface.
 
 The retention time for backups must be greater than or equal to one, be a whole number, and not contain special characters.
-
 ====
-
-// Перелік центральних компонентів, для яких можна налаштувати резервне копіювання за розкладом та час зберігання резервних копій: ::
 
 The list of central components for which backup scheduling and retention time can be configured includes: ::
 
-//* [*] Сховище артефактів -- центральний компонент *`nexus`*.
 * [*] Artifact repository - central component *`nexus`*.
-//* [*] Панель керування Платформою та реєстрами -- центральний компонент *`control-plane`*.
-//TODO: Platform and Registries should always start from capital letter?
-* [*] Control panel for the Platform and Registries - central component *`control-plane`*.
-//* [*] Керування користувачами -- центральний компонент *`user-management`*.
+* [*] Control panel for the Platform and registries—central component *`control-plane`*.
 * [*] User Management - central component *`user-management`*.
-//* [*] Моніторинг -- центральний компонент *`monitoring`*.
 * [*] Monitoring - central component *`monitoring`*.
 
-
-//Значення зберігаються до конфігурації *_values.yaml_* у репозиторії  *_cluster-mgmt_*.
 The values are stored in the *_values.yaml_* configuration file in the *_cluster-mgmt_* repository.
 
-//Відповідні параметри застосовуються завдяки Jenkins-пайплайну `*MASTER-Build-cluster-mgmt*`.
 The corresponding parameters are applied through the `*MASTER-Build-cluster-mgmt*` Jenkins pipeline.
 
 [#schedule-setup]
-//== Налаштування розкладу
 == Setting up a schedule
 
-//. Увійдіть до консолі *Control Plane* як адміністратор Платформи.
+include::partial$templates/snippets/backup-restore-planning-en.adoc[]
+
 . Log in to the *Control Plane* console as the Platform administrator.
 +
 image:admin:infrastructure/cluster-mgmt/update-cluster-mgmt-01.png[]
-//. Перейдіть до розділу [.underline]#Керування платформою# та натисніть `РЕДАГУВАТИ`.
-//TODO: How do we translate correctly into English the interface controls that are in Ukrainian as in this example?
-. Go to the [.underline]#Platform Management# section and click on `EDIT`.
+
+. Go to the [.underline]#Platform management# section and click on *`Edit`*.
 +
 image:admin:backup-restore/backup-schedule-cluster-mgmt/cp-backup-schedule-1.png[]
-//. Перейдіть до секції [.underline]#Розклад резервного копіювання# та виконайте налаштування для необхідних центральних компонентів.
+
 . Navigate to the [.underline]#Backup schedule# section and configure the settings for the required central components.
 +
 [TIP]
 ====
 
-//Наразі це:
 Currently, they are:
 
-//. Сховище артефактів -- центральний компонент *`nexus`*.
 . Artifact repository - central component *`nexus`*.
-//. Панель керування Платформою та реєстрами -- центральний компонент *`control-plane`*.
-. Control panel for the Platform and Registries - central component *`control-plane`*.
-//TODO: Platform and Registries should always start from capital letter?
-//. Керування користувачами -- центральний компонент *`user-management`*.
+. Control panel for the Platform and registries -- central component *`control-plane`*.
 . User Management - central component *`user-management`*.
-//. Моніторинг -- центральний компонент *`monitoring`*.
 . Monitoring - central component *`monitoring`*.
 ====
-
 +
 image:admin:backup-restore/backup-schedule-cluster-mgmt/cp-backup-schedule-2.png[]
 +
 [NOTE]
 ====
-//Розклад резервного копіювання налаштовується у форматі https://uk.wikipedia.org/wiki/Cron[*unix-cron*] та визначається за серверним часом -- https://24timezones.com/chasovyy-poyas/utc[UTC].
 The backup schedule is configured in the https://uk.wikipedia.org/wiki/Cron[*unix-cron*] format and is determined by the server's time in https://24timezones.com/chasovyy-poyas/utc[UTC].
 
-//Якщо ви конфігуруєте розклад для України, то необхідно враховувати https://24timezones.com/%D0%9A%D0%B8%D1%97%D0%B2/%D1%87%D0%B0%D1%81[зміщення] на +2 години (`UTC+2`) у зимовий час та +3 години (`UTC+3`) у літній час.
 If you are configuring the schedule for Ukraine, take into account the +2 hours https://24timezones.com/%D0%9A%D0%B8%D1%97%D0%B2/%D1%87%D0%B0%D1%81[offset] (`UTC+2`) in winter time and +3 hours offset (`UTC+3`) in summer time.
 
-//Скористайтеся ресурсом https://crontab.guru/[] -- простим та зручним редактором для виразів cron, щоб краще зрозуміти логіку налаштувань розкладу.
 Use the https://crontab.guru/[] resource, a simple and convenient cron expression editor, to better understand the logic of schedule settings.
 ====
-//. Налаштуйте розклад для компонента *Nexus* та задайте час зберігання бекапів у днях:
+
 . Configure the schedule for the *Nexus* component and set the backup retention time in days:
-//* У полі `Розклад` вкажіть, наприклад, таке значення: `5 11 * * MON-FRI`. Використовуйте пробіл як роздільник.
+
 * In the `Schedule` field, enter, for example, the following value: `5 11 * * MON-FRI`. Use a space as a separator.
 +
-//Це означатиме, що резервна копія для компонента `*nexus*` створюватиметься кожного дня, з понеділка по п'ятницю, об 11:05 за часом UTC (13:05 за київським часом).
 This means that a backup for the `*nexus*` component will be created every day from Monday to Friday at 11:05 UTC time (13:05 Kyiv time).
-//* У полі `Час зберігання в днях` вкажіть, наприклад, `5`. Тобто бекап зберігатиметься у сховищі протягом 5 днів.
-//TODO: How do we translate the interface elements? Is interface already translated into English so we can check?
+
 * In the `Retention time (days)` field, enter, for example, the following value: `5`. This means that the backup will be stored in the repository for 5 days.
 +
 image:admin:backup-restore/backup-schedule-cluster-mgmt/cp-backup-schedule-3.png[]
-//. Налаштуйте розклад для компонента *Control Plane* та задайте час зберігання бекапів у днях:
+
 . Configure the schedule for the *Control Plane* component and set the backup retention time in days:
-//* У полі `Розклад` вкажіть, наприклад, таке значення: `6 11 * * MON-FRI`. Використовуйте пробіл як роздільник.
+
 * In the `Schedule` field, enter, for example, the following value: `6 11 * * MON-FRI`. Use a space as a separator.
 +
-//Це означатиме, що резервна копія для компонента `*control-plane*` створюватиметься кожного дня, з понеділка по п'ятницю, об 11:06 за часом UTC (13:06 за київським часом).
 This means that a backup for the *control-plane* component will be created every day from Monday to Friday at 11:06 UTC time (13:06 Kyiv time).
-//* У полі `Час зберігання в днях` вкажіть, наприклад, `6`. Тобто бекап зберігатиметься у сховищі протягом 6 днів.
+
 * In the `Retention time (days)` field, enter, for example, the following value: `6`. This means that the backup will be stored in the repository for 6 days.
 
 +
 image:admin:backup-restore/backup-schedule-cluster-mgmt/cp-backup-schedule-4.png[]
-//. Налаштуйте розклад для компонента *User Management* та задайте час зберігання бекапів у днях:
+
 . Configure the schedule for the *User Management* component and set the backup retention time in days:
-//* У полі `Розклад` вкажіть, наприклад, таке значення: `7 11 * * MON-FRI`. Використовуйте пробіл як роздільник.
+
 * In the `Schedule` field, enter, for example, the following value: `7 11 * * MON-FRI`. Use a space as a separator.
 +
-//Це означатиме, що резервна копія для компонента `*user-management*` створюватиметься кожного дня, з понеділка по п'ятницю, об 11:07 за часом UTC (13:07 за київським часом).
 This means that a backup for the *user-management* component will be created every day from Monday to Friday at 11:07 UTC time (13:07 Kyiv time).
-//* У полі `Час зберігання в днях` вкажіть, наприклад, `7`. Тобто бекап зберігатиметься у сховищі протягом 7 днів.
+
 * In the `Retention time (days)` field, enter, for example, the following value: `7`. This means that the backup will be stored in the repository for 7 days.
 
 +
 image:admin:backup-restore/backup-schedule-cluster-mgmt/cp-backup-schedule-5.png[]
-//. Налаштуйте розклад для компонента *Monitoring* та задайте час зберігання бекапів у днях:
+
 . Set up the schedule for the *Monitoring* component and specify the backup retention period in days:
-//* У полі `Розклад` вкажіть, наприклад, таке значення: `7 11 * * MON-FRI`. Використовуйте пробіл як роздільник.
+
 * In the `Schedule` field, enter, for example, the following value: `7 11 * * MON-FRI`. Use a space as a separator.
 +
-//Це означатиме, що резервна копія для компонента `*monitoring*` створюватиметься кожного дня, з понеділка по п'ятницю, об 11:07 за часом UTC (13:07 за київським часом).
+
 This means that a backup for the *monitoring* component will be created every day from Monday to Friday at 11:07 UTC time (13:07 Kyiv time).
-//* У полі `Час зберігання в днях` вкажіть, наприклад, `8`. Тобто бекап зберігатиметься у сховищі протягом 8 днів.
+
 * In the `Retention time (days)` field, enter, for example, the value 8. This means that the backup will be stored in the repository for 8 days
 
 +
 image:admin:backup-restore/backup-schedule-cluster-mgmt/cp-backup-schedule-6.png[]
-//. Натисніть kbd:[ПІДТВЕРДИТИ], щоб зберегти зміни.
-. Click kbd:[CONFIRM] to save the changes.
+
+. Click *`Confirm`* to save the changes.
 +
-//В результаті сформується запит на оновлення зі статусом `Новий`.
 As a result, a request for update with the status `New` will be generated.
-//. Поверніться до розділу [.underline]#Керування платформою#, прокрутіть бігунок униз сторінки та знайдіть секцію `Запити на оновлення`.
-//TODO: How do we translate correctly the name of the section above?
-. Go back to the [.underline]#Platform Management# section, scroll down the page, and find the `Update requests` section.
+
+. Go back to the [.underline]#Platform management# section, scroll down the page, and find the `Update requests` section.
 +
 image:admin:backup-restore/backup-schedule-cluster-mgmt/cp-backup-schedule-7.png[]
-//. Відкрийте сформований запит, натиснувши іконку перегляду -- 👁.
+
 . Open the generated request by clicking the view icon  -- 👁.
 +
-//NOTE: Запропоновані зміни зберігаються до конфігурації *_values.yaml_* у репозиторії  *_cluster-mgmt_* у разі підтвердження.
 NOTE: The proposed changes will be saved to the *values.yaml* configuration file in the *cluster-mgmt* repository upon confirmation.
-//. У новому вікні зіставте 2 версії змін, переконайтеся, що внесені вами дані вірні, та натисніть `Підтвердити`. Ви також можете відразу відхилити зміни до конфігурації, натиснувши `Відхилити`.
+
 . In the new window, compare the two versions of the changes, make sure the data you entered is correct, and click `Confirm`. You can also reject the changes to the configuration immediately by clicking `Reject`.
 +
-//TIP: У вікні для порівняння можна зручно перевірити 2 версії змін: поточну (зліва) та нову (справа).
 TIP: The comparison window allows you to conveniently check the two versions of the changes: the current one (on the left) and the new one (on the right).
 +
 image:admin:backup-restore/backup-schedule-cluster-mgmt/cp-backup-schedule-8.png[]
 +
 image:registry-management/cp-submit-mr/cp-submit-mr-3.png[]
 +
-// В результаті запит набуває статусу `Підтверджено`. У встановлений час запускається Jenkins-пайплайн `*MASTER-Build-cluster-mgmt*`. Він застосовує параметри заданої конфігурації та створює резервні копії у сховищі бекапів.
 As a result, the request will change the state to  `confirmed`. At the specified time, the `*MASTER-Build-cluster-mgmt*` Jenkins pipeline will be triggered. It applies the parameters of the specified configuration and creates backups in the backup repository.
-//. Зачекайте, доки виконається збірка коду. Це може зайняти декілька хвилин.
+
 . Wait until the code build is completed. This may take a few minutes.
 +
-//Ви можете перевірити поточний статус та результат виконання за посиланням *`CI`* на інтерфейсі.
 You can check the current status and execution result by clicking the *`CI`* link on the interface.
 +
 image:admin:backup-restore/backup-schedule-cluster-mgmt/cp-backup-schedule-9.png[]
 +
 image:admin:backup-restore/backup-schedule-cluster-mgmt/cp-backup-schedule-10.png[]
 
-//== Перевірка створених бекапів
 == Checking the created backups
 
-//У визначену дату та час мають бути створені резервні копії, згідно із розкладом, вказаним у конфігурації (_див. -- xref:#schedule-setup[]_).
 At the specified date and time, backups should be created according to the schedule specified in the configuration (see -- xref:#schedule-setup[]_).
 
-// Перевірити це можна наступним чином: ::
 You can check this as follows: ::
 
-//. Увійдіть до Openshift-консолі як адміністратор Платформи.
-//TODO: How do we write Platform Administrator or Platform administrator?
 . Log in to the Openshift console as the Platform administrator.
-//. Отримайте API-токен для доступу до кластера через `oc login`:
 . Obtain an API token for cluster access via `oc login`:
-//* Натисніть `*Copy Login Command*`.
+
 * Click `*Copy login command*`.
 +
 image:admin:backup-restore/backup-schedule-cluster-mgmt/cp-backup-schedule-11.png[]
-//* Увійдіть через *Keycloak*.
+
 * Log in through *Keycloak*.
 +
 image:admin:backup-restore/backup-schedule-cluster-mgmt/cp-backup-schedule-12.png[]
-//* Натисніть `*Display Token*` (показати токен).
+
 * Click `*Display Token*`.
 +
 image:admin:backup-restore/backup-schedule-cluster-mgmt/cp-backup-schedule-13.png[]
-//* Скопіюйте `oc login` API-токен.
+
 * Copy the `oc login` API token.
 +
 image:admin:backup-restore/backup-schedule-cluster-mgmt/cp-backup-schedule-14.png[]
-//. Відкрийте термінал/консоль, вставте отриманий токен та виконайте вхід.
+
 . Open a terminal/console, paste the obtained token, and execute the login.
 +
 image:admin:backup-restore/backup-schedule-cluster-mgmt/cp-backup-schedule-15.png[]
-//. Отримайте список бекапів за допомогою команди:
+
 . Retrieve the list of backups using the command:
 +
 [source,bash]
@@ -226,19 +174,13 @@ image:admin:backup-restore/backup-schedule-cluster-mgmt/cp-backup-schedule-15.pn
 velero get backups
 ----
 +
-//В результаті отримуємо список бекапів центральних компонентів, а саме їх назви, статуси, дату та час створення, а також час, протягом якого ці бекапи зберігатимуться у сховищі.
 As a result, you will get a list of backups for central components, including their names, statuses, creation dates and times, as well as the retention period for these backups in the repository.
 +
 image:admin:backup-restore/backup-schedule-cluster-mgmt/cp-backup-schedule-16.png[]
 +
-//[NOTE]
-//====
-//Зверніть увагу, що час створення бекапів показано не серверний (UTC), а цільовий, зі зміщенням (UTC+2, за Києвом).
-//====
 [NOTE]
 ====
 Note that the backup creation time is shown in the target time zone (UTC+2, Kyiv time), not the server time (UTC).
+====
 
-//IMPORTANT: Після закінчення строку зберігання, система бекапування видаляє застарілі резервні копії.
 IMPORTANT: After the retention period expires, the backup system deletes outdated backups.
-
