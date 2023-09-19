@@ -1,142 +1,87 @@
-//= API Рейт-ліміти: обмеження кількості запитів за одиницю часу
-= API Rate Limits: limiting the number of requests per time unit
-:toc-title: On this page:
-:toc: auto
-:toclevels: 5
-:experimental:
-:sectnums:
-:sectnumlevels: 5
-:sectanchors:
-:sectlinks:
-:partnums:
+= API Rate Limits: Restricting the number of requests per time unit
+include::platform:ROOT:partial$templates/document-attributes/default-set-en.adoc[]
 
+include::platform:ROOT:partial$admonitions/language-en.adoc[]
 
-
-//== Загальний опис
 == Overview
-____
-//Рейт-лімітування (_англ. -- Rate limiting_) -- це стратегія для обмеження мережевого трафіку.
-*Rate limiting* is a network trafic limiting strategy.
-____
 
-//_API рейт-ліміти_ (_англ. -- API Rate Limits_) -- обмеження кількості HTTP-запитів до сервісу чи маршруту за заданий період секунд, хвилин, годин, днів, місяців або років.
-_API Rate Limits_ -- these are limits of the number of HTTP-requests to the service or route per a defined time period in seconds.
+TIP: *Rate limiting* is a network traffic limiting strategy.
 
-//Механізм рейт-лімітів реалізований на базі
-//https://docs.konghq.com/hub/kong-inc/rate-limiting/[Rate-Limiting]-плагіну для Kong API Gateway. Якщо сервіс/маршрут не має рівня аутентифікації, ліміт буде встановлено для IP-адреси клієнта. В іншому випадку для лімітів можна використовувати значення власного заголовка запита, що містить інформацію про користувача: наприклад, ідентифікатор
-//користувача, його роль чи ідентифікатор організації, яку він представляє. Такий заголовок можна додати засобами Kong OIDC-плагіну.
-The mechanism of API Rate Limits is based on the https://docs.konghq.com/hub/kong-inc/rate-limiting/[Rate-Limiting]-plugin for Kong API Gateway. If the service/route does not have an authentication level, the limit will be set for client IP address. Otherwise, HTTP-header can be used for limiting, for example user ID, user role ID, or user organization ID.
+*_API rate limits_* are limits of the number of HTTP requests to the service or route per a defined period. It is set _in seconds_.
+
+The mechanism of API Rate Limits is based on the https://docs.konghq.com/hub/kong-inc/rate-limiting/[Rate-Limiting]-plugin for Kong API Gateway. If the service/route does not have an authentication level, the limit will be set for the client's IP address. Otherwise, the HTTP header can be used for limiting, for example, user ID, user role ID, or user organization ID.
 
 [CAUTION]
 ====
-//Важливо, щоб плагін _rate-limiting виконувався після OIDC-плагіну_!
 It is imperative that the _rate-limiting plugin is executed after the OIDC-plugin_!
 
-//Тобто пріоритет OIDC-плагіну має бути вищим за значення пріоритету для плагіну rate-limiting, який за https://github.com/Kong/kong/blob/master/kong/plugins/rate-limiting/handler.lua#L49[замовчуванням становить 910]. Цей механізм більш детально описаний нижче.
 This means that the OIDC-plugin priority must be higher than the rate-limiting plugin priority, which is https://github.com/Kong/kong/blob/master/kong/plugins/rate-limiting/handler.lua#L49[910 by default]. The mechanism is described in detail further.
 ====
 
 [IMPORTANT]
 ====
-//Всі рейт-ліміти обчислюються виключно в межах одного екземпляру Kong API Gateway. Якщо кількість екземплярів Kong більше одного, то загальна кількість запитів від користувача може бути більшою в _n_ разів за значення, встановлене в налаштуваннях для лімітів, де _n_ -- це кількість
 //розгорнутих екземплярів Kong API Gateway.
 All rate-limits are calculated within one Kong API Gateway instance. If there are _n_ Kong API Gateway instances, then the general number of requests from the user can be _n_ times the set limit value.
 
-//Kong API Gateway розгортається на рівні сервісів реєстру.
 Kong API Gateway is deployed on the registry services level.
 ====
 
-//.Верхньорівнева діаграма функціонування рейт-лімітів у Kong
 .High-level diagram of rate-limits functioning in Kong
 ====
 image:registry-admin/api-rate-limits/Kong-Rate-Limits.drawio.png[]
 ====
 
-//== Принцип роботи рейт-лімітів для неавтентифікованих користувачів
 == Rate-limits operation principle for non-authenticated users
 
-//Для неавтентифікованих користувачів можливо встановити ліміт лише за IP-адресою (`config.limit_by: ip`).
 Limits can only be set by IP address for non-authenticated users (`config.limit_by: ip`).
 
-////
-Такий ліміт працюватиме виключно для публічних API, які не потребують автентифікації, адже в разі наявності
-автентифікації, OIDC-плагін, який виконується першим, повертатиме
-користувачу помилку `HTTP 403 Forbidden` до надходження запита до Rate-limiting-плагіну.
-////
-
-//.Схема роботи рейт-лімітів для неавтентифікованих користувачів
-. Rate-limits operation scheme for non-authenticated users
+.Rate-limits operation scheme for non-authenticated users
 ====
 [plantuml]
 ----
 include::partial$registry-admin/api-rate-limiting-unauthenticated-user.puml[]
 ----
 
-//. Користувач надсилає запит до платформи, який надходить до Kong API Gateway.
 . The user sends a request to the platform. The request goes to Kong API Gateway.
-//. Запит обробляється Kong Rate-Limiting плагіном, який, базуючись на правилах для конкретного сервісу/маршруту, визначає, чи досягнуто ліміт запитів для IP-адреси користувача.
+
 . The request is processed by the Kong Rate-Limiting plugin, which decides if the request limit was achieved by the user, based on the given service/route rules.
-//. Якщо ліміт запитів від користувача не досягнуто, запит перенаправляється на відповідний сервіс платформи для подальшого опрацювання.
-. If the request limit was not achieved by the user, the request is rerouted to the corresponding service for processing.
-//. Користувач отримує відповідь від сервісу.
+. If the user did not achieve the request limit, the request is rerouted to the corresponding service for processing.
 . The user receives a response from the service.
-//. Якщо ліміт запитів досягнуто, плагін Rate-Limiting повертає відповідь з помилкою `HTTP 429`.
-.If the request limit was achieved by the user, the Rate-Limiting plugin responds with the `HTTP 429` error.
+.If the user achieved the request limit, the Rate-Limiting plugin responds with the `HTTP 429` error.
 ====
 
-//== Принцип роботи рейт-лімітів для автентифікованих користувачів
-== Rate-limits operation principle for authenticated users
+== Rate limits operation principle for authenticated users
 
-//Якщо сервіс/маршрут має рівень автентифікації, то ліміт
-//можна встановити не лише для IP-адреси клієнта, а й для
-//конкретного автентифікованого користувача чи їх групи.
 If the service/route has an authentication level, then the limit can be set not only for IP-address, but for any authenticated user or user group.
 
-//В такому разі для обчислення ліміту можна використовувати значення власного заголовка `"token-claim"` запита, що містить інформацію про користувача: наприклад, ідентифікатор користувача, роль, або ідентифікатор організації, яку він представляє.
-//Такий заголовок можна додати засобами Kong OIDC-плагіну.
-In this case the request's own `"token-claim"` header value can be used to calculate the limit, as the header contains user data, such as: user ID, role, organization ID, etc. Such a header can be added using Kong OIDC-plugin.
+In this case, the request's own `"token-claim"` header value can be used to calculate the limit, as the header contains user data, such as user ID, role, organization ID, etc. This header can be added using Kong OIDC-plugin.
 
-//.Принцип роботи рейт-лімітів для автентифікованих користувачів
-.Rate-limits operation principle for authenticated users
+.Rate limits operation principle for authenticated users
 ====
 [plantuml]
 ----
 include::partial$registry-admin/api-rate-limiting-authenticated-user.puml[]
 ----
 
-//. Користувач надсилає запит до платформи, який надходить до Kong API Gateway.
 . The user sends a request to the platform. The request goes to Kong API Gateway.
-//. Першим запит обробляє Kong OIDC-плагін, який перевіряє сесію
-//користувача. +
 . Kong OIDC-plugin gets to process the request, checking user session. +
-//Якщо користувач успішно пройшов автентифікацію (існує активна сесія), то OIDC-плагін додає до запита заголовки із JWT-токенами користувача та заголовок `"token-claim"`, що містить значення атрибута (claim) з токена доступу автентифікованого користувача. Надалі значення цього заголовка використовується плагіном rate-limiting для обчислення лімітів для автентифікованого користувача чи групи таких користувачів.
 . If the user was successfully authenticated (active session present), then the OIDC-plugin adds two headers to the request: one with the user's JWT-tokens, and one `"token-claim"` that contains the claim attribute value from the user's access token. From this point, the rate-limiting plugin will use the `"token-claim"` header to calculate rate-limits for the authenticated user, or user group.
-//. Обробка запита передається до наступного плагіну -- Rate-Limiting.
 . The request goes to Rate-Limiting plugin for processing.
-//. Плагін Rate-Limiting, базуючись на правилах для конкретного сервісу/маршруту, визначає, чи досягнуто ліміт запитів для користувача. +
 . The Rate-Limiting plugin decides if the request limit was achieved by the user, based on the given service/route rules. +
-//Ліміт може бути встановлений як за IP-адресою, так і на основі значення заголовка `"token-claim"`.
 . The limit can be set by IP-address, as well as `"token-claim"` header value.
-//. Якщо ліміт запитів від користувача не досягнуто, запит перенаправляється на відповідний сервіс платформи для подальшого опрацювання.
-. If the request limit was not achieved by the user, the request is rerouted to the corresponding service for processing.
-//. Користувач отримує відповідь від сервісу.
+. If the user did not achieve the request limit, the request is rerouted to the corresponding service for processing.
 . The user receives a response from the service.
-//. Якщо ліміт запитів досягнуто, плагін Rate-Limiting повертає відповідь з помилкою `HTTP 429`.
-.If the request limit was achieved by the user, the Rate-Limiting plugin responds with the `HTTP 429` error.
+.If the user achieved the request limit, the Rate-Limiting plugin responds with the `HTTP 429` error.
 ====
 
 [header-setup-unauth-user]
 [#header-setup-unauth-user]
-//=== Налаштування власного заголовка для автентифікованого користувача
 === Setting up header for authenticated user
 
-//Для обчислення лімітів для автентифікованих користувачів можна використовувати значення заголовка `"token-claim"` запита, що містить інформацію про користувача. Встановити значення для цього заголовка можна в налаштуваннях OIDC-плагіну для Kong. Цей заголовок може містити значення кореневого атрибута (`claim`) з JWT-токена доступу користувача.
 The values of `"token-claim"` header that contains user info can be used to calculate limits for authenticated users. You can set the values via Kong OIDC-plugin configuration. The header can include the value of root attribute (`claim`) from the user's access JWT-token.
 
-//.Приклад налаштування OIDC-плагіну KONG для додавання заголовка "token-claim"
 .Example: configuring Kong OIDC-plugin to add "token-claim" header
 ====
-
 .OIDC Config
 [source,yaml]
 -----------------
@@ -144,10 +89,8 @@ config:
   token_claim_header_value: "sub"
 -----------------
 
-//В такому випадку, після обробки запита OIDC-плагіном, до запита буде додано заголовок `"token-claim"`, значення для якого буде взято з атрибута `"sub"` (claim) токена доступу користувача.
 In this case, `"token-claim"` header will be added after processing the request by OIDC-plugin. The header will be taken from the `"sub"` (claim) attribute of the user access token.
 
-//Тобто ми отримаємо заголовок `"token-claim"`, що містить ідентифікатор користувача. Надалі цей заголовок можна використати в плагіні rate-limiting для обчислення ліміту за ідентифікатором користувача.
 As a result, we get a `"token-claim"` header that contains user ID. This header can be used in the rate-limiting plugin to calculate limit by user ID.
 
 .Rate-Limiting Config
@@ -157,38 +100,25 @@ config:
   limit_by: header
   header_name: "token-claim"
 -----------------
-
 ====
 
-//Для складніших варіантів обчислення ліміту можна додати власний атрибут до JWT-токена, що містить значення яке обчислюється. Зробити це можливо засобами https://www.keycloak.org/docs/latest/server_admin/#_protocol-mappers[Keycloak protocol mappers].
-For more complex limit calculations you can add your own dedicated attribute to the JWT-token. This is done via https://www.keycloak.org/docs/latest/server_admin/#_protocol-mappers[Keycloak protocol mappers].
+For more complex limit calculations, you can add your own dedicated attribute to the JWT-token. This is done via https://www.keycloak.org/docs/latest/server_admin/#_protocol-mappers[Keycloak protocol mappers].
 
 [#rate-limits-configuration]
-//== Налаштування рейт-лімітів адміністратором
 == Configuring rate-limits
 
-//=== Механізм налаштування рейт-лімітів
 === Rate-limits configuration mechanism
 
-//Механізм рейт-лімітів реалізований на базі
-//https://docs.konghq.com/hub/kong-inc/rate-limiting/[Rate-Limiting]-плагіну для Kong API Gateway.
 The mechanism is based on https://docs.konghq.com/hub/kong-inc/rate-limiting/[Rate-Limiting]-plugin for Kong API Gateway.
 
-//Плагін Kong Rate-limiting є частиною Kong API Gateway та розгортається автоматично, разом з ним.
 Kong Rate-limiting is a part of Kong API Gateway and is deployed along with it.
 
-//Механізм налаштування рейт-лімітів адміністратором є наступним: ::
 The Rate-limits configuration mechanism goes as follows: ::
 
-//. Адміністратор створює або редагує конфігураційний файл у форматі _.yaml (.yml)_
-//з налаштуваннями для розширень Kong API Gateway -- OIDC та Rate-Limiting.
-. The administrator creates and edits the configuration file in _.yaml (.yml)_ file for OIDC and Rate-Limiting plugins Kong API Gateway.
-//. Адміністратор зберігає зміни в Gerrit-репозиторії у відповідному каталозі.
+. The administrator creates and edits the configuration file in _.yaml (.yml)_ file for *OIDC* and *Rate-Limiting* plugins Kong API Gateway.
 . Changes are saved in the corresponding catalog of Gerrit-repository.
-//. Запускається процес Jenkins, який перевіряє наявність змін в репозиторії, та застосовує змінену конфігурацію для всіх запущених екземплярів Kong API Gateway в межах реєстру.
 . Jenkins checks the repository for changes and applies the changed configuration for all the deployed instances of Kong API Gateway within the registry.
 +
-//.Схема налаштування рейт-лімітів адміністратором
 .Rate-limit configuration scheme
 ====
 image:registry-admin/api-rate-limits/Rate-limit-configuration.drawio.png[]
@@ -196,59 +126,43 @@ image:registry-admin/api-rate-limits/Rate-limit-configuration.drawio.png[]
 
 [CAUTION]
 ====
-//Щоб налаштувати ліміти для автентифікованих користувачів чи їх груп, що об`єднані за певним атрибутом, необхідно спершу додати до запита заголовки з потрібними атрибутами. Базуючись на значеннях цих атрибутів, Rate-Limiting плагін зможе рахувати ліміти для кожного автентифікованого користувача чи групи індивідуально. Додати до запита заголовки з атрибутами користувача можна за допомогою OIDC-плагіну, який дозволяє додати власний заголовок `"token-claim"` зі значенням з JWT-токена (_детальніше -- у розділі xref:#header-setup-unauth-user[]_).
-To configure limits for authenticated users or user groups assembled by a certain attribute, you need to add header with said attributes to the request. Based on the attributes values, the Rate-Limiting plugin will calculate limits for each authenticated user or group individually. Use OIDC-plugin to add the headers with user attributes, as it allows you to add your own `"token-claim"` header with the JWT-token value (see xref:#header-setup-unauth-user[]_ for details).
+To configure limits for authenticated users or user groups assembled by a certain attribute, you need to add header with said attributes to the request. Based on the attribute values, the Rate-Limiting plugin will calculate limits for each authenticated user or group individually. Use OIDC-plugin to add the headers with user attributes, as it allows you to add your own `"token-claim"` header with the JWT-token value (see xref:#header-setup-unauth-user[]_ for details).
 ====
 
-//=== Процес налаштування лімітів за допомогою values.yaml
 === The process of configuring limits in values.yaml
 
-//Налаштування рейт-лімітів відбувається у конфігураційному файлі _values.yaml_, у шаблоні розгортання відповідного реєстру. Метадані розгортання реєстрів із шаблону зберігаються у компоненті `control-plane-gerrit` -- центральному репозиторії Gerrit.
-Rate-limits are configured in the _values.yaml_ configuration file, in the deployment template of the corresponding registry. Registry deployement metadata is stored in the `control-plane-gerrit` component -- central Gerrit repository.
+Rate-limits are configured in the _values.yaml_ configuration file, in the deployment template of the corresponding registry. Registry deployment metadata is stored in the `control-plane-gerrit` component -- central Gerrit repository.
 
 [TIP]
 ====
-//Для прикладу розглянемо шаблон реєстру `registry-tenant-template-registry-dev-minimal`, що містить відповідну мінімальну конфігурацію ресурсів для реєстру, що розгортатиметься (_див. сторінку xref:admin:registry-management/control-plane-create-registry.adoc[]_).
 As an example, let's look at the `registry-tenant-template-registry-dev-minimal` registry template that contains the minimum resource configuration for the deployed registry (_see xref:admin:registry-management/control-plane-create-registry.adoc[]_)
 ====
 
 [NOTE]
 ====
-//* За замовчуванням рейт-ліміти вимкнені.
 * Rate-limits are turned off by default.
-//* Увімкнути їх може адміністратор безпеки з належними правами доступу.
 * A security administrator with the corresponding access rights can turn them off.
 ====
 
-//. У локальному середовищі адміністратора відкрийте репозиторій центрального Gerrit -- `control-plane-gerrit`.
 . Open the central Gerrit repository `control-plane-gerrit` in a local environment.
-//. Відкрийте конфігураційний файл відповідного шаблону розгортання реєстру.
 . Open the configuration file of the corresponding registry deployment template.
 +
-//Шлях до файлу може бути, наприклад, такий:
 The route to the file would look similar to this:
 +
 ____
 resources/repositories/templates/registry-tenant-template-<registry-template-name>.git/deploy-templates/values.yaml
 ____
 +
-//TIP: Для прикладу ми використовуємо шаблон _registry-tenant-template-registry-dev-minimal.git_ -- шаблон розгортання реєстру із відповідним набором ресурсів (_тут -- мінімальна (minimal) конфігурація_).
 TIP: As an example we'll use the _registry-tenant-template-registry-dev-minimal.git_ template for registry deployment with the corresponding resources (_minimal configuration_).
 +
 image:registry-admin/api-rate-limits/api-rate-limits-1.png[]
 
-//. Всередині файлу _values.yml_ знайдіть секцію параметрів, яка відповідає за налаштування плагінів Kong -- `kongPluginsConfig`.
-
-//. Увімкніть плагін встановлення рейт-лімітів. Для цього встановіть значення параметра `rateLimitingPluginEnable: true`.
 . Activate the Rate-Limiting plugin by setting `rateLimitingPluginEnable: true`.
 +
-//NOTE: Функціональність рейт-лімітів здатна обмежити кількість запитів за одиницю часу _від вебпорталів_ (Кабінети посадової особи, отримувача послуг та адміністрування регламентів) _до API внутрішніх сервісів_ реєстру.
 NOTE: The rate-limit functionality limits the amount of requests per time unit _from the webportals_ (Officer portal, citizen portal, etc.) _to the external services APIs_ of the registry.
 
-//. За замовчуванням налаштування Kong Rate Limiting плагіну виглядають наступним чином:
-. By default the Kong Rate Limiting plugin configuration looks as follows:
+. By default, the Kong Rate-Limiting plugin configuration looks as follows:
 +
-//.Налаштування values.yml для плагіну Kong Rate Limiting
 .Configuring values.yml for Kong Rate Limiting plugin
 ====
 [source,yaml]
@@ -268,66 +182,33 @@ kongPluginsConfig:
   pluginsRateLimitByIpHideClientHeaders: "false"
 ----
 
-//Поточна конфігурація показує налаштування рейт-лімітів за секунду та годину за:
 This configuration shows rate-limits per second and hour by:
 
-//* заголовком (`ByHeader`) -- лише для авторизованих користувачів -- параметри `pluginsRateLimitByHeaderRequestsPerSecond` та `pluginsRateLimitByHeaderRequestsPerHour` відповідно;
 * Header (`ByHeader`) -- only for authorized users -- `pluginsRateLimitByHeaderRequestsPerSecond` and `pluginsRateLimitByHeaderRequestsPerHour` parameters, accordingly;
-//* IP-адресою (`ByIp`) -- для будь-яких користувачів -- параметри `pluginsRateLimitByIpRequestsPerSecond` та `pluginsRateLimitByIpRequestsPerHour` відповідно.
 * IP-address (`ByIp`) -- for all users -- `pluginsRateLimitByIpRequestsPerSecond` and `pluginsRateLimitByIpRequestsPerHour` parameters, accordingly.
 
-//IMPORTANT: Для коректної роботи плагіну, значення лімітів для параметрів `LimitByHeader` та `LimitByIP` мають бути однаковими.
 IMPORTANT: For proper plugin operation, the limit valiues for `LimitByHeader` and `LimitByIP` parameters must be identical.
-
 ====
 +
-//NOTE: Повний список налаштувань та можливостей Kong Rate Limiting плагіну з описом параметрів доступний за https://docs.konghq.com/hub/kong-inc/rate-limiting/[посиланням].
-NOTE: The full list of Kong Rate Limiting plugin configurations and capabilities is available https://docs.konghq.com/hub/kong-inc/rate-limiting/[here].
+NOTE: The full list of Kong Rate-Limiting plugin configurations and capabilities is available https://docs.konghq.com/hub/kong-inc/rate-limiting/[here].
 
-//. Після усіх налаштувань, виконайте commit до відповідного репозиторію. Після проходження збірки, нові ліміти набудуть чинності.
 . After configuring, perform a commit into the corresponding repository.
 
-//TODO: Додати в опис примітку про дефолтні ліміти для ендпоінтів: 1.8.2+
-
-//== Відображення помилок на формах Кабінетів при перевищенні кількості запитів до сервісів
 == Displaying errors on Portal forms on exceeding the service request limits
 
-//Перевищення кількості дозволених запитів від кабінетів адміністратора регламенту реєстру (`admin-portal`), посадової особи (`officer-portal`) та отримувача послуг (`citizen-portal`) до сервісів (бекенд-API) призводить до виникнення помилок, які відображаються на інтерфейсах користувачів.
-Exceeding the amount of permitted requests from the `admin-portal`, `officer-portal`, and `citizen-portal` to backend API services causes errors that are displayed in the UI.
+Exceeding the number of permitted requests from the `admin-portal`, `officer-portal`, and `citizen-portal` to backend API services causes errors that are displayed in the UI.
 
-//Якщо при спробі доступу до сторінок кабінетів перевищено ліміт дозволеної кількості запитів до сервісів, то робота зі сторінкою блокується і відбувається перехід на сторінку з описом помилки `HTTP 429`.
-If the rate-limit are exceeded when trying to access portal pages, the access is blocked, and the user is redirected to `HTTP 429` error page.
+If the rate limit is exceeded when trying to access portal pages, the access is blocked, and the user is redirected to `HTTP 429` error page.
 
-//Обмеження кількості запитів та час відновлення роботи зі сторінкою порталу встановлює адміністратор безпеки у xref:#rate-limits-configuration[налаштуваннях плагіну] Rate Limiting.
-
-//.Приклади відображення помилок у кабінетах користувачів при перевищенні встановлених лімітів
-.Examples of error displaying in user portals on exceeding rate-limits
+.Examples of error displayed in user portals on exceeding rate-limits
 ====
 
-//.Помилка при перевищенні лімітів запитів до сервера за встановлену одиницю часу у кабінеті адміністратора регламентів:
 .Rate-limit exceeding error in regulations administrator portal:
 image:registry-admin/api-rate-limits/api-rate-limits-2.png[]
 
-//.Перевищення лімітів запитів до сервера за встановлену одиницю часу у кабінеті посадової особи:
 .Rate-limit exceeding error in officer portal:
 image:registry-admin/api-rate-limits/api-rate-limits-4.png[]
 
-//.Перевищення лімітів запитів до сервера за встановлену одиницю часу у кабінеті отримувача послуг:
 .Rate-limit exceeding error in citizen portal:
 image:registry-admin/api-rate-limits/api-rate-limits-3.png[]
 ====
-
-////
-----
-//TODO: Уточнити: Заголовок RateLimit-Reset, cхоже, підтримується лише в enterprise версії плагіну (Advanced).
-Значення "хх секунд" в тексті помилки визначається значенням отриманою з HTTP заголовка відповіді сервера "RateLimit-Reset".
-Сторінка з описом помилки відображається для користувача при виконанні запитів з усіх сторінок Admin/Citizen/Officer Portal.
-Користувач має змогу оновити сторінку після того, як буде вичерпано встановлений проміжок часу блокування порталу і повернутись на активну сторінку за допомогою:
-а) засобів навігації браузера;
-б) клавіатури;
-в) кнопки "Оновити сторінку" на інтерфейсі сторінки з описом помилки.
-Користувач має змогу оновити сторінку з описом помилки до закінчення встановленого проміжку часу блокування порталу(RateLimit Reset)після чого сторінка з описом помилки відображається з оновленим значенням RateLimit-Reset до розблокування.
-Користувач має змогу оновити сторінку з описом помилки до закінчення встановленого проміжку часу блокування порталу(RateLimit Reset), однак для продовження роботи час становлений в RateLimit Reset має бути завершеним.
-При спробі користувача перейти на будь-яку іншу сторінку порталу за допомогою засобів навігації браузера, система повертає користувача на сторінку з описом помилки.
-Перелік критичних запитів та способи відображення нотифікації про помилки пп. 31 Переліку сценаріїв помилок та способів їх обробки.
-////
