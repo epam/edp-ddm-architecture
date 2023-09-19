@@ -1,86 +1,99 @@
-:toc-title: On this page:
-:toc: auto
-:toclevels: 5
-:experimental:
-:sectnums:
-:sectnumlevels: 5
-:sectanchors:
-:sectlinks:
-:partnums:
-
 = Manually backing up and restoring the registry
+include::platform:ROOT:partial$templates/document-attributes/default-set-en.adoc[]
+
+include::platform:ROOT:partial$admonitions/language-en.adoc[]
 
 == Backing up registry
 
-//Після успішного розгортання реєстру та регламентів адміністратор Платформи має можливість створити резервну копію реєстру, що буде збережена до захищеного сховища бекапів (для прикладу, Minio).
-After a successful deployment of the registry and regulations, the Platform administrator can create a backup of the registry, which will be stored in a secure backup repository (for example, Minio).
+include::partial$templates/snippets/backup-restore-planning-en.adoc[]
 
-//Для цього необхідно виконати наступні кроки:
-To back up a registry this, follow these steps:
+After a successful deployment of the registry and regulations, the Platform administrator can create a backup of the registry, which will be stored in a secure backup repository—*MinIO*.
 
-//* Увійдіть до **Control Plane**, використовуючи створені попередньо створені логін та пароль.
-* Log in to the **Control Plane** using the previously created login and password.
-//* Перейдіть до розділу **Реєстри** та оберіть реєстр для резервного копіювання.
-* Go to the **Registries** section and select the registry for backup.
-//* Перейдіть до секції **Конфігурація** на сторінці xref:admin:registry-management/control-plane-view-registry.adoc#sections[Перегляд конфігурації створеного реєстру], натисніть на посилання до Jenkins (**CI**) Платформи та у вкладці **Всі** (**All**) знайдіть job із назвою `Create-registry-backup-backup-test` (див. зображення нижче).
-//TODO: У програмі, замість назви підсторінки "Перегляд конфігурації створеного реєстру" я бачу табу "Інформація про реєстр", і нижче переклала її саме так.
-* Go to the **Configuration** section at the xref:admin:registry-management/control-plane-edit-registry.adoc#sections[Registry information] tab, click on the link under **CI** to open Jenkins, navigate to the *All* tab, and find the job named `Create-registry-backup-backup-test` (see the image below).
+To back up a registry this, follow these steps: ::
 
-//TIP: Детальніше -- див. xref:admin:registry-management/control-plane-view-registry.adoc#registry-deploy-status[Перевірка відомостей про розгортання реєстру].
-//TODO: Can I translate the below page name in such a way? How do I check the reference at the below address?
-TIP: For more details, see xref:admin:registry-management/control-plane-edit-registry.adoc#registry-deploy-status[Checking registry deployment details]
+. Log in to the **Control Plane** using the previously created login and password.
 
+. Go to the **Registries** section and select the registry for backup.
+
+. Open the **Configuration** section at the xref:admin:registry-management/control-plane-edit-registry.adoc#sections[Registry information] tab, click on the link under *CI* to open Jenkins, navigate to the *All* tab, and find the job named *Create-registry-backup-`<registry-name>`* where `<registry-name>` means the name for your registry (_see the image below_).
++
+TIP: For more details on Jenkins jobs, see xref:admin:registry-management/control-plane-edit-registry.adoc#registry-deploy-status[Checking registry deployment details]
++
 image:backup-restore/registry/control-plane-create-backup-job.png[]
 
-//* Відкрийте job та натисніть `Зібрати з параметрами`, щоб запустити `Create-registry-backup-backup-test` job.
-* Open the job and click `Build with Parameters` to launch the `Create-registry-backup-backup-test` job.
-
+. Open the job and click *`Build with Parameters`* to launch the *Create-registry-backup* pipeline.
++
 image:backup-restore/registry/control-plane-create-backup-01.png[]
 
-//* Натисніть `Зібрати`.
-* Click `Build`.
-
+. Click *`Build`*.
++
 image:backup-restore/registry/control-plane-create-backup-02.png[]
++
 image:backup-restore/registry/control-plane-create-backup-03.png[]
++
+If the job is successfully executed, a backup of the registry with its regulations is created and uploaded to the corresponding backup repository directory.
 
-//* У разі успішного виконання job, створюється резервна копія реєстру з регламентом та завантажується до відповідної директорії сховища бекапів.
-* If the job is successfully executed, a backup of the registry with its regulations is created and uploaded to the corresponding backup repository directory.
+[WARNING]
+====
+Backup replication of S3 buckets::
 
-// image:admin:backup-restore-minio1.png[]
+After the backup creation pipeline has run, it establishes bucket replication pipelines. These pipelines are scheduled to run at 19:30 (UTC) by default. If you need to launch the pipeline earlier, you can manually modify this schedule:
 
-//== Відновлення реєстру (Restore)
+. Log into OKD.
+. In the top-right corner, click Copy login command > Display Token.
+. In the *Log in with this token* field, copy the token to log into OpenShift through the terminal. It might look like this:
++
+.Example of oc login
+[source,bash]
+----
+oc login --token=sha256~gQa0bxg_aaabbbcccd_D88470E-aabBcQuCn9keIM4I --server=https://api.envone.dev.registry.eua.gov.ua:1234
+----
+
+. Open the *OpenShift CLI* and execute the copied command.
++
+[TIP]
+For more information about *OpenShift CLI*, refer to the guide xref:registry-develop:study-project/index.adoc#preconditions-setup[Getting Started Preparations].
+
+. Start the replication backups of the S3 buckets with the schedule desired by the user. To do this, run the following command:
++
+[source,bash]
+----
+namespace="abc-02";schedule='19 12 * * *'; for cronJob in `oc get cronjob -n velero -o custom-columns="NAME:.metadata.name" --no-headers | grep "${namespace}"`;do oc -n velero patch cronjob/$cronJob -p '{"spec":{"schedule":"'$schedule'"}}'; echo 1;done
+----
++
+NOTE: Replace the value `namespace="abc-02"` with the name of your registry. For example, `namespace="test-registry"`.
+
+TIP: Also, familiarize yourself with the settings for automatic setup of S3 bucket replications on the page xref:admin:backup-restore/backup-schedule-registry-components.adoc[].
+====
+
 == Restoring registry
 
-//* Увійдіть до **Control Plane**, використовуючи створені попередньо логін та пароль.
-* Login to the **Control Plane** using the previously created login and password.
-//* Перейдіть до розділу **Реєстри** та оберіть реєстр, який необхідно відновити.
-* Go to the **Registries** section and select the Registry that needs to be restored.
-//* Перейдіть до Jenkins (CI) платформи та у вкладці **Всі** (**All**) знайдіть `Restore-registry-backup-test` job (див. зображення нижче).
-* Go to the **Configuration** section, click on the link under **CI** to open Jenkins, navigate to the *All* tab, and find the  `Restore-registry-backup-test` job (see the image below).
+To restore a registry from the created backup, follow these steps: ::
 
+. Log in to the **Control Plane** using the previously created login and password.
+
+. Go to the **Registries** section and select the Registry that needs to be restored.
+
+. Go to the **Configuration** section, click on the link under **CI** to open Jenkins, navigate to the *All* tab, and find the  *Restore-registry-`<registry-name>`* job, where `<registry-name>` means the name for your registry (_see the image below_).
++
 image:backup-restore/registry/control-plane-create-restore.png[]
 
-//* Відкрийте job та натисніть `Зібрати з параметрами`, щоб запустити `Restore-registry-backup-backup-test` job.
-* Open the job and click `Build with Parameters` to launch the `Restore-registry-backup-backup-test` job.
-
+. Open the job and click *`Build with Parameters`* to launch the *Restore-registry* pipeline.
++
 image:backup-restore/registry/control-plane-create-restore-01.png[]
 
-//* Натисніть `Зібрати`.
-* Click `Build`.
-
+. Click `Build`.
++
 image:backup-restore/registry/control-plane-create-restore-02.png[]
 
-//* Далі, на кроці введення параметрів, оберіть версію резервної копії для відновлення. Для цього перейдіть до виводу консолі (Секція **Console Output** на панелі зліва) та натисніть `Input Requested`.
-* Next, in the parameter input step, select the backup version to restore. To do this, go to the console output (the **Console Output** section on the left panel) and click `Input Requested`.
-
+. Next, in the parameter input step, select the backup version to restore. To do this, go to the *Console Output* section on the left panel and click *`Input Requested`*.
++
 image:backup-restore/registry/control-plane-create-restore-03.png[]
 
-//* Оберіть версію резервної копії зі списку та натисніть `Proceed`.
-* Select the backup version from the list and click `Proceed`.
-
+. Select the backup version from the list and click *`Proceed`*.
++
 image:backup-restore/registry/control-plane-create-restore-04.png[]
-
-//* У разі успішного виконання job `Restore-registry-backup-test`, реєстр буде відновлено до стану обраної версії резервної копії.
-* If the `Restore-registry-backup-test` job is successfully executed, the registry will be restored to the selected backup version.
-
++
+If the *Restore-registry* pipeline is successfully executed, the registry will be restored to the selected backup version.
++
 image:backup-restore/registry/control-plane-create-restore-05.png[]
