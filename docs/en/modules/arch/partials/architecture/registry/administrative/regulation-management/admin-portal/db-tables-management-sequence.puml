@@ -1,0 +1,85 @@
+@startuml
+
+autonumber
+skinparam responseMessageBelowArrow true
+
+actor "Regulations\n administrator" as User
+actor "Regulations\n inspector" as Reviewer
+
+participant "Administrative portal" as FrontEnd
+participant "Registry regulations\n management service" as BackendService
+participant "Change inspection service" as Gerrit
+participant "Registry regulations\n publishing service" as Jenkins
+
+activate User
+User -> FrontEnd: Create candidate version of the regulations
+FrontEnd -> BackendService: Create candidate version of the regulations
+activate BackendService
+BackendService -> Gerrit: Create a separate branch
+activate Gerrit
+BackendService -> Gerrit: Get updated version of DataModelSnapshot
+BackendService <-- Gerrit: DataModelSnapshot
+
+BackendService -> Gerrit: Get change history of DataModelSnapshot
+FrontEnd <-- BackendService: DataModelSnapshot
+
+BackendService -> BackendService: Processing change history
+FrontEnd <-- BackendService: History
+User <-- FrontEnd: Regulations candidate version
+
+User -> FrontEnd: Request to save changes of\n regulations candidate version
+FrontEnd -> BackendService: New version of DataModelSnapshot
+
+User -> FrontEnd: Request for change inspection of\n regulations candidate version
+FrontEnd -> BackendService: Send the candidate version for review
+
+deactivate User
+
+BackendService -> Gerrit: Get DataModelSnapshot of the document\n that is up-to-date when creating the change branch
+BackendService <-- Gerrit: DataModelSnapshot
+
+BackendService -> Gerrit: Get changed DataModelSnapshot
+BackendService <-- Gerrit: DataModelSnapshot
+BackendService -> BackendService: build Diff document
+BackendService -> BackendService: conversion of Diif document\n in liquibase changeset
+
+BackendService -> BackendService: Add information to liquibase сhangelog\n from liquibase changeset
+BackendService -> Gerrit: Save liquibase changeset
+deactivate BackendService
+
+activate Reviewer
+Reviewer -> FrontEnd: Request for version inspection
+FrontEnd -> BackendService: Request for version inspection
+
+activate BackendService
+BackendService -> Gerrit: Get candidate version status
+BackendService <-- Gerrit: Condition status (conflicts and tests)
+BackendService -> Gerrit: Get DataModelSnapshot\n from the candidate version change branch
+
+'Add diff here
+
+BackendService -> Gerrit: Get document with change history
+BackendService <-- Gerrit: History
+FrontEnd <-- BackendService: Candidate version
+Reviewer <-- FrontEnd: Candidate version
+
+Reviewer -> FrontEnd: Request to apply changes
+deactivate Reviewer
+
+FrontEnd -> BackendService: Request to apply changes
+
+BackendService -> Gerrit: Merge PR
+deactivate BackendService
+
+Gerrit --> Jenkins: Send event to start RegistryRegulationJob
+
+activate Jenkins
+Jenkins -> Jenkins: Create DB structure\n and informing metadata table\n using liquibase changelog
+Jenkins -> Jenkins: Create DataModelSnapshot\n using DB
+
+Jenkins -> Gerrit: Save updated DataModelSnapshot
+deactivate Jenkins
+Gerrit -> Gerrit: merge changes to master
+deactivate Gerrit
+
+@enduml
