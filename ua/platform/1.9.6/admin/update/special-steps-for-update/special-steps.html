@@ -3421,17 +3421,531 @@
 </aside>
             <article class="doc">
 <h1 class="page">Оновлення Платформи та реєстрів до версії 1.9.6: спеціальні кроки</h1>
-<div class="admonitionblock caution">
+<div id="toc" class="toc">
+<div id="toctitle">ЗМІСТ</div>
+<ul class="sectlevel1">
+<li><a href="#_мета_інструкції">1. Мета інструкції</a></li>
+<li><a href="#_підготовка_кластера_платформи_до_оновлення">2. Підготовка кластера Платформи до оновлення</a>
+<ul class="sectlevel2">
+<li><a href="#_створення_повної_резервної_копії_простору_імен_user_management">2.1. Створення повної резервної копії простору імен <code>user-management</code></a></li>
+<li><a href="#_видалення_застарілих_ресурсів">2.2. Видалення застарілих ресурсів</a></li>
+</ul>
+</li>
+<li><a href="#update-platform">3. Оновлення Платформи</a>
+<ul class="sectlevel2">
+<li><a href="#_запуск_пайплайну_platform_deploy">3.1. Запуск пайплайну platform-deploy</a></li>
+<li><a href="#_оновлення_cluster_mgmt">3.2. Оновлення cluster-mgmt</a></li>
+<li><a href="#_внесення_виправлень_до_скрипту">3.3. Внесення виправлень до скрипту</a></li>
+</ul>
+</li>
+<li><a href="#_кроки_після_оновлення_платформи">4. Кроки після оновлення Платформи</a>
+<ul class="sectlevel2">
+<li><a href="#_налаштування_cleanup_job">4.1. Налаштування Cleanup Job</a></li>
+<li><a href="#_оновлення_анотації_для_reloader_env_js_у_компоненті_common_web_app">4.2. Оновлення анотації для reloader env.js у компоненті common-web-app</a></li>
+<li><a href="#_застосування_hotfix_для_реєстрів_версії_1_9_5">4.3. Застосування hotfix для реєстрів версії 1.9.5</a></li>
+<li><a href="#_застосувати_фікс_для_реєстрів_1_9_6">4.4. Застосувати фікс для реєстрів 1.9.6</a></li>
+</ul>
+</li>
+<li><a href="#_оновлення_реєстру">5. Оновлення реєстру</a>
+<ul class="sectlevel2">
+<li><a href="#_push_бібліотеки_сервісів_даних_до_центрального_сховища_артефактів_nexus">5.1. Push бібліотеки сервісів даних до центрального сховища артефактів Nexus</a></li>
+<li><a href="#_застосування_hotfix_образів_для_компонентів_реєстру">5.2. Застосування hotfix-образів для компонентів реєстру</a></li>
+</ul>
+</li>
+<li><a href="#_відомі_проблеми">6. Відомі проблеми</a></li>
+</ul>
+</div>
+<div class="sect1">
+<h2 id="_мета_інструкції"><a class="anchor" href="#_мета_інструкції"></a><a class="link" href="#_мета_інструкції">1. Мета інструкції</a></h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Метою цієї сторінки є відображення процесу оновлення та спеціальних кроків, необхідних для оновлення кластера Платформи та реєстрів з версії <code>1.9.5.19</code> до <code>1.9.6.34</code>.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_підготовка_кластера_платформи_до_оновлення"><a class="anchor" href="#_підготовка_кластера_платформи_до_оновлення"></a><a class="link" href="#_підготовка_кластера_платформи_до_оновлення">2. Підготовка кластера Платформи до оновлення</a></h2>
+<div class="sectionbody">
+<div class="sect2">
+<h3 id="_створення_повної_резервної_копії_простору_імен_user_management"><a class="anchor" href="#_створення_повної_резервної_копії_простору_імен_user_management"></a><a class="link" href="#_створення_повної_резервної_копії_простору_імен_user_management">2.1. Створення повної резервної копії простору імен <code>user-management</code></a></h3>
+<div class="paragraph">
+<p>Оскільки цей реліз передбачає оновлення сервісу Keycloak шляхом його видалення, про всяк випадок <span class="underline"><em>обов&#8217;язково</em></span> створіть повний бекап простору імен <strong><code>user-management</code></strong> <em>ДО</em> початку розгортання нової версії Платформи.</p>
+</div>
+<div class="admonitionblock note">
 <table>
 <tr>
 <td class="icon">
-<i class="fa icon-caution" title="УВАГА"></i>
+<i class="fa icon-note" title="ПРИМІТКА"></i>
 </td>
 <td class="content">
-Документ у процесі формування. Перегляньте останню доступну версію сторінки&#8201;&#8212;&#8201;<a href="#1.9.5@admin:update/special-steps-for-update/special-steps.adoc" class="xref unresolved">Оновлення Платформи та реєстрів до версії 1.9.5: спеціальні кроки</a>.
+Перед створенням бекапу переконайтеся, що ви увійшли до кластера за допомогою команди <code>oc login</code>.
 </td>
 </tr>
 </table>
+</div>
+<div class="listingblock">
+<div class="title">Створення повної резервної копії user-management</div>
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-bash hljs" data-lang="bash">$ velero create backup user-management-fresh --include-namespaces user-management</code></pre>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_видалення_застарілих_ресурсів"><a class="anchor" href="#_видалення_застарілих_ресурсів"></a><a class="link" href="#_видалення_застарілих_ресурсів">2.2. Видалення застарілих ресурсів</a></h3>
+<div class="paragraph">
+<p>Видаліть застарілий ресурс <strong><em>deploy-templates/templates/KeycloakRealmComponent.yaml</em></strong> та відредагуйте ресурс <strong><em>registry-configuration/deploy-templates/values.yaml</em></strong> у репозиторії <strong><em>registry-configuration</em></strong>.</p>
+</div>
+<div class="admonitionblock important">
+<table>
+<tr>
+<td class="icon">
+<i class="fa icon-important" title="ВАЖЛИВО"></i>
+</td>
+<td class="content">
+Виправлення стосується лише реєстрів версії &lt; <code>1.9.6</code>.<br>
+</td>
+</tr>
+</table>
+</div>
+<div class="paragraph">
+<p>Внесіть необхідні зміни до репозиторію <strong><em>registry-configuration</em></strong>. Для цього виконайте наступні кроки:</p>
+</div>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>Відрийте <strong>Openshift</strong>-консоль &gt; <strong>Projects</strong> &gt; <strong><code>control-plane</code></strong> та перейдіть до сервісу <strong><code>gerrit</code></strong> за відповідним роутом.</p>
+</li>
+<li>
+<p>Знайдіть репозиторій <strong><em>registry-configuration</em></strong> та створіть <strong>Merge Request</strong> в гілку <code>1.5.0-SNAPSHOT.161</code>, який має містити видалений файл <em>deploy-templates/templates/KeycloakRealmComponent.yaml</em> та відредагований файл <em>registry-configuration/deploy-templates/values.yaml</em>, як це зображено нижче.</p>
+</li>
+<li>
+<p>Застосуйте зміни до відповідної гілки&#8201;&#8212;&#8201;виконайте <code>git merge</code>.</p>
+</li>
+</ol>
+</div>
+<div class="paragraph">
+<p><span class="image"><img src="../../_images/infrastructure/special-steps/special-steps-1-9-6-1.png" alt="image" width="467" height="271"></span></p>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="update-platform"><a class="anchor" href="#update-platform"></a><a class="link" href="#update-platform">3. Оновлення Платформи</a></h2>
+<div class="sectionbody">
+<div class="sect2">
+<h3 id="_запуск_пайплайну_platform_deploy"><a class="anchor" href="#_запуск_пайплайну_platform_deploy"></a><a class="link" href="#_запуск_пайплайну_platform_deploy">3.1. Запуск пайплайну platform-deploy</a></h3>
+<div class="paragraph">
+<p>Запустіть пайплайн <code>platform-deploy</code> в Jenkins CICD2 з опціями оновлення та необхідною версією збірки, а саме <code>1.9.5.19</code>.</p>
+</div>
+<div class="paragraph">
+<p>Вкажіть необхідний режим розгортання (<code>deploymentMode</code>).</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_оновлення_cluster_mgmt"><a class="anchor" href="#_оновлення_cluster_mgmt"></a><a class="link" href="#_оновлення_cluster_mgmt">3.2. Оновлення cluster-mgmt</a></h3>
+<div class="paragraph">
+<p>Цей крок описує стандартний процес оновлення інфраструктурних компонентів Платформи за допомогою пайплайну <code>cluster-mgmt</code> в адміністративній панелі <strong>Control Plane</strong>.</p>
+</div>
+<div class="admonitionblock tip">
+<table>
+<tr>
+<td class="icon">
+<i class="fa icon-tip" title="ПІДКАЗКА"></i>
+</td>
+<td class="content">
+Див. детальніше на сторінці <a href="../update_cluster-mgmt.html" class="xref page">Оновлення інфраструктурних компонентів Платформи</a>.
+</td>
+</tr>
+</table>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_внесення_виправлень_до_скрипту"><a class="anchor" href="#_внесення_виправлень_до_скрипту"></a><a class="link" href="#_внесення_виправлень_до_скрипту">3.3. Внесення виправлень до скрипту</a></h3>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>Після створення Merge Request (MR) оновлення Платформи, внесіть виправлення до скрипту, що знаходиться у <strong><em>scripts/modify_control_plane_version.py</em></strong>. Додайте кодування <code>UTF-8</code> до параметрів виклику метода <code>open</code>.</p>
+<div class="listingblock">
+<div class="title">scripts/modify_control_plane_version.py</div>
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-python hljs" data-lang="python">with open(values_file, 'r', encoding="utf-8") as file:</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Скрипт повинен мати наступний вигляд:</p>
+</div>
+<div class="paragraph">
+<p><span class="image"><img src="../../_images/infrastructure/special-steps/special-steps-1-9-6-2.png" alt="image" width="467" height="89"></span></p>
+</div>
+<div class="admonitionblock note">
+<table>
+<tr>
+<td class="icon">
+<i class="fa icon-note" title="ПРИМІТКА"></i>
+</td>
+<td class="content">
+Зображення демонструє зміни, що були внесені вже після злиття Merge Request оновлення Платформи.
+</td>
+</tr>
+</table>
+</div>
+</li>
+<li>
+<p>Продовжіть оновлення Платформи шляхом підтвердження злиття MR.</p>
+</li>
+</ol>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_кроки_після_оновлення_платформи"><a class="anchor" href="#_кроки_після_оновлення_платформи"></a><a class="link" href="#_кроки_після_оновлення_платформи">4. Кроки після оновлення Платформи</a></h2>
+<div class="sectionbody">
+<div class="sect2">
+<h3 id="_налаштування_cleanup_job"><a class="anchor" href="#_налаштування_cleanup_job"></a><a class="link" href="#_налаштування_cleanup_job">4.1. Налаштування Cleanup Job</a></h3>
+<div class="paragraph">
+<p>Після успішного оновлення Платформи, через оновлення версії <strong>Istio</strong> з версії <code>1.10</code> до <code>1.18</code>, для реєстрів на версії <code>1.9.5</code> не працюватиме Cleanup Job.</p>
+</div>
+<div class="admonitionblock note">
+<table>
+<tr>
+<td class="icon">
+<i class="fa icon-note" title="ПРИМІТКА"></i>
+</td>
+<td class="content">
+Ця проблема пов&#8217;язана з помилкою в Istio версії <code>1.10</code>: <a href="https://github.com/istio/istio/issues/26882" class="bare">https://github.com/istio/istio/issues/26882</a>.<br>
+Istio призначав неправильну групу <code>"1337"</code> для томів, приєднаних до поду.
+У версії <code>1.18</code> ця помилка була виправлена, але зазначена група залишилася. Щоб виправити це, потрібно додати <strong>init-контейнер</strong> до деплоймента компонента <strong><code>registry-regulation-management</code></strong>.
+</td>
+</tr>
+</table>
+</div>
+<div class="paragraph">
+<p>Для усунення цієї проблеми, в наявних реєстрах <em>ЛИШЕ</em> версії <code>1.9.5</code> виконайте наступні кроки:</p>
+</div>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>Перейдіть до <strong>gerrit</strong> у проєкті <strong><code>control-plane</code></strong>.</p>
+</li>
+<li>
+<p>Оберіть репозиторій <strong><em>registry-regulation-management</em></strong> та внесіть зміни до гілки, яка відповідає версії Платформи <code>1.9.5</code>.</p>
+<div class="paragraph">
+<p>Приклад:</p>
+</div>
+<div class="paragraph">
+<p><span class="image"><img src="../../_images/infrastructure/special-steps/special-steps-1-9-6-3.png" alt="image" width="467" height="503"></span></p>
+</div>
+<div class="olist loweralpha">
+<ol class="loweralpha" type="a">
+<li>
+<p>У маніфест <strong><em>deploy-templates/templates/deployment.yaml</em></strong> за шляхом <strong><em>.spec.template.spec</em></strong> додайте наступний код для створення init-контейнера, що змінить групу на актуальну:</p>
+<div class="listingblock">
+<div class="title">Deployment config</div>
+<div class="content">
+<pre>initContainers:
+  - name: setup-permissions
+    image: "{{ .Values.image.name }}:{{ .Values.image.version }}"
+    command: ["sh", "-c", "chown -R 1001:1001 {{ .Values.gerrit.repositoryDirectory }}"]
+    volumeMounts:
+      - name: repositories-data
+        mountPath: {{ .Values.gerrit.repositoryDirectory }}
+    securityContext:
+      runAsUser: 0</pre>
+</div>
+</div>
+</li>
+<li>
+<p>Після додавання блоку коду, маніфест <strong><em>deployment.yaml</em></strong> повинен виглядати наступним чином:</p>
+<div class="paragraph">
+<p><span class="image"><img src="../../_images/infrastructure/special-steps/special-steps-1-9-6-4.png" alt="image" width="467" height="393"></span></p>
+</div>
+</li>
+</ol>
+</div>
+</li>
+<li>
+<p>Після додавання блоку коду до маніфесту, перезапустіть кожен <strong>MASTER-Build-<code>&lt;registry-name&gt;</code></strong> пайплайн для реєстру, який відповідає версії <code>1.9.5</code>.</p>
+<div class="admonitionblock tip">
+<table>
+<tr>
+<td class="icon">
+<i class="fa icon-tip" title="ПІДКАЗКА"></i>
+</td>
+<td class="content">
+<code>&lt;registry-name&gt;</code>&#8201;&#8212;&#8201;назва реєстру.
+</td>
+</tr>
+</table>
+</div>
+</li>
+</ol>
+</div>
+<div class="paragraph">
+<p>Після успішного запуску Build-пайплайну, CleanUp Job відновить свою працездатність.</p>
+</div>
+<div class="admonitionblock note">
+<table>
+<tr>
+<td class="icon">
+<i class="fa icon-note" title="ПРИМІТКА"></i>
+</td>
+<td class="content">
+<div class="paragraph">
+<p>Якщо на кластері існує багато реєстрів версії <code>1.9.5</code>, і перезапуск кожної збірки Jenkins-пайплайну займає багато часу, можна використати наступний <strong>bash-скрипт</strong> для оновлення deployment-конфігурації сервісу <strong><code>registry-regulation-management</code></strong> без оновлення реєстру через Jenkins-пайплайн.</p>
+</div>
+<div class="paragraph">
+<p>Зверніть увагу, що цей скрипт вносить патчі до deployment-конфігурації <em class="underline">усіх реєстрів</em>. Якщо виключити деякі реєстри із процесу, їх можна додати у поле <strong><code>--field-selector</code></strong> .</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="../../_images/infrastructure/special-steps/special-steps-1-9-6-5.png" alt="image" width="467" height="21">
+</div>
+<div class="title">Зображення 1. Приклад виключення реєстру <strong>abc-01</strong> із процесу внесення патчу:</div>
+</div>
+<div class="listingblock">
+<div class="title">Скрипт patching-deployment.sh внесення патчів до deployment-конфігурації компонента <strong><code>registry-regulation-management</code></strong></div>
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-bash hljs" data-lang="bash">#!/bin/bash
+for registry in $(oc get codebases -n control-plane --no-headers -o custom-columns=":metadata.name" --field-selector=metadata.name!=cluster-mgmt); do
+  echo "Patching ${registry}"
+  oc patch deployment registry-regulation-management-deployment -n ${registry} -p '{"spec":{"template":{"spec":{"initContainers": [{"name": "setup-permissions", "image": "docker-registry.control-plane-nexus.svc:5004/control-plane/registry-regulation-management-master:1.9.5.8", "command": ["sh", "-c", "chown -R 1001:1001 /var/lib/repos-data"], "volumeMounts": [{"name": "repositories-data", "mountPath": "/var/lib/repos-data"}], "securityContext": {"runAsUser": 0}}]}}}}'
+done</code></pre>
+</div>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="../../_images/infrastructure/special-steps/special-steps-1-9-6-6.png" alt="image" width="467" height="125">
+</div>
+<div class="title">Зображення 2. Приклад запуску скрипту із попереднім входом через <code>oc cli</code></div>
+</div>
+</td>
+</tr>
+</table>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_оновлення_анотації_для_reloader_env_js_у_компоненті_common_web_app"><a class="anchor" href="#_оновлення_анотації_для_reloader_env_js_у_компоненті_common_web_app"></a><a class="link" href="#_оновлення_анотації_для_reloader_env_js_у_компоненті_common_web_app">4.2. Оновлення анотації для reloader env.js у компоненті common-web-app</a></h3>
+<div class="paragraph">
+<p>Після оновлення Платформи та перед оновленням реєстру виконайте наступні кроки:</p>
+</div>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>Перейдіть у центральний Gerrit.</p>
+</li>
+<li>
+<p>Відкрийте <strong>Browse</strong> &gt; <strong>Repositories</strong> &gt; <strong><em>common-web-app</em></strong>.</p>
+</li>
+<li>
+<p>Перейдіть у розділ <strong>Commands</strong> та натисніть <strong><code>Create change</code></strong>.</p>
+</li>
+<li>
+<p>Оберіть версію <code>1.9.4.96</code> common-web-app, з котрою відбувалося оновлення, впишіть опис змін та натисніть на створення нового CRD.</p>
+</li>
+<li>
+<p>У новому вікні натисніть <strong><code>Edit</code></strong> &gt; <strong><code>ADD/OPEN/UPLOAD</code></strong>.</p>
+</li>
+<li>
+<p>Оберіть файл <em>deploy-templates/templates/deployment.yaml</em>.</p>
+</li>
+<li>
+<p>Додайте замість наявної анотації <code><a href="http://configmap.reloader.stakater.com/reload">configmap.reloader.stakater.com/reload</a>: "environment-js"</code> нову (<em>як показано нижче</em>) та збережіть зміни.</p>
+<div class="listingblock">
+<div class="content">
+<pre>configmap.reloader.stakater.com/reload: "environment-js-{{ $portal.name }}"</pre>
+</div>
+</div>
+<div class="paragraph">
+<p><span class="image"><img src="../../_images/infrastructure/special-steps/special-steps-1-9-6-7.png" alt="image" width="467" height="196"></span></p>
+</div>
+</li>
+<li>
+<p>Натисніть <strong><code>START REVIEW</code></strong> &gt; <strong><code>Code-Review +2</code></strong> &gt; <strong><code>Verified +1</code></strong> &gt; <strong><code>SEND AND START REVIEW</code></strong> &gt; <strong><code>Submit</code></strong>.</p>
+</li>
+</ol>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_застосування_hotfix_для_реєстрів_версії_1_9_5"><a class="anchor" href="#_застосування_hotfix_для_реєстрів_версії_1_9_5"></a><a class="link" href="#_застосування_hotfix_для_реєстрів_версії_1_9_5">4.3. Застосування hotfix для реєстрів версії 1.9.5</a></h3>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>Перейдіть до <strong>Gerrit</strong> у проєкті <strong><code>control-plane</code></strong>.</p>
+</li>
+<li>
+<p>Відкрийте репозиторій <strong><em>edp-library-stages-fork</em></strong> та внесіть зміни в гілку <code>build/0.2.1-SNAPSHOT.395</code> (<strong>Commands</strong> &gt; <strong><code>Create change</code></strong>).</p>
+<div class="paragraph">
+<p><span class="image"><img src="../../_images/infrastructure/special-steps/special-steps-1-9-6-8.png" alt="image" width="467" height="209"></span></p>
+</div>
+</li>
+<li>
+<p>Натисніть у новому вікні <strong><code>Edit</code></strong> &gt; <strong><code>ADD/OPEN/UPLOAD</code></strong>.</p>
+</li>
+<li>
+<p>Оберіть файл <strong><em>src/com/epam/edp/customStages/impl/cd/DeployViaHelmfile.groovy</em></strong> та внести зміну у рядок <code>326</code>, зокрема додайте знак символ <strong><code>?</code></strong> (знак питання) та натисніть <strong><code>Save</code></strong>.</p>
+<div class="paragraph">
+<p><span class="image"><img src="../../_images/infrastructure/special-steps/special-steps-1-9-6-9.png" alt="image" width="467" height="178"></span></p>
+</div>
+</li>
+<li>
+<p>Оберіть файл <strong><em>src/com/epam/edp/customStages/helper/DeployHelper.groovy</em></strong> та внести зміну у рядок <code>605</code>, а саме видаліть символ <code>!</code> (знак оклику), та натисніть <strong><code>Save and Publish</code></strong>.</p>
+<div class="paragraph">
+<p><span class="image"><img src="../../_images/infrastructure/special-steps/special-steps-1-9-6-10.png" alt="image" width="467" height="180"></span></p>
+</div>
+</li>
+<li>
+<p>Проставте оцінки <strong><code>+2 Code Review</code></strong> та <strong><code>+1 Verified</code></strong> та виконайте <code>git merge</code> змін.</p>
+</li>
+</ol>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_застосувати_фікс_для_реєстрів_1_9_6"><a class="anchor" href="#_застосувати_фікс_для_реєстрів_1_9_6"></a><a class="link" href="#_застосувати_фікс_для_реєстрів_1_9_6">4.4. Застосувати фікс для реєстрів 1.9.6</a></h3>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>Перейдіть до <strong>Gerrit</strong> у проєкті <strong><code>control-plane</code></strong>.</p>
+</li>
+<li>
+<p>Оберіть репозиторій <strong><em>edp-library-stages-fork</em></strong> та внесіть зміни в гілку <code>build/0.2.1-SNAPSHOT.418</code> (<strong>Commands</strong> &gt; <strong><code>Create change</code></strong>).</p>
+<div class="paragraph">
+<p><span class="image"><img src="../../_images/infrastructure/special-steps/special-steps-1-9-6-11.png" alt="image" width="467" height="215"></span></p>
+</div>
+</li>
+<li>
+<p>Натисніть у новому вікні <strong><code>Edit</code></strong> &gt; обрати <strong><code>ADD/OPEN/UPLOAD</code></strong>.</p>
+</li>
+<li>
+<p>Обрати файл <strong><em>src/com/epam/edp/customStages/helper/DeployHelper.groovy</em></strong> та внесіть зміну у рядок <code>607</code>, зокрема видаліть символ  <strong><code>!</code></strong> (<em>знак оклику</em>), та натисніть <strong><code>Save and Publish</code></strong>.</p>
+<div class="paragraph">
+<p><span class="image"><img src="../../_images/infrastructure/special-steps/special-steps-1-9-6-12.png" alt="image" width="467" height="172"></span></p>
+</div>
+</li>
+<li>
+<p>Проставте оцінки <strong><code>+2 Code Review</code></strong>, <strong><code>+1 Verified</code></strong> та виконайте git merge змін.</p>
+</li>
+</ol>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_оновлення_реєстру"><a class="anchor" href="#_оновлення_реєстру"></a><a class="link" href="#_оновлення_реєстру">5. Оновлення реєстру</a></h2>
+<div class="sectionbody">
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>Оновіть реєстр до нової версії відповідно до інструкції <a href="../update-registry-components.html" class="xref page">Оновлення компонентів реєстру</a></p>
+</li>
+<li>
+<p>Перейдіть до застосування хотфіксів, описаних нижче.</p>
+</li>
+</ol>
+</div>
+<div class="sect2">
+<h3 id="_push_бібліотеки_сервісів_даних_до_центрального_сховища_артефактів_nexus"><a class="anchor" href="#_push_бібліотеки_сервісів_даних_до_центрального_сховища_артефактів_nexus"></a><a class="link" href="#_push_бібліотеки_сервісів_даних_до_центрального_сховища_артефактів_nexus">5.1. Push бібліотеки сервісів даних до центрального сховища артефактів Nexus</a></h3>
+<div class="paragraph">
+<p>Виконайте <code>push</code> бібліотеки сервісів по роботі з даними до центрального сховища артефактів <code>control-plane-nexus</code>.</p>
+</div>
+<div class="admonitionblock note">
+<table>
+<tr>
+<td class="icon">
+<i class="fa icon-note" title="ПРИМІТКА"></i>
+</td>
+<td class="content">
+У <em>helmfile.yaml</em> прописувати їх не потрібно.
+</td>
+</tr>
+</table>
+</div>
+<div class="listingblock">
+<div class="title">Список образів</div>
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-text hljs" data-lang="text">model-core-base-image-1-9-6-hotfix:1.9.4-1.9.6-HOTFIX-SNAPSHOT.1
+kafka-api-core-base-image-1-9-6-hotfix:1.9.4-1.9.6-HOTFIX-SNAPSHOT.1
+rest-api-core-base-image-1-9-6-hotfix:1.9.6-1.9.6-HOTFIX-SNAPSHOT.1
+soap-api-core-base-image-1-9-6-hotfix:1.9.4-1.9.6-HOTFIX-SNAPSHOT.1</code></pre>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_застосування_hotfix_образів_для_компонентів_реєстру"><a class="anchor" href="#_застосування_hotfix_образів_для_компонентів_реєстру"></a><a class="link" href="#_застосування_hotfix_образів_для_компонентів_реєстру">5.2. Застосування hotfix-образів для компонентів реєстру</a></h3>
+<div class="paragraph">
+<p>Застосуйте наступні hotfix-образи для відповідних компонентів реєстру у <em>helmfile.yaml</em> реєстру.</p>
+</div>
+<div class="admonitionblock tip">
+<table>
+<tr>
+<td class="icon">
+<i class="fa icon-tip" title="ПІДКАЗКА"></i>
+</td>
+<td class="content">
+Завантажити образи можна за посиланням: <a href="https://hub.docker.com/u/uss2jelastic" class="bare">https://hub.docker.com/u/uss2jelastic</a>.
+</td>
+</tr>
+</table>
+</div>
+<div class="dlist">
+<dl>
+<dt class="hdlist1">bpms: </dt>
+<dd>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-text hljs" data-lang="text">1.9.7-1.9.6-HOTFIX-SNAPSHOT.1</code></pre>
+</div>
+</div>
+</dd>
+<dt class="hdlist1">dataplatform-jenkins-agent: </dt>
+<dd>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-text hljs" data-lang="text">1.9.6-1.9.6-HOTFIX-SNAPSHOT.5</code></pre>
+</div>
+</div>
+</dd>
+<dt class="hdlist1">common-web-app: </dt>
+<dd>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-text hljs" data-lang="text">1.9.6-MDTUDDM-27852-HOT-FIX-SNAPSHOT.3</code></pre>
+</div>
+</div>
+</dd>
+</dl>
+</div>
+<div class="admonitionblock warning">
+<table>
+<tr>
+<td class="icon">
+<i class="fa icon-warning" title="ПОПЕРЕДЖЕННЯ"></i>
+</td>
+<td class="content">
+Після встановлення хотфіксів потрібно перезібрати модель даних реєстру.
+</td>
+</tr>
+</table>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_відомі_проблеми"><a class="anchor" href="#_відомі_проблеми"></a><a class="link" href="#_відомі_проблеми">6. Відомі проблеми</a></h2>
+<div class="sectionbody">
+<div class="dlist">
+<dl>
+<dt class="hdlist1">Проблема: </dt>
+<dd>
+<p>Залишається вимкненим перемикач <em>"Самостійна реєстрація користувачів"</em> у Control Plane після вмикання та підтвердження Merge Request.</p>
+</dd>
+<dt class="hdlist1">Тимчасове рішення: </dt>
+<dd>
+<p>Необхідно перейти до редагування реєстру &gt; вкладка авторизації надавачів послуг &gt; ввімкнути та вимкнути перемикач на інтерфейсі та підтвердити зміни.</p>
+</dd>
+</dl>
+</div>
+</div>
 </div>
 </article>
     </div>
