@@ -1,10 +1,5 @@
 = Ідемпотентне розгортання регламенту
 
-[IMPORTANT]
---
-Сторінка технічної документації є баченням майбутньої реалізації, актуальність якого може бути застарілою.
---
-
 == Загальний опис
 
 На етапі розгортання регламенту кроки запускаються лише якщо було внесено зміни в рамках останнього коміту. Таким чином якщо при попередньому запуску пайплайна крок був не успішним, а в поточному коміті зміни не було внесено, то крок буде проігноровано і відмічено як успішний.
@@ -54,7 +49,8 @@ registry-regulations-cli [plan|save] [parameter] [options]
 Приймає як параметер, логічна назва складової регламенту.
 
 OPTIONS:
-    -f --file - перелік папок і файлів [Обовʼязковий]
+    --file - перелік папок і файлів
+    --file-detailed - перелік папок і файлів з детальною інформацією про них
 
 ----
 === Перевірка стану регламенту і необхідності запуску кроку розгортання
@@ -62,10 +58,11 @@ OPTIONS:
 .Приклад використання на пайплайні розгортання
 [source, bash]
 ----
-registry-regulations-cli plan data-model -f registry-regulations/data-model/ registry-regulations/settings.yaml
+registry-regulations-cli plan data-model --file registry-regulations/data-model/ registry-regulations/settings.yaml
 ----
 
-Вихідним параметром виконання команди є _boolean_ флаг чи відрізняються файли які були використанні при виконанні даного кроку від поточного стану.
+Вихідним параметром виконання команди з флагом --file є _boolean_ флаг чи відрізняються файли які були використанні при виконанні даного кроку від поточного стану.
+Вихідним параметром виконання команди з флагом --file-detailed є список файлів з переданого списку, які відрізняються від поточного стану.
 
 Правила коли необхідно повторно виконати крок:
 
@@ -78,74 +75,31 @@ registry-regulations-cli plan data-model -f registry-regulations/data-model/ reg
 .Формат виклику команди збереження стану файлів для кроку розгортання регламенту.
 [source, bash]
 ----
-registry-regulations-cli save ${group-name} -f %{dir1} %{dir2/subDir1} ${fileName}
+registry-regulations-cli save ${group-name} --file %{dir1} %{dir2/subDir1} ${fileName}
 ----
 
 .Приклад
 [source, bash]
 ----
-registry-regulations-cli save  data-model -f registry-regulations/data-model/ registry-regulations/settings.yaml
+registry-regulations-cli save  data-model --file registry-regulations/data-model/ registry-regulations/settings.yaml
 ----
 
-у разі успішного виконання кроку стан зберігається в секреті `registry-regulation-state`
+у разі успішного виконання кроку стан зберігається в секреті `registry-regulation-state` у форматі
+data.group-name: {value json}
 
 .Структура збереження стану регламенту в секреті.
-[source, json]
+[source, yaml]
 ----
-{
-  "redash-roles": {
-    "registry-regulations/roles": "...:SHA256"
-  },
-  "roles": {
-    "registry-regulations/roles": "...:SHA256"
-  },
-  "data-model": {
-    "registry-regulations/data-model": "...:SHA256",
-    "registry-regulations/settings.yaml": "...:SHA256"
-  },
-  "reports": {
-    "registry-regulations/reports": "...:SHA256"
-  },
-  "notifications": {
-    "registry-regulations/notifications": "...:SHA256"
-  },
-  "excerpts": {
-    "registry-regulations/excerpts-csv": "...:SHA256",
-    "registry-regulations/excerpts-docx": "...:SHA256",
-    "registry-regulations/excerpts": "...:SHA256"
-  },
-  "bp-grouping": {
-    "registry-regulations/bp-grouping": "...:SHA256"
-  },
-  "geoserver-configuration": {
-    "registry-regulations/data-model": "...:SHA256"
-  },
-  "forms": {
-    "registry-regulations/forms": "...:SHA256"
-  },
-  "global-vars": {
-    "registry-regulations/global-vars": "...:SHA256"
-  },
-  "theme": {
-    "registry-regulations/global-vars": "...:SHA256"
-  },
-  "trembita-integrations": {
-    "registry-regulations/bp-trembita": "...:SHA256"
-  },
-  "bpmn-dmn": {
-    "registry-regulations/bpmn": "...:SHA256",
-    "registry-regulations/dmn": "...:SHA256"
-  },
-  "bp-auth": {
-    "registry-regulations/bp-auth": "...:SHA256"
-  },
-  "autotests": {
-    "registry-regulations/autotests": "...:SHA256"
-  },
-  "settings": {
-    "registry-regulations/settings": "...:SHA256"
-  }
-}
+data:
+  upload-global-vars-changes: '{ "global-vars" : "...(SHA256)"}'
+  create-keycloak-roles: '{
+    "roles/officer.yml" : "...(SHA256)",
+    "roles/citizen.yml" : "...(SHA256)"
+    }'
+  upload-business-process-changes:  '{
+  "bpmn/bp-1.bpmn" : "...(SHA256)",
+  "bpmn/bp-2.bpmn" : "...(SHA256)"}'
+  other-steps: '...'
 ----
 
 Для підрахунку чексуми файлів використовується алгоритм _SHA256_ `MessageDigest digest = MessageDigest.getInstance("SHA-256");`
