@@ -24,6 +24,7 @@
 ** Формат головного логотипу - svg
 ** Формат логотипу лоадера - svg
 ** Формат favicon - png, 32*32 px. Всі сучасні браузери підтримують цей формат та розмір.
+* Формат svg обраний для адаптивності та можливості легкого темування.
 
 == Компоненти системи та їх призначення в рамках дизайну рішення
 
@@ -55,17 +56,17 @@
 ** Окреме поле для головного логотипу
 ** Окреме поле для логотипу лоадера
 ** Окреме поле для favicon
-* прийняти зміни та дочекатись редеплою платформи з новими env змінною.
+* прийняти зміни та дочекатись редеплою платформи з новою Config Map
 
 === Інтерфейси адміністратора
 
 Зміна лого на платформі:
 
-Photo (TBA)
+image::architecture-workspace/platform-evolution/logo/platform_logo.png[]
 
 == Міграція існуючих реєстрів при оновленні
 
-Усі існуючи екземпляри платформи мають заповнити змінні 3-х лого значенням поточних логотипів у base64.
+Усі існуючи екземпляри платформи отримають назву платформи та логотипи у рамках оновлення у якості значень за замовчуванням.
 
 == Технічне рішення
 
@@ -77,13 +78,23 @@ Photo (TBA)
 
 === Високорівневий дизайн рішення
 
-TBA diagram
+.Передача назви платформи та логотипів
+image::arch:architecture-workspace/platform-evolution/logo/logo_platform.svg[]
 
 [source,yaml]
 .cluster-mgmt/deploy-templates/values.yaml
 ----
 global:
   platformName: test
+  logosPath: "configmap:platform-logos:<timestamp>"
+----
+
+[source,yaml]
+.platform-logos.yaml
+----
+kind: ConfigMap
+name: platform-logos
+data:
   logoMain: base64
   logoLoader: base64
   logoFavicon: base64
@@ -95,12 +106,6 @@ global:
 env:
   - name: PLATFORM_NAME
     value: {{ .Values.global.platformName }}
-  - name: LOGO_MAIN
-    value: {{ .Values.global.logoMain }}
-  - name: LOGO_LOADER
-    value: {{ .Values.global.logoLoader }}
-  - name: LOGO_FAVICON
-    value: {{ .Values.global.logoFavicon }}
 ----
 
 === План розробки
@@ -117,8 +122,11 @@ env:
 ** `*.svg` для головного логотипу
 ** `*.svg` для логотипу лоадера
 ** `*.png` для файлу favicon. Розмір у px не валідується.
-* Ім'я платформи та файли у вигляді base64 зберегти у `values.yaml` - у полях `global.platformName`, `global.logoMain`, `global.logoLoader`, `global.logoFavicon`.
-* Ці змінні у вигляді environment змінних потрапляють у control-plane-console (Devops)
+* Ім'я платформи зберегти у `values.yaml` - у полі `global.platformName`.
+* platformName у вигляді environment змінних потрапляють у control-plane-console (Devops)
+* Файли логотипів у вигляді base64 зберегти у Config Map `platform-logos`
+* Використати логотипи з Config Map *platform-logos* у *control-plane-console* через прямий виклик з golang частини (так само як у швидких посиланнях)
+* Додати існуючи логотипи та назву у якості значень за замовчуванням у `cluster-mgmt/deploy-templates/values.yaml` та Config Map `platform-logos`.
 
 
 ==== Використання параметрів
