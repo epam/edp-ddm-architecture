@@ -3,96 +3,118 @@ include::platform:ROOT:partial$templates/document-attributes/default-set-en.adoc
 
 include::platform:ROOT:partial$admonitions/language-en.adoc[]
 
-//Для первинного завантаження даних використовується БД-процедура https://www.postgresql.org/docs/9.6/plpgsql.html[PL/pgSQL].
-A https://www.postgresql.org/docs/9.6/plpgsql.html[PL/pgSQL] database procedure is used for initial data loading.
+The *_PL/pgSQL_* database procedure, a programming language embedded in PostgreSQL for advanced procedures and functions, is used for the initial data load.
 
-//CAUTION: Перед виконанням процедури первинного завантаження даних, переконайтеся, що виконано передумови, описані в секції xref:data-modeling/initial-load/data-initial-data-load-prep.adoc[Підготовка даних до міграції].
-CAUTION: Before you start the initial data loading, ensure all the prerequisite steps described in xref:data-modeling/initial-load/data-initial-data-load-prep.adoc[] are performed.
+CAUTION: Before executing the initial data load procedure, ensure that all prerequisites described in the section xref:data-modeling/initial-load/data-initial-data-load-prep.adoc[] are met. This will provide a smooth and uninterrupted data-loading process.
 
-//== Специфікація PL/pgSQL процедури для БД Платформи
-== PL/pgSQL procedure specification for the Platform database
+== PL/pgSQL procedure specification for the Platform's database
 
-.Procedure for initial loading
+This section details the PL/pgSQL procedure that allows data to be loaded from CSV files into the Platform database tables.
+
+.Data loading procedure
 [source, sql]
 ----
 CREATE OR REPLACE PROCEDURE p_load_table_from_csv(
-p_table_name text
-, p_file_name text
-, p_table_columns text[]
-, p_target_table_columns text[] DEFAULT NULL::text[]
+  p_table_name text,
+  p_file_name text,
+  p_table_columns text[],
+  p_target_table_columns text[] DEFAULT NULL::text[]
 );
 ----
 
-Parameters description: ::
+Parameter description: ::
 
-* `p_table_name`: Target table name.
-* `p_file_name`: Full path to the CSV data file.
-* `p_table_columns`: An array of field names in the data file (first row in a CSV file).
-* `p_target_table_columns`: An array of target table fields. Empty if the field list matches the fields in the CSV file.
+<.> `p_table_name` — the name of the target table where data will be loaded.
+<.> `p_file_name` — the full path to the CSV file from which data will be loaded.
+<.> `p_table_columns` — an array of field names in the data file corresponding to the first row of the CSV file.
+<.> `p_target_table_columns` — an array of target table fields. This parameter is optional if the list of fields in the data file matches the fields in the target table.
+
 +
-The elements of the `p_target_table_columns` parameter can be provided in different formats:
+Value formats for the `p_target_table_columns` parameter:
+
+* `<col_name>`: The field in the target table receives the value of the corresponding field in the CSV file.
+* `<col_name>::<some_calculation_based_on_source_cols>`: The field receives a value from a calculation based on source fields.
 +
---
-* `<col_name>`: The field in the target table receives the value from the corresponding field (with the same name) in the CSV file.
-* `<col_name>::<some_calculation_based_on_source_cols>`: The field in the target table receives the value that is the result of the expression.
-+
-TIP: For details, jump to the xref:complex-case-1[Complex scenario 1] call example.
-+
-* `<col_name>::ref(lookup_col:<lookup_col_name>, ref_table:<ref_table_name>, ref_col:<ref_col_name>, ref_id:<ref_id_col_name>)`: For this format, the system runs the following SQL query, which searches the directory table by `id`:
+TIP: For more information on this approach, see the section xref:complex-case-1[Complex Scenario 1].
+
+* `<col_name>::ref(lookup_col:<lookup_col_name>, ref_table:<ref_table_name>, ref_col:<ref_col_name>, ref_id:<ref_id_col_name>)`: Used to search for `id` in a reference table when the input value is represented by a descriptive field, not an identifier, but the value of this field must be unique.
 +
 [source, sql]
 ----
-SELECT <ref_id> INTO <col_name> FROM <ref_table> WHERE <ref_col> = <lookup_col>;
+SELECT <ref_id_col_name> INTO <col_name> FROM <ref_table_name> WHERE <ref_col_name> = <lookup_col_name>;
 ----
 +
-A request like this is used when the field contains a foreign key reference to the directory, and the value in the CSV file is represented not by an identifier but by a descriptive field, but the values of this field must be unique.
-+
-//TIP: Детальніше -- див. підрозділ xref:complex-case-2[Cкладний сценарій 2] у прикладах виклику.
-TIP: For details, jump to xref:complex-case-2[Complex scenario 2] call example.
-+
-* `<col_name>::ref_array(lookup_col:<lookup_col_name>, ref_table:<ref_table_name>, ref_col:<ref_col_name>, ref_id:<ref_id_col_name>, delim:<delimeter_character>)`: This format differs from the previous one only in that the `<lookup_col_name>` field in the CSV file contains an array of descriptive values. As a result, an array of matching `ids` will be returned.
+TIP: For more details on this usage method, see the section xref:complex-case-2[Complex Scenario 2].
 
---
+* `<col_name>::ref_array(lookup_col:<lookup_col_name>, ref_table:<ref_table_name>, ref_col:<ref_col_name>, ref_id:<ref_col_name>, delim:<delimiter_character>)`: Similar to the previous one, but for cases where the `<lookup_col_name>` field in the CSV file contains an array of descriptive values, and an array of corresponding `id`s is returned.
 
-//== Приклади виклику процедури
 == Procedure call examples
 
 [#simple-case]
-=== Simple scenario
+=== Basic scenario
 
+This scenario demonstrates the primary use of the procedure for importing data from a CSV file into a database table. A feature is the ability to import the entity ID value, uniquely identifying table records.
+
+.Procedure call. Basic scenario
 [source, sql]
 ----
-CALL p_load_table_from_csv('research',
-'D:\PostgreSQL\csv\uuid\01-Typy_doslidgen_uuid.csv', array
-['uuid','research_type'], array['research_type']);
+CALL p_load_table_from_csv(
+  'research', 'D:\PostgreSQL\csv\uuid\01-Typy_doslidgen_uuid.csv',
+  array [ 'uuid', 'research_type' ],
+  array[ 'research_type' ]
+);
 ----
+
+Parameter description: ::
+
+<.> `uuid` — a static (fixed) name that does not depend on the entity ID name. It imports a unique identifier (UUID) from the file. When importing, the `primaryKey` of the table being imported must be of type `UUID`.
+<.> The ID column must be the first in the import file and have a UUID format to ensure proper data processing.
+
+This example illustrates data import from the file _01-Types_of_research_uuid.csv_, located at _D:\PostgreSQL\csv\uuid\_, into the `research` table. The imported fields include `uuid` as a unique identifier and `research_type` as the type of research.
 
 [#complex-case-1]
-=== Complex scenario 1
+=== Complex Scenario 1
 
+This scenario demonstrates the extended use of the procedure
+for importing data that includes processing specific conditions and forming additional fields using calculations based on the data imported from the CSV file.
+This approach is used to address specific data processing and classification needs.
+
+.Procedure call. Complex scenario 1
 [source, sql]
 ----
-CALL p_load_table_from_csv('koatuu','${dataLoadPath}03-KOATUU_simple.csv'
-, array['code','category','name']
-, array['code','category','name'
-,'level1::substring(code,1,2)||''00000000'''
-,'level2::substring(code,1,5)||''00000'''
-,'type::CASE WHEN code ~ ''[0-9]{2}0{8}'' AND code !~ ''(80|85)0{8}'' THEN ''О''
+CALL p_load_table_from_csv(
+  'koatuu', '${dataLoadPath}03-KOATUU_simple.csv',
+  array[ 'code', 'category', 'name' ],
+  array[ 'code', 'category', 'name',
+  'level1::substring(code,1,2)||''00000000''',
+  'level2::substring(code,1,5)||''00000''',
+  'type::CASE WHEN code ~ ''[0-9]{2}0{8}'' AND code !~ ''(80|85)0{8}'' THEN ''О''
             WHEN code ~ ''[0-9]{2}2[0-9]{2}0{5}'' AND code !~ ''[0-9]{2}20{7}'' THEN ''Р''
             WHEN coalesce(category, ''Р'') != ''Р''
             OR code IN (SELECT DISTINCT substring(code,1,5)||''00000'' FROM koatuu_csv k2 WHERE category = ''Р'') AND category IS NULL
             OR code ~ ''(80|85)0{8}'' THEN ''НП''
-            ELSE NULL END']
+            ELSE NULL END' ]
 );
 ----
 
-[#complex-case-2]
-=== Complex scenario 2
+Parameter and logic description: ::
 
+<.> `code`, `category`, `name` — standard fields imported directly from the CSV file.
+<.> `level1` — creates a new field by extracting the first two digits from the `code` field and appending zeros to make eight digits, forming a unique first-level identifier.
+<.> `level2` — similar to `level1`, but extracts the first five digits and appends zeros to make five digits, creating a unique second-level identifier.
+<.> `type` — determines the object type based on a complex conditional expression. Using regular expressions and conditional logic, this field classifies records based on their codes and categories.
+
+This scenario is beneficial for processing and classifying geographical data according to KOATUU (Classifier of Objects of the Administrative-Territorial Unit of Ukraine), providing automated creation of hierarchical levels and types of objects based on their codes.
+
+[#complex-case-2]
+=== Complex Scenario 2
+
+This scenario reveals the possibilities of importing data for a complex staff structure using additional transformations to match data with external keys and identifiers in the database. The scenario includes searching in reference tables using descriptive values to obtain corresponding identifiers and processing arrays of data.
+
+.Procedure Call. Complex Scenario 2
 [source, sql]
 ----
 CALL p_load_table_from_csv('staff','D:\PostgreSQL\csv\staff.csv'
-
 ,array['uuid','laboratory','staff_status','researches','full_name','hygienist_flag','full_time_flag','salary','fixed_term_contract_flag','contract_end_date','specialization_date','specialization_end_date','dismissal_flag','dismissal_date']
   ,array['laboratory_id::ref(lookup_col:laboratory,ref_table:laboratory,ref_col:name,ref_id:laboratory_id)'
         ,'staff_status_id::ref(lookup_col:staff_status,ref_table:staff_status,ref_col:name,ref_id:staff_status_id)'
@@ -101,28 +123,34 @@ CALL p_load_table_from_csv('staff','D:\PostgreSQL\csv\staff.csv'
      );
 ----
 
-//== Завантаження даних до БД
-== Loading data into the database
+Parameter and logic description: ::
 
-//Для завантаження даних в БД використовуємо стандартну функціональність liquibase.
-To load data into the database, use the standard Liquibase functionality.
+<.> `uuid`, `full_name`, `hygienist_flag`, `full_time_flag`, `salary`, `fixed_term_contract_flag`, `contract_end_date`, `specialization_date`, `specialization_end_date`, `dismissal_flag`, `dismissal_date` — standard fields imported directly from the CSV file without changes.
+<.> `laboratory_id` — the `laboratory` field in the CSV file is transformed into `laboratory_id` by searching for the corresponding identifier in the `laboratory` table by the laboratory name.
+<.> `staff_status_id` — similarly, the `staff_status` field is transformed into `staff_status_id` by searching for the staff status identifier in the `staff_status` table.
+<.> `researches` — this field contains an array of research that are transformed into corresponding `research_id`s through a search in the `research` table. A special delimiter `#` is used to identify individual elements in the array.
 
-//=== Приклад XML-шаблону для завантаження даних
-=== An example of an XML template for loading data
+This scenario shows how to effectively import complex data sets requiring additional transformations and searches in reference tables to ensure data integrity. It is particularly beneficial for systems where it is crucial to match imported data with existing entities in the database.
 
+== Data loading process
+
+For loading data into the database, it is recommended to use the standard functionality of Liquibase, a database management tool that supports database schema versioning and change management through XML files, SQL scripts, and other formats.
+
+CAUTION: Refer to the detailed practical guide on modeling and loading data structures into the registry for guidance: xref:study-project/study-tasks/task-1-registry-db-modeling.adoc[].
+
+[#data-load-xml-template]
+.Sample XML template for data loading
 [source, xml]
 ----
 <databaseChangeLog
-        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
-        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-        xmlns:ext="http://www.liquibase.org/xml/ns/dbchangelog-ext"
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:ext="http://www.liquibase.org/xml/ns/dbchangelog-ext"
         xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.2.xsd
-        http://www.liquibase.org/xml/ns/dbchangelog-ext xsd/dbchangelog-ext.xsd">
-
+        http://www.liquibase.org/xml/ns/dbchangelog-ext http://www.liquibase.org/xml/ns/dbchangelog-ext.xsd">
     <property  name="dataLoadPath"  value="D:\PostgreSQL\csv\"/>
-
     <changeSet author="registry owner" id="load data to dictionaries">
-        <sql dbms="postgresql" endDelimiter=";" splitStatements="true" stripComments="true">
+       <sql dbms="postgresql" endDelimiter=";" splitStatements="true" stripComments="true">
             CALL p_load_table_from_csv('research','${dataLoadPath}01-Typy doslidgen.csv', array['code','research_type'], array['research_type']);
             CALL p_load_table_from_csv('refusal_reason','${dataLoadPath}02-Prichiny vidmov.csv', array['code','document_type','name','constant_code'], array['document_type','name','constant_code']);
             CALL p_load_table_from_csv('kopfg','${dataLoadPath}05-kopfg.csv', array['code','name']);
@@ -130,55 +158,156 @@ To load data into the database, use the standard Liquibase functionality.
             CALL p_load_table_from_csv('factor','${dataLoadPath}14-Himichni_factory_OBRV.csv', array['code','name','col3','col4'], array['name','factor_type::''Хімічний: ОБРВ''']);
             CALL p_load_table_from_csv('factor','${dataLoadPath}15-Himichni factory dovilni.csv', array['code','name'], array['name','factor_type::''Хімічний: довільні''']);
         </sql>
-  </changeSet>
-
+    </changeSet>
 </databaseChangeLog>
 ----
 
-//TIP: За детальною інформацією щодо створення фізичної моделі даних реєстру за допомогою інструмента Liquibase зверніться до розділу **"Створення фізичної моделі даних реєстру"** цього документа.
-//TODO: No link here?
-TIP: For details on creating a physical data model of the registry using the Liquibase tool, see the xref:registry-develop:data-modeling/data/physical-model/overview.adoc[] section.
+Description of the XML template and its components: ::
+
+<.> `databaseChangeLog` — the root element that defines the database change log. It contains one or more `changeSet` elements, each representing a group of changes to be applied to the DB.
+<.> `property` — defines the variable `dataLoadPath`, which contains the path to the directory with CSV files to be imported.
+<.> `changeSet` — describes the set of changes to be applied. The `author` and `id` attributes help to identify and version each set of changes.
+<.> `sql` — used to execute SQL commands. Attributes `dbms`, `endDelimiter`, `splitStatements`, and `stripComments` allow controlling how commands are performed in the context of a specific DBMS (in our case, PostgreSQL).
+
+This example demonstrates using Liquibase to automate loading data from external files into specified database tables, ensuring efficient and controlled data management.
+
+TIP: Also, read about creating the physical data model of the registry on the page xref:data-modeling/data/physical-model/liquibase-ddm-ext.adoc[].
 
 [#initial-load-csv-requirements]
-//== Вимоги до файлів для автоматичного завантаження до БД
-== File requirements for automatic uploads to the database
+== Requirements for CSV data import to the database
 
-//Файли, що використовуватимуться для завантаження даних до БД, повинні мати чітку структуру.
-The files used to upload data into the database must have a clear structure.
+=== Import CSV requirements
 
-//Вимоги до файлів для автоматичного завантаження в БД:
-File requirements for automatic uploads to the database:
+CSV files loading data into the database must meet specified structural and formatting requirements. Below is a detailed description of these requirements with specific examples:
 
-//* тільки СSV-формат;
-* The file format must be CSV.
-//* назва файлу -- латиницею;
-* The file name must contain only Latin letters.
-//* кодування -- UTF8;
-* Files must use UTF8 encoding.
-//* перший рядок містить назви полів;
-* The first row must contain field names.
-//* починаючи із другого рядка містяться значення полів (структура відповідає назвам полів із першого рядка);
-* Starting from the second row, the file must contain field values. Their structure must match the field names in the first row.
-//* значення полів одного рядка файлу повністю визначають значення полів, необхідних для створення запису в базі даних;
-* One row in the file must contain the values necessary to create a record in the database.
-//* розділювач значень полів: `,` (кома) або `;` (крапка з комою);
-* Values are separated by commas or semicolons.
-//* відсутність значення (`NULL`) передається відсутнім значенням, наприклад, `...значення 1[red]##,,##значення 3...`, тобто відсутнє значення пропускається між двома комами, а не позначається пробілом);
-* The absence of a value (`NULL`) is conveyed by a missing value, not a space. For example:
-+
-`...value 1,,value 3...`
-//* наявність унікальності за одним бізнес-полем (наприклад, поле `Назва`) -- для довідників;
-* The file must contain at least one unique business field (for example, `Name`) for directories.
-//* для позначення масивів описових значень використовуються фігурні дужки `{`, `}`.
-* Use curly brackets `{` `}` to denote arrays of descriptive values.
+[options="header",cols="20%,40%,40%"]
+|===
+| Requirement | Description | Example
 
-//== Рекомендації для завантаження великої кількості даних
+| File format
+| Use only the CSV format.
+| `data.csv`
+
+| File name
+| File names should be in Latin characters.
+| `employees.csv`
+
+| Encoding
+| Files must be in `UTF-8` encoding.
+| File saved as `UTF-8` without BOM.
+
+| File structure
+| The first line contains field names. Data follows from the second line.
+| `name,email\nJohn Doe,johndoe@example.com`
+
+| Field value separator
+| Use `,` or `;` as separators.
+| `name,age\nJohn Doe,30` or `name;age\nJohn Doe;30`
+
+| Absence of value (`NULL`)
+| A skip between two separators represents the absence of a value.
+| `name,age,address\nJohn Doe,30,` (address is missing)
+
+| Uniqueness by business field
+| Ensure the uniqueness of records by a key business field.
+| In the `departments.csv` file, each department name is unique (`name`).
+
+| Array of descriptive values notation
+| Use curly braces for arrays of descriptive values.
+| `specializations\n{Data Analysis, Software Development, Project Management}`
+|===
+
+These requirements ensure clarity and consistency of the imported data,
+facilitating efficient loading of information into the database without errors or discrepancies.
+
+=== CSV Example
+
+Consider an example of a CSV file that contains four columns: `name`, `email`, `age`, and `specializations`, along with four data entries. This file will meet the specified requirements for structure and formatting.
+
+.Example. Content of test data in CSV format
+[source,csv]
+----
+name,email,age,specializations
+John Doe,johndoe@example.com,30,{Data Analysis, Software Development}
+Jane Smith,janesmith@example.com,28,{Project Management, User Experience Design}
+Richard Roe,richardroe@example.com,35,{Network Administration, Technical Support}
+Emily Davis,emilydavis@example.com,40,{Financial Planning, Market Research}
+----
+
+In this example: ::
+
+<.> `name` — the person's name.
+<.> `email` — the person's email address.
+<.> `age` — the person's age.
+<.> `specializations` — the person's specializations, presented as an array.
+
 == Recommendations for loading large amounts of data
 
-//Для завантаження великої кількості даних (понад 1 млн рядків) рекомендується тимчасова зміна конфігурації БД -- у файлі з налаштуваннями PostgreSQL `postgresql.conf` встановити наступні значення для часу очікування підключень між реплікою та основною (master) БД:
-If you need to load a large amount of data (over 1 million rows), we recommend temporarily changing the database configuration. Set the following values for the connection waiting time between the replica and the main database in the `postgresql.conf` file:
+When the need arises to load large volumes of data (tens or hundreds of megabytes) through CSV files, it is recommended to use direct SQL code instead of standard procedures. Using SQL allows for control over the loading process and facilitates the creation of historical records in the `+_hst+` table and filling in metadata in fields starting with `+ddm_+`. This approach is crucial for maintaining integrity and proper operation of the registry, as it mimics actions typically performed automatically during procedure calls.
 
+.Sample SQL code for data loading
+[source, sql]
 ----
-wal_sender_timeout = 900s
-wal_receiver_timeout = 900s
+-- Creating a temporary staging table that matches the CSV file structure
+CREATE TABLE account_csv_stage (username text, bank_number text);
+-- Loading data from the CSV file into the staging table
+COPY account_csv_stage (username, bank_number)
+FROM
+  '${dataLoadPath}account.csv' WITH (HEADER, FORMAT CSV);
+-- Inserting data from the staging table into the main and historical tables while simultaneously filling in metadata
+WITH main_table_cte AS (
+  INSERT INTO account (
+    username, bank_number, ddm_created_by,
+    ddm_updated_by
+  )
+  SELECT
+    username,
+    bank_number,
+    'admin',
+    'admin'
+  FROM
+    account_csv_stage RETURNING *
+) INSERT INTO account_hst (
+  id, username, bank_number, ddm_created_by,
+  ddm_created_at, ddm_dml_op, ddm_system_id,
+  ddm_application_id, ddm_business_process_id
+)
+SELECT
+  id,
+  username,
+  bank_number,
+  ddm_created_by,
+  CURRENT_TIMESTAMP,
+  'I' as ddm_dml_op,
+  (
+    SELECT
+      ss.system_id
+    FROM
+      ddm_source_system ss
+    WHERE
+      ss.system_name = 'initial load'
+  ) ddm_system_id,
+  (
+    SELECT
+      sa.application_id
+    FROM
+      ddm_source_application sa
+    WHERE
+      sa.application_name = 'initial load'
+  ) ddm_application_id,
+  (
+    SELECT
+      sb.business_process_id
+    FROM
+      ddm_source_business_process sb
+    WHERE
+      sb.business_process_name = 'initial load process'
+  ) ddm_business_process_id
+FROM
+  main_table_cte;
+-- Dropping the temporary staging table after operations are completed
+DROP
+  TABLE account_csv_stage;
 ----
+
+This method can be an alternative to calling the procedure in the xref:data-load-xml-template[XML template for data loading]. It is advisable to create a separate `changeSet` for each file load using this approach to ensure organized version and change management in the database.

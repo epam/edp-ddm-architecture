@@ -4,8 +4,9 @@ WORKDIR /antora
 RUN chown -R node:node /antora
 ARG GIT_USERNAME
 ARG GIT_TOKEN
-ENV GIT_CREDENTIALS=https://$GIT_USERNAME:$GIT_TOKEN@gerrit-mdtu-ddm-edp-cicd.apps.cicd2.mdtu-ddm.projects.epam.com
-RUN git clone https://$GIT_USERNAME:$GIT_TOKEN@gerrit-mdtu-ddm-edp-cicd.apps.cicd2.mdtu-ddm.projects.epam.com/mdtu-ddm/general/ddm-architecture
+ARG GIT_HOST
+ENV GIT_CREDENTIALS=https://$GIT_USERNAME:$GIT_TOKEN@$GIT_HOST
+RUN git clone $GIT_CREDENTIALS/mdtu-ddm/general/ddm-architecture --depth=1
 WORKDIR /antora/ddm-architecture
 RUN chown -R node:node /antora/ddm-architecture
 USER node

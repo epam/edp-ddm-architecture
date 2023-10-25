@@ -1,0 +1,57 @@
+= Процес збірки інсталятора Платформи
+
+include::platform:ROOT:partial$templates/document-attributes/arch-set-ua.adoc[]
+
+== Загальний опис
+
+Діаграма послідовності поточного CI/CD процесу:
+[plantuml, cicd, svg]
+----
+@startuml
+autoactivate off
+actor "Адміністратор SIT" as user order 10
+participant "SIT" as sit order 20
+participant "control-plane-\nversioner" as versioner order 30
+database "control-plane\n-gerrit.git" as cpgerrit order 40
+participant "control-plane-\ngerrit" as controlplanegerrit order 50
+database "control-plane\n-installer.git" as installer order 60
+participant "control-plane\n-installer" as cpinstaller order 70
+
+database "Gerrit" as gerrit order 80
+database "Nexus" as nexus order 90
+
+user -> sit: Approve SIT with\nnew component versions
+activate sit
+sit -> versioner: Start Build
+activate versioner
+versioner -> sit: Pick component versions from SIT
+deactivate sit
+versioner -> cpgerrit: Push new component versions to\nstageCR.json, helmfile.yaml
+return success
+versioner -> controlplanegerrit: Start Build
+activate controlplanegerrit
+controlplanegerrit -> cpgerrit: Clone repo
+controlplanegerrit -> controlplanegerrit: Build cp gerrit
+controlplanegerrit -> nexus: Push
+return success
+versioner -> installer: Push platform component versions\nto helmfile.yaml
+return success
+
+activate cpinstaller
+versioner -> cpinstaller: Start Build
+versioner -> user: Success build
+deactivate user
+deactivate versioner
+cpinstaller -> nexus: Download components images
+return success
+cpinstaller -> gerrit: Clone components repos
+return success
+cpinstaller -> cpinstaller: Building archive
+cpinstaller -> nexus: Upload installer archive
+return success
+deactivate nexus
+deactivate user
+cpinstaller -> user: Success
+@enduml
+
+----

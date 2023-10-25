@@ -1,0 +1,118 @@
+= Historical table mechanism and managing historical data
+include::platform:ROOT:partial$templates/document-attributes/arch-set-en.adoc[]
+
+== Overview
+
+This document explains how the Platform stores historical data in a database, how historical (`_hst`) tables work, and how they update when the primary table structure changes. It details how the system tracks changes, what operations historical tables record, and how they preserve previous data versions.
+
+== Overview
+
+The Platform allows developers to define tables in XML format using declarative approach. During deployment, Liquibase processes these structures, generates SQL code, and runs it in a PostgreSQL database.
+
+To track historical changes, developers add the attribute `ext:historyFlag="true"` to a table definition. This automatically creates a historical table (`_hst`) that records all modifications.
+
+== Table structure
+
+When a table includes `historyFlag="true"`, Liquibase generates two tables:
+
+* **Primary table** (e.g., `protocols`) -- stores current data.
+* **Historical table** (`protocols_hst`) -- captures all changes in the primary table (insertions, updates, deletions).
+
+.Example XML template for table creation
+[source,xml]
+----
+<createTable tableName="protocols" ext:historyFlag="true">
+    <column name="protocol_id" type="UUID">
+        <constraints nullable="false" primaryKey="true" primaryKeyName="pk_protocols"/>
+    </column>
+    <column name="protocol_name" type="TEXT">
+        <constraints nullable="false"/>
+    </column>
+</createTable>
+----
+
+.Example SQL structure of the primary table
+[source,sql]
+----
+CREATE TABLE protocols (
+    protocol_id UUID PRIMARY KEY,
+    protocol_name TEXT NOT NULL,
+    ddm_created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
+    ddm_created_by TEXT NOT NULL,
+    ddm_updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    ddm_updated_by TEXT
+);
+----
+
+.Example SQL structure of the historical table
+[source,sql]
+----
+CREATE TABLE protocols_hst (
+    protocol_id UUID NOT NULL,
+    protocol_name TEXT NOT NULL,
+    ddm_created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
+    ddm_created_by TEXT NOT NULL,
+    ddm_dml_op CHAR(1) NOT NULL,
+    ddm_system_id UUID NOT NULL,
+    ddm_application_id UUID NOT NULL,
+    CONSTRAINT pk_protocols_hst PRIMARY KEY (protocol_id, ddm_created_at)
+);
+----
+
+== Historical change mechanism
+
+=== Insert operations
+
+When a new record is inserted (`INSERT`) into the primary table, it does not appear in the historical table. The system starts tracking history only after the first update or deletion.
+
+.Example insert operation
+[source,sql]
+----
+INSERT INTO protocols (protocol_id, protocol_name)
+VALUES ('550e8400-e29b-41d4-a716-446655440000', 'Protocol A');
+----
+
+=== Update operations
+
+When a record is updated (`UPDATE`), the system copies the previous version into the historical table. The `_hst` table maintains a complete change history.
+
+.Example update operation
+[source,sql]
+----
+UPDATE protocols
+SET protocol_name = 'Protocol A - Updated'
+WHERE protocol_id = '550e8400-e29b-41d4-a716-446655440000';
+----
+
+=== Delete operations
+
+When a record is deleted (`DELETE`), the system moves it to the `_hst` table before removing it from the primary table.
+
+.Example delete operation
+[source,sql]
+----
+DELETE FROM protocols
+WHERE protocol_id = '550e8400-e29b-41d4-a716-446655440000';
+----
+
+== Preserving historical data when table structures change
+
+Historical tables capture all changes to records, including updates, deletions, and other modifications. This ensures full change history, auditability, transparency, and the ability to restore previous data versions.
+
+The system does not automatically clean up `_hst` tables. When the primary table structure changes, the system creates a new historical table that stores data in the format valid at the time of modification. This preserves historical data in its original structure.
+
+This approach does not delete historical records; it adapts them to changes in the primary table. As a result, historical data remains accessible and retains the appropriate format, regardless of schema updates.
+
+Although retention policies and data archiving are not currently available, the Platform plans to support these features in the future.
+
+[TIP,caption="How does it work?"]
+====
+* When a new column is added to the primary table → the system creates a new version of the historical table (`_hst_1`, `_hst_2`, etc.).
+* The system moves all records from `_hst` to `_hst_1`, while `_hst` keeps only the latest version of records.
+* If `_hst` contained multiple updates (`UPDATE`) of a single record, the new `_hst` version stores only the most recent state.
+* The system retains previous versions in the archived `_hst_1` table.
+====
+
+== Related pages
+
+* xref:registry-develop:best-practices/db-optimization-historical-data.adoc[]

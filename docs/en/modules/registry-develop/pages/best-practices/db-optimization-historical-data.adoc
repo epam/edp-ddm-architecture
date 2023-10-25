@@ -1,0 +1,71 @@
+= Optimizing the database and manually managing history changes
+include::platform:ROOT:partial$templates/document-attributes/default-set-en.adoc[]
+
+== Overview
+
+Over time, database performance may degrade due to accumulating modified or deleted records, index fragmentation, and outdated statistics. These factors affect query execution speed, disk space usage, and overall system efficiency.
+
+To maintain stable performance, periodic database optimization is recommended. PostgreSQL provides built-in mechanisms such as `VACUUM`, `ANALYZE`, and `REINDEX` to free up disk space, update query optimizer statistics, and improve query performance.
+
+== Key optimization commands
+
+This document uses the `protocols` table as an example for optimization.
+
+To reduce table size, update statistics for the query optimizer, and maintain index efficiency, the following operations are recommended:
+
+* **`VACUUM`** — Frees disk space occupied by deleted or updated rows that are no longer needed.
+* **`ANALYZE`** — Updates PostgreSQL's query optimizer statistics to help choose the most efficient execution plans.
+* **`REINDEX`** — Rebuilds indexes to improve query performance after significant table modifications.
+
+== Manually executing optimization commands
+
+To manually optimize a specific table, run the following commands:
+
+[source,sql]
+----
+VACUUM ANALYZE protocols;
+REINDEX TABLE protocols;
+----
+
+These commands help maintain the efficiency of the `protocols` table, especially after mass deletions or updates.
+
+== Automating optimization
+
+The registry database is configured with *autovacuum*, which automatically runs `VACUUM` and `ANALYZE` without requiring administrator intervention. However, in some cases, forced execution of these commands may be necessary, such as when:
+
+- A large number of records have been deleted.
+- Query performance has significantly decreased.
+- The table undergoes frequent updates (`UPDATE`) or deletions (`DELETE`).
+
+== Scheduling optimization with `cron`
+
+To automate optimization, schedule `VACUUM` and `ANALYZE` using `cron`. This requires database administrator access. For example, add the following entry to `crontab`:
+
+[source,shell]
+----
+0 3 * * * psql -d database_name -c 'VACUUM ANALYZE protocols;'
+----
+
+This schedule runs `VACUUM ANALYZE` for the `protocols` table every night at 03:00.
+
+TIP: 🔗 The detailed mechanism of autovacuum is described in the https://www.postgresql.org/docs/14/routine-vacuuming.html#AUTOVACUUM[official PostgreSQL documentation].
+
+== Manual change history management
+
+By default, the system automatically stores all changes in historical `_hst` tables. However, in some cases, more flexible control over change history may be required beyond the standard mechanism.
+
+An alternative approach involves creating a separate table for historical records and managing them through business logic.
+
+Key steps: ::
+
+. Create a *dedicated table* for historical records, such as `protocols_history`, to store previous versions of records.
+
+. Before updating or deleting a record in `protocols`, *move its copy* to `protocols_history` using business logic.
+
+. *Implement a separate business process* to manage historical data retention. This allows defining which changes to store, how long to keep them, and whether to add additional metadata.
+
+This approach provides greater control over historical data when the default `_hst` mechanism is insufficient and requires a more customized retention process.
+
+== Related pages
+
+* xref:arch:architecture/registry/operational/registry-management/historical-tables-mechanism.adoc[]
