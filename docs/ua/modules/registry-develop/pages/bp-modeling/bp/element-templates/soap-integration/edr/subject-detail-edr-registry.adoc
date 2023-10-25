@@ -1,0 +1,85 @@
+= Отримання деталізованої інформації за суб'єктом в ЄДР: _Get Subject Detail Edr Registry_
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+== Загальна інформація
+
+Для спрощення моделювання бізнес-процесів розроблені типові інтеграційні конектори для отримання інформації з ЄДРfootnote:[**ЄДР** -- Єдиний державний реєстр юридичних осіб, фізичних осіб-підприємців та громадських формувань.], налаштування яких відбувається на схемах бізнес-процесів у додатку **Camunda Modeler**.
+
+Наразі імплементовано 2 типи конекторів для отримання даних із ЄДР: ::
+
+. Інтеграційний конектор `searchSubject` -- призначений для отримання інформації про суб'єкт за кодом ЄДРПОУ або РНОКПП (раніше -- ІПН).
+. Інтеграційний конектор `subjectDetails` -- призначений для отримання деталізованої інформації про суб'єкт за ID.
+
+== Налаштування делегата
+
+Розширення *Get Subject Detail Edr Registry* -- делегат для виклику зовнішнього SOAP-сервісу, призначений для отримання деталізованої інформації про суб'єкт за ID, який налаштовується за допомогою шаблону *Get Subject Detail Edr Registry* (_subjectDetailEdrRegistryConnectorDelegate.json_).
+
+[WARNING]
+====
+Передумови ::
+За умови налаштування шаблону у *Camunda Modeler* переконайтеся, що папка із застосунком *_resources/element-templates_* містить файл _subjectDetailEdrRegistryConnectorDelegate.json_.
+====
+
+. Відкрийте **Service Task**.
+. На панелі налаштувань справа натисніть `Open Catalog` та оберіть шаблон *Get Subject Detail Edr Registry* зі списку.
++
+image:registry-develop:bp-modeling/ext-integration/connectors/edr/element-template-settings-02.png[]
+
+. Налаштуйте обраний шаблон:
+
+* У полі `Name` вкажіть назву задачі. Наприклад, `Пошук деталізованої інформації за суб'єктом в ЄДР`.
+* У полі `Authorization token` зазначте токен для доступу до СЕВ ДЕІР "Трембіта". Наприклад, `{token}`.
++
+NOTE: `Authorization token` надається постачальником сервісу (в нашому випадку -- ЄДР), який є іншим учасником СЕВ ДЕІР "Трембіта".
+
+* У полі `Id` зазначте унікальний ідентифікатор суб'єкта для пошуку в ЄДР. Наприклад, `{subject_id}`.
+* У полі `Result variable` зазначте назву вихідного параметру, до якого буде записано відповідь від сервісу. Наприклад, `response`.
+
++
+image:registry-develop:bp-modeling/ext-integration/connectors/edr/element-template-settings-2.png[]
+
+== Приклади використання у бізнес-процесі
+
+Розглянемо ситуацію, коли у бізнес-процесі необхідно перевірити статус суб'єкта в ЄДР.
+
+Для цього у процесі необхідно налаштувати інтеграційний конектор для пошуку суб'єкта з ЄДР (в нашому випадку відповідь буде записано до змінної `responseEDR`).
+
+image:registry-develop:bp-modeling/ext-integration/connectors/edr/element-template-settings-3.png[]
+
+.Приклад відповіді від сервісу
+====
+[source,json]
+----
+    {
+    "name": "active user",
+    "code": "77777777",
+    "id": 213123,
+    "state": "ACTIVE"
+    }
+----
+
+Відповідь містить параметр `state`, що має значення `"ACTIVE"`.
+Далі на шлюзі відбувається перевірка:
+
+NOTE: Якщо `state` має значення `SUSPENDED` або `CANCELLED`, то бізнес-процес видає валідаційну помилку.
+====
+
+.Приклад налаштування гілки
+====
+----
+${responseEdr.value.responseBody.elements().get(0).prop('state').value().equals('SUSPENDED') || responseEdr.responseBody.elements().get(0).prop('state').value().equals('CANCELED')}
+----
+
+image:registry-develop:bp-modeling/ext-integration/connectors/edr/element-template-settings-4.png[]
+
+NOTE: Якщо `state` не дорівнює `SUSPENDED` або `CANCELLED`, то відбудеться подальше виконання процесу.
+====
+
+.Приклад налаштування гілки
+====
+----
+${!responseEdr.value.responseBody.elements().get(0).prop('state').value().equals('SUSPENDED') && !responseEdr.value.responseBody.elements().get(0).prop('state').value().equals('CANCELED')}
+----
+
+image:registry-develop:bp-modeling/ext-integration/connectors/edr/element-template-settings-5.png[]
+====

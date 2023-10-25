@@ -1,0 +1,112 @@
+= Отримання сутностей у Фабриці даних масивом: _Batch Read entities from data factory_
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+== Загальна інформація
+
+Інтеграційне розширення *Batch Read entities from data factory* дозволяє налаштовувати читання даних із таблиці (сутності) масивом у бізнес-процесі. Це розширення допомагає автоматизувати процеси отримання списків сутностей за їх ідентифікаторами, забезпечуючи належне оброблення даних та передачу їх до наступних етапів бізнес-процесу. Розширення додає різні властивості до сервісного завдання (Service Task).
+
+.Короткі відомості про делегат
+|===
+|Назва |Пояснення
+
+|Бізнес-назва інтеграційного розширення
+|*Batch Read entities from data factory*
+
+|Службова назва інтеграційного розширення
+|*`${dataFactoryConnectorBatchReadDelegate}`*
+
+|Назва файлу у бібліотеці розширень
+|*_dataFactoryConnectorBatchReadDelegate.json_*
+|===
+
+== Перед початком
+
+include::partial$admonitions/install-element-templates.adoc[]
+
+== Налаштування
+
+Делегат *Batch Read entities from data factory* призначений для використання у сервісних завданнях (Service Task) бізнес-процесу. Він дозволяє налаштувати автоматичне отримання даних із таблиці (сутності) масивом з різними параметрами.
+
+=== Налаштування завдання
+
+. Створіть завдання типу *Service Task* у вашому бізнес-процесі.
+. Назвіть завдання, наприклад, `Перегляд даних про кадровий склад`.
+. Застосуйте шаблон делегата, обравши *Batch Read entities from data factory* зі списку в налаштуваннях завдання.
++
+image:bp-modeling/bp/element-temp/service-task/entity-management/batch-read/batch-read-entities-1.png[]
+
+Завдання приймає вхідні дані з попереднього завдання та передає результат до наступного етапу процесу.
+
+=== Налаштування делегата
+
+Resource ::
+У полі *Resource* вкажіть ресурс, з якого потрібно отримати дані.
+
+Resource ids ::
+У полі *Resource ids* передайте масив ідентифікаторів ресурсів, наприклад, `${researchIds}`.
++
+[NOTE]
+====
+`researchIds` можна отримати зі скрипту, наприклад, наступним чином:
+
+[source,groovy]
+----
+def researchesIds = response.responseBody.prop("researches").elements().stream()
+        .map(objId -> objId.value())
+        .collect()
+
+        set_transient_variable("researchIds", researchesIds)
+----
+Цей скрипт обробляє інформацію й отримує масив даних по всім об'єктам досліджень співробітника, зберігаючи ідентифікатори сутностей у змінній `researchIds`.
+====
+
+X-Access-Token ::
+У полі *X-Access-Token* зазначте токен доступу користувача, під яким виконується операція. Наприклад:
++
+[source,groovy]
+----
+${initiator().accessToken}
+----
+Або використайте токен виконавця останнього користувацького завдання:
++
+[source,groovy]
+----
+${completer('previous user task ID').accessToken}
+----
+* `completer()` — назва JUEL-функції.
+* `'previous user task ID'` — ID попередньої задачі користувача.
+* `accessToken` — метод, який передає JWT-токен користувача.
+
+Result variable ::
+У полі *Result variable* вкажіть назву змінної, в яку необхідно записати результат. Наприклад, `researchResponse`.
+
+[NOTE]
+====
+У результаті виконання делегата повертається масив сутностей у наступному форматі:
+
+.Приклад відповіді
+[source,json]
+----
+[
+    {
+      "researchId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+      ...
+    },
+    {
+      "researchId": "3fa85f64-5717-4562-b3fc-aaaaaaaaaaa7",
+      ...
+    }
+]
+----
+====
+
+== Приклад
+
+Ось приклад, який показує, як відповідний делегат використовується у бізнес-процесі:
+
+.Приклад. Налаштування делегата Batch Read entities from data factory у синтетичному процесі отримання даних про кадровий склад
+image::registry-develop:bp-modeling/bp/element-temp/service-task/entity-management/batch-read/batch-read-entities-2.png[]
+
+== Пов'язані сторінки
+
+* xref:bp-modeling/bp/element-templates/service-task-templates/entity-management/batch-creation-entities-v2.adoc[]

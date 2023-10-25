@@ -1,36 +1,65 @@
-openapi: 3.0.1
+openapi: 3.0.3
 info:
-  title: 'v1-alpha: User process management API'
-  version: 'v1-alpha'
+  title: User process management API
   description: All user process management operations
+  version: "1.0"
+servers:
+- url: http://localhost:8080/user-process-management
+  description: Generated server url
+tags:
+- name: user-process-definition-api
+  description: User process definition Rest API
+- name: grouped-user-process-definition-api
+  description: Grouped user process definition Rest API
 paths:
   /api/process-definition/{key}/start:
     post:
       tags:
-        - process-definition-controller
+      - user-process-definition-api
       summary: Start process instance
-      description: Returns started process instance
+      description: |-
+        ### Endpoint purpose:
+        This endpoint allows you to initiate a new process instance based on the provided process definition key
       operationId: startProcessInstance
       parameters:
-        - name: key
-          in: path
-          required: true
-          schema:
-            type: string
+      - name: X-Access-Token
+        in: header
+        description: Token used for endpoint security
+        required: true
+        schema:
+          type: string
+      - name: Accept-Language
+        in: header
+        description: User preferred language
+        schema:
+          type: string
+      - name: key
+        in: path
+        required: true
+        schema:
+          type: string
       responses:
-        '200':
+        "200":
           description: Returns started process instance
           content:
             '*/*':
               schema:
                 $ref: '#/components/schemas/StartProcessInstanceResponse'
-        '404':
+              example:
+                id: d81fd894-6842-11ee-b71c-0a580a811836
+                processDefinitionId: fcfea78f-66c2-11ee-b586-0a580a80065a
+                ended: false
+        "401":
+          description: Unauthorized
+          content:
+            application/json: {}
+        "404":
           description: Business process definition hasn't found
           content:
             '*/*':
               schema:
                 $ref: '#/components/schemas/SystemErrorDto'
-        '500':
+        "500":
           description: Internal server error
           content:
             '*/*':
@@ -39,242 +68,287 @@ paths:
   /api/process-definition/{key}/start-with-form:
     post:
       tags:
-        - process-definition-controller
+      - user-process-definition-api
       summary: Start process instance with form
-      description: Returns started process instance
+      description: |-
+        ### Endpoint purpose:
+        This endpoint allows to start process instance by process definition key with start form data
+        ### Form validation:
+        This endpoint requires valid form, if form provided in request body does not match form structure assigned to task, then _422_ status code returned.
       operationId: startProcessInstanceWithForm
       parameters:
-        - name: key
-          in: path
-          required: true
-          schema:
-            type: string
+      - name: X-Access-Token
+        in: header
+        description: Token used for endpoint security
+        required: true
+        schema:
+          type: string
+      - name: Accept-Language
+        in: header
+        description: User preferred language
+        schema:
+          type: string
+      - name: key
+        in: path
+        required: true
+        schema:
+          type: string
       requestBody:
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/FormDataDto'
+            example:
+              data:
+                formFieldName1: field value 1
+                formFieldName2: field value 2
         required: true
       responses:
-        '200':
+        "200":
           description: Returns started process instance
           content:
             '*/*':
               schema:
                 $ref: '#/components/schemas/StartProcessInstanceResponse'
-        '404':
+              example:
+                id: d81fd894-6842-11ee-b71c-0a580a811836
+                processDefinitionId: fcfea78f-66c2-11ee-b586-0a580a80065a
+                ended: false
+        "404":
           description: Business process definition hasn't found
           content:
             '*/*':
               schema:
                 $ref: '#/components/schemas/SystemErrorDto'
-        '500':
+        "422":
+          description: Form validation failed
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ValidationErrorDto'
+        "500":
           description: Internal server error
           content:
             '*/*':
               schema:
                 $ref: '#/components/schemas/SystemErrorDto'
-  /api/process-instance/count:
-    get:
-      tags:
-        - process-instance-controller
-      summary: Retrieve count of all unfinished process instances with root process instance
-      description: Returns business process instances count
-      operationId: countProcessInstances
-      responses:
-        '200':
-          description: OK
-          content:
-            '*/*':
-              schema:
-                $ref: '#/components/schemas/CountResponse'
   /api/process-definition:
     get:
       tags:
-        - process-definition-controller
+      - user-process-definition-api
       summary: Retrieve all process definitions
-      description: Returns business process definitions list
+      description: |-
+        ### Endpoint purpose:
+        This endpoint allows to retrieve a list of process definitions based on the provided parameters, like _active_ or _suspended_ query parameters
       operationId: getProcessDefinitions
       parameters:
-        - name: params
-          in: query
-          required: true
-          schema:
-            $ref: '#/components/schemas/GetProcessDefinitionsParams'
+      - name: X-Access-Token
+        in: header
+        description: Token used for endpoint security
+        required: true
+        schema:
+          type: string
+      - name: suspended
+        in: query
+        description: Parameter used to retrieve suspended processes
+        schema:
+          type: boolean
+      - name: active
+        in: query
+        description: Parameter used to retrieve active processes
+        schema:
+          type: boolean
+      - name: params
+        in: query
+        required: true
+        schema:
+          $ref: '#/components/schemas/GetProcessDefinitionsParams'
       responses:
-        '200':
-          description: OK
-          content:
-            '*/*':
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/ProcessDefinitionResponse'
-  /api/process-definition/{key}:
-    get:
-      tags:
-        - process-definition-controller
-      summary: Retrieve process definition by key
-      description: Returns business process definition entity
-      operationId: getProcessDefinitionByKey
-      parameters:
-        - name: key
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: OK
+        "200":
+          description: List of process definitions
           content:
             '*/*':
               schema:
                 $ref: '#/components/schemas/ProcessDefinitionResponse'
+              example:
+              - id: ea4430c8-66c2-11ee-b586-0a580a80065a
+                key: business-process-key
+                name: Business process name
+                suspended: false
+                formKey: null
+        "401":
+          description: Unauthorized
+          content:
+            application/json: {}
+        "500":
+          description: Internal server error
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/SystemErrorDto'
+  /api/process-definition/{key}:
+    get:
+      tags:
+      - user-process-definition-api
+      summary: Retrieve process definition by key
+      description: |-
+        ### Endpoint purpose:
+        This endpoint allows you to retrieve a process definition based on its unique key.
+      operationId: getProcessDefinitionByKey
+      parameters:
+      - name: X-Access-Token
+        in: header
+        description: Token used for endpoint security
+        required: true
+        schema:
+          type: string
+      - name: key
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: Process definition
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ProcessDefinitionResponse'
+              example:
+                id: ea4430c8-66c2-11ee-b586-0a580a80065a
+                key: business-process-key
+                name: Business process name
+                suspended: false
+                formKey: null
+        "401":
+          description: Unauthorized
+          content:
+            application/json: {}
+        "404":
+          description: Business process definition hasn't found
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/SystemErrorDto'
+        "500":
+          description: Internal server error
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/SystemErrorDto'
   /api/process-definition/count:
     get:
       tags:
-        - process-definition-controller
-      summary: Retrieve count of all process definitions
-      description: Returns business process definitions count
+      - user-process-definition-api
+      summary: Retrieve count of process definitions
+      description: |-
+        ### Endpoint purpose:
+        This endpoint allows you to retrieve the total count of available process definitions that match the specified parameters. You can filter the count by specifying criteria like _active_ or _suspended_ query parameters
       operationId: countProcessDefinitions
       parameters:
-        - name: params
-          in: query
-          required: true
-          schema:
-            $ref: '#/components/schemas/GetProcessDefinitionsParams'
+      - name: X-Access-Token
+        in: header
+        description: Token used for endpoint security
+        required: true
+        schema:
+          type: string
+      - name: suspended
+        in: query
+        description: Parameter used to retrieve suspended processes
+        schema:
+          type: boolean
+      - name: active
+        in: query
+        description: Parameter used to retrieve active processes
+        schema:
+          type: boolean
+      - name: params
+        in: query
+        required: true
+        schema:
+          $ref: '#/components/schemas/GetProcessDefinitionsParams'
       responses:
-        '200':
-          description: OK
+        "200":
+          description: Count of process definitions
           content:
             '*/*':
               schema:
                 $ref: '#/components/schemas/CountResponse'
-  /api/officer/process-instance:
-    get:
-      tags:
-        - process-instance-controller
-      summary: Retrieve all process instances for the officer role
-      description: Returns business process instances list
-      operationId: getOfficerProcessInstances
-      parameters:
-        - name: firstResult
-          in: query
-          description: Pagination of results. Specifies the index of the first result to return.
-          schema:
-            type: integer
-        - name: maxResult
-          in: query
-          description: Pagination of results. Specifies the maximum number of results to return. Will return less results if there are no more results left.
-          schema:
-            type: integer
-        - name: sortBy
-          in: query
-          description: Sort the results lexicographically by a given criterion. Valid values are instanceId, caseInstanceId, dueDate, executionId, caseExecutionId,assignee, created, description, id, name, nameCaseInsensitive and priority. Must be used in conjunction with the sortOrder parameter.
-          schema:
-            type: string
-        - name: sortOrder
-          in: query
-          description: Sort the results in a given order. Values may be asc for ascending order or desc for descending order. Must be used in conjunction with the sortBy parameter.
-          schema:
-            type: string
-      responses:
-        '200':
-          description: Business process instances list
+              example:
+                count: 10
+        "401":
+          description: Unauthorized
+          content:
+            application/json: {}
+        "500":
+          description: Internal server error
           content:
             '*/*':
               schema:
-                uniqueItems: true
-                type: array
-                items:
-                  $ref: '#/components/schemas/GetProcessInstanceResponse'
-              example:
-                - id: 4ce5cc26-33ab-11eb-adc1-0242ac120002
-                  processDefinitionId: processDefinitionId
-                  processDefinitionName: processDefinition
-                  startTime: '2020-12-01T12:00:00'
-                  status:
-                    code: in_progress
-                    title: У виконанні
+                $ref: '#/components/schemas/SystemErrorDto'
   /api/grouped-process-definition:
     get:
       tags:
-        - grouped-process-definition-controller
+      - grouped-user-process-definition-api
       summary: Retrieve all process definitions with groups
-      description: Returns grouped and ungrouped business process definitions ordered lists
+      description: |-
+        ### Endpoint purpose:
+         This endpoint allows users to retrieve grouped and ungrouped business process definitions ordered lists based on their system role in X-Access-Token
       operationId: getProcessDefinitions_1
       parameters:
-        - name: params
-          in: query
-          required: true
-          schema:
-            $ref: '#/components/schemas/GetProcessDefinitionsParams'
+      - name: X-Access-Token
+        in: header
+        description: Token used for endpoint security
+        required: true
+        schema:
+          type: string
+      - name: params
+        in: query
+        required: true
+        schema:
+          $ref: '#/components/schemas/GetProcessDefinitionsParams'
       responses:
-        '200':
-          description: OK
+        "200":
+          description: List of process definitions with groups
           content:
             '*/*':
               schema:
                 $ref: '#/components/schemas/GroupedProcessDefinitionResponse'
-  /api/citizen/process-instance:
-    get:
-      tags:
-        - process-instance-controller
-      summary: Retrieve all process instances for the citizen role
-      description: Returns business process instances list
-      operationId: getCitizenProcessInstances
-      parameters:
-        - name: firstResult
-          in: query
-          description: Pagination of results. Specifies the index of the first result to return.
-          schema:
-            type: integer
-        - name: maxResult
-          in: query
-          description: Pagination of results. Specifies the maximum number of results to return. Will return less results if there are no more results left.
-          schema:
-            type: integer
-        - name: sortBy
-          in: query
-          description: Sort the results lexicographically by a given criterion. Valid values are instanceId, caseInstanceId, dueDate, executionId, caseExecutionId,assignee, created, description, id, name, nameCaseInsensitive and priority. Must be used in conjunction with the sortOrder parameter.
-          schema:
-            type: string
-        - name: sortOrder
-          in: query
-          description: Sort the results in a given order. Values may be asc for ascending order or desc for descending order. Must be used in conjunction with the sortBy parameter.
-          schema:
-            type: string
-      responses:
-        '200':
-          description: Business process instances list
+              example: |-
+                {
+                    "groups": [
+                        {
+                            "name": "Business processes group name",
+                            "processDefinitions": [
+                                {
+                                    "id": "fcfea78f-66c2-11ee-b586-0a580a80065a",
+                                    "key": "business-process-in-group",
+                                    "name": "Business process in group name",
+                                    "suspended": false,
+                                    "formKey": null
+                                }
+                            ]
+                        },
+                    "ungrouped": [
+                        {
+                            "id": "fcd4151b-66c2-11ee-b586-0a580a80065a",
+                            "key": "ungrouped-process",
+                            "name": "Ungrouped process name",
+                            "suspended": false,
+                            "formKey": null
+                        }
+                    ]
+                }
+        "401":
+          description: Unauthorized
           content:
-            '*/*':
-              schema:
-                uniqueItems: true
-                type: array
-                items:
-                  $ref: '#/components/schemas/GetProcessInstanceResponse'
-              example:
-                - id: 4ce5cc26-33ab-11eb-adc1-0242ac120002
-                  processDefinitionId: processDefinitionId
-                  processDefinitionName: processDefinition
-                  startTime: '2020-12-01T12:00:00'
-                  status:
-                    code: citizen_in_progress
-                    title: Прийнято в обробку
+            application/json: {}
+        "500":
+          description: Internal server error
+          content:
+            application/json: {}
 components:
   schemas:
-    SystemErrorDto:
-      type: object
-      properties:
-        traceId:
-          type: string
-        code:
-          type: string
-        message:
-          type: string
-        localizedMessage:
-          type: string
     StartProcessInstanceResponse:
       type: object
       properties:
@@ -284,30 +358,57 @@ components:
           type: string
         ended:
           type: boolean
+    SystemErrorDto:
+      type: object
+      properties:
+        traceId:
+          type: string
+        code:
+          type: string
+        message:
+          type: string
+        messageKey:
+          type: string
     FormDataDto:
       type: object
       properties:
-        data:
-          type: object
-          additionalProperties:
-            type: object
         signature:
+          type: string
+        language:
           type: string
         x-access-token:
           type: string
-    CountResponse:
+    ErrorDetailDto:
       type: object
       properties:
-        count:
-          type: integer
-          format: int64
-    GetProcessDefinitionsParams:
+        message:
+          type: string
+        messageKey:
+          type: string
+        field:
+          type: string
+        value:
+          type: string
+    ErrorsListDto:
       type: object
       properties:
-        active:
-          type: boolean
-        suspended:
-          type: boolean
+        errors:
+          type: array
+          items:
+            $ref: '#/components/schemas/ErrorDetailDto'
+    ValidationErrorDto:
+      type: object
+      properties:
+        traceId:
+          type: string
+        code:
+          type: string
+        message:
+          type: string
+        messageKey:
+          type: string
+        details:
+          $ref: '#/components/schemas/ErrorsListDto'
     ProcessDefinitionResponse:
       type: object
       properties:
@@ -321,34 +422,19 @@ components:
           type: boolean
         formKey:
           type: string
-    GetProcessInstanceResponse:
+    GetProcessDefinitionsParams:
       type: object
       properties:
-        id:
-          type: string
-        processDefinitionId:
-          type: string
-        processDefinitionName:
-          type: string
-        startTime:
-          type: string
-          format: date-time
-        status:
-          $ref: '#/components/schemas/StatusModel'
-    StatusModel:
+        active:
+          type: boolean
+        suspended:
+          type: boolean
+    CountResponse:
       type: object
       properties:
-        code:
-          type: string
-          enum:
-            - ACTIVE
-            - PENDING
-            - SUSPENDED
-            - COMPLETED
-            - EXTERNALLY_TERMINATED
-            - INTERNALLY_TERMINATED
-        title:
-          type: string
+        count:
+          type: integer
+          format: int64
     GroupedProcessDefinitionResponse:
       type: object
       properties:

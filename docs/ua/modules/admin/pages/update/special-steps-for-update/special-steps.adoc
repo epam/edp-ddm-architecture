@@ -1,389 +1,108 @@
-= Оновлення Платформи та реєстрів до версії 1.9.6: спеціальні кроки
+= Оновлення Платформи та реєстрів до версії 1.9.8: спеціальні кроки
 include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
 
-== Мета інструкції
+Сторінка демонструє процес оновлення та спеціальні кроки, необхідні для переходу кластера Платформи та реєстрів з версії `1.9.7` на `1.9.8`.
 
-Метою цієї сторінки є відображення процесу оновлення та спеціальних кроків, необхідних для оновлення кластера Платформи та реєстрів з версії `1.9.5.19` до `1.9.6.34`.
-
-== Підготовка кластера Платформи до оновлення
-
-=== Створення повної резервної копії простору імен `user-management`
-
-Оскільки цей реліз передбачає оновлення сервісу Keycloak шляхом його видалення, про всяк випадок [.underline]#_обов'язково_# створіть повний бекап простору імен *`user-management`* _ДО_ початку розгортання нової версії Платформи.
-
-NOTE: Перед створенням бекапу переконайтеся, що ви увійшли до кластера за допомогою команди `oc login`.
-
-.Створення повної резервної копії user-management
-[source,bash]
-----
-$ velero create backup user-management-fresh --include-namespaces user-management
-----
-
-=== Видалення застарілих ресурсів
-
-Видаліть застарілий ресурс *_deploy-templates/templates/KeycloakRealmComponent.yaml_* та відредагуйте ресурс *_registry-configuration/deploy-templates/values.yaml_* у репозиторії *_registry-configuration_*.
-
-IMPORTANT: Виправлення стосується лише реєстрів версії < `1.9.6`. +
-
-Внесіть необхідні зміни до репозиторію *_registry-configuration_*. Для цього виконайте наступні кроки:
-
-. Відрийте *Openshift*-консоль > *Projects* > *`control-plane`* та перейдіть до сервісу *`gerrit`* за відповідним роутом.
-
-. Знайдіть репозиторій *_registry-configuration_* та створіть *Merge Request* в гілку `1.5.0-SNAPSHOT.161`, який має містити видалений файл _deploy-templates/templates/KeycloakRealmComponent.yaml_ та відредагований файл _registry-configuration/deploy-templates/values.yaml_, як це зображено нижче.
-
-. Застосуйте зміни до відповідної гілки -- виконайте `git merge`.
-
-
-image:admin:infrastructure/special-steps/special-steps-1-9-6-1.png[image,width=467,height=271]
-
-=== Встановлення актуального розміру диска Nexus для control-plane-nexus
-
-WARNING: Ця інструкція стосується кластерів, що оновлюються _НЕ_ через пайплайн *platform-deploy* у Jenkins CICD2.
-
-Якщо розмір вашого диска Nexus у проєкті *`control-plane-nexus`* відрізняється від стандартних `100GB`, необхідно встановити актуальний розмір диска.
-
-Для цього у конфігураційному файлі  _repositories/components/infra/control-plane-nexus.git/deploy-templates/values.gotmpl_ встановіть значення параметра *`nexus.storage.size`*, яке дорівнює вашому поточному розміру диска.
-
-[#update-platform]
 == Оновлення Платформи
 
-=== Запуск пайплайну platform-deploy
+=== Розгортання нової версії Інсталятора
 
-Запустіть пайплайн `platform-deploy` в Jenkins CICD2 з опціями оновлення та необхідною версією збірки, а саме `1.9.6.34`.
+Виконайте оновлення Платформи згідно з інструкціями:
 
-Вкажіть необхідний режим розгортання (`deploymentMode`).
+* xref:admin:installation/platform-deployment/platform-aws-deployment.adoc#installer-update[Оновлення Платформи в OKD-кластері на AWS]
+* xref:admin:installation/platform-deployment/platform-vsphere-deployment.adoc#installer-update[Оновлення Платформи в OKD-кластері на vSphere]
 
-=== Оновлення cluster-mgmt
+=== Оновлення інфраструктурних компонентів Платформи
 
-Цей крок описує стандартний процес оновлення інфраструктурних компонентів Платформи за допомогою пайплайну `cluster-mgmt` в адміністративній панелі *Control Plane*.
+Цей крок описує стандартний процес оновлення інфраструктурних компонентів Платформи за допомогою пайплайну *cluster-mgmt* в адміністративній панелі Control Plane.
 
-TIP: Див. детальніше на сторінці xref:admin:update/update_cluster-mgmt.adoc[].
+Виконайте процедуру оновлення за допомогою інструкції: xref:admin:update/update_cluster-mgmt.adoc[].
 
-=== Внесення виправлень до скрипту
+=== Кроки після оновлення Платформи
 
-. Після створення Merge Request (MR) оновлення Платформи, внесіть виправлення до скрипту, що знаходиться у *_scripts/modify_control_plane_version.py_*. Додайте кодування `UTF-8` до параметрів виклику метода `open`.
-+
-.scripts/modify_control_plane_version.py
-[source,python]
-----
-with open(values_file, 'r', encoding="utf-8") as file:
-----
-+
-Скрипт повинен мати наступний вигляд:
-+
-image:admin:infrastructure/special-steps/special-steps-1-9-6-2.png[image,width=467,height=89]
-+
-NOTE: Зображення демонструє зміни, що були внесені вже після злиття Merge Request оновлення Платформи.
-
-. Продовжіть оновлення Платформи шляхом підтвердження злиття MR.
-
-== Кроки після оновлення Платформи
-
-=== Налаштування Cleanup Job
-
-Після успішного оновлення Платформи, через оновлення версії *Istio* з версії `1.10` до `1.18`, для реєстрів на версії `1.9.5` не працюватиме Cleanup Job.
-
-NOTE: Ця проблема пов'язана з помилкою в Istio версії `1.10`: https://github.com/istio/istio/issues/26882[]. +
-Istio призначав неправильну групу `"1337"` для томів, приєднаних до поду.
-У версії `1.18` ця помилка була виправлена, але зазначена група залишилася. Щоб виправити це, потрібно додати *init-контейнер* до деплоймента компонента *`registry-regulation-management`*.
-
-Для усунення цієї проблеми, в наявних реєстрах _ЛИШЕ_ версії `1.9.5` виконайте наступні кроки:
-
-. Перейдіть до *gerrit* у проєкті *`control-plane`*.
-
-. Оберіть репозиторій *_registry-regulation-management_* та внесіть зміни до гілки, яка відповідає версії Платформи `1.9.5`.
-+
-Приклад:
-+
-image:admin:infrastructure/special-steps/special-steps-1-9-6-3.png[image,width=467,height=503]
-
-.. У маніфест *_deploy-templates/templates/deployment.yaml_* за шляхом *_.spec.template.spec_* додайте наступний код для створення init-контейнера, що змінить групу на актуальну:
-+
-.Deployment config
-----
-initContainers:
-  - name: setup-permissions
-    image: "{{ .Values.image.name }}:{{ .Values.image.version }}"
-    command: ["sh", "-c", "chown -R 1001:1001 {{ .Values.gerrit.repositoryDirectory }}"]
-    volumeMounts:
-      - name: repositories-data
-        mountPath: {{ .Values.gerrit.repositoryDirectory }}
-    securityContext:
-      runAsUser: 0
-----
-
-.. Після додавання блоку коду, маніфест *_deployment.yaml_* повинен виглядати наступним чином:
-+
-image:admin:infrastructure/special-steps/special-steps-1-9-6-4.png[image,width=467,height=393]
-
-. Після додавання блоку коду до маніфесту, перезапустіть кожен *MASTER-Build-`<registry-name>`* пайплайн для реєстру, який відповідає версії `1.9.5`.
-+
-TIP: `<registry-name>` -- назва реєстру.
-
-Після успішного запуску Build-пайплайну, CleanUp Job відновить свою працездатність.
-
-[NOTE]
-====
-
-Якщо на кластері існує багато реєстрів версії `1.9.5`, і перезапуск кожної збірки Jenkins-пайплайну займає багато часу, можна використати наступний *bash-скрипт* для оновлення deployment-конфігурації сервісу *`registry-regulation-management`* без оновлення реєстру через Jenkins-пайплайн.
-
-Зверніть увагу, що цей скрипт вносить патчі до deployment-конфігурації [.underline]_усіх реєстрів_. Якщо виключити деякі реєстри із процесу, їх можна додати у поле *`--field-selector`* .
-
-.Приклад виключення реєстру *abc-01* із процесу внесення патчу:
-image::admin:infrastructure/special-steps/special-steps-1-9-6-5.png[image,width=467,height=21]
-
-[source,bash]
-.Скрипт patching-deployment.sh внесення патчів до deployment-конфігурації компонента *`registry-regulation-management`*
-----
-#!/bin/bash
-for registry in $(oc get codebases -n control-plane --no-headers -o custom-columns=":metadata.name" --field-selector=metadata.name!=cluster-mgmt); do
-  echo "Patching ${registry}"
-  oc patch deployment registry-regulation-management-deployment -n ${registry} -p '{"spec":{"template":{"spec":{"initContainers": [{"name": "setup-permissions", "image": "docker-registry.control-plane-nexus.svc:5004/control-plane/registry-regulation-management-master:1.9.5.8", "command": ["sh", "-c", "chown -R 1001:1001 /var/lib/repos-data"], "volumeMounts": [{"name": "repositories-data", "mountPath": "/var/lib/repos-data"}], "securityContext": {"runAsUser": 0}}]}}}}'
-done
-----
-
-.Приклад запуску скрипту із попереднім входом через `oc cli`
-image::admin:infrastructure/special-steps/special-steps-1-9-6-6.png[image,width=467,height=125]
-====
-
-=== Оновлення анотації для reloader env.js у компоненті common-web-app
-
-Після оновлення Платформи та перед оновленням реєстру виконайте наступні кроки:
-
-. Перейдіть у центральний Gerrit.
-. Відкрийте *Browse* > *Repositories* > *_common-web-app_*.
-. Перейдіть у розділ *Commands* та натисніть *`Create change`*.
-. Оберіть версію `1.9.4.96` common-web-app, з котрою відбувалося оновлення, впишіть опис змін та натисніть на створення нового CRD.
-
-. У новому вікні натисніть *`Edit`* > *`ADD/OPEN/UPLOAD`*.
-. Оберіть файл _deploy-templates/templates/deployment.yaml_.
-. Додайте замість наявної анотації `http://configmap.reloader.stakater.com/reload[configmap.reloader.stakater.com/reload]: "environment-js"` нову (_як показано нижче_) та збережіть зміни.
-+
-----
-configmap.reloader.stakater.com/reload: "environment-js-{{ $portal.name }}"
-----
-+
-image:admin:infrastructure/special-steps/special-steps-1-9-6-7.png[image,width=467,height=196]
-
-. Натисніть *`START REVIEW`* > *`Code-Review +2`* > *`Verified +1`* > *`SEND AND START REVIEW`* > *`Submit`*.
-
-=== Застосування hotfix для реєстрів версії 1.9.5
-
-. Перейдіть до *Gerrit* у проєкті *`control-plane`*.
-
-. Відкрийте репозиторій *_edp-library-stages-fork_* та внесіть зміни в гілку `build/0.2.1-SNAPSHOT.395` (*Commands* > *`Create change`*).
-+
-image:admin:infrastructure/special-steps/special-steps-1-9-6-8.png[image,width=467,height=209]
-
-. Натисніть у новому вікні *`Edit`* > *`ADD/OPEN/UPLOAD`*.
-
-. Оберіть файл *_src/com/epam/edp/customStages/impl/cd/DeployViaHelmfile.groovy_* та внести зміну у рядок `326`, зокрема додайте знак символ *`?`* (знак питання) та натисніть *`Save`*.
-+
-image:admin:infrastructure/special-steps/special-steps-1-9-6-9.png[image,width=467,height=178]
-
-. Оберіть файл *_src/com/epam/edp/customStages/helper/DeployHelper.groovy_* та внести зміну у рядок `605`, а саме видаліть символ `!` (знак оклику), та натисніть *`Save and Publish`*.
-+
-image:admin:infrastructure/special-steps/special-steps-1-9-6-10.png[image,width=467,height=180]
-
-. Проставте оцінки *`+2 Code Review`* та *`+1 Verified`* та виконайте `git merge` змін.
-
-=== Застосувати фікс для реєстрів 1.9.6
-
-. Перейдіть до *Gerrit* у проєкті *`control-plane`*.
-
-. Оберіть репозиторій *_edp-library-stages-fork_* та внесіть зміни в гілку `build/0.2.1-SNAPSHOT.418` (*Commands* > *`Create change`*).
-+
-image:admin:infrastructure/special-steps/special-steps-1-9-6-11.png[image,width=467,height=215]
-
-. Натисніть у новому вікні *`Edit`* > обрати *`ADD/OPEN/UPLOAD`*.
-
-. Обрати файл *_src/com/epam/edp/customStages/helper/DeployHelper.groovy_* та внесіть зміну у рядок `607`, зокрема видаліть символ  *`!`* (_знак оклику_), та натисніть *`Save and Publish`*.
-+
-image:admin:infrastructure/special-steps/special-steps-1-9-6-12.png[image,width=467,height=172]
-
-. Проставте оцінки *`+2 Code Review`*, *`+1 Verified`* та виконайте git merge змін.
+IMPORTANT: Якщо перед оновленням ви вручну обмежували публічний доступ до Keycloak (наприклад, додавали роути в namespace `user-management`), видаліть ці зміни перед запуском конвеєра *cluster-mgmt*.
 
 == Оновлення реєстру
 
-. Оновіть реєстр до нової версії відповідно до інструкції xref:admin:update/update-registry-components.adoc[]
+Цей крок описує стандартний процес оновлення компонентів реєстру за допомогою пайплайну *MASTER-Build* в адміністративній панелі Control Plane.
 
-. Перейдіть до застосування хотфіксів, описаних нижче.
+Виконайте процедуру оновлення за допомогою інструкції: xref:admin:update/update-registry-components.adoc[].
 
-=== Push бібліотеки сервісів даних до центрального сховища артефактів Nexus
+=== Кроки після оновлення реєстру
 
-Виконайте `push` бібліотеки сервісів по роботі з даними до центрального сховища артефактів `control-plane-nexus`.
+==== (_Опціонально_) Увімкнення `singleIdentityEnabled`
 
-NOTE: У _helmfile.yaml_ прописувати їх не потрібно.
+Якщо перед оновленням реєстру параметр `singleIdentityEnabled` був увімкнений (`true`), його потрібно активувати знову.
 
-.Список образів
-[source,text]
-----
-model-core-base-image-1-9-6-hotfix:1.9.4-1.9.6-HOTFIX-SNAPSHOT.1
-kafka-api-core-base-image-1-9-6-hotfix:1.9.4-1.9.6-HOTFIX-SNAPSHOT.1
-rest-api-core-base-image-1-9-6-hotfix:1.9.6-1.9.6-HOTFIX-SNAPSHOT.1
-soap-api-core-base-image-1-9-6-hotfix:1.9.4-1.9.6-HOTFIX-SNAPSHOT.1
-----
+Якщо у вас увімкнена функція автентифікації через один Keycloak-акаунт для користувачів `legal`, `entrepreneur` і `individual`, задайте значення `true` для `singleIdentityEnabled` у файлі `values.yaml` на рівні `portals`. За замовчуванням цей параметр має значення `false`:
 
-=== Застосування hotfix-образів для компонентів реєстру
-
-Застосуйте наступні hotfix-образи для відповідних компонентів реєстру у _helmfile.yaml_ реєстру.
-
-bpms: ::
-+
-[source,text]
-----
-1.9.7-1.9.6-HOTFIX-SNAPSHOT.1
-----
-
-dataplatform-jenkins-agent: ::
-+
-[source,text]
-----
-1.9.6-1.9.6-HOTFIX-SNAPSHOT.5
-----
-
-common-web-app: ::
-+
-[source,text]
-----
-1.9.6-MDTUDDM-27852-HOT-FIX-SNAPSHOT.3
-----
-
-=== Послідовність роботи з `pull` і `push` хотфікс-образів
-
-[NOTE]
-Завантажити образи можна за посиланням: https://hub.docker.com/u/uss2jelastic[]. Для цього потрібно мати встановлений Docker https://docs.docker.com/engine/install/[].
-
-Послідовність роботи з `pull` і `push` хотфікс-образів:
-
-. Виконайте `pull`.
-+
-----
-docker pull <your-repo-name>/<image-name>:tag
-----
-+
-Наприклад:
-+
-----
-docker pull uss2jelastic/kafka-api-core-base-image-1-9-6-hotfix
-----
-+
-TIP: У *Dockerhub* кожний репозиторій надає приклад, як робити `pull`.
-+
-image:admin:infrastructure/special-steps/special-steps-1-9-6-13.png[]
-
-. Після `pull` на локальну машину, змініть тег образа.
-+
-----
-docker image tag <your-repo-name>/<image-name>:tag localregistry:5000/control-plane/<image-name>:tag
-----
-+
-.Список тегів для хотфіксів даного релізу
-----
-docker image tag uss2jelastic/model-core-base-image-1-9-6-hotfix:1.9.4-1.9.6-HOTFIX-SNAPSHOT.1 localregistry:5000/control-plane/model-core-base-image-1-9-6-hotfix:1.9.4-1.9.6-HOTFIX-SNAPSHOT.1
-docker image tag uss2jelastic/kafka-api-core-base-image-1-9-6-hotfix:1.9.4-1.9.6-HOTFIX-SNAPSHOT.1 localregistry:5000/control-plane/kafka-api-core-base-image-1-9-6-hotfix:1.9.4-1.9.6-HOTFIX-SNAPSHOT.1
-docker image tag uss2jelastic/rest-api-core-base-image-1-9-6-hotfix:1.9.6-1.9.6-HOTFIX-SNAPSHOT.1 localregistry:5000/control-plane/rest-api-core-base-image-1-9-6-hotfix:1.9.6-1.9.6-HOTFIX-SNAPSHOT.1
-docker image tag uss2jelastic/soap-api-core-base-image-1-9-6-hotfix:1.9.4-1.9.6-HOTFIX-SNAPSHOT.1 localregistry:5000/control-plane/soap-api-core-base-image-1-9-6-hotfix:1.9.4-1.9.6-HOTFIX-SNAPSHOT.1
-docker image tag uss2jelastic/bpms-1-9-6-hotfix:1.9.7-1.9.6-HOTFIX-SNAPSHOT.1 localregistry:5000/control-plane/bpms-1-9-6-hotfix:1.9.7-1.9.6-HOTFIX-SNAPSHOT.1
-docker image tag uss2jelastic/dataplatform-jenkins-agent-1-9-6-hotfix:1.9.6-1.9.6-HOTFIX-SNAPSHOT.5 localregistry:5000/control-plane/dataplatform-jenkins-agent-1-9-6-hotfix:1.9.6-1.9.6-HOTFIX-SNAPSHOT.5
-docker image tag uss2jelastic/common-web-app-master:1.9.6-MDTUDDM-27852-HOT-FIX-SNAPSHOT.3 localregistry:5000/control-plane/common-web-app-master:1.9.6-MDTUDDM-27852-HOT-FIX-SNAPSHOT.3
-----
-
-. Після встановлення тегу виконайте `push`.
-
-.. Виконайте вхід до Платформи за допомогою `oc cli`. Токен можна отримати через Openshift-консоль, у секції *Copy login command*.
-+
-image:admin:infrastructure/special-steps/special-steps-1-9-6-14.png[]
-
-.. Якщо ви користуєтеся Windows, то внесіть наступний запис до файлу _C:\Windows\System32\drivers\etc\hosts_, якщо linux -- то запис потрібно зробити в _/etc/hosts_.
-+
-----
-127.0.0.1 localregistry
-----
-
-.. Відкрийте декілька терміналів, в одному переадресуйте порти на под `nexus`, який можна знайти у проєкті `control-plane-nexus` в *Openshift* > *Workloads* > *Pods*.
-+
-----
-oc port-forward <nexus-pod-name> 5000:5000 -n control-plane-nexus
-----
-
-.. Виконайте вхід в `nexus`.
-+
-TIP: Пароль можна знайти у секреті *nexus-admin-password* проєкту `control-plane-nexus`.
-+
-----
-docker login -u admin -p <secret-password> localregistry:5000
-----
-
-.. Переконайтеся, що вхід успішний. Після цього можна виконати `push`. Це може зайняти певний час.
-+
-NOTE: Пам'ятайте, що в іншому терміналі повинна бути активною переадресація портів.
-+
-----
-docker push localregistry:5000/control-plane/image_name:tag
-----
-
-.. Після цього ваш образ з'явиться в `nexus`. Туди можна перейти через *Openshift* > *Networking* > *Routes* > *`nexus`* у проєкті `control-plane-nexus`. Всі образи знаходяться у *Browse* > *docker-registry*.
-+
-image:admin:infrastructure/special-steps/special-steps-1-9-6-15.png[]
-
-. Застосуйте необхідні `nexus`-образи до реєстру.
-+
-У `control-plane-gerrit` знайдіть репозиторій реєстру і в його гілці `master` внесіть зміни до файлу _deploy-templates/helmfile.yaml_. При зміні образа вкажіть версію і шлях до папки з образом, як в `nexus`:
-
-bpms: ::
-+
-image:admin:infrastructure/special-steps/special-steps-1-9-6-16.png[]
-
-common-web-app: ::
-+
-image:admin:infrastructure/special-steps/special-steps-1-9-6-17.png[]
-
-dataplatform-jenkins-agent: ::
-+
-image:admin:infrastructure/special-steps/special-steps-1-9-6-18.png[]
-
-+
-[%collapsible]
-._Приклад deploy-templates/helmfile.yaml для компонента dataplatform-jenkins-agent_
-====
+.values.yaml
 [source,yaml]
 ----
-- name: dataplatform-jenkins-agent
-  namespace: '{{ env "NAMESPACE" }}'
-  labels:
-    type: remote
-    update_scc: false
-    repoURL: ssh://jenkins@gerrit.mdtu-ddm-edp-cicd:32114/mdtu-ddm/data-architecture/devops-application/dataplatform-jenkins-agent.git
-    path: components/registry/
-    branch: 1.9.6.24
-  chart: /opt/repositories/dataplatform-jenkins-agent/deploy-templates
-  version: 1.9.6-1.9.6-HOTFIX-SNAPSHOT.2
-  values:
-  - values.yaml
-  - values.gotmpl
-  - image:
-      name: '{{ env "edpComponentDockerRegistryUrl" }}/{{ env "globalEDPProject" }}/dataplatform-jenkins-agent-1-9-6-hotfix'
-      version: 1.9.6-1.9.6-HOTFIX-SNAPSHOT.2
-  missingFileHandler: Warn
-  needs:
-  - '{{ env "NAMESPACE" }}/istio-configuration'
-  - '{{ env "NAMESPACE" }}/network-management'
-  - '{{ env "NAMESPACE" }}/keycloak-operator'
-  - '{{ env "NAMESPACE" }}/gerrit-operator'
-  - '{{ env "NAMESPACE" }}/jenkins-operator'
-  - '{{ env "NAMESPACE" }}/registry-configuration'
+portals:
+  officer:
+    enableSingleIdentity: true
 ----
+
+TIP: Детальніше про функціональність читайте на сторінці xref:registry-develop:registry-admin/cp-auth-setup/officers/enable-single-identity.adoc[].
+
+==== (_Опціонально_) Зміна значення `lifetime` для Kong session cookie
+
+Якщо перед оновленням реєстру ви змінювали значення `lifetime` для Kong session cookie, після оновлення потрібно повторно застосувати ці зміни.
+
+Щоб змінити тривалість сесії користувача, внесіть відповідні коригування у компонент `common-web-app` у гілці відповідної версії `1.9.8`. Замість значення за замовчуванням `"lifetime": "3600"` встановіть необхідне значення, наприклад `"lifetime": "7200"`.
+
+image:admin:infrastructure/special-steps/1-9-8/special-steps-1-9-8-1.png[]
+
+Для внесення змін оновіть відповідні файли, як показано на зображенні:
+
+image:admin:infrastructure/special-steps/1-9-8/special-steps-1-9-8-2.png[]
+
+[TIP,caption="Приклад"]
+====
+Нижче наведено `git diff` файл для зміни значення `3600c` на `7200c`:
+
+xref:attachment$special-steps/1-9-8/Change-kong-lifetime-cookie-to-7200.patch[Change-kong-lifetime-cookie-to-7200.patch].
 ====
 
-NOTE: У цьому релізі при зміні образу гілки міняти НЕ ПОТРІБНО.
+==== (_Опціонально_) Збільшення кількості партицій в історичних Kafka-топіках
 
-WARNING: Після встановлення хотфіксів потрібно перезібрати модель даних реєстру.
+[NOTE]
+====
+Якщо попередньо кількість партицій уже було збільшено, цей крок виконувати не потрібно.
+====
 
-== Відомі проблеми
+. Масштабуйте (`scale down`) Deployments `bpms-deployment` та `process-history-service-persistence-deployment` до `0`.
+. У розділі menu:Home[Search] знайдіть `KafkaTopic`.
++
+image:admin:infrastructure/special-steps/1-9-8/special-steps-1-9-8-3.png[]
 
-Проблема: ::
-Залишається вимкненим перемикач _"Самостійна реєстрація користувачів"_ у Control Plane після вмикання та підтвердження Merge Request.
+. Для топіків `bpm-history-process` та `bpm-history-task` змініть значення `spec.partitions` на `15`.
+. Масштабуйте (`scale up`) `bpms-deployment`, повернувши необхідну кількість реплік.
+. Масштабуйте `process-history-service-persistence-deployment` до `3`, щоб кожна репліка обробляла по `5` партицій.
 
-Тимчасове рішення: ::
-Необхідно перейти до редагування реєстру > вкладка авторизації надавачів послуг > ввімкнути та вимкнути перемикач на інтерфейсі та підтвердити зміни.
+==== (_Опціонально_) Налаштування зовнішніх довідників
+
+У версії реєстрів `1.9.8` були внесені зміни до *політики безпеки вмісту (CSP)*, що стосуються конфігурації заголовків відповіді (response headers) порталів та їх ендпоінтів.
+Тепер дозволено встановлювати з'єднання лише з джерела `connect-src 'self'` за замовчуванням, замість `*`, як це було в попередніх версіях.
+
+TIP: `'self'` -- це директива CSP, яка дозволяє встановлювати з'єднання лише з того ж домену, з якого було завантажено сторінку. Директива `connect-src` визначає допустимі джерела для всіх типів вихідних з'єднань з клієнтської частини, таких як Fetch API, XHR-запити, WebSockets, EventSource тощо. Це допомагає контролювати, куди фронтенд може надсилати запити.
+
+IMPORTANT: Ця директива впливає на роботу компонентів, які здійснюють запити до зовнішніх API, наприклад, для завантаження даних у випадних списках (select), підключення кастомних шарів мап (map) або інших зовнішніх сервісів.
+
+Щоб додати необхідні зовнішні URL для використання у довідниках:
+
+. Відкрийте файл `values.yaml` відповідного реєстру.
+. Додайте необхідні URL-адреси до змінної `global.connectSourceList`.
++
+.Приклад додавання зовнішнього довідника
+[source,yaml]
+----
+global:
+  connectSourceList:
+    - 'https://jsonplaceholder.typicode.com/albums'
+----
+
+TIP: Ви можете додати кілька URL-адрес у масив `connectSourceList`, кожна з яких має бути записана з окремого рядка у форматі `- 'URL'`.
+
+Докладніше про директиву `connect-src` читайте у https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Security-Policy/connect-src[документації MDN].

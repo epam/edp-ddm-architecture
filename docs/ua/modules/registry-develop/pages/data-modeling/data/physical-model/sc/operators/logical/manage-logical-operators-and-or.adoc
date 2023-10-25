@@ -1,0 +1,418 @@
+= Оптимізація пошукових запитів: управління логічними операторами `AND` та `OR` в рамках однієї таблиці
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+== Проблематика
+
+У традиційному підході до формування пошукових запитів, параметри об'єднувалися виключно за допомогою логічного оператора `AND`. Це створювало обмеження, оскільки не давало можливості використовувати гнучкіші умови об'єднання параметрів, такі як `OR`. Тепер користувачі можуть обирати між `AND` та `OR`, забезпечуючи гнучкість у порядку застосування цих операторів.
+
+== Загальний опис
+
+Моделювальники регламенту мають змогу деталізувати та оптимізувати пошукові запити завдяки тегу *`<ext:logicOperator>`*. Цей тег є ключовим елементом у створенні більш гнучких і ефективних умов пошуку в базах даних.
+
+Особливості та можливості тегу `<ext:logicOperator>`:
+
+. *Підтримка різних логічних операторів*:
+
+* Наразі `<ext:logicOperator>` підтримує два основні типи логічних операторів: `AND` та `OR`.
+* Це розширення дозволяє створювати складніші та точні умови пошуку, адаптуючи запити до конкретних потреб користувачів.
+
+. *Гнучкість при моделюванні запитів*:
+
+* З використанням `<ext:logicOperator>`, моделювальники можуть визначити, чи мають умови в таблиці об'єднуватися через `AND` (всі умови повинні бути виконані), або через `OR` (достатньо виконання будь-якої з умов).
+
+. *Вкладеність та комбінації умов*:
+
+* Тег дозволяє використовувати вкладені структури, комбінуючи `AND` і `OR` для створення складніших логічних умов.
+* Це значно розширює можливості моделювання запитів, дозволяючи враховувати різноманітні сценарії та бізнес-вимоги.
+
+TIP: Про особливості застосування функціональності у прикладах моделювання процесів читайте на сторінці xref:best-practices/bp-and-or-single-table.adoc[].
+
+== Приклади моделювання
+
+Нижченаведені приклади демонструють, як можна використовувати тег `<ext:logicOperator>` для створення більш гнучких і потужних умов пошуку в базах даних, задовольняючи різні бізнес-потреби та вимоги до обробки даних.
+
+[NOTE]
+====
+* Пошукові умови, визначені на першому рівні в `ext:table`, а також умови між різними таблицями, об'єднуються _ЛИШЕ_ оператором `AND`. Це означає, що всі критерії в різних таблицях або на першому рівні `ext:table` повинні бути виконані одночасно для включення результату в кінцевий набір даних.
+
+* Якщо ваші пошукові потреби вимагають лише використання `AND` між різними умовами, нема потреби явно визначати тег `<ext:logicOperator>` у вашому запиті. У цьому випадку система автоматично припустить, що ви використовуєте `AND` як логічний оператор за замовчуванням.
+====
+
+=== Сценарій 1: простий пошук за віком із використанням `AND`
+
+.XML-схема з використанням логічного оператора AND
+====
+[source, xml]
+----
+<ext:createSearchCondition name="simple_age_search">
+    <ext:table name="users">
+        <ext:logicOperator type="and">
+            <ext:column name="first_name" returning="true"/>
+            <ext:column name="last_name" returning="true"/>
+            <ext:column name="user_age" searchType="equal"/>
+        </ext:logicOperator>
+    </ext:table>
+</ext:createSearchCondition>
+----
+====
+
+У цій XML-схемі використовується тег `<ext:logicOperator type="and">` для явного зазначення, що умови пошуку по стовпцях `first_name`, `last_name` та `user_age` мають бути об'єднані за допомогою логічного оператора `AND`.
+
+.Опис таблиці `users`
+[cols="2,5", options="header"]
+|===
+| Стовпець | Опис
+
+| `first_name`
+| Ім'я користувача, яке повертається як результат.
+
+| `last_name`
+| Прізвище користувача, яке також повертається як результат.
+
+| `user_age`
+| Вік користувача, який використовується для точного пошуку з оператором `equal`.
+|===
+
+.SQL-скрипт (_пошуковий запит_)
+====
+[source,sql]
+----
+SELECT first_name, last_name FROM users
+WHERE first_name = 'John' AND last_name = 'Doe' AND user_age = 30
+----
+====
+
+У цьому SQL-скрипті демонструється використання логічного оператора `AND` для вибірки записів, де ім'я, прізвище та вік користувача відповідають заданим критеріям.
+
+.HTTP GET-запит із використанням `AND`
+[tabs]
+====
+
+HTTP::
++
+[source,http]
+----
+GET /simple-age-search?firstName=John&lastName=Doe&userAge=30 HTTP/1.1
+Host: api.example.com
+----
++
+Цей HTTP-запит використовує метод `GET` для запита до сервера, отримуючи результати, які відповідають комбінованим умовам `AND` за ім'ям, прізвищем та віком користувача.
++
+У цьому HTTP-запиті:
+
+* `GET` -- метод запита, використаний для отримання даних.
+* `/simple-age-search?firstName=John&lastName=Doe&userAge=30` -- шлях до ресурсу на сервері, включаючи параметри запита `firstName`, `lastName` та `userAge`, які вказують на пошук користувачів з ім'ям `'John'`, прізвищем `'Doe'` та віком `30` років.
+* `HTTP/1.1` -- версія протоколу HTTP.
+* `Host: api.example.com` -- заголовок, що вказує хост або домен, де знаходиться ресурс.
+
+cURL::
++
+[source,curl]
+----
+curl -X GET "https://api.example.com/simple-age-search?firstName=John&lastName=Doe&userAge=30"
+----
++
+Ця команда використовує *cURL* для відправки HTTP-запита з методом `GET`, вказуючи на комбінацію умов `AND`.
+====
+
+
+.HTTP POST-запит із використанням `AND`
+[tabs]
+====
+
+HTTP::
++
+[source,http]
+----
+POST /simple-age-search HTTP/1.1
+Host: api.example.com
+Content-Type: application/json
+
+{
+  "firstName": "John",
+  "lastName": "Doe",
+  "userAge": 30
+}
+----
++
+Цей HTTP-запит використовує метод `POST` для відправки даних на сервер, вказуючи комбіновані умови `AND` у форматі JSON.
++
+У цьому HTTP запиті:
+
+* `POST` -- метод запита, використаний для відправки даних на сервер.
+* `/simple-age-search` -- шлях до ресурсу на сервері (ендпоінт).
+* `HTTP/1.1` -- версія протоколу HTTP.
+* `Host: api.example.com` -- заголовок, що вказує домен, де знаходиться ресурс.
+* `Content-Type: application/json` -- заголовок, що вказує на тип контенту, який передається у тілі запита.
+* Тіло запита містить JSON-об'єкт з параметрами `firstName`, `lastName`, `userAge` з відповідними значеннями `John`, `Doe`, `30`. Це вказує на пошук користувачів з ім'ям `'John'`, прізвищем `'Doe'` та віком `30` років.
+
+cURL::
++
+[source,curl]
+----
+curl -X POST "https://api.example.com/simple-age-search" \
+     -H "Content-Type: application/json" \
+     -d '{"firstName": "John", "lastName": "Doe", "userAge": 30}'
+----
++
+Ця команда використовує *cURL* для відправки HTTP-запита з методом `POST`, вказуючи на комбінацію умов `AND` у форматі JSON.
+====
+
+=== Сценарій 2: комбінований пошук за персонажем мультфільму з використанням `AND` та `OR`
+
+.XML-схема з використанням логічних операторів `AND` та `OR`
+====
+[source, xml]
+----
+<ext:createSearchCondition name="cartoon_character_search">
+    <ext:table name="cartoon_characters">
+        <ext:logicOperator type="or">
+            <ext:logicOperator type="and">
+                <ext:column name="character_name" searchType="equal"/>
+                <ext:column name="show_title" searchType="equal"/>
+            </ext:logicOperator>
+            <ext:column name="famous_phrase" searchType="contains"/>
+        </ext:logicOperator>
+    </ext:table>
+</ext:createSearchCondition>
+----
+====
+
+Ця XML-схема використовує теги `<ext:logicOperator>` для створення складних умов пошуку, що комбінують `AND` та `OR`. Пошук відбувається за іменем персонажа та назвою шоу (`AND`) або за характерною фразою персонажа (`OR`).
+
+.Опис таблиці `cartoon_characters`
+[cols="2,5", options="header"]
+|===
+| Стовпець | Опис
+
+| `character_name`
+| Ім'я персонажа мультфільму для пошуку.
+
+| `show_title`
+| Назва шоу, в якому з'являється персонаж.
+
+| `famous_phrase`
+| Характерна фраза персонажа, яка використовується для пошуку з оператором `contains`.
+|===
+
+.SQL-скрипт (_пошуковий запит_)
+====
+[source,sql]
+----
+SELECT * FROM cartoon_characters
+WHERE (character_name = 'SpongeBob' AND show_title = 'SpongeBob SquarePants')
+   OR famous_phrase LIKE '%I’m ready!%'
+----
+====
+
+Цей SQL-скрипт використовує комбіновані умови `AND` та `OR` для пошуку персонажів за іменем та шоу або за характерною фразою.
+
+.HTTP GET-запит із використанням `AND` та `OR`
+[tabs]
+====
+
+HTTP::
++
+[source,http]
+----
+GET /cartoon-character-search?characterName=SpongeBob&showTitle=SpongeBob%20SquarePants&famousPhrase=I%E2%80%99m%20ready! HTTP/1.1
+Host: api.example.com
+----
++
+Цей HTTP-запит використовує метод `GET` для запита до сервера, отримуючи результати, які відповідають комбінованим умовам `AND` за іменем персонажа та шоу, або за характерною фразою.
++
+У цьому HTTP-запиті:
+
+* `GET` -- метод запита, використаний для отримання даних.
+* `/cartoon-character-search?characterName=SpongeBob&showTitle=SpongeBob%20SquarePants&famousPhrase=I%E2%80%99m%20ready!` -- шлях до ресурсу на сервері зі вказаними параметрами для комбінованого пошуку.
+* `HTTP/1.1` -- версія протоколу HTTP.
+* `Host: api.example.com` -- заголовок, що вказує хост або домен, де знаходиться ресурс.
+
+cURL::
++
+[source,curl]
+----
+curl -X GET "https://api.example.com/cartoon-character-search?characterName=SpongeBob&showTitle=SpongeBob%20SquarePants&famousPhrase=I%E2%80%99m%20ready!"
+----
++
+Ця команда використовує *cURL* для відправки HTTP-запита з методом `GET`, вказуючи на комбіновані умови `AND` та `OR`.
+====
+
+
+.HTTP POST-запит із використанням `AND` та `OR`
+[tabs]
+====
+
+HTTP::
++
+[source,http]
+----
+POST /cartoon-character-search HTTP/1.1
+Host: api.example.com
+Content-Type: application/json
+
+{
+  "characterName": "SpongeBob",
+  "showTitle": "SpongeBob SquarePants",
+  "famousPhrase": "I’m ready!"
+}
+----
++
+Цей HTTP-запит використовує метод `POST` для відправки даних на сервер, вказуючи комбіновані умови `AND` та `OR` у форматі JSON.
++
+У цьому HTTP запиті:
+
+* `POST` -- метод запита, використаний для відправки даних на сервер.
+* `/cartoon-character-search` -- шлях до ресурсу на сервері (ендпоінт).
+* `HTTP/1.1` -- версія протоколу HTTP.
+* `Host: api.example.com` -- заголовок, що вказує домен, де знаходиться ресурс.
+* `Content-Type: application/json` -- заголовок, що вказує на тип контенту, який передається у тілі запита.
+* Тіло запита містить JSON-об'єкт з параметрами `characterName`, `showTitle`, `famousPhrase` з відповідними значеннями `SpongeBob`, `SpongeBob SquarePants`, `I’m ready!`. Це вказує на пошук персонажів за комбінованими умовами.
+
+cURL::
++
+[source,curl]
+----
+curl -X POST "https://api.example.com/cartoon-character-search" \
+     -H "Content-Type: application/json" \
+     -d '{"characterName": "SpongeBob", "showTitle": "SpongeBob SquarePants", "famousPhrase": "I’m ready!"}'
+----
++
+Ця команда використовує *cURL* для відправки HTTP-запита з методом `POST`, вказуючи на комбіновані умови `AND` та `OR` у форматі JSON.
+====
+
+=== Сценарій 3: складний комбінований пошук за автором книги з використанням вкладених операторів `AND` та `OR`
+
+.XML-схема з використанням вкладених логічних операторів `AND` та `OR`
+====
+[source, xml]
+----
+<ext:createSearchCondition name="advanced_search">
+    <ext:table name="international_authors">
+        <ext:logicOperator type="or">
+            <ext:logicOperator type="and">
+                <ext:column name="nationality" searchType="equal"/>
+                <ext:logicOperator type="or">
+                    <ext:column name="genre" searchType="equal"/>
+                    <ext:column name="award" searchType="contains"/>
+                </ext:logicOperator>
+            </ext:logicOperator>
+            <ext:column name="book_title" searchType="contains"/>
+        </ext:logicOperator>
+    </ext:table>
+</ext:createSearchCondition>
+----
+====
+
+Ця XML-схема демонструє складну структуру пошуку, що використовує вкладені `AND` та `OR` для фільтрації міжнародних авторів за національністю, жанром, нагородами або назвами книг.
+
+.Опис таблиці `international_authors`
+[cols="2,5", options="header"]
+|===
+| Стовпець | Опис
+
+| `nationality`
+| Національність автора.
+
+| `genre`
+| Жанр творів автора.
+
+| `award`
+| Нагороди, отримані автором.
+
+| `book_title`
+| Назви книг автора.
+|===
+
+.SQL-скрипт (_пошуковий запит_)
+====
+[source,sql]
+----
+SELECT * FROM international_authors
+WHERE (nationality = 'Ukrainian' AND (genre = 'Fiction' OR award LIKE '%Nobel Prize%'))
+   OR book_title LIKE '%Independence%'
+----
+====
+
+Цей SQL-скрипт використовує складні умови `AND` та `OR` для пошуку українських авторів, які пишуть у жанрі художньої літератури або мають таку нагороду, як Нобелівська премія, або авторів будь-якої національності, які написали книги з назвою, що містить слово `"Independence"`.
+
+.HTTP GET-запит із використанням вкладених `AND` та `OR`
+[tabs]
+====
+
+HTTP::
++
+[source,http]
+----
+GET /advanced-search?nationality=Ukrainian&genre=Fiction&award=Nobel%20Prize&bookTitle=Independence HTTP/1.1
+Host: api.example.com
+----
++
+Цей HTTP-запит використовує метод `GET` для запита до сервера, отримуючи результати, які відповідають складним умовам вибірки.
++
+У цьому HTTP-запиті:
+
+* `GET` -- метод запита, використаний для отримання даних.
+* `/advanced-search?nationality=Ukrainian&genre=Fiction&award=Nobel%20Prize&bookTitle=Independence` -- шлях до ресурсу на сервері зі вказаними параметрами для складного комбінованого пошуку.
+* `HTTP/1.1` -- версія протоколу HTTP.
+* `Host: api.example.com` -- заголовок, що вказує хост або домен, де знаходиться ресурс.
+
+cURL::
++
+[source,curl]
+----
+curl -X GET "https://api.example.com/advanced-search?nationality=Ukrainian&genre=Fiction&award=Nobel%20Prize&bookTitle=Independence"
+----
++
+Ця команда використовує *cURL* для відправки HTTP-запита з методом `GET`, вказуючи на складну комбінацію умов.
+====
+
+
+.HTTP POST-запит із Використанням Вкладених `AND` та `OR`
+[tabs]
+====
+
+HTTP::
++
+[source,http]
+----
+POST /advanced-search HTTP/1.1
+Host: api.example.com
+Content-Type: application/json
+
+{
+  "nationality": "Ukrainian",
+  "genre": "Fiction",
+  "award": "Nobel Prize",
+  "bookTitle": "Independence"
+}
+----
++
+Цей HTTP-запит використовує метод `POST` для відправки даних на сервер, вказуючи складні комбіновані умови вибірки в форматі JSON.
++
+У цьому HTTP запиті:
+
+* `POST` -- метод запита, використаний для відправки даних на сервер.
+* `/advanced-search` -- шлях до ресурсу на сервері (ендпоінт).
+* `HTTP/1.1` -- версія протоколу HTTP.
+* `Host: api.example.com` -- заголовок, що вказує домен, де знаходиться ресурс.
+* `Content-Type: application/json` -- заголовок, що вказує на тип контенту, який передається у тілі запита.
+* Тіло запита містить JSON-об'єкт з параметрами `nationality`, `genre`, `award`, `bookTitle` з відповідними значеннями `Ukrainian`, `Fiction`, `Nobel Prize`, `Independence`. Це вказує на пошук авторів за складними комбінованими умовами.
+
+cURL::
++
+[source,curl]
+----
+curl -X POST "https://api.example.com/advanced-search" \
+     -H "Content-Type: application/json" \
+     -d '{"nationality": "Ukrainian", "genre": "Fiction", "award": "Nobel Prize", "bookTitle": "Independence"}'
+----
++
+Ця команда використовує *cURL* для відправки HTTP-запита з методом `POST`, вказуючи на складну комбінацію умов у форматі JSON.
+====
+
+== Пов'язані сторінки
+
+* xref:best-practices/bp-and-or-single-table.adoc[]
+* xref:data-modeling/data/physical-model/liquibase-ddm-ext.adoc[]
+* xref:registry-develop:data-modeling/data/physical-model/sc/attributes/search-type/search-type-attribute.adoc[]

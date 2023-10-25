@@ -1,0 +1,185 @@
+= Функція _signature_content()_
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+== Опис
+
+Функція *`signature_content(String data, SignFormat container): SignDataDto`* використовується для отримання контенту з підписаних даних. Ця функція приймає дані у форматі Base64 та тип контейнера підпису, і повертає об'єкт типу `SignDataDto`, що містить деталі контенту підпису.
+
+== Параметри
+
+.Параметри функції
+|===
+|*Аргумент* | *Опис*
+| `data`    | Дані, що включають підпис у форматі `Base64`.
+| `container` | Тип контейнера підпису.
+|===
+
+== Що повертає
+
+Ця функція повертає об'єкт типу `SignDataDto`, що містить деталі контенту підпису.
+
+.SignDataDto
+|===
+|*Поле*        | *Опис*
+| `allContent` | Список всіх частин контенту.
+| `content`    | Перша частина контенту.
+|===
+
+== Алгоритм роботи
+
+Функція працює за таким алгоритмом:
+
+. Приймає дані, що включають підпис у форматі Base64, та тип контейнера підпису.
+. Виконує запит до сервісу цифрового підпису для отримання контенту.
+. Повертає об'єкт типу `SignDataDto`, що містить список всіх частин контенту та першу частину контенту.
+
+== Методи взаємодії
+
+Функція надає наступні методи:
+
+.Методи взаємодії
+|===
+|*Метод*           | *Опис*
+| `getAllContent()` | Повертає список всіх частин контенту.
+| `getContent()`    | Повертає першу частину контенту.
+|===
+
+== Приклади використання
+
+Цей розділ демонструє приклади використання JUEL-функції у Groovy-скриптах бізнес-процесу.
+
+`signature_content()` отримує перелік файлів, що були підписані.
+
+image::best-practices/bp-sign-validate/bp-sign-validate-7.png[]
+
+._Скрипт для обробки контенту цифрового підпису та його збереження_
+[%collapsible]
+====
+[source,groovy]
+----
+var asicContent = signature_content(animalResponse.prop('photos').value(), validationAsicRes.container).getAllContent()
+var cadesContent = signature_content(animalResponse.prop('mainPhoto').value(), validationCadesRes.container).getContent()
+
+def photos = []
+asicContent.each {
+    def decodedAsicContent = Base64.getDecoder().decode(it.getData())
+    def asicFileMetadata = save_digital_document(decodedAsicContent, it.getName())
+    def photo = [:]
+    photo.id = asicFileMetadata.getId()
+    photo.checksum = asicFileMetadata.getChecksum()
+    photos << photo
+}
+
+def mainPhotos = []
+def decodedCadesContent = Base64.getDecoder().decode(cadesContent.getData())
+def cadesFileMetadata = save_digital_document(decodedCadesContent, cadesContent.getName().concat('.png'))
+def mainPhoto = [:]
+mainPhoto.id = cadesFileMetadata.getId()
+mainPhoto.checksum = cadesFileMetadata.getChecksum()
+mainPhotos << mainPhoto
+
+def contentsPayload = S([:], 'application/json')
+contentsPayload.prop('name', animalResponse.prop('name').value())
+contentsPayload.prop('chipNumber', animalResponse.prop('chipNumber').value())
+contentsPayload.prop('photos', S(photos, 'application/json'))
+contentsPayload.prop('mainPhoto', S(mainPhotos, 'application/json'))
+
+set_transient_variable('contentsPayload', contentsPayload)
+----
+====
+
+Цей скрипт зосереджений на обробці контенту цифрового підпису та його збереженні. Він виконує наступні дії:
+
+* Отримує контент цифрових підписів для фотографій тварини.
+* Декодує, зберігає та обробляє ці фотографії.
+* Формує JSON-об'єкт з деталями контенту.
+* Зберігає JSON-об'єкт в змінній для подальшого використання.
+
+Функція `signature_content(...)` приймає два аргументи: контент, що підписується, та контейнер підпису. Вона повертає деталі контенту підпису.
+
+Розглянемо скрипт докладніше:
+
+. *Використання функції `signature_content(...)`*:
++
+--
+- *asicContent*:
++
+[source,groovy]
+----
+var asicContent = signature_content(animalResponse.prop('photos').value(), validationAsicRes.container).getAllContent()
+----
++
+Функція `signature_content(...)` приймає два аргументи: контент для підпису (у цьому випадку це фотографії тварини) та контейнер підпису ASIC. Метод `.getAllContent()` повертає усі частини цього контенту.
+
+- *cadesContent*:
++
+[source,groovy]
+----
+var cadesContent = signature_content(animalResponse.prop('mainPhoto').value(), validationCadesRes.container).getContent()
+----
++
+Аналогічно попередньому, але для основної фотографії тварини та підпису CADES.
+--
++
+IMPORTANT: Функція `signature_content(...)` працює виключно з контейнерами цифрових підписів двох типів: `ASIC` і `CAdES`. Щоб вона функціонувала коректно, потрібно спочатку встановити або визначити тип контейнера, з яким вона буде працювати, безпосередньо в налаштуваннях цієї функції.
+
+. *Обробка та збереження фотографій з контенту ASIC*:
++
+[source,groovy]
+----
+def photos = []
+asicContent.each {
+    def decodedAsicContent = Base64.getDecoder().decode(it.getData())
+    def asicFileMetadata = save_digital_document(decodedAsicContent, it.getName())
+    def photo = [:]
+    photo.id = asicFileMetadata.getId()
+    photo.checksum = asicFileMetadata.getChecksum()
+    photos << photo
+}
+----
++
+Цей блок коду декодує кожну частину контенту ASIC з Base64, зберігає її за допомогою функції `save_digital_document(...)`, а потім зберігає метадані цих файлів у список `photos`.
+
+. *Обробка та збереження основної фотографії з контенту CADES*:
++
+[source,groovy]
+----
+def mainPhotos = []
+def decodedCadesContent = Base64.getDecoder().decode(cadesContent.getData())
+def cadesFileMetadata = save_digital_document(decodedCadesContent, cadesContent.getName().concat('.png'))
+def mainPhoto = [:]
+mainPhoto.id = cadesFileMetadata.getId()
+mainPhoto.checksum = cadesFileMetadata.getChecksum()
+mainPhotos << mainPhoto
+----
++
+Аналогічно попередньому блоку коду, але обробляється лише одна фотографія (основна).
+
+. *Формування JSON-об'єкта з деталями контенту*:
++
+[source,groovy]
+----
+def contentsPayload = S([:], 'application/json')
+contentsPayload.prop('name', animalResponse.prop('name').value())
+contentsPayload.prop('chipNumber', animalResponse.prop('chipNumber').value())
+contentsPayload.prop('photos', S(photos, 'application/json'))
+contentsPayload.prop('mainPhoto', S(mainPhotos, 'application/json'))
+----
++
+Тут ми створюємо порожній JSON-об'єкт (`contentsPayload`) та наповнюємо його даними: ім'ям тварини, номером чипа, списком фотографій та основною фотографією.
+
+. *Збереження JSON-об'єкта*:
++
+[source,groovy]
+----
+set_transient_variable('contentsPayload', contentsPayload)
+----
++
+Сформований JSON-об'єкт `contentsPayload` зберігається як тимчасова змінна для подальшого використання в бізнес-процесі.
+
+TIP: Детальніше з використанням функції у бізнес-процесі ви можете ознайомитися на сторінці xref:best-practices/bp-sign-validate-asics-cades.adoc[].
+
+== Пов'язані сторінки
+
+* xref:best-practices/bp-sign-validate-asics-cades.adoc[]
+* xref:bp-modeling/bp/juel-functions/signatures/signature-details.adoc[]

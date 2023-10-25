@@ -1,0 +1,371 @@
+= Використання платформного Nexus замість реєстрового при створенні реєстру
+
+[IMPORTANT]
+--
+Сторінка технічної документації є баченням майбутньої реалізації, актуальність якого може бути застарілою.
+--
+
+В цьому перехідному дизайні розглядається надання опційної можливості використання для потреб реєстру центрального сховища артефактів Платформи.
+
+== Актори та ролі користувачів
+* Технічний адміністратор Платформи
+* Технічний адміністратор реєстру
+* Моделювальник регламенту реєстру
+
+== Загальний опис
+З точки зору роботи підсистем розгортання та моделювання регламенту реєстру, необхідно мати сховище для зберігання згенерованих
+артефактів реєстрових компонентів (registry-rest-api, registry-kafka-api, registry-soap-api, registry-model, bp-webservice-gateway), а саме їх
+Docker образи та JAR (Java Archive) файли.
+
+Задля економії ресурсів реєстру (CPU, RAM) пропонується надати можливість адміністратору Платформи обирати потрібне сховище.
+
+== Функціональні сценарії
+* Створення нового реєстру
+* Розгортання регламенту реєстру
+* Редагування реєстру
+
+== Поточна реалізація
+В поточній реалізації Платформи, для виконання цієї вимоги під кожний реєстр розгортається своє власне сховище артефактів (SonarType Nexus).
+
+.Фрагмент діаграми взаємодії між компонентами підсистем
+image::architecture-workspace/platform-evolution/optional-registry-nexus/as-is-nexus.drawio.svg[]
+
+[TIP]
+--
+Докладніше про поточну реалізацію описано у відповідних підсистемах:
+
+* xref:arch:architecture/platform/administrative/config-management/overview.adoc[]
+* xref:arch:architecture/registry/administrative/regulation-publication/overview.adoc[]
+--
+
+.Місця зберігання артефактів в реєстровому Nexus
+|===
+|Тип|Назва репозиторію|Шлях|Приклад
+
+|Docker Image
+|docker-registry
+|`/v2/<registry-name>/<component-name>`
+|/v2/registry-1/registry-rest-api-master-0-0-1
+
+|JAR
+|edp-maven-releases
+|`/ua/gov/mdtu/ddm/dataplatform/template/<component-name>`
+|/ua/gov/mdtu/ddm/dataplatform/template/rest-api
+
+|===
+
+== Загальні принципи та положення
+* При створенні реєстру на адмін-консолі доступний вибір типу сховища артефактів (центральне або виділене реєстрове сховище).
+* При редагуванні реєстру на адмін-консолі доступний вибір типу сховища артефактів (центральне або виділене реєстрове сховище).
+* При зміні типу сховіща існуючі артефакти не переносяться.
+* При зміні типу сховіща необхідно повідомити адміністратора про
+  . При зміні типу сховища, пайплайн публікацій має бути зупинений.
+  . Після зміни необхідно запустити пайплайн публікацій для отримання артефактів вже в новому сховищі (реєстр продовжить роботу і без цього до першого перзапуску).
+* Тільки адміністратор Платформи може змінювати це налаштування.
+* Зміна типу сховища не має приводити до business interruption (реєстр має продовжувати роботу після застосування).
+* При обраному "центральному" сховищі, відбувається
+  . Налаштування відповідних компонентів в реєстрі для роботи з ним
+  . Видалення реєстрового Nexus
+* При обраному "виділеному" реєстровому сховищі відбувається розгортання компонентів `nexus-operator` що і розгортає реєстровий nexus.
+* Реєстр має свій власний maven репозиторій в Платформному сховищі Nexus.
+* Реєстр не має свого власного docker репозиторію в Платформному сховищі Nexus, а використовує вже існуючий.
+* Пайплайн розгортання реєстру при його створенні безумновно налаштовує також і центральне сховище артефактів підготовлюючи його для роботи з артефактами реєстру.
+* При видаленні реєстру відбувається очистка всіх зроблених налаштувань платформного Nexus.
+
+
+== Цільовий дизайн
+Після розробки та впровадження цього перехідного дизайну, адміністратор Платформи буде мати можливість обрати в якості сховища артефактів наступні:
+
+* Центральне сховище артефактів Платформи
+* Виділене реєстрове сховище артефактів
+
+image::architecture-workspace/platform-evolution/optional-registry-nexus/to-be-nexus.drawio.svg[]
+
+== UI
+
+На сторінках створення та редагування реєстру відображається нова таба "Сховище артефактів" з dropdown елементом і з варіантами вибору:
+
+* Платформне сховище
+* Виділене реєстрове сховище
+
+.Орієнтовний mockup
+image::architecture-workspace/platform-evolution/optional-registry-nexus/mockup-1.png[]
+
+image::architecture-workspace/platform-evolution/optional-registry-nexus/mockup-2.png[]
+
+[TIP]
+--
+Більше мокапів можна знайти за https://www.figma.com/file/7fAv5Fv3q2PFEuvJowiFd1/Untitled?type=design&node-id=0-1&mode=design&t=qFhylGqHMCKpZ42M-0[посиланням].
+--
+
+В `values.yaml` реєстру записується значення:
+
+[source,yaml]
+----
+global:
+  registry:
+    artifactsStorage: "platform" # platform | registry
+----
+
+Спираючись на це значення відбувається налаштування відповідних компонентів в реєстрі та Платформі для роботи з ним, а саме:
+
+* Виділене реєстрове сховище — виконується розгортання реєстрового компонента `nexus-operator`, що за собою тягне всі налаштування які і виконуються наразі.
+* Платформне сховище — реєстр налаштовується на роботу з центральним сховищем артефактів Платформи.
+
+[IMPORTANT]
+--
+В інструкції по створенню резервної копії реєстру відобразити інформацію про те, що бекап реєстру з Платформним сховищем
+не буде включати сгенеровані артефакти `rest-api`, `soap-api`, `kafka-api`, `bp-webservice-gateway`. Для продовження роботи після відновлення
+треба буде запустити пайплайн публікації регламенту.
+--
+
+== Інтеграція реєстру для роботи з центральним сховищем артефактів
+
+Для налаштування роботи реєстру з центральним сховищем артефактів Платформи, необхідно виконати наступні кроки пайплайном розгортання реєстру:
+
+. Створювати maven репозиторій реєстру в центральному nexus.
+  * Параметризувати конфігмапу `[mdtu-ddm/infrastructure/control-plane-nexus.git]/deploy-templates/nexus-operator/templates/cm/configuration/nexus_repos_to_create.yaml` та через
+`_helpers.tpl` динамічно генерувати json для створення репозиторію виключно для реєстру спираючись на перелік реєстрів в `values.yaml` Платформи.
++
+.Діаграма послідовності по роботі консолі з репозиторіями при створенні реєстру
+[plantuml]
+----
+actor "Технічний адміністратор\nПлатформи" as admin
+participant "Адмін-консоль" as console
+database "registry.git" as registry
+participant "control-plane-jenkins" as cpjenkins
+participant "control-plane-nexus" as cpnexus
+participant "registry-nexus" as nexus
+
+admin -> console: Створення реєстру
+alt #LightBlue З Платформним сховищем
+console -> registry: Запис global.registry.artifactsStorage в values.yaml
+cpjenkins -> cpnexus: Налаштування центрального Nexus
+return: Налаштовано
+else #LightGray З реєстровим сховищем
+console -> registry: Запис global.registry.artifactsStorage в values.yaml
+cpjenkins -> cpnexus: Налаштування центрального Nexus
+return: Налаштовано
+cpjenkins -> nexus: Розгортання реєстрового Nexus
+return: Розгорнуто
+end
+console -> admin: "Реєстр створено"
+----
++
+.Приклад json для створення репозиторію
+[source,json]
+----
+  {
+    "name": "<registry_name_placeholder>",
+    "repositoryType": "maven-hosted",
+    "blob_store": "edp-maven",
+    "version_policy": "release",
+    "layout_policy": "strict",
+    "strict_content_validation": "true",
+    "write_policy": "allow"
+  }
+----
++
+[TIP]
+Для тригеру реконсиляції оператора тут і надалі можна використовувати анотації Reloader в конфігмапі та Deployment.
++
+. Створювати роль з мінімально необхідним доступом (тільки до maven репозиторію реєстру та docker-registry).
+  * Параметризувати конфігмапу `[mdtu-ddm/infrastructure/control-plane-nexus.git]/deploy-templates/nexus-operator/templates/cm/configuration/nexus_default_roles.yaml`
++
+.Приклад json для створення ролі
+[source,json]
+----
+  {
+    "id": "<registry-name>-role",
+    "name": "<registry-name>-role",
+    "description": "Read and write access to <registry-name> maven repository and docker-registry",
+    "privileges": [
+      "nx-search-read",
+      "nx-repository-admin-maven2-<registry_name>-*",
+      "nx-repository-view-maven2-<registry_name>-*",
+      "nx-repository-admin-docker-docker-registry-browse",
+      "nx-repository-admin-docker-docker-registry-edit",
+      "nx-repository-admin-docker-docker-registry-add",
+      "nx-repository-admin-docker-docker-registry-read",
+      "nx-repository-view-docker-docker-registry-browse",
+      "nx-repository-view-docker-docker-registry-edit",
+      "nx-repository-view-docker-docker-registry-add",
+      "nx-repository-view-docker-docker-registry-read"
+    ],
+    "roles": []
+  }
+----
++
+. Створювати реєстрового користувача для взаємодії з центральним nexus.
+  * Параметризувати конфігмапу `[mdtu-ddm/infrastructure/control-plane-nexus.git]/deploy-templates/nexus-operator/templates/cm/configuration/nexus_default_users.yaml`
++
+[source,yaml]
+----
+[
+  {
+    "username": "registry-user",
+    "first_name": "registry-user",
+    "last_name": "registry-user",
+    "email": "registry-user@edp.com",
+    "password": "",
+    "roles": [
+      "edp-admin"
+    ]
+  }
+]
+----
++
+  * Або створити CR `NexusUser`:
++
+[source,yaml]
+----
+apiVersion: v2.edp.epam.com/v1alpha1
+kind: NexusUser
+metadata:
+  name: registry-<registry-name>
+  namespace: control-plane-nexus
+  labels:
+    registry: nexus
+spec:
+  email: <registry-name>@ddm.com
+  firstName: <registry-name>
+  lastName: <registry-name>
+  ownerName: nexus
+  roles:
+    - <registry-name>-role
+  status: active
+  userId: <registry-name>@ddm.com
+
+----
++
+
+[TIP]
+Пароль від створеного користувача буде лежати в сікреті з назвою `nexus-<username>`.
++
+. Проініціалізувати `registry-regulation-publication-pipelines` для роботи з центральним nexus.
+  * Ініціалізувати екземпляр класу `Codebase` при запуску пайплайну публікацій значенням з поля `host` або поля `proxyHost` в залежності від значення `artifactsStorage` в `values.yaml` реєстру з коректним користувачем.
++
+.Необхідні для адаптації місця коду бібліотеки `registry-regulation-publication-pipelines`
+[source,groovy]
+----
+class DockerRegistry {
+    .......
+  void init() {
+        def secretDataJson = context.platform.getAsJson("secret", NEXUS_CI_USER_SECRET)["data"]
+        ciUser = DecodeHelper.decodeBase64(secretDataJson["username"])
+        ciUserPassword = DecodeHelper.decodeBase64(secretDataJson["password"])
+        host = context.platform.getJsonPathValue("edpcomponent", "docker-registry", ".spec.url")
+        proxyHost = context.platform.getJsonPathValue("edpcomponent", "docker-proxy-registry", ".spec.url")
+    ........
+}
+
+class Codebase {
+    .......
+    void setImageTag(String imageTag) {
+        this.imageTag = imageTag
+        this.imageUrl = "${context.dockerRegistry.host}/${context.namespace}/${imageName}:${imageTag}"
+    }
+
+    void setImageName(String imageName) {
+        this.imageName = imageName
+        this.imageUrl = "${context.dockerRegistry.host}/${context.namespace}/${imageName}:${imageTag}"
+    }
+    ........
+}
+
+class BuildDockerfileImage {
+    void createBuildConfig() {
+        context.logger.info("Creating build config ${context.codebase.buildConfigName}")
+        context.script.sh(script: "oc new-build --name ${context.codebase.buildConfigName} " +
+                "--binary=true " +
+                "--to-docker=true " +
+                "--to=${context.codebase.imageUrl} " +
+                "--push-secret=${context.dockerRegistry.PUSH_SECRET} " +
+                "--build-arg=NEXUS_USR=${context.dockerRegistry.ciUser} " +
+                "--build-arg=NEXUS_PASS=${context.dockerRegistry.ciUserPassword}")
+    }
+}
+----
++
+. Параметризувати `service-generation-utility` для роботи з центральним nexus.
+  * Параметризувати Dockerfile кожного компонента, а саме `RUN mvn deploy -B --settings settings.xml ....`
+  * Параметризувати settings.xml кожного компонента
+  * Адаптувати deployments компонентів під роботу з Платформним nexus (tags, pull secret, etc).
+  * Для компонента `data-model` прибрати генерування та пуш docker образу.
+  * Для компонентів `rest-api`, `kafka-api`, `soap-api`, `bp-webservice-gateway` прибрати пуш jar файлу в сховище Nexus (замінити mvn deploy на mvn build).
+. Опційно розгортати `nexus-operator` в helmfile в залежності від контенту змінної `artifactsStorage`.
+. Підтримка і запуск `CleanUp` задач в Платформному nexus очищенні або видаленні реєстру.
+. Видалення всіх створених налаштувань та docker образів Платформного nexus при зміні типу сховища з Платформного на реєстрове.
+
+.Місця зберігання артефактів в платформному Nexus
+|===
+|Тип|Назва репозиторію|Шлях|Приклад
+
+|Docker Image
+|docker-registry
+|`/v2/registries/<registry-name>/<component-name>`
+|/v2/registries/registry-1/registry-rest-api-master-0-0-1
+
+|JAR
+|<registry-name>-maven-releases
+|`/ua/gov/mdtu/ddm/dataplatform/template/<component-name>`
+|/ua/gov/mdtu/ddm/dataplatform/template/rest-api
+
+|===
+
+== Компоненти системи та їх призначення в рамках дизайну рішення
+
+У даному розділі наведено перелік компонент системи, які задіяні або потребують змін в рамках реалізації дизайну.
+
+|===
+|Підсистема|Компонент|Модуль|Опис змін
+
+|Підсистема розгортання регламенту реєстру
+|*registry-regulations-publications-pipelines*
+|https://github.com/epam/edp-ddm-registry-regulations-publication-pipeline[github:/epam/edp-ddm-registry-regulations-publication-pipeline]
+|Адаптування пайплайнів cleanup та delete registry
+
+|Підсистема розгортання регламенту реєстру
+|*service-generation-utility*
+|https://github.com/epam/edp-ddm-service-generation-utility[github:/epam/edp-ddm-service-generation-utility]
+|Параметризація шаблонів компонентів
+
+|Підсистема розгортання та налаштування Платформи та реєстрів
+|*control-plane-nexus*
+|https://github.com/epam/edp-ddm-control-plane-nexus[github:/epam/edp-ddm-control-plane-nexus]
+|Параметризація створення репозиторіїв, користувачів та ролей.
+
+|Підсистема розгортання регламенту реєстру
+|*nexus-operator*
+|https://github.com/epam/edp-nexus-operator[github:/epam/edp-nexus-operator]
+|Параметризація розгортання реєстрового Nexus
+
+|Підсистема управління Платформою та реєстрами
+|*control-plane-console*
+|https://github.com/epam/edp-ddm-control-plane-console[github:/epam/edp-ddm-control-plane-console]
+|Зміни в UI, зміни в процесах створення реєстру та merge requests.
+
+|===
+
+== Безпека та логування
+* Nexus та OKD журналюють процеси по створенню репозиторіїв, користувачів та ролей в STDOUT. Далі ці логи збираються
+підсистемою моніторингу подій та сповіщення.
+* Створені користувачі повинні мати мінімальний набір прав для роботи зі сховищами (включаючи pull та push користувачів).
+
+== Зворотна сумісність
+Зміни мають бути зворотно сумісними та не порушувати роботу реєстрів що вже існують на екземплярі Платформи що оновлюється.
+
+Всі реєстри, що були створені до версії 1.9.8 повинні мати можливість змінити тип сховища артефактів.
+
+== Високорівневий план розробки
+=== Технічні експертизи
+* _DevOps_
+* _FE_
+* _BE_
+
+=== Попередній план розробки
+. Роботи по адмін-консолі
+. Адаптація `nexus-operator`
+. Адаптація `control-plane-nexus`
+. Роботи по `registry-regulations-publications-pipelines`
+. Параметризація `service-generation-utility`

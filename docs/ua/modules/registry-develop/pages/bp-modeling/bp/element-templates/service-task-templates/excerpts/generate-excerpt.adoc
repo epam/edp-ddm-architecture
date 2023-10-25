@@ -1,0 +1,188 @@
+= Генерування витягу: _Generate Excerpt_
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+== Загальна інформація
+
+Інтеграційне розширення *Generate Excerpt* дозволяє налаштовувати завдання для формування витягу у бізнес-процесі. Це розширення допомагає автоматизувати процеси генерації витягів у форматах *PDF*, *DOCX* та *CSV*, забезпечуючи належне оброблення запитів та передачу даних між процесами. Розширення додає різні властивості до завдання типу *Service Task*.
+
+.Короткі відомості про делегат
+|===
+|Назва |Пояснення
+
+|Бізнес-назва інтеграційного розширення
+|*Generate Excerpt*
+
+|Службова назва інтеграційного розширення
+|`${excerptConnectorGenerateDelegate}`
+
+|Назва файлу у бібліотеці розширень
+|*_excerptConnectorGenerateDelegate.json_*
+|===
+
+Розширення *Generate Excerpt* використовується, коли необхідно сформувати витяг з певними даними у визначеному форматі.
+
+TIP: Більш детально про особливості використання делегата у бізнес-процесі див. на сторінці xref:bp-modeling/bp/excerpts/bp-modeling-excerpt-csv-docx.adoc[].
+
+== Перед початком
+
+include::partial$admonitions/install-element-templates.adoc[]
+
+== Налаштування
+
+Делегат *Generate Excerpt* призначений для використання у завданнях типу *Service Task* бізнес-процесу. Він дозволяє налаштувати генерацію витягів з передачею вхідних та вихідних даних.
+
+=== Налаштування завдання
+
+. Створіть завдання типу *Service Task* у вашому бізнес-процесі.
+. Назвіть завдання, наприклад, `Запит на формування витягу-звіту`.
+. Застосуйте шаблон делегата, обравши *Generate Excerpt* зі списку в налаштуваннях завдання.
++
+image:bp-modeling/bp/element-temp/service-task/excerpts/generate-excerpt/generate-excerpt-2.png[]
+
+=== Налаштування делегата
+
+Виконайте наступні налаштування:
+
+Excerpt Type ::
+У полі *Excerpt Type* введіть назву теки у регламенті, в якій визначено шаблон витягу. Наприклад, `reference-factor-names-excerpt`.
+
+Excerpt Input Data ::
+У полі *Excerpt Input Data* введіть вкажіть дані для формування витягу. Наприклад, `${excerpt}`.
++
+[NOTE]
+====
+Дані для формування витягу можна отримати скриптом та передати у полі *Excerpt Input Data* у вигляді змінної.
+
+Дані, що передаються для генерації витягу `excerptInputData` повинні мати відповідний формат:
+
+[source, groovy]
+----
+{
+   "requests":[
+      {
+         "field1":"value1"
+      },
+      {
+         "field2":"value2"
+      }
+      ...
+   ]
+}
+----
+
+.Приклад скрипту, який формує дані для витягу, і пояснення його роботи
+[source,groovy]
+----
+def factorFormData = submission('UserTask_ViewFactors').formData
+def excerpt = [:]
+
+def factors = factorFormData.prop('factorData').elements().collect { item ->
+    [name: item.prop('name').value(), creatorFullName: item.prop('creatorFullName').value(), updaterFullName: item.prop('updaterFullName').value()]
+}
+
+excerpt["factors"] = factors
+
+def request = S([:], 'application/json')
+request.prop('recordId', null as String)
+request.prop('excerptType', 'reference-factor-names-excerpt')
+request.prop('excerptInputData', S(excerpt, 'application/json'))
+request.prop('requiresSystemSignature', false)
+
+execution.removeVariable('payload')
+set_transient_variable('payload', request)
+
+set_transient_variable('excerpt', excerpt)
+----
+
+Цей скрипт виконує наступні дії:
+
+. **Отримання даних форми**: отримує дані з форми `UserTask_ViewFactors`.
+. **Формування об'єкта `excerpt`**: створює об'єкт `excerpt` та додає до нього список факторів, зібраних з форми.
+. **Створення запита**: створює запит на генерацію витягу, задаючи тип витягу, вхідні дані та інші параметри.
+. **Очищення змінної `payload`**: видаляє змінну `payload`, якщо вона існує.
+. **Налаштування транзитних змінних**: встановлює транзитні змінні `payload` та `excerpt` для використання у процесі.
+====
+
+Requires System Signature ::
+У полі *Requires System Signature* введіть значення `false`.
++
+[IMPORTANT]
+====
+Можливість підписання даних витягів у форматі .csv і .docx системним ключем відсутня, тому за замовчуванням параметр `Requires System Signature` має містити значення `false`. Якщо буде вказано значення `true`, бізнес-процес не буде працювати. Підписання системним ключем доступно лише для формату .pdf.
+====
+
+Excerpt Language ::
+Вкажіть мову, якою буде згенеровано витяг. Залиште поле порожнім, щоб застосувати значення за замовчуванням.
+
+X-Access-Token ::
+У полі *X-Access-Token* зазначте токен доступу користувача, під яким виконується операція. Цей токен забезпечує повноваження виконавця задачі щодо доступу до даних.
+
+* Наприклад, вкажіть токен ініціатора процесу через JUEL-функцію `initiator()`, використавши метод `accessToken`:
++
+[source,groovy]
+----
+${initiator().accessToken}
+----
+
+* Альтернативно, ви можете вказати токен виконавця останнього користувацького завдання. Для цього ви можете використати JUEL-функцію `completer()`, передавши ID попередньої задачі та використавши метод `accessToken`. Наприклад:
++
+[source,groovy]
+----
+${completer('previous user task ID').accessToken}
+----
++
+** `completer()` — назва JUEL-функції.
+** `'previous user task ID'` — ID попередньої задачі користувача.
+** `accessToken` — метод, який передає JWT-токен користувача.
+
+X-Digital-Signature source ::
+У полі *X-Digital-Signature source* вкажіть джерело цифрового підпису. Це поле вказує на Ceph-документ із цифровим підписом даних КЕП на стороні користувача (_див. детальніше про підпис КЕП у делегатах xref:bp-modeling/bp/element-templates/user-task-templates/officer-sign-task.adoc[] та xref:bp-modeling/bp/element-templates/user-task-templates/citizen-sign-task.adoc[]_). Функція `sign_submission()` та метод `signatureDocumentId` дозволяють отримати підписані дані з UI-форми та передати ID Ceph-документа. Наприклад:
++
+----
+${sign_submission('Sign data with QES user form').signatureDocumentId}
+----
+
+* `sign_submission` -- назва JUEL-функції.
+* `'Sign data with QES user form'` -- ID завдання користувача, із даними, на які накладено КЕП.
+* `signatureDocumentId` -- метод, який дозволяє отримати ID Ceph-документа, в якому зберігаються підписані КЕП дані.
+
+X-Digital-Signature-Derived source ::
+У полі *X-Digital-Signature-Derived source* вкажіть джерело системного цифрового підпису (цифрової печатки). Це поле вказує на Ceph-документ із системним цифровим підписом (цифровою печаткою), накладеним на дані. Наприклад, `${system_signature_ceph_key}`.
++
+[TIP]
+====
+Значення ключа/ідентифікатора системного підпису можна отримати після підпису даних за допомогою делегата xref:bp-modeling/bp/element-templates/service-task-templates/signature/system-signature-by-dso-service.adoc[]. Результат виконання операції підписання даних системним ключем буде збережено до вказаної змінної, наприклад, `system_signature_ceph_key`. Надалі ви зможете використати змінну в іншому місці процесу, зокрема під час збереження даних до БД або для генерування витягу тощо.
+====
+
+Result variable ::
+У полі *Result variable* вкажіть назву змінної, в яку необхідного записати результат. Наприклад, `response`.
+
+== Приклад
+
+Ось приклад, який показує, як відповідний делегат використовується у бізнес-процесі:
+
+.Приклад. Налаштування делегата Generate excerpt
+image::bp-modeling/bp/element-temp/service-task/excerpts/generate-excerpt/generate-excerpt-1.png[]
+
+[TIP]
+====
+[%collapsible]
+.Де можна знайти приклад бізнес-процесу?
+=====
+include::partial$snippets/demo-reg-reference-examples-ua.adoc[]
+
+*Generate excerpt* -- делегат, який використовується у деяких бізнес-процесах, що потребують перевірки статусу витягу.
+
+Ви можете використати один із прикладів процесів за пошуком по ключовим словам -- *_reference-generate-factor-names-excerpt_*.
+
+У Кабінеті користувача бізнес-процес буде доступний у розділі *Доступні послуги*.
+=====
+====
+
+== Пов'язані сторінки
+
+* xref:bp-modeling/bp/element-templates/call-activities/check-excerpt-status.adoc[]
+* xref:bp-modeling/bp/excerpts/bp-modeling-excerpt-csv-docx.adoc[]
+* xref:bp-modeling/bp/element-templates/service-task-templates/excerpts/define-process-excerpt-id.adoc[]
+
+

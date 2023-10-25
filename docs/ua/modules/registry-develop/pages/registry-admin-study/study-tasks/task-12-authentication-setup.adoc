@@ -1,0 +1,127 @@
+= Завдання 12. Налаштування типів автентифікації
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+== Мета завдання
+
+Виконання цього завдання має на меті: ::
+
+* [*] Навчити змінювати тип автентифікації для надавачів послуг.
+
+[#prerequisites]
+== Передумови
+
+. Перед налаштуванням автентифікації завантажте архів із тестовими ключами для автентифікації:
+`https://id.gov.ua/downloads/test_certificatesqa_2024.zip[test-certificatesqa_2024.zip]`.
+
+. Ознайомтеся з документами:
+
+* xref:registry-develop:registry-admin/cp-auth-setup/cp-auth-setup-overview.adoc[Налаштування автентифікації користувачів]
+* xref:registry-develop:registry-admin/cp-auth-setup/cp-auth-setup-officers.adoc[Налаштування автентифікації надавачів послуг]
+* xref:registry-develop:registry-admin/create-users/manual-user-creation.adoc[]
+* xref:user:citizen-officer-portal-auth.adoc[Автентифікація користувачів реєстру]
+
+== Загальний опис
+
+Платформа дозволяє адміністраторам налаштувати тип автентифікації для надавачів послуг, зокрема Платформа підтримує наступні налаштування:
+
+* Перший тип автентифікації -- *IIT-Віджет*, який встановлено за замовчуванням. Цей тип призначений для автентифікації надавачів послуг за допомогою КЕП на формі входу до _Кабінету користувача_.
+
+* Другий тип автентифікації -- *id.gov.ua*. Цей тип призначений для автентифікації надавачів послуг за допомогою зовнішнього постачальника ідентифікаційних даних на формі входу до _Кабінету користувача_.
+
+NOTE: Одночасно користувачі _Кабінету_ зможуть використовувати лише один встановлений тип автентифікації (або *IIT-віджет*, або *id.gov.ua*), але налаштування реєстру можуть співіснувати разом для обох типів.
+
+== Процес виконання завдання
+
+=== Налаштування реєстру
+
+Для налаштування реєстру виконайте наступні кроки:
+
+NOTE: *Ідентифікатор клієнта* та *Клієнтський секрет* -- це дані, які ви отримаєте після укладення договору на використання тестового середовища `test.id.gov.ua`.
+
+. В редагуванні реєстру оберіть налаштування *Автентифікація надавача послуг* і виконайте зміну типу автентифікації на `id.gov.ua`.
++
+--
+* 	*Вкажіть тип автентифікації*: `Реєстрова інтеграція з id.gov.ua`.
+*	*Посилання на віджет*: `https://test.id.gov.ua/?auth_type=dig_sign`.
+*	*Ідентифікатор клієнта (client_id)*: `17f33242543e4340b690391d6f1d1813`
+*	*Клієнтський секрет (secret)*: `25f08bf5ad8a8455830f6ef6a20bf0aa427a5e88`
+*   *Ключ шифрування*: оберіть ключ `idgovua`.
+--
+NOTE: Дані надані виключно для прикладу. Реальні `client_id` та `secret` ви можете отримати при реєстрації в системі ICEI (_при укладенні договору приєднання або при налаштуванні тестового підключення_). Детальний опис функціональності доступний xref:registry-develop:registry-admin/cp-auth-setup/cp-auth-setup-officers.adoc#id-gov-ua-auth[за посиланням].
++
+image:registry-develop:registry-admin-study/task-authentication-setup/01-icei.png[]
+
+. Підтвердьте зміни та дочекайтеся завершення Jenkins-пайплайну *MASTER-Build-`<registry-name>`* із результатом `*SUCCESS*`. Він застосовує параметри заданої конфігурації для типу автентифікації. (_див. пункти 3.2.3-3.2.8 інструкції xref:registry-develop:registry-admin/cp-auth-setup/cp-auth-setup-officers.adoc[Налаштування автентифікації надавачів послуг]_).
+
+[#create-keycloak-user]
+=== Створення користувача у Keycloak
+
+Для того, щоб користувач мав змогу автентифікуватися у *Кабінеті користувача (надавача послуг)*, потрібно створити цього користувача у *Сервісі управління користувачами та ролями (Keycloak)*.
+
+NOTE: Детальний опис процесу створення користувачів див. у розділі xref:registry-develop:registry-admin/create-users/manual-user-creation.adoc#create-user[Створення користувача у системі].
+
+Щоб створити користувача у реєстрі, виконайте наступні кроки:
+
+. Перейдіть до Keycloak-реалму  *`<registry-name>`-officer-portal*, створіть користувача та використайте наступні дані:
+
+* *Username*: `ТЕСТ Юридична Особа`
+* *Email*: test@test.com
+* *First Name*: `Юридична`
+* *Last Name*: `Особа`
+
+. Призначте роль `officer`.
++
+image:registry-develop:registry-admin-study/task-authentication-setup/02-keycloak-role.png[]
+
+. Додайте наступні атрибути на вкладці *Attributes*:
+
+* *`drfo`* -- `5544332211`;
+* *`edrpou`* -- `12345678`;
+* *`fullName`* -- `Юридична Особа`.
++
+NOTE: Ключі можуть періодично оновлюватися.  Тестові ключі можна завантажити на сторінці https://id.gov.ua/connectqa. Використовуйте ключ Юридична особа (з посадою) та візьміть дані звідти.
++
+TIP: Атрибут *`drfo`* -- це поле *РНОКПП*.
++
+NOTE: Перед тим, як вставляти дані у `fullName`, видаліть значення `ТЕСТ`. Наприклад: при отриманні значення `TЕСТ Юридична особа`, видаліть значення `ТЕСТ`. У результаті ви маєте отримати наступну назву: `Юридична особа`.
++
+image:registry-develop:registry-admin-study/task-authentication-setup/03-check-data.png[]
++
+image:registry-develop:registry-admin-study/task-authentication-setup/04-keycloak-attributes.png[]
+
+NOTE: Результатом буде додавання користувача у *Сервіс управління користувачами та ролями (Keycloak)* зі встановленими атрибутами автентифікації.
+
+=== Перевірка автентифікації за допомогою _id.gov.ua_
+
+Для перевірки автентифікації виконайте наступні кроки:
+
+. Перейдіть до menu:Швидких посилань[Кабінет користувача].
++
+image:registry-develop:registry-admin-study/task-add-registry-users/07-officer-portal.png[]
+
+. Увійдіть до *Кабінету користувача*.
++
+image:registry-develop:registry-admin-study/task-add-registry-users/08-user-portal.png[]
+
+. Оберіть *Увійти за допомогою електронного підпису*.
++
+image:registry-develop:registry-admin-study/task-authentication-setup/05-sign-in-with-digital-signature.png[]
++
+NOTE: Червоне інформаційне вікно з повідомленням `Домен інформаційної системи не підключений до id.gov.ua` -- це очікуваний результат, оскільки використовується тестовий майданчик `test.id.gov.ua`, а не промисловий `id.gov.ua`.
+
+. Використайте наступні дані для автентифікації:
+
+* *Тип:* `Файловий носій`;
+* *Ключ:* `Key-6.dat` із папки `Юридична особа (з посадою)` із попередньо завантаженого архіву (_див. розділ xref:#prerequisites[], крок 1_);
+* *Пароль:* `12345`.
++
+image:registry-develop:registry-admin-study/task-authentication-setup/06-sign-in-with-digital-signature.png[]
++
+image:registry-develop:registry-admin-study/task-authentication-setup/07-check-data.png[]
+
+[NOTE]
+====
+Результатом виконання цього завдання буде успішна автентифікація за допомогою інтегрованої системи електронної ідентифікації (ІСЕІ) *ID.GOV.UA* -- _лише у випадку формування домену та отримання реальних даних від ІСЕІ_. Детальний опис функціональності доступний xref:registry-develop:registry-admin/cp-auth-setup/cp-auth-setup-officers.adoc#id-gov-ua-auth[за посиланням].
+
+image::registry-develop:registry-admin-study/task-add-registry-users/12-success authentication.png[]
+====

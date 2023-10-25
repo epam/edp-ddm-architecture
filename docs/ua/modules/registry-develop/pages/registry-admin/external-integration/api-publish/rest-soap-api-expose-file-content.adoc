@@ -1,0 +1,314 @@
+= Отримання контенту файлів через зовнішні API
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+//TODO: REVIEW, EDIT AND INSERT IMAGES
+
+Цей посібник пояснює процес надання доступу до вмісту файлів, збережених у реєстрі, через зовнішні API. Він включає інтеграцію через REST на Платформі та SOAP-базовану інтеграцію з системою "Трембіта".
+
+== Проблематика
+
+Необхідність розробити функціональність для доступу до вмісту файлів, збережених у реєстрі, через зовнішні API. Досі це було можливим лише з бізнес-процесу.
+
+== Загальний опис
+
+Доступ до файлів здійснюється через окремий запит. Інтеграційні точки створюються, якщо в таблицях регламенту присутні поля типу `file` або `file[]`, що означають один файл або масив файлів відповідно.
+
+Функціональні сценарії включають:
+
+* Налаштування критеріїв пошуку
+* Генерацію сервісів критеріїв пошуку
+* Доступ до вмісту файлів через публічний API
+* Доступ до вмісту файлів через міжреєстрову взаємодію (з "Трембітою" та без неї)
+
+== Передумови
+
+Ознайомтеся з нашим посібником про публічні API на сторінці xref:registry-admin/external-integration/api-publish/public-api/expose-public-api.adoc[]. Він стане основою цієї інструкції, адже ми будемо використовувати схожі концепції та методи. На поточній сторінці ми сфокусуємося на налаштуванні доступу до специфічних файлів та їх вмісту, використовуючи публічний API як основний інструмент.
+
+[#regulations-modeling]
+== Моделювання регламенту
+
+. У Кабінеті адміністратора регламентів перейдіть до розділу *Таблиці > Файл опису структури* та додайте новий changeset.
++
+[TIP]
+====
+* Детальніше про файл опису структури читайте на сторінці xref:registry-admin/admin-portal/registry-modeling/tables/xml-editor.adoc[].
+====
+
+. Створіть таблицю з полями типу `file` або `file[]` для певних стовпців.
++
+CAUTION: Точки інтеграції для отримання контенту файлів створюються лише за наявності полів типу `file` або `file[]` у структурі даних.
++
+.XML-структура даних для створення таблиці
+[source,xml]
+----
+<changeSet id="animal_profile" author="registry owner">
+    <createTable tableName="animal_profile">
+        <column name="animal_profile_id" type="UUID" defaultValueComputed="uuid_generate_v4()" constraints="nullable=false, primaryKey=true, primaryKeyName=pk_animal_profile_id"/>
+        <column name="name" type="TEXT"/>
+        <column name="main_photo" type="type_file"/>
+        <column name="photos" type="type_file[]"/>
+    </createTable>
+</changeSet>
+----
++
+TIP: Більш детально про створення таблиць див. на сторінці xref:data-modeling/data/physical-model/liquibase-ddm-ext.adoc#table-management[Керування таблицями].
++
+.*_Опис параметрів XML-структури. Натисніть, щоб розгорнути або згорнути_*
+[%collapsible]
+====
+Ця XML-структура описує створення нової БД-таблиці, яка призначена для зберігання профілів тварин, включаючи унікальний ідентифікатор, ім'я, основне фото та набір додаткових фотографій. Ось що робить кожен елемент цього фрагменту:
+
+* **`<changeSet>`** -- цей тег визначає зміну в базі даних. Кожен `changeSet` має унікальний ідентифікатор (`id`) та автора (`author`). В цьому випадку зміну ідентифікують як `"animal_profile"`, а автором є `"registry owner"`.
+
+* **`<createTable>`** -- цей тег командує створити нову таблицю в базі даних. Назва таблиці вказана як `"animal_profile"`.
+
+* **Елементи `<column>`** -- кожен такий елемент визначає стовпець у таблиці.
+
+** `animal_profile_id` -- це унікальний ідентифікатор для кожного запису в таблиці. Його тип -- `UUID` (універсально унікальний ідентифікатор), який генерується автоматично функцією `uuid_generate_v4()`. Цей стовпець є первинним ключем таблиці, що означає, що кожне значення в цьому стовпці є унікальним і не може бути `null`.
+
+** `name` -- цей стовпець призначений для зберігання текстових даних, можливо, імені або назви, пов'язаної з профілем тварини.
+
+** `main_photo` -- цей стовпець призначений для зберігання файлу, ймовірно, головного фото профілю тварини. Тип даних `type_file` свідчить про те, що він може зберігати посилання на один файл.
+
+** `photos` -- цей стовпець призначений для зберігання масиву файлів (`type_file[]`), додаткових фотографій тварини. Тип даних вказує на те, що це може бути колекція файлів.
+====
+
+. Використайте `changeSet` з тегом `<exposeSearchCondition>` для створення доступу до конкретних даних в базі через API, базуючись на заданих критеріях пошуку. Це дозволяє системі автоматично генерувати інтеграційні точки та API-ендпоінти для виконання запитів, визначених у XML-схемі. Наприклад, такий `changeSet` може бути використаний для створення доступу до профілів тварин, включаючи їхні ідентифікатори, назви та фотографії.
++
+.XML-структура даних для створення критерію пошуку
+[source,xml]
+----
+<!-- Creates search condition -->
+<changeSet author="registry owner" id="searchCondition for checking files public">
+    <ext:createSearchCondition name="animal_profile_with_files_public">
+        <ext:table name="animal_profile" alias="a">
+            <ext:column name="animal_profile_id"/>
+            <ext:column name="name"/>
+            <ext:column name="main_photo"/>
+            <ext:column name="photos"/>
+        </ext:table>
+    </ext:createSearchCondition>
+</changeSet>
+
+<!-- Enables public access -->
+<changeSet author="registry owner" id="publicApiFiles">
+    <ext:exposeSearchCondition name="animal_profile_with_files_public" publicAccess="true"/>
+</changeSet>
+----
++
+[TIP]
+====
+* Дізнайтеся більше про критерії пошуку в розділі xref:data-modeling/data/physical-model/liquibase-ddm-ext.adoc#create-search-conditions[Управління критеріями пошуку].
+* Більше про публічний API можна дізнатися на сторінці xref:registry-admin/external-integration/api-publish/public-api/expose-public-api.adoc[].
+====
+
+. Перейдіть до наступного розділу для публікації моделі даних у регламенті.
+
+[#regulations-api-publish]
+== Публікація API у регламенті
+
+Опублікуйте модель даних, застосувавши зміни до майстер-версії регламенту.
+API-точка доступу до даних буде згенерована на базі кожного визначеного пошукового критерію.
+
+TIP: Детальніше про публікацію змін до регламенту читайте у розділі xref:registry-admin/admin-portal/version-control/candidate/overview-new-change-request.adoc#push-changes-master[Застосування змін до майстер-версії].
+
+[#view-endpoints-openapi]
+== Перегляд опублікованих API у Swagger
+
+Після успішного проходження всіх етапів публікації, можна переглянути внесені пошукові запити, які доступні для публічного доступу, в OpenAPI-специфікації. Для цього:
+
+. Перейдіть до вебінтерфейсу управління кластером OpenShift.
+. Оберіть проєкт із вашим реєстром, відкрийте Networking > Routes та перейдіть за посиланням до сервісу *`platform-gateway-kong-proxy`*.
++
+[NOTE]
+====
+Обов'язково додайте в кінець URL-адреси `/openapi`, інакше ви потрапите до sandbox-середовища із pet-точками доступу. Ваш URL у браузері має виглядати так:
+
+----
+https://example.com/api/public/data-factory/openapi
+----
+====
+
+. Відкрийте openapi та знайдіть опубліковані публічні точки доступу.
+
+== Налаштування Control Plane
+
+Відкрийте доступ до публічних даних та налаштуйте рейт-ліміти.
+
+. Увійдіть до адміністративної панелі *Control Plane*.
+. На вкладці *Інформація про реєстр* знайдіть секцію *Публічний доступ*.
+. Натисніть кнопку `*Надати доступ*`.
+. У новому вікні заповніть поля:
+
+* *Службова назва запита*: введіть службову назву запита. Наприклад, `animal-profile`.
+
+* *Для точки інтеграції вкажіть посилання до...*:
+
+** *пошукового запита* -- вкажіть точку інтеграції для search condition, налаштовану розробником регламенту на етапі xref:#regulations-modeling[] та опубліковану в сервісі публічних API реєстру. Наприклад, `/animal-profile-with-files-public`. За цим посиланням ви зможете отримати увесь ресурс (наприклад, таблицю, яка зберігає цифрові документи), включно з ідентифікаторами цифрових документів та hash-cуму.
+
+** *файлу* -- вкажіть посилання до додаткового ендпоінта, за яким можна буде отримати контент файлу у визначеній таблиці. Формат посилання наступний:
++
+.Формат посилання для надання доступу до контенту файлу
+----
+/files/table-name/(.*)/column-name/(.*)
+----
++
+[TIP]
+====
+У нашому прикладі ендпоінт для надання доступу до контенту файлу із назвою `main-photo.*` із таблиці `animal-profile` виглядатиме так:
+
+----
+/files/animal-profile/(.*)/main-photo/(.*)
+----
+====
+
+* Встановіть рейт-ліміти на доступ -- кількість запитів від користувачів/систем за одиницю часу. Наприклад, за годину, місяць тощо.
+
+. Натисніть кнопку `*Надати*`.
+
+. Перейдіть до секції *Запити на оновлення*, відкрийте та підтвердьте новий запит. Запропоновані зміни будуть застосовані до налаштувань реєстру у файлі *_deploy-templates/values.yaml_*.
+
+[NOTE]
+====
+Для приватних API додаткові налаштування доступу не вимагаються. Авторизованим системам та користувачам доступ до ресурсів та файлів надається на базі визначених налаштувань на рівні:
+
+* *Control Plane* (_див. детальніше на сторінках xref:registry-admin/external-integration/cp-integrate-ext-system.adoc[] та xref:registry-admin/external-integration/cp-integrate-trembita.adoc[]_).
+
+* *Регламенту* (_див. детальніше -- xref:data-modeling/data/physical-model/rest-api-view-access-to-registry.adoc[]_)
+
+====
+
+
+//TODO: Update and write more readable
+== Отримання контенту файлів
+
+Згідно з наведеним вище прикладом структури таблиці `animal_profile`:
+
+[source,xml]
+----
+<changeSet id="animal_profile" author="registry owner">
+    <createTable tableName="animal_profile">
+        <column name="animal_profile_id" type="UUID" defaultValueComputed="uuid_generate_v4()" constraints="nullable=false, primaryKey=true, primaryKeyName=pk_animal_profile_id"/>
+        <column name="name" type="TEXT"/>
+        <column name="main_photo" type="type_file"/>
+        <column name="photos" type="type_file[]"/>
+    </createTable>
+</changeSet>
+----
+
+Приклад відповіді на запит пошуку сутності `animal_profile` за ідентифікатором може виглядати так:
+
+[source,json]
+----
+{
+  "animalProfileId": "uuid1-animal-profile",
+  "name": "Barsik",
+  "mainPhoto": {
+    "id": "uuid2-main-photo",
+    "checksum": "..."
+  },
+  "photos": [
+    {
+      "id": "uuid3-photo1",
+      "checksum": "..."
+    },
+    {
+      "id": "uuid4-photo2",
+      "checksum": "..."
+    }
+  ]
+}
+----
+
+У цьому прикладі `animalProfileId` - унікальний ідентифікатор профілю тварини, `name` - назва (ім'я тварини), `mainPhoto` - основне фото тварини, і `photos` - масив додаткових фотографій. Кожен об'єкт фотографії містить унікальний ідентифікатор (`id`) та контрольну суму (`checksum`).
+
+=== Створення окремих точок інтеграції для отримання вмісту файлів.
+
+.Шаблон формування посилання до вмісту файлу
+[source, httprequest]
+----
+HTTP GET /api/data-factory/files/{entity}/{entityId}/{fieldName}/{fieldId}
+----
+
+Данна точка інтеграції наслідує всі правила застосування _RBAC_.
+
+Така точка інтеграції доступна в rest-api якщо в моделі даних є хоча б одне поле типу _file_ або _file[]_. +
+В сервісах _rest-api-ext_ та _rest-api-public_ правила _Istio_ налаштовані так, що доступ до цих посилань для користувачів з реалму _external_systems_ є тільки за умови якщо хоча б один _searchCondition_ що містить в собі тип _file_ або _file[]_ був виставлений через тег _<exposeSearchCondition/>_
+
+.Посилання для прикладу
+[source, httprequest]
+----
+HTTP GET /api/data-factory/files/user/uuid1-user/photo/uuid2-photo
+----
+
+.Посилання для прикладу для доступу до конкретних документів в масиві
+[source, httprequest]
+----
+GET /api/data-factory/files/user/uuid1-user/documents/uuid3-passport
+GET /api/data-factory/files/user/uuid1-user/documents/uuid4-driver-licence
+----
+
+Дане посилання підтримує запити двох типів контенту  _application/json_ і при такому запиті повертає структуру _JSON_, вміст файлу закодований у _Base64_ в якості значення поля _content_ з мета інформацією про файл у _checksum_ та _fileName_
+
+.Приклад запиту для отримання відповіді в JSON форматі
+[source, httprequest]
+----
+GET /api/data-factory/files/user/uuid1-user/documents/uuid3-passport
+Accept: application/json
+----
+
+[source, httprequest]
+----
+HTTP/1.1 200 OK
+Content-Type: text/html; charset=UTF-8
+
+{
+    "contetn": "passport in Base64",
+    "checksum": "..."
+    "fileName": "petro_passport.pdf"
+}
+----
+
+Запити між _soap-api_ та _rest-api_ для файлів відбуваються саме таким чином, а трансформація об'єкта для передачі по _SOAP_Trembita_ відбувається безпосередньо на _soap-api_
+
+Якщо в запиті не зазначено, що як відповідь очікується _application/json_, то типи визначаються динамічно в залежності від типу файлу.
+Додатково проставляються заголовки _Content-Disposition_ зі значенням _attachment_ та вказанням атрибуту _filename_ взятого з метаданих про файл.
+Такі посилання можна буде формувати в бізнес-процесах, та публікувати на користувацьких формах, для завантаження файлів безпосередньо з форм.
+
+
+.Приклад запита для завантаження (download) файлу
+[source, httprequest]
+----
+GET /api/data-factory/files/user/uuid1-user/documents/uuid3-passport
+----
+
+[source, httprequest]
+----
+HTTP/1.1 200 OK
+Content-Type: application/pdf
+Content-Disposition: attachment; filename="petro_passport.pdf"
+
+... (binary PDF data)
+----
+
+=== Виставлення точок інтеграції які повертають файли для публічного доступу
+
+У випадку з наданням доступу до публічних даних, передбачено надання доступу до індивідуальних ресурсів з встановленням лімітів.
+Оскільки доступ надається індивідуально то в загальному вигляді заборонено використання _wildcard_ `*` у шляхах. Разом з тим для файлів у відповідності до найкращих практик побудови _REST API_ використовується _path_variable_, тому передбачено  окремий тип точок інтеграції який дозволяє використовувати _wildcard_ але строго в заздалегіть визначеному шаблоні.
+
+[source, httprequest]
+----
+GET /api/data-factory/files/${tableName}/*/${column}/*
+----
+
+== Демонстрація
+
+- У браузері перейдіть за посиланням на вказаний пошуковий запит.
+
+- У відповіді ви побачите всі записи з ідентифікаторами кожного файлу.
+
+- Для отримання зображення файлу перейдіть за посиланням, сформованим після додавання доступу до файлу, з вказанням конкретного ідентифікатора.
+
+- Якщо у запиті не вказано формат контенту "application/json", тип файлу у відповіді визначається динамічно.
+
+- Якщо вказано формат "application/json", то у відповіді повернеться JSON з контентом файлу, закодованим у Base64.

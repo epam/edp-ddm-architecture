@@ -1,0 +1,91 @@
+= Налаштування Postman для перевірки інтеграції із зовнішніми системами
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+Якщо ви шукаєте спосіб легко перевірити, як ваші системи спілкуються одна з одною через REST API, ви потрапили за адресою. Ми покажемо вам, як швидко налаштувати Postman, щоб зробити ваш процес інтеграції більш зручним та ефективним. Розпочнімо!
+
+== Передумови
+
+Перш за все, переконайтеся, що ви маєте:
+
+* *Postman*, встановлений на вашому комп'ютері. Завантажити застосунок можна з офіційного джерела за посиланням: https://www.postman.com/downloads/[]. Альтернативно, використовуйте застосунок у вашому браузері.
+
+* Доступ до сервісу `bp-webservice-gateway` через OpenShift або локальне середовище.
+* Файл xref:attachment$registry-admin/external-integration/rest-api-postman-collection.json[_rest-api-postman-collection.json_] з API-запитами, які вам потрібно тестувати.
+
+== Способи доступу до сервісу bp-webservice-gateway
+
+Є два основних способи налаштувати доступ до bp-webservice-gateway для ваших тестових запитів у Postman:
+
+=== Локальний доступ через переадресацію портів (Port-Forwarding)
+
+Цей метод дозволяє швидко почати роботу і не потребує додаткового налаштування роутів в OpenShift.
+
+TIP: Використовуйте інструкцію xref:registry-admin/remote_connection.adoc[] як приклад.
+
+. Відкрийте термінал і виконайте цю команду для переадресації портів до сервісу `bp-webservice-gateway`:
++
+[source,bash]
+----
+oc port-forward svc/bp-webservice-gateway 8080 -n strimko2test
+----
++
+Ця команда створює тунель між портом `8080` на вашому локальному комп'ютері та сервісом `bp-webservice-gateway` в OpenShift-кластері, у просторі імен `strimko2test`. Вона дозволяє отримати локальний доступ до сервісу, як ніби він запущений на вашій машині, перенаправляючи трафік між локальним портом і портом сервісу на кластері.
+
+. Тепер у Postman використовуйте локальний URL (localhost) замість віддаленої адреси https://bp-webservice-gateway-{{YOUR-REGISTER-NAME}}-main.apps.envtwo.dev.registry.eua.gov.ua/ws:
++
+[source]
+----
+http://localhost:8080/ws
+----
++
+NOTE: Додаткові налаштування в Intellij IDEA або інших середовищах розробки не потрібні.
+
+. Оберіть запит із вашої колекції Postman та запустіть його.
+
+=== Використання маршруту (Route) в OpenShift
+
+Якщо вам потрібен доступ через інтернет, створіть маршрут (роут) в OpenShift-консолі.
+
+.Приклад конфігурації для створення роута
+[source,yaml]
+----
+kind: Route
+apiVersion: route.openshift.io/v1
+metadata:
+  name: bp-webservice-gateway-direct
+  namespace: {{YOUR-REGISTER-NAME}}
+  labels:
+    app: bp-webservice-gateway
+    app.kubernetes.io/managed-by: Helm
+  annotations:
+    haproxy.router.openshift.io/ip_whitelist: 0.0.0.0/0
+    meta.helm.sh/release-name: bp-webservice-gateway
+    meta.helm.sh/release-namespace: strimko2test
+spec:
+  host: bp-webservice-gateway-{{YOUR-REGISTER-NAME}}-main.apps.envtwo.dev.registry.eua.gov.ua
+  path: /ws
+  to:
+    kind: Service
+    name: bp-webservice-gateway
+    weight: 100
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+  wildcardPolicy: None
+----
+
+Після створення, використовуйте новий маршрут у Postman для ваших запитів.
+
+== Усунення помилок
+
+Якщо у вас виникли проблеми з авторизацією в OpenShift, наприклад, помилка `failed verify certificate`, ось кілька порад, як можна це розв'язати:
+
+* Спробуйте вийти з системи командою `oc logout`, а потім знову увійти за допомогою `oc login` з новим токеном.
+* Виконайте команду `oc login` з додатковим параметром `--insecure-skip-tls-verify`:
++
+[source,bash]
+----
+oc login --token=xxxx --server=xxxx --insecure-skip-tls-verify
+----
+
+Це допоможе вам обійти проблеми з перевіркою TLS-сертифіката та продовжити роботу.
