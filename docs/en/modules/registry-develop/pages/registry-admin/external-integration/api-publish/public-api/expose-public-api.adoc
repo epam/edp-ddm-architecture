@@ -1,0 +1,230 @@
+= Configuring access to registry's public data
+include::platform:ROOT:partial$templates/document-attributes/default-set-en.adoc[]
+
+include::platform:ROOT:partial$admonitions/language-en.adoc[]
+
+== Overview
+
+Third-party systems and users can retrieve public information from the registry in its current state and process and visualize it without authentication using the public API access points.
+
+This document consists of two main parts: creation and publication of access points at the level of the registry regulations and access configuration at the registry's configuration level.
+
+== Usage scenarios
+
+The platform provides the following functionality for working with public data in the registry::
+
+* [*] Publication of search queries
+* [*] Configuration of public API resources
+* [*] Creation of integration points for the public API by the technical administrator of the registry
+* [*] Accessing documentation and using the public API
+* [*] Monitoring the status and use of public search criteria
+* [*] Adjusting rate limits for existing integration points
+
+== Action plan for configuration and use
+
+Follow the action plan below to configure and use the public APIs in the registry:
+
+Configuration at the registry regulations level: ::
++
+[%interactive]
+* [ ] xref:#regulations-modeling[]
+* [ ] xref:#regulations-api-publish[]
+* [ ] xref:#view-endpoints-openapi[]
+
+Configuration at the registry's configuration level: ::
++
+[%interactive]
+* [ ] xref:#control-plane-public-access[Configuring access to public data and setting rate limits]
+* [ ] (_Optional_) xref:#grafana-monitoring[]
+* [ ] (_Optional_) xref:#public-user-account[]
+
+[#regulations-modeling]
+== Registry regulations modeling
+
+. Open the *Administrative Portal* and create a candidate version.
++
+TIP: Learn more about this on the page xref:registry-admin/admin-portal/version-control/create-new-change-request.adoc[].
+
+. Navigate to *Tables* > *Structure description file* and add a new changeset with a Search Condition.
++
+[TIP]
+====
+* Read more about the structure description file on the page xref:registry-admin/admin-portal/registry-modeling/tables/xml-editor.adoc[].
+
+* Learn more about search criteria (Search Conditions) on the page xref:data-modeling/data/physical-model/liquibase-ddm-ext.adoc[].
+====
+
++
+image:registry-develop:registry-admin/external-integration/api-publish/public-api/expose-public-api-1.png[]
+
+. Determine which specific search criterion you want to make public. Add a new changeset with the `exposeSearchCondition` tag and the `publicAccess` attribute.
++
+[source,xml]
+----
+<exposeSearchCondition publicAccess="true" name="vpo_person_type_contains_name_public_test"/>
+----
++
+TIP: For more detailed information on `exposeSearchCondition`, see xref:data-modeling/data/physical-model/liquibase-ddm-ext.adoc#exposeSearchCondition[API access setting tag in the registry].
+
++
+[NOTE]
+====
+We recommend setting up page-based pagination (type `page`) to manage the display of data returned from `exposeSearchCondition` (`count`). Also, set the `limit` to the number of registry data items returned in the response.
+
+Learn more about the `limit` and `pagination` in the following documentation sections:
+
+* xref:data-modeling/data/physical-model/liquibase-ddm-ext.adoc#limit-attribute-values[Limit attribute]
+* xref:data-modeling/data/physical-model/liquibase-ddm-ext.adoc#pagination-attribute-values[Pagination attribute]
+====
+
+. Proceed to the next section for publishing the data model in the regulation.
+
+[#regulations-api-publish]
+== Publishing the API in the registry regulations
+
+Publish the data model by applying changes to the master version of the regulations. The API access point for the data will be generated based on each defined search criterion.
+
+TIP: Learn more about publishing changes to the regulation in the section xref:registry-admin/admin-portal/version-control/overview-new-change-request.adoc#push-changes-master[Applying changes to the master version].
+
+[#view-endpoints-openapi]
+== Viewing published APIs in Swagger
+
+After completing all stages of publication, you can review the submitted search queries available for public access in the OpenAPI specification. To do this:
+
+. Navigate to the OpenShift cluster management web interface.
+. Select the project with your registry, open Networking > Routes, and follow the link to the *`platform-gateway-kong-proxy`* service.
++
+[NOTE]
+====
+Be sure to add `/openapi` to the end of the URL; otherwise, you will be directed to a sandbox environment with pet endpoints. Your browser URL should look like this:
+
+----
+https://example.com/api/public/data-factory/openapi
+----
+====
+
+. Open openapi and find the published public endpoints.
+. Copy the endpoint name to the clipboard and proceed to the next setup step.
++
+image:registry-develop:registry-admin/external-integration/api-publish/public-api/expose-public-api-2.png[]
+
+[NOTE]
+====
+
+TTL-based caching is set for links to API documentation for GET requests to reduce the load on the Kong API Gateway service. The response is cached using the `proxy-cache` plugin.
+
+You can configure the cache value at the plugin configuration level through Gerrit. The default value is 15 minutes.
+
+The cache is stored in the memory of the API Gateway.
+====
+
+[#control-plane-public-access]
+== Configuring access to public data
+
+=== Configuring access to public data and setting rate limits
+
+Enable access to public data and set rate limits.
+
+. Log in to the *Control Plane* admin panel.
+. On the *Registry information* tab, find the *Public access* section.
+. Click the *`Grant access`* button.
+. In the new window, fill in the fields:
+
+* *Service request name*: enter the service request name. For example, `city-lab`.
+
+* *Integration point*: indicate the integration point, configured by the regulation developer at the xref:#regulations-modeling[] stage and published in the API registry service. For example, `/search-laboratories-by-city`.
+
+* Set *rate limits* for access -- the number of requests from users/systems per unit of time, for example, per hour, month, etc.
+
+. Click the *`Grant`* button.
++
+image:registry-develop:registry-admin/external-integration/api-publish/public-api/expose-public-api-3.png[]
+
+. Go to the *Update Requests* section, open and confirm the new request. The proposed changes will be applied to the registry settings in the *_deploy-templates/values.yaml_* file.
++
+image:registry-develop:registry-admin/external-integration/api-publish/public-api/expose-public-api-5.png[]
++
+TIP: See more about confirming changes on the xref:admin:registry-management/control-plane-submit-mr.adoc[] page.
++
+After configuration, the registry setup will look like this:
++
+[source,yaml]
+----
+publicApi:
+  - name: vpo-person-type-test
+    url: /vpo-person-type-contains-name-public-test
+    limits:
+        second: 5
+        hour: 100
+    enabled: true
+  - ...
+----
++
+Once the deployment pipeline is executed, public access to the data via the specified API endpoint will be available.
+
+=== Checking the operation of public access
+
+. Open the browser in _Incognito_ mode and paste the link to the added search query copied in the xref:#view-endpoints-openapi[] section.
++
+image:registry-develop:registry-admin/external-integration/api-publish/public-api/expose-public-api-6.png[]
+
+. An unauthenticated user/system will receive data in JSON format.
++
+image:registry-develop:registry-admin/external-integration/api-publish/public-api/expose-public-api-6-1.png[]
++
+[CAUTION]
+====
+When the limit is reached, an API Gateway response is generated with code 429 and a body:
+----
+{ "message": "API rate limit exceeded" }
+----
+====
+
+=== Access management
+
+. Edit integration points and rate limits: ::
+
+.. Click on the _edit_ icon &#128393; next to the relevant request.
+.. Make the necessary changes and confirm them.
++
+image:registry-develop:registry-admin/external-integration/api-publish/public-api/expose-public-api-7.png[]
+
+. Block access by clicking the _block_ icon &#128274;. Technically, this will mean suspending access to a particular API endpoint.
++
+TIP: Access can be restored by clicking on _unblock_ (_double click on the blocked item_ &#128274;).
++
+image:registry-develop:registry-admin/external-integration/api-publish/public-api/expose-public-api-7-1.png[]
+
+. Revoke access entirely by clicking on the _delete_ icon 🚫.
++
+NOTE: After each action, check and confirm the application of changes in the +++<b style="font-weight: 700">Update Requests<b>+++ section.
+
+CAUTION: If you delete existing integration points or temporarily disable them, the user will receive an HTTP 404 error message when trying to access them.
+
+[NOTE]
+====
+Changing the status icons following the public API in the *Public access* section means that the created update request has been applied to the `master` branch, and the changes have been incorporated into the registry configuration file -- _deploy-templates/values.yml_.
+To verify the successful application of changes and the correctness of the set access to public endpoints, the technical registry administrator must check the `master` branch pipeline status.
+====
+
+[#grafana-monitoring]
+== Grafana metrics monitoring
+
+The Platform has a Grafana dashboard designed for monitoring performance metrics and the number of requests to public integration points from unauthenticated users and third-party systems.
+
+image:registry-develop:registry-admin/external-integration/api-publish/public-api/expose-public-api-4.png[]
+
+The technical registry administrator can use the data from the dashboard to track dynamics and the status of metrics. This data can help determine the need for optimization settings, such as adjusting request limits.
+
+TIP: For detailed monitoring information, you can review the page xref:registry-admin/grafana-monitoring/public-api-kong-metrics.adoc[].
+
+[#public-user-account]
+== Creating a service account for executing public requests
+
+Although formally the integration points are public, to maintain consistency in audit and logging within the Platform, such requests will be made on behalf of a service user from the Keycloak realm `external-system`. The system will automatically create a service user `public-user` for authorization at the `platform-gateway` level.
+
+_Ensure_ that such a system user is created in the appropriate realm of the Keycloak service. To do this:
+
+. Open the Keycloak authentication and authorization service.
+. Find the `-external-system` realm for your registry.
+. Open the *Clients* menu > `public-user`.
