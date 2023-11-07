@@ -38,6 +38,22 @@ image::architecture-workspace/platform-evolution/optional-registry-nexus/as-is-n
 * xref:arch:architecture/registry/administrative/regulation-publication/overview.adoc[]
 --
 
+.Місця зберігання артефактів в реєстровому Nexus
+|===
+|Тип|Назва репозиторію|Шлях|Приклад
+
+|Docker Image
+|docker-registry
+|`/v2/<registry-name>/<component-name>`
+|/v2/registry-1/registry-rest-api-master-0-0-1
+
+|JAR
+|edp-maven-releases
+|`/ua/gov/mdtu/ddm/dataplatform/template/<component-name>`
+|/ua/gov/mdtu/ddm/dataplatform/template/rest-api
+
+|===
+
 == Загальні принципи та положення
 * При створенні реєстру, на адмін-консолі доступний вибір типу сховища артефактів (центральне або виділене реєстрове сховище)
 * Налаштування типу сховища артефактів недоступне для редагування після створення.
@@ -54,9 +70,77 @@ image::architecture-workspace/platform-evolution/optional-registry-nexus/as-is-n
 
 image::architecture-workspace/platform-evolution/optional-registry-nexus/to-be-nexus.drawio.svg[]
 
+== UI
 
+На сторінці створення реєстру, відображається нова таба "Сховище артефактів" з dropdown елементом і з варіантами вибору:
+
+* Платформне сховище
+* Виділене реєстрове сховище
+
+Після створення реєстру поле деактивується і для редагування недоступне.
+
+.Орієнтовний mockup
+image::architecture-workspace/platform-evolution/optional-registry-nexus/mockup.png[]
+
+В `values.yaml` реєстру записується значення:
+
+[source,yaml]
+----
+global:
+  registry:
+    artifactsStorage: "platform" # platform | registry
+----
+
+Спираючись на ці значення відбувається налаштування відповідних компонентів в реєстрі для роботи з ним, а саме:
+
+* Виділене реєстрове сховище — виконується розгортання реєстрового компоненту `nexus-operator`, що за собою тягне всі налаштування які і виконуються наразі.
+* Платформне сховище — реєстр налаштовується на роботу з центральним сховищем артефактів Платформи.
+
+== Інтеграція реєстра для роботи з центральним сховищем артефактів
+
+Для налаштування роботи реєстру з центральним сховищем артефактів Платформи, необхідно виконати наступні кроки:
+
+. Створити maven репозиторій реєстру в центральному nexus.
+  * [mdtu-ddm/infrastructure/control-plane-nexus.git]/deploy-templates/nexus-operator/templates/cm/configuration/nexus_default_users.yaml
+  * [mdtu-ddm/infrastructure/control-plane-nexus.git]/deploy-templates/nexus-operator/templates/cm/configuration/nexus_repos_to_create.yaml
+. Створити реєстрового користувача для взаємодії з центральним nexus.
+. Проініціалізувати `registry-regulation-publication-pipelines` для роботи з центральним nexus.
+. Параметризувати `service-generation-utility` для роботи з центральним nexus.
+
+.Місця зберігання артефактів в платформному Nexus
+|===
+|Тип|Назва репозиторію|Шлях|Приклад
+
+|Docker Image
+|docker-registry
+|`/v2/registries/<registry-name>/<component-name>`
+|/v2/registries/registry-1/registry-rest-api-master-0-0-1
+
+|JAR
+|<registry-name>-maven-releases
+|`/ua/gov/mdtu/ddm/dataplatform/template/<component-name>`
+|/ua/gov/mdtu/ddm/dataplatform/template/rest-api
+
+|===
 
 == Компоненти системи та їх призначення в рамках дизайну рішення
+
+У даному розділі наведено перелік компонент системи, які задіяні або потребують змін в рамках реалізації дизайну.
+
+|===
+|Підсистема|Компонент|Модуль|Опис змін
+
+|Підсистема розгортання регламенту реєстру
+|*registry-regulations-publications-pipelines*
+|https://github.com/epam/edp-ddm-registry-regulations-publication-pipeline[github:/epam/edp-ddm-registry-regulations-publication-pipeline]
+|Адаптування пайплайнів cleanup та delete registry
+
+|
+|
+|
+|
+
+|===
 
 == Високорівневий план розробки
 === Технічні експертизи
