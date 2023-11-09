@@ -1,0 +1,188 @@
+= Поточний стан тестування навантаження системи
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+include::platform:ROOT:partial$admonitions/language-ua.adoc[]
+
+== Опис поточного тестування навантаження
+
+=== Поточні сценарії
+
+Як регламент для тестування навантаження на даний використовується certified-laboratories-registry-regulation.
+
+Поточні тести покривають наступні сценарії:
+
+[options="header"]
+|===
+
+| Сценарій | Сервіси які задієються
+
+| Створення простої сутності
+| registry-rest-api, registry-kafka-api, bpms, digital-signature-ops, user-task-management, form-schema-provider, form-submission-validation
+
+| Оновлення простої сутності
+| registry-rest-api, registry-kafka-api, bpms, digital-signature-ops, user-task-management, form-schema-provider, form-submission-validation
+
+| Читання простої сутності
+| registry-rest-api, bpms, digital-signature-ops, user-task-management, form-schema-provider, form-submission-validation
+
+| Критерій з пошуком за типом starts-with
+| registry-rest-api
+
+| Критерій з пошуком за типом contains
+| registry-rest-api
+
+| Критерій з пошуком за типом equals
+| registry-rest-api
+
+| Отримання історії виконання БП
+| process-history-service, bpms
+
+| Авторизація
+| Keyckoak
+
+| Логаут
+| Keycloak
+
+
+|===
+
+=== Технологічний стек
+
+[options="header"]
+|===
+
+| Назва утиліти | Опис
+
+| Apache JMeter
+| Утиліта для написання сценаріїв тестів навантаження та їх запуску
+
+| Carrier
+| UI агрегатор репортів з перформанс тестів
+
+
+|===
+
+
+
+
+== Підготовка оточення проведення тестування навантаження
+
+=== Підготовка реєстру
+
+==== Налаштування файлу запуску
+
+Для виконання прекондішнів по підготовці до запуску тестів навантаження необхідно підготувати файл, дана конфігурація виконає наступні кроки:
+
+** Створення реєстру за заданою назвою
+** Розгортання обраного регламенту
+** Додавання доступу для зовнішніх систем
+** Налаштування EDR
+** Налаштування піблічного доступу до заданого ендпоінту
+
+.Файл підготовки оточення __registry.json__
+(xref:arch:attachment$/architecture/performance-testing/registry.json[Завантажити])
+[%collapsible, json]
+====
+----
+include::arch:attachment$/architecture/performance-testing/registry.json[json]
+----
+====
+
+Необхідно налаштувати параметри до котрих додані коментарі
+
+[options="header"]
+|===
+| Назва секції | Опис
+| name
+| Назва реєстру. Необхідно вказати назву бажаного реєстру
+
+| isGeoServer
+| Присутність геосерверу. True - присутній, False - не присутній
+
+
+| accessToExternalSystems
+| Назва доступу до зовнішньої системи
+
+
+| publicApiSettings
+| Необхідно вказати назву публічного доступу, ендпоіну, ліміту на годину
+
+
+| template
+| Тип реєстру. Productuion - оточення продакшн типу, Development - оточення для розробки
+
+
+| repository
+| Назва регламенту. Доступні регламенти:
+
+* certified-laboratories-registry-regulation
+* consent-data
+
+| branch
+| Гілка регламенту для разгортання
+
+| regulationDeployOnly
+| Тип запуску тестів попереднього розгортання. True - запуск лише розгортання регламенту, False - повний флоу
+|===
+
+==== Запуск прекондішн тестів
+Для виконнання прекондішн тестів необхідно перейти до Jenkins -> Clusters -> <cluster name> -> <cluster name>-run-installer-validation-tests
+
+* Запуск пайплайну з параметрами
+
+image::arch:attachment$/architecture/performance-testing/run-pipeline.png[align="center", 500, 500]
+
+* Обрати виключно параметр RUN_REGISTRY_TESTS
+
+image::arch:attachment$/architecture/performance-testing/test-params.png[align="center", 500, 500]
+
+* Вказати tag з Gerrit до відповідного очікуваного регламенту
+
+image::arch:attachment$/architecture/performance-testing/set-build.png[align="center", 500, 500]
+
+* Передати підготовлений файл як input param до пайплайну на кроку control-plane-tests
+
+image::arch:attachment$/architecture/performance-testing/file-uplpad.png[align="center", 500, 500]
+
+==== Підготовка оточення до проведення тестування навантаження
+
+Для подальшого налаштування реєстру необхідно виконати наступні дії:
+
+* Створення конфіг мапи в опеншифті для тестових користувачів
+
+Конфіг мапа створюється у namespace реєстру який був створений за назвою sign-widget-mock-users
+
+.Файл контенту секрету __sign-widget-mock-users__
+(xref:arch:attachment$/architecture/performance-testing/sign-widget-mock-users.yml[Завантажити])
+[%collapsible, json]
+====
+----
+include::arch:attachment$/architecture/performance-testing/sign-widget-mock-users.yml[yml]
+----
+====
+
+* Додати у Control Plane Gerrit, в репозиторії реєстру, файл values.yml наступну змінну
+
+*caIsolation: true*
+
+* Встановити аутентифікацію через браузер у опеншифті
+
+** Необхідно перейти до Пошуку та занайти сутність Keycloak Realms для  реєстру та обрати officer-portal
+
+image::arch:attachment$/architecture/performance-testing/keycloak-realm-path.png[align="center", 500, 500]
+
+** Встановити для browser-flow у ресурсі browser
+
+image::arch:attachment$/architecture/performance-testing/keycloak-flow.png[align="center", 500, 500]
+
+== Запуск тестування навантаження
+
+Для запуску тестування навантаження необхідно виконати наступні кроки:
+
+* Перейти до Carrier та обрати вкладику Baackend, натиснути кнопку ран навпроти officer-processes
+
+image::arch:attachment$/architecture/performance-testing/carrier-perf-start.png[align="center", 500, 500]
+
+* У параметрах задати неймспейс рееєстру та натиснути кнопку start
+
+image::arch:attachment$/architecture/performance-testing/carrier-perf-params.png[align="center", 500, 500]
