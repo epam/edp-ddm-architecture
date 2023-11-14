@@ -102,6 +102,7 @@ CALL p_load_table_from_csv('staff','D:\PostgreSQL\csv\staff.csv'
 
 Для завантаження даних в БД використовуємо стандартну функціональність liquibase.
 
+[#data-load-xml-template]
 .Приклад XML-шаблону для завантаження даних
 [source, xml]
 ----
@@ -150,9 +151,63 @@ TIP: За детальною інформацією щодо створення 
 
 == Рекомендації для завантаження великої кількості даних
 
-Для завантаження великої кількості даних (понад 1 млн рядків) рекомендується тимчасова зміна конфігурації БД -- у файлі з налаштуваннями PostgreSQL `postgresql.conf` встановити наступні значення для часу очікування підключень між реплікою та основною (master) БД:
+Для завантаження великих csv-файлів (десятки і сотні мегабайт) можна використати стандартний SQL код замість процедури. Для коректної роботи реєстру такий SQL код повинен також створити історичні дані (таблиця `\_hst`) та заповнити поля з метаданими (колонки `ddm_`), тобто повторити ті операції що процедура виконує автоматично. В прикладі наведений коректний та найбільш ефективний метод це зробити.
 
+.Приклад SQL коду для завантаження даних
+[source, sql]
 ----
-wal_sender_timeout = 900s
-wal_receiver_timeout = 900s
+-- Створення тимчасової проміжної таблиці, яка 
+-- відповідає формату csv файлу що завантажується
+CREATE TABLE account_csv_stage (username text, bank_number text);
+
+-- Завантаження даних із csv файлу в проміжну таблицю
+COPY account_csv_stage (username,bank_number) 
+FROM '${dataLoadPath}account.csv' 
+WITH (HEADER, FORMAT CSV);
+
+-- Вставка даних в основну та історичну таблиці
+WITH main_table_cte AS (
+    INSERT INTO account (
+        username
+      , bank_number
+      , ddm_created_by
+      , ddm_updated_by
+      )
+    SELECT username
+         , bank_number
+         , 'admin'
+         , 'admin'
+    FROM account_csv_stage
+    RETURNING *) 
+INSERT INTO account_hst (
+      id
+    , username
+    , bank_number
+    , ddm_created_by
+    , ddm_created_at
+    , ddm_dml_op
+    , ddm_system_id
+    , ddm_application_id
+    , ddm_business_process_id)
+SELECT 	  id
+        , username
+        , bank_number
+        , ddm_created_by
+        , CURRENT_TIMESTAMP
+        , 'I' as ddm_dml_op
+        , (SELECT ss.system_id 
+             FROM ddm_source_system ss 
+            WHERE ss.system_name ='initial load') ddm_system_id
+        , (SELECT sa.application_id 
+             FROM ddm_source_application sa 
+            WHERE sa.application_name ='initial load') ddm_application_id
+        , (SELECT sb.business_process_id 
+             FROM ddm_source_business_process sb 
+            WHERE sb.business_process_name ='initial load process') ddm_business_process_id
+FROM main_table_cte;
+
+-- Видалення тимчасової проміжної таблиці
+DROP TABLE account_csv_stage;
 ----
+
+Таким кодом можна замінити виклик процедури в xref:data-load-xml-template[XML-шаблоні для завантаження даних]. Для кожного завантаження файлу таким методом, варто створювати окремий ченджсет.
