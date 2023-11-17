@@ -1,0 +1,589 @@
+= Перевірка підписаних даних, отриманих зі сторонньої системи: валідація КЕП та ідентифікація підписантів у файлах ASIC/CADES
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+== Загальний опис
+
+Під час інтеграції зі сторонніми системами на рівні бізнес-процесів потрібно обробляти підписані файли, які надходять від цих систем. Важливо забезпечити цілісність цих файлів, перевіряючи накладений на них цифровий підпис, отримати дані про підписанта для подальшої обробки або внесення в реєстри, а також мати можливість доступу до вмісту файлів-контейнерів.
+
+TIP: Про особливості завантаження підписаних файлів до системи, див. на сторінці xref:user:bp-files/upload-multiple-files-p7s-asic.adoc[].
+
+=== Основні функціональні сценарії
+
+Перевірка цілісності ::
+Для забезпечення автентичності й цілісності даних, підписи перевіряються відповідно до типу контейнера.
+
+Ідентифікація підписанта ::
+Система дозволяє отримувати інформацію про всіх підписантів даних, що допомагає в трасуванні джерела й авторства.
+
+Доступ до контенту ::
+Можливість видобування контенту прямо з підписаного масиву даних.
+
+=== Важливі аспекти
+
+* Обробка даних відбувається безпосередньо в скрипт-задачах бізнес-процесу.
+* Для передачі байтових даних між системами використовується кодування `Base64`.
+* За замовчуванням використовується формат `CAdES-X-Long`.
+* Дані та підпис _завжди_ передаються разом в одному масиві.
+* Робота з підписами реалізована з допомогою `ІІТ`-бібліотеки.
+
+=== Визначення й термінологія цифрового підпису
+
+_Контейнер_ -- це результатний файл, який містить підписані дані. Існують різні типи контейнерів:
+
+.Типи контейнерів
+[cols="15%,60%,25%",options="header"]
+|===
+| Контейнер | Опис | Підтримується Платформою
+
+| *CAdES (p7s)*
+| Загальний формат для цифрових підписів
+| Так
+
+| *ASiC (asic)*
+| Сучасний контейнер, який рекомендується для використання. Особливість: архів для зберігання декількох файлів різних форматів
+| Так
+
+| *XAdES (xml)*
+| Формат, що базується на XML
+| Ні
+
+| *PAdES (pdf)*
+| Використовується для підпису PDF документів
+| Ні
+
+|===
+
+TIP: Див. детальніше про підтримувані типи цифрового контенту на сторінці xref:bp-modeling/forms/components/file/component-file-multiple-values.adoc[].
+
+_Формат підпису_ -- це конкретний алгоритм або набір правил, які використовуються при створенні цифрового підпису. Наприклад, `CAdES-X-Long` -- це рекомендований формат. Саме такий формат використовує Платформа за замовчуванням.
+
+_Тип підпису_ може бути:
+
+* _Відокремлений (*detached*)_ -- підпис і дані зберігаються окремо.
+* _Вбудований (*enveloped*)_ -- підпис включений безпосередньо в документ або дані.
+
+У цьому контексті терміни "файл" та "дані" є взаємозамінними й означають одне й те ж.
+
+[TIP]
+====
+.Як працює підписання цифрових документів за допомогою контейнерів різних форматів?
+[%collapsible]
+=====
+Розглянемо детальний опис типів контейнерів на прикладі офіційного ресурсу https://id.gov.ua/sign[].
+
+. Автентифікуйтеся за допомогою КЕП.
+. Перейдіть на форму підписання та збереження документів.
++
+image:best-practices/bp-sign-validate/bp-sign-validate-01.png[]
+
+. Оберіть формат підпису документа (тип контейнера).
++
+image:best-practices/bp-sign-validate/bp-sign-validate-02.png[]
++
+image:best-practices/bp-sign-validate/bp-sign-validate-03.png[]
+
+. Завантажте файл, який необхідно підписати.
+
+Надалі підписаний таким чином файл можна буде використовувати у бізнес-процесах реєстру.
+=====
+====
+
+== Моделювання процесу валідації підписаного файлу з даними про домашніх тварин
+
+Цей розділ містить референтний приклад моделювання процесу перевірки підписаних файлів, що містять інформацію про домашніх тварин.
+
+[TIP]
+====
+[%collapsible]
+.Де можна знайти приклади референтних бізнес-процесів?
+=====
+include::partial$snippets/demo-reg-reference-examples-ua.adoc[]
+
+Приклад BPMN-схеми процесу буде доступний у регламенті демо-реєстру за пошуком по ключовим словам -- *_checking-signed-data_*. Назви форм ви можете знайти всередині відповідних користувацьких задач бізнес-процесу у полі *`Form key`*.
+=====
+====
+
+=== Передумови
+
+Користувач завантажує до зовнішньої системи фотографії тварин, які супроводжуються підписами форматів `asics` або `CAdES`.
+
+Платформа надалі зможе автоматично інтегруватися з цією зовнішньою системою, забирає файли, відокремлює від них цифрові підписи, а потім проводити перевірку валідності кожного підпису.
+
+=== Процес моделювання
+
+==== Користувацька задача (User Task) для пошуку даних
+
+Створіть користувацьку задачу для пошуку інформації про тварину за номером чіпа. Виконайте наступні налаштування:
+
+. Оберіть *Template* > *User form*.
+. У полі *Name* введіть назву задачі.
+. У полі *Form key* вкажіть назву задачі. Ключ форми поєднує змодельовану користувацьку задачу зі службовою назвою UI-форми введення даних.
+. У полі *Assignee* вкажіть значення `${initiator}`, яке представляє користувача, що ініціював цей бізнес-процес.
+
+image:best-practices/bp-sign-validate/bp-sign-validate-1.png[]
+
+==== Скриптова задача (Script Task) для отримання підписаних документів від зовнішніх систем
+
+Змоделюйте скриптову задачу для отримання підписаних даних від зовнішньої системи.
+
+TIP: Розгляньте опис варіанту налаштування скриптів для отримання документів від зовнішніх систем: xref:registry-develop:bp-modeling/bp/save-digital-doc-remote-url.adoc#[].
+
+. Створіть скриптову задачу (*Script Task*).
+. Відкрийте редактор скриптів -- `*Open script editor*`.
+
++
+image:best-practices/bp-sign-validate/bp-sign-validate-2.png[]
+
+. Використайте референтний приклад скрипту.
++
+[NOTE]
+====
+У цьому випадку показано емуляцію запита до зовнішньої системи за допомогою сервісу Wiremock.
+
+Детальніше про емуляцію API див. xref:registry-develop:registry-admin/external-integration/cp-mock-integrations.adoc[].
+====
+
++
+.Референтний приклад скрипту для отримання підписаних даних із зовнішньої системи
+[source,groovy]
+----
+import okhttp3.OkHttpClient
+import okhttp3.Request
+
+def chipNumber = submission('UserTask_EnterAnimalChipNumber')
+  .formData.prop('chipNumber')
+  .value()
+
+def okHttpClient = new OkHttpClient().newBuilder().build()
+
+def requestToAnimal = new Request.Builder()
+  .url('http://wiremock:9021/animals?chipNumber='.concat(chipNumber))
+  .get()
+  .build()
+
+def animalResponse = okHttpClient.newCall(requestToAnimal).execute()
+def animalResponseBodyString = animalResponse.body().string()
+def animalResponseBodySpinJson = S(animalResponseBodyString, 'application/json')
+
+set_variable('animalResponse', animalResponseBodySpinJson)
+----
+
++
+_Розгляньмо покроково поданий скрипт_:
+
+.. Імпорт необхідних бібліотек для роботи із HTTP-запитами.
++
+[source,groovy]
+----
+import okhttp3.OkHttpClient
+import okhttp3.Request
+----
+
+.. Отримання номера мікрочипа.
++
+[source,groovy]
+----
+def chipNumber = submission('UserTask_EnterAnimalChipNumber')
+  .formData.prop('chipNumber')
+  .value()
+----
+Скрипт отримує номер мікрочипа, введений користувачем у задачі `UserTask_EnterAnimalChipNumber`, і зберігає його в змінній `chipNumber`.
+
+.. Створення клієнта для HTTP-запитів.
++
+[source,groovy]
+----
+def okHttpClient = new OkHttpClient().newBuilder().build()
+----
+Тут ми створюємо новий об'єкт `OkHttpClient`, який буде відповідати за відправлення HTTP-запитів.
+
+.. Формування запита.
++
+[source,groovy]
+----
+def requestToAnimal = new Request.Builder()
+  .url('http://wiremock:9021/animals?chipNumber='.concat(chipNumber))
+  .get()
+  .build()
+----
+Ми формуємо HTTP GET-запит до URL `'http://wiremock:9021/animals'` із параметром `chipNumber`. Тобто, ми запитуємо інформацію про тварину, яка має заданий номер мікрочипа.
+
+.. Відправлення запита та отримання відповіді.
++
+[source,groovy]
+----
+def animalResponse = okHttpClient.newCall(requestToAnimal).execute()
+----
+За допомогою створеного раніше `OkHttpClient`, ми відправляємо наш запит і отримуємо відповідь у формі об'єкта `animalResponse`.
+
+.. Конвертація відповіді в рядок.
++
+[source,groovy]
+----
+def animalResponseBodyString = animalResponse.body().string()
+----
+Відповідь перетворюється в рядок (`String`) для подальшої обробки.
+
+.. Перетворення рядка в JSON.
++
+[source,groovy]
+----
+def animalResponseBodySpinJson = S(animalResponseBodyString, 'application/json')
+----
+Скрипт використовує функцію `S()` для перетворення рядка відповіді на об'єкт Spin JSON, який дозволить легко працювати з JSON-даними.
+
+.. **Збереження результату**:
++
+[source,groovy]
+----
+set_variable('animalResponse', animalResponseBodySpinJson)
+----
+Отриманий об'єкт Spin JSON зберігається у змінну `animalResponse` для подальшого використання у бізнес-процесі.
+
++
+[NOTE]
+====
+Отже, загалом скрипт виконує наступні дії:
+
+* Отримує номер мікрочипа тварини, введений користувачем.
+* Відправляє HTTP `GET`-запит до зовнішнього API, щоб отримати дані про тварину за її номером мікрочипа.
+* Зберігає отриману відповідь як JSON-об'єкт у змінну `animalResponse` для подальшого використання.
+
+
+Цей скрипт імітує надсилання відповіді з файлами фотографій тварини. Відповідь включає поле `mainPhoto`, де розміщена основна фотографія тварини в контейнері CAdES, та поле `photos`, що містить додаткові знімки, закодовані в `Base64` у форматі `asics` (_див. нижче_).
+====
+
+==== Сервісна задача для перевірки підпису (Service Task)
+
+//TODO Add to delegates list
+
+Створіть сервісну задачу для перевірки валідності підпису у файлах. Використайте кастомний делегат *Signature validation by DSO service*.
+
+.Короткі відомості про делегат
+|===
+|Назва | Пояснення
+
+|Бізнес-назва
+|*Signature validation by DSO service*
+
+|Службова назва
+|*`${digitalSignatureValidateDelegate}`*
+
+|Назва файлу у бібліотеці розширень
+|*_digitalSignatureValidateDelegate.json_*
+|===
+
+. Відкрийте бізнес-процес та створіть *Service Task*.
+. Натисніть кнопку *Open Catalog*.
+. Зі списку делегатів оберіть *Signature validation by DSO service* та підтвердіть свій вибір, натиснувши *`Apply`*.
+. У полі *Name* введіть зрозумілу назву задачі, яка відображатиме її суть.
+. У полі *Data* вкажіть змінну, де зберігається підпис у форматі Base64 для подальшої обробки. Наприклад: `${animalResponse.prop('photos').value()}`.
+. Встановіть необхідний тип контейнера у полі *Container*. Можливі варіанти: `ASIC`, `CADES`, або `ALL` (_якщо потрібно автоматично визначити формат вхідних даних_).
+
++
+.Перевірка підпису. Автоматичне визначення формату вхідних даних
+image::best-practices/bp-sign-validate/bp-sign-validate-3.png[]
++
+.Перевірка підпису. Контейнер CADES
+image::best-practices/bp-sign-validate/bp-sign-validate-3-1.png[]
+
++
+[NOTE]
+====
+У цьому бізнес-процесі використано дві сервісні задачі з типовим розширенням *Signature validation by DSO service*, в якому налаштовано різні типи контейнерів. В одній сервісній задачі перевіряється валідність підпису головного фото, яке було отримано в контейнері Asic, а в другій -- додаткових фото, які були отримані в контейнері CAdES.
+====
+
+. У полі *X-Access-Token* вкажіть JWT-токен доступу користувача, від імені якого виконується операція. Наприклад, використаємо токен виконавця останньої задачі: `${completer('UserTask_EnterAnimalChipNumber').accessToken}`.
+. У полі *Result variable* вкажіть змінну, до якої необхідно зберегти результат. Наприклад, `validationAsicResult` або `validationCadesResult`.
+
+=== Умови для перевірки підписів
+
+Далі змоделюйте будь-які умови для перевірки підписів. У даному прикладі змодельована перевірка щодо валідності обидвох підписів -- як для головного фото, так і для додаткових.
+
+.XOR-шлюз перевірки валідності підписів
+image::best-practices/bp-sign-validate/bp-sign-validate-4.png[]
+
+=== Скриптова задача для отримання даних про підписантів та перевірки на збіг персональних даних
+
+Змоделюйте Script Task та використайте скрипт, що збиратиме інформацію про підписантів отриманих файлів та виконуватиме перевірку на збіги персональних даних. Використайте у скрипті JUEL-функцію `signature_details()`.
+
+image::best-practices/bp-sign-validate/bp-sign-validate-5.png[]
+
+._Скрипт отримання деталей цифрового підпису_
+[%collapsible]
+====
+[source,groovy]
+----
+var asicSignInfo = signature_details(animalResponse.prop('photos').value(),
+                        validationAsicResult.container).getSignInfo()
+var cadesSignInfo = signature_details(animalResponse.prop('mainPhoto').value(),
+                        validationCadesResult.container).getSignInfo()
+
+var isEqualFullName = asicSignInfo.getSubjFullName()
+                                .equalsIgnoreCase(cadesSignInfo.getSubjFullName())
+
+def signerPayload = S([:], 'application/json')
+signerPayload.prop('fullName', cadesSignInfo.getSubjFullName())
+signerPayload.prop('drfo', cadesSignInfo.getSubjDRFOCode())
+signerPayload.prop('edrpou', cadesSignInfo.getSubjEDRPOUCode())
+
+
+set_transient_variable('isEqualFullName', isEqualFullName)
+set_transient_variable('signerPayload', signerPayload)
+set_variable('validationCadesRes', validationCadesResult)
+set_variable('validationAsicRes', validationAsicResult)
+----
+====
+
+Поданий скрипт спрямований на роботу з деталями цифрового підпису і робить наступне:
+
+* Отримує деталі цифрових підписів для фотографій тварини.
+* Порівнює повні імена осіб, які підписали обидва документи.
+* Формує JSON-об'єкт з деталями підпису.
+* Зберігає отримані дані в змінних для подальшого використання.
+
+Функція `signature_details(...)` приймає два аргументи: контент, що підписується, та контейнер підпису.  Вона повертає деталі про підпис (як про особу, яка підписала, так і технічні деталі підпису).
+
+Розглянемо скрипт докладно:
+
+. *Використання функції `signature_details(...)`*:
++
+--
+* *asicSignInfo*:
++
+[source,groovy]
+----
+var asicSignInfo = signature_details(animalResponse.prop('photos').value(),
+                        validationAsicResult.container).getSignInfo()
+----
++
+Функція `signature_details(...)` приймає два аргументи: контент для підпису (_у цьому випадку -- це фотографії тварини_) та контейнер підпису. Ця функція повертає деталі про цифровий підпис `ASIC`. Після цього за допомогою методу `.getSignInfo()` ми отримуємо інформацію про підпис.
+
+* *cadesSignInfo*:
++
+[source,groovy]
+----
+var cadesSignInfo = signature_details(animalResponse.prop('mainPhoto').value(),
+                        validationCadesResult.container).getSignInfo()
+----
++
+Аналогічно попередньому пункту, але тут ми працюємо з основною фотографією тварини та контейнером підпису `CADES`.
+--
++
+IMPORTANT: Функція `signature_details(...)` приймає лише контейнери `ASIC` та `CAdES`.
+
+. Порівняння імен у підписах:
++
+[source,groovy]
+----
+var isEqualFullName = asicSignInfo.getSubjFullName()
+                    .equalsIgnoreCase(cadesSignInfo.getSubjFullName())
+----
++
+Скрипт порівнює повні імена суб'єктів (_людей, які підписали документи_) в обох підписах (`ASIC` та `CADES`) і перевіряє, чи вони збігаються. Результат порівняння зберігається у змінній `isEqualFullName`.
+
+. Формування JSON-об'єкта з деталями підпису:
++
+[source,groovy]
+----
+def signerPayload = S([:], 'application/json')
+signerPayload.prop('fullName', cadesSignInfo.getSubjFullName())
+signerPayload.prop('drfo', cadesSignInfo.getSubjDRFOCode())
+signerPayload.prop('edrpou', cadesSignInfo.getSubjEDRPOUCode())
+----
++
+Тут ми створюємо порожній JSON-об'єкт (`signerPayload`) та наповнюємо його даними з підпису `CADES`: повне ім'я, код `DRFO` та код `EDRPOU`.
+
+. Збереження змінних:
++
+[source,groovy]
+----
+set_transient_variable('isEqualFullName', isEqualFullName)
+set_transient_variable('signerPayload', signerPayload)
+set_variable('validationCadesRes', validationCadesResult)
+set_variable('validationAsicRes', validationAsicResult)
+----
++
+Результати обробки зберігаються у змінних, які будуть доступні для подальшого використання в бізнес-процесі.
+
+=== Перегляд даних про підписанта
+
+Змоделюйте користувацьку задачу для перегляду даних про підписанта на формі.
+
+image:best-practices/bp-sign-validate/bp-sign-validate-6.png[]
+
+=== Скриптова задача для отримання переліку підписаних файлів
+
+Змоделюйте скриптову задачу та використайте у скрипті JUEL-функцію `signature_content()`, яка отримує перелік файлів, що були підписані.
+
+image::best-practices/bp-sign-validate/bp-sign-validate-7.png[]
+
+._Скрипт для обробки контенту цифрового підпису та його збереження_
+[%collapsible]
+====
+[source,groovy]
+----
+var asicContent = signature_content(animalResponse.prop('photos').value(),
+                        validationAsicRes.container).getAllContent()
+var cadesContent = signature_content(animalResponse.prop('mainPhoto').value(),
+                        validationCadesRes.container).getContent()
+
+def photos = []
+asicContent.each {
+        def decodedAsicContent = Base64.getDecoder().decode(it.getData())
+        def asicFileMetadata = save_digital_document(decodedAsicContent, it.getName())
+        def photo = [:]
+        photo.id = asicFileMetadata.getId()
+        photo.checksum = asicFileMetadata.getChecksum()
+        photos << photo
+        }
+
+def mainPhotos = []
+def decodedCadesContent = Base64.getDecoder().decode(cadesContent.getData())
+def cadesFileMetadata = save_digital_document(decodedCadesContent, cadesContent.getName().concat('.png'))
+def mainPhoto = [:]
+mainPhoto.id = cadesFileMetadata.getId()
+mainPhoto.checksum = cadesFileMetadata.getChecksum()
+mainPhotos << mainPhoto
+
+def contentsPayload = S([:], 'application/json')
+
+contentsPayload.prop('name', animalResponse.prop('name').value())
+contentsPayload.prop('chipNumber', animalResponse.prop('chipNumber').value())
+contentsPayload.prop('photos', S(photos, 'application/json'))
+contentsPayload.prop('mainPhoto', S(mainPhotos, 'application/json'))
+
+set_transient_variable('contentsPayload', contentsPayload)
+----
+====
+
+Цей скрипт зосереджений на обробці контенту цифрового підпису та його збереженні. Він виконує наступні дії:
+
+* Отримує контент цифрових підписів для фотографій тварини.
+* Декодує, зберігає та обробляє ці фотографії.
+* Формує JSON-об'єкт з деталями контенту.
+* Зберігає JSON-об'єкт в змінній для подальшого використання.
+
+Функція `signature_content(...)` приймає два аргументи: контент, що підписується, та контейнер підпису. Вона повертає деталі контенту підпису.
+
+Розглянемо скрипт докладніше:
+
+. *Використання функції `signature_content(...)`*:
++
+--
+- *asicContent*:
++
+[source,groovy]
+----
+var asicContent = signature_content(animalResponse.prop('photos').value(),
+                        validationAsicRes.container).getAllContent()
+----
++
+Функція `signature_content(...)` приймає два аргументи: контент для підпису (у цьому випадку це фотографії тварини) та контейнер підпису ASIC. Метод `.getAllContent()` повертає усі частини цього контенту.
+
+- *cadesContent*:
++
+[source,groovy]
+----
+var cadesContent = signature_content(animalResponse.prop('mainPhoto').value(),
+                        validationCadesRes.container).getContent()
+----
++
+Аналогічно попередньому, але для основної фотографії тварини та підпису CADES.
+--
++
+IMPORTANT: Функція `signature_content(...)` працює виключно з контейнерами цифрових підписів двох типів: `ASIC` і `CAdES`. Щоб вона функціонувала коректно, потрібно спочатку встановити або визначити тип контейнера, з яким вона буде працювати, безпосередньо в налаштуваннях цієї функції.
+
+. *Обробка та збереження фотографій з контенту ASIC*:
++
+[source,groovy]
+----
+def photos = []
+asicContent.each {
+    def decodedAsicContent = Base64.getDecoder().decode(it.getData())
+    def asicFileMetadata = save_digital_document(decodedAsicContent, it.getName())
+    def photo = [:]
+    photo.id = asicFileMetadata.getId()
+    photo.checksum = asicFileMetadata.getChecksum()
+    photos << photo
+}
+----
++
+Цей блок коду декодує кожну частину контенту ASIC з Base64, зберігає її за допомогою функції `save_digital_document(...)`, а потім зберігає метадані цих файлів у список `photos`.
+
+. *Обробка та збереження основної фотографії з контенту CADES*:
++
+[source,groovy]
+----
+def mainPhotos = []
+def decodedCadesContent = Base64.getDecoder().decode(cadesContent.getData())
+def cadesFileMetadata = save_digital_document(decodedCadesContent, cadesContent.getName().concat('.png'))
+def mainPhoto = [:]
+mainPhoto.id = cadesFileMetadata.getId()
+mainPhoto.checksum = cadesFileMetadata.getChecksum()
+mainPhotos << mainPhoto
+----
++
+Аналогічно попередньому блоку коду, але обробляється лише одна фотографія (основна).
+
+. *Формування JSON-об'єкта з деталями контенту*:
++
+[source,groovy]
+----
+def contentsPayload = S([:], 'application/json')
+contentsPayload.prop('name', animalResponse.prop('name').value())
+contentsPayload.prop('chipNumber', animalResponse.prop('chipNumber').value())
+contentsPayload.prop('photos', S(photos, 'application/json'))
+contentsPayload.prop('mainPhoto', S(mainPhotos, 'application/json'))
+----
++
+Тут ми створюємо порожній JSON-об'єкт (`contentsPayload`) та наповнюємо його даними: ім'ям тварини, номером чипа, списком фотографій та основною фотографією.
+
+. *Збереження JSON-об'єкта*:
++
+[source,groovy]
+----
+set_transient_variable('contentsPayload', contentsPayload)
+----
++
+Сформований JSON-об'єкт `contentsPayload` зберігається як тимчасова змінна для подальшого використання в бізнес-процесі.
+
+=== Підписання даних та збереження їх до БД
+
+Змоделюйте кроки з підписання даних та їх збереження до БД реєстру.
+
+image::best-practices/bp-sign-validate/bp-sign-validate-8.png[]
+
+[TIP]
+====
+* Загальний опис та поради для моделювання містяться на сторінці xref:bp-modeling/bp/bp-modeling-instruction.adoc[].
+* Відвідайте розділ xref:bp-modeling/bp/element-templates/element-templates-overview.adoc[]
+* Ознайомтеся також з іншими свіжими референтними прикладами моделювання: xref:best-practices/best-practices-overview.adoc[].
+====
+
+== Використання у Кабінеті користувача
+
+Розглянемо приклад, як виглядатимуть користувацькі UI-форми з підписаними цифровими документами, отриманими із зовнішньої системи. Також оглянемо отриману інформацію про підписанта для подальшої обробки або внесення в реєстри, а також вміст файлів-контейнерів.
+
+. Увійдіть до _Кабінету користувача_.
+. Запустіть змодельований бізнес-процес.
++
+image::best-practices/bp-sign-validate/bp-sign-validate-9.png[]
+
+. Введіть номер чипа тварини.
++
+image::best-practices/bp-sign-validate/bp-sign-validate-10.png[]
+
+. Перегляньте дані про підписанта на формі.
++
+image::best-practices/bp-sign-validate/bp-sign-validate-11.png[]
+
+. Далі перевірте ім'я та номер чипа тварини, а також основне та додаткові фото, які можна вивантажити на свій пристрій та переглянути.
++
+image::best-practices/bp-sign-validate/bp-sign-validate-12.png[]
+
+. Підпишіть дані на формі за допомогою КЕП та завершіть бізнес-процес.
+
+== Пов'язані сторінки
+
+* xref:arch:architecture/registry/administrative/regulation-management/platform-evolution/sign-validation/sign-validation.adoc[]
