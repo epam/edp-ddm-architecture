@@ -1,0 +1,73 @@
+= Перевірка цілісності запитів на внесення змін до регламенту
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+== Проблематика
+
+Компоненти xref:arch:architecture/registry/administrative/regulation-management/registry-regulation/registry-regulation.adoc[цифрового регламенту реєстру] мають внутрішні зв'язки, які раніше перевірялись лише частково. Це викликало проблеми зі своєчасним виявленням помилок під час внесення змін у регламент.
+
+== Загальний опис
+
+Платформа підтримує систему розширеної валідації для забезпечення перевірки таких аспектів:
+
+* Взаємозв'язки між директоріями
+* Взаємозв'язки у делегатах бізнес-процесів
+* Залежності для JUEL-функцій бізнес-процесів
+
+[NOTE]
+_Цілісний запит на внесення змін_ -- це запит на зміни, після застосування якого, всі компоненти регламенту реєстру зберігають валідні взаємозв'язки.
+
+Наприклад, при використанні делегата у бізнес-процесі зі створення сутності можна виконати перевірку щодо наявності відповідної таблиці у моделі даних. Якщо така таблиця відсутня, то запит на внесення змін вважається не цілісним і не може бути інтегрований до мастер-гілки регламенту.
+
+== Перевірка взаємозв'язків між директоріями регламенту реєстру
+
+У Вебінтерфейсі моделювання регламенту розробник може внести зміни до наявного бізнес-процесу або створити новий через версію-кандидат.
+
+Наприклад, при редагуванні форми, яка містить пошуковий запит, на вкладці *Data* компонента xref:registry-develop:bp-modeling/forms/components/select/select-overview.adoc[Select] ви внесли та зберегли неправильну назву точки інтеграції, яка відсутня у дата-моделі:
+
+* Правильне значення: `+++<b style="color: green;">/officer/api/data-factory/factor-all</b>+++`
+* Помилкове значення: `+++<b style="color: orange;">/api/data-factory/folders</b>+++`.
+
+image:registry-develop:registry-admin/admin-portal/version-control/regulations-integrity/regulations-integrity-1.png[]
+
+== Перевірка залежності для JUEL-функцій бізнес-процесів
+
+При використанні *Script Task* розробник може використовувати JUEL-функції у скрипті (_детальніше див. xref:bp-modeling/bp/modeling-facilitation/modelling-with-juel-functions.adoc[]_).
+
+Наприклад, що у такому скрипті ви передали JUEL-функції та зберегли некоректне значення ідентифікатора задачі:
+
+* Правильне значення: `submission('signRequest+++<b style="color: green;">DataFormActivity</b>+++')`
+
+* Неправильне значення: `submission('signRequest+++<b style="color: orange;">FolderFormActivity</b>+++')`
+
+image:registry-develop:registry-admin/admin-portal/version-control/regulations-integrity/regulations-integrity-2.png[]
+
+== Перевірка взаємозв'язків при використанні типових розширень бізнес-процесів
+
+Розробник регламенту у сервісній задачі (*Service Task*) може використати типове розширення. Наприклад, *Create entity in data factory* (_детальніше про створення сутностей див. xref:bp-modeling/bp/element-templates/service-task-templates/create-entity.adoc[]_), де у полі *Resource* необхідно вказати ресурс (назву таблиці) для збереження даних.
+
+Наприклад, ви вказали значення, яке відсутнє у базі даних:
+
+image:registry-develop:registry-admin/admin-portal/version-control/regulations-integrity/regulations-integrity-3.png[]
+
+== Помилки валідації в логах пайплайну застосування змін до регламенту
+
+Під час виконання пайплайну *MASTER-Code-review-registry-regulations* проходить додатковий крок валідації, який підсвічується жовтим кольором та сигналізує про наявні помилки, деталі яких зберігаються у логах.
+
+image:registry-develop:registry-admin/admin-portal/version-control/regulations-integrity/regulations-integrity-4.png[]
+
+[NOTE]
+====
+Тобто, після внесення некоректних даних до JUEL-функції, типового розширення та пошукового запита, система перевіряє ці дані та відображає ідентифікатори задач зі вказаними помилками.
+====
+
+image:registry-develop:registry-admin/admin-portal/version-control/regulations-integrity/regulations-integrity-5.png[]
+
+Така сама валідація проходить і на пайплайні *MASTER-Build-registry-regulations* при застосуванні некоректних змін до мастер-версії регламенту.
+
+image:registry-develop:registry-admin/admin-portal/version-control/regulations-integrity/regulations-integrity-6.png[]
+
+[IMPORTANT]
+====
+Для релізу `1.9.7`, знайдені помилки не перешкоджають подальшому розгортанню регламенту при проходженні інших кроків пайплайну.
+====
+
