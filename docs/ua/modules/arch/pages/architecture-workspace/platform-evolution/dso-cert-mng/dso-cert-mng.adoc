@@ -7,7 +7,7 @@
 в розмірі у 1MB. Потрібно розробити рішення, що б дозволило працювати з вищевказаними файлами без обмеження на розмір.
 
 NOTE: В цьому документі для спрощення _Список сертифікатів сумісних центрів сертифікації ключів (ЦСК)_ = файл
-(_CACertificates.p7b_), а _Параметри взаємодії із сумісними ЦСК_ = файл _CAs.json_
+_CACertificates.p7b_, а _Параметри взаємодії із сумісними ЦСК_ = файл _CAs.json_
 
 == Концепти
 * _Список сертифікатів сумісних центрів сертифікації ключів (ЦСК)_ - файл що містить перелік сертифікатів ЦСК, що
@@ -40,8 +40,8 @@ _CAs.json_ у _Веб-інтерфейсі управління Платформ
 * При розгортанні реєстру файли _CACertificates.p7b_ та _CAs.json_ зберігаються в Ceph кошик з публічним доступом до файлу
 * Для файлів сертифікатів створюється окремий Ceph кошик шляхом додавання ресурсу _Object Bucket Claim_ у Helm Chart
 _Сервісу цифрових підписів_
-* При оновленні файлів сертифікатів створюються нові об'єкти у Ceph кошику. Старі файли не перезатираються
-* Ім'я об'єкта для кошика генерується на основі поточної позначки часу
+* Файли сертифікатів при оновленні перезатираються у Ceph кошику по тому самому ідентифікатору
+* Імена файлів статичні та посилання на них не змінюються при оновленні
 * Рішення застосовується як для _Сервісу цифрових підписів_ _Підсистеми цифрових підписів_, так і для _Підсистеми
 управління користувачами та ролями_
 
@@ -60,21 +60,20 @@ participant "Cert Bucket\nConfig Map" as cm
 participant "Cert Bucket\nSecret" as secret
 participant "Ceph" as ceph
 participant "DSO" as dso
-participant "DSO\nConfig Map" as dso_config
 
 admin -> cp: Updates certificates
 cp -> gerrit: Updates certificates
 jenkins -> obc: Creates
-obc --> cm: Creates
 obc --> secret: Creates
+obc --> cm: Creates
+dso -> cm: Mounts
 
 jenkins -> gerrit: Pull certificates
-jenkins -> jenkins: Generates name
 jenkins -> cm: Read
 jenkins -> secret: Read
-jenkins -> ceph: Save certs in bucket with name and public access
-jenkins -> dso_config: Update cert urls
-dso_config -> dso: Reloads
+jenkins -> ceph: Save certs in bucket with public access
+jenkins -> dso: Restarts deployment
+
 dso -> ceph: Reads certs
 
 @enduml
@@ -137,30 +136,20 @@ sh '
   AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY \
   AWS_DEFAULT_OUTPUT=json \
   AWS_ENDPOINT_URL=$BUCKET_HOST \
-  aws s3 cp dso/config/CACertificates.p7b s3://$BUCKET_NAME/$GENERATED_FILENAME --acl public-read
+  aws s3 cp dso/config/CACertificates.p7b s3://$BUCKET_NAME/CACertificates.p7b --acl public-read
 '
 ----
 
 NOTE: В ході розробки треба переконатись, що виконання команд з Ceph не вплине на глобальну конфігурацію AWS, яка також
 використовується для іншої функціональності в пайплайні
 
-Ім'я файлів повинно генеруватися за наступним принципом:
+Ім'я файлів є статичним і має значення _CACertificates.p7b_ та _CAs.json_ відповідно
 
-[source, groovy]
+Після оновлення сертифікатів у Ceph кошику виконується рестарт Деплойменту _Сервісу Цифрових Підписів_
+
+[source, bash]
 ----
-def certFilename = "CACertificates-${TIMESTAMP}.p7b" // CACertificates-1701861498.p7b
-def configFilename = "CAs-${TIMESTAMP}.json" // CAs-1701861498.json
-----
-
-URL для файлів _CACertificates.p7b_ та _CAs.json_ для передачі в DSO формується за наступним принципом:
-
-[source, groovy]
-----
-def certUrl = "${bucketHost}/${bucketName}/${certFilename}"
-// http://rook-ceph-rgw-mdtuddm.openshift-storage.svc/dso-certificates-3ea4ad25-805b-4a27-8df0-c85066501937/CACertificates-1701861498.p7b
-
-def configUrl = "${bucketHost}/${bucketName}/${configFilename}"
-// http://rook-ceph-rgw-mdtuddm.openshift-storage.svc/dso-certificates-3ea4ad25-805b-4a27-8df0-c85066501937/CAs-1701861498.json
+oc rollout restart deployment/digital-signature-ops
 ----
 
 === Конфігурація DSO
@@ -173,8 +162,8 @@ def configUrl = "${bucketHost}/${bucketName}/${configFilename}"
 .application.yml. Конфігурація з використанням системного сховища Ceph
 ----
 ca:
-  certificates-url: http://rook-ceph-rgw-mdtuddm.openshift-storage.svc/dso-certificates-3ea4ad25-805b-4a27-8df0-c85066501937/CACertificates-1701861498.p7b
-  config-url: http://rook-ceph-rgw-mdtuddm.openshift-storage.svc/dso-certificates-3ea4ad25-805b-4a27-8df0-c85066501937/CAs-1701861498.json
+  certificates-url: http://rook-ceph-rgw-mdtuddm.openshift-storage.svc/dso-certificates-3ea4ad25-805b-4a27-8df0-c85066501937/CACertificates.p7b
+  config-url: http://rook-ceph-rgw-mdtuddm.openshift-storage.svc/dso-certificates-3ea4ad25-805b-4a27-8df0-c85066501937/CAs.json
 ----
 
 [source,yaml]
@@ -196,15 +185,42 @@ ca:
   config-url: file:/app/data/CAs.json
 ----
 
-За замовчуванням у Helm values сервісу повинні бути вказані наступні значення для конфігурацій:
+Параметри доступу до Ceph кошика, що включають адресу s3 ендпоінта та назву бакета прокинуті в Деплоймент _Сервіс
+цифрових підписів_ як змінні оточення
+
+[source,yaml]
+.values.yaml
+----
+# part of digital-signature-ops Deployment
+      env:
+        - name: CERT_BUCKET_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: dso-ca-certificates
+              key: BUCKET_HOST
+        - name: CERT_BUCKET_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: dso-ca-certificates
+              key: BUCKET_NAME
+# ...
+----
+
+NOTE: Авторизаційна інформація доступу до кошика не використовується у _Сервісі Цифрових Підписів_
+
+URL доступу до файлів винесені як параметри Helm values і мають наступні значення, які потенційно можуть бути перевизначені
+на рівні реєстру (без відповідного інтерфейсу у _Веб-інтерфейсі управління Платформою та Реєстрами_)
 
 [source,yaml]
 .values.yaml
 ----
 ca:
-  certificates-url: https://iit.com.ua/download/productfiles/CACertificates.p7b
-  config-url: https://iit.com.ua/download/productfiles/CAs.json
+  certificates-url: http://${CERT_BUCKET_HOST}/${CERT_BUCKET_NAME}/CACertificates.p7b
+  config-url: http://${CERT_BUCKET_HOST}/${CERT_BUCKET_NAME}/CAs.json
 ----
+
+NOTE: Параметри прокидаються в Spring застосунок за стандартними в платформі принципом _Helm values_ -> _Config Map_ ->
+_application.yml_ -> _Spring context_
 
 === Міграція
 Перехід на нову версію не потребує додаткових скриптів міграції чи ручних налаштувань
