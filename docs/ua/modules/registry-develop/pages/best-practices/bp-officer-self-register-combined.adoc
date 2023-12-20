@@ -1,0 +1,77 @@
+= Самостійна реєстрація для надавачів послуг, які автентифікуються з ключем ФОП або юридичної особи
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+== Загальний опис
+
+Ця сторінка описує комбінований бізнес-процес самореєстрації для посадових осіб, який забезпечує різні підходи залежно від типу ключа, який використовується для автентифікації в Кабінеті користувача.
+
+Основна мета цього процесу -- автоматизувати процедуру самореєстрації для посадових осіб, які автентифікуються з ключем ФОП або юридичної особи. У такому випадку процес проходить автоматично. Проте, якщо посадова особа автентифікується з ключем фізичної особи (ФО), процес передбачає ручну модерацію.
+
+Процес побудований як комбінований, на базі двох інших процесів:
+
+* xref:best-practices/bp-officer-self-register-manual.adoc[]
+* xref:best-practices/bp-officer-self-register-auto.adoc[]
+
+NOTE: Використовуйте цей комбінований бізнес-процес самореєстрації у випадках, коли у вас вже налаштовано відповідні параметри в Control Plane-консолі. Для отримання додаткової інформації щодо цих налаштувань зверніться до розділу xref:registry-admin/cp-auth-setup/officer-portal-access-individual-qes.adoc[].
+
+[TIP]
+====
+[%collapsible]
+.Де можна знайти приклад референтного бізнес-процесу?
+=====
+include::partial$snippets/demo-reg-reference-examples-ua.adoc[]
+
+Приклад BPMN-схеми процесу буде доступний у регламенті демо-реєстру за пошуком по ключовим словам -- *_reference-officer-selfregistration-combined-bp_*. Назви форм ви можете знайти всередині відповідних користувацьких задач (User Task) бізнес-процесу у полі *`Form key`*.
+=====
+====
+
+== Моделювання процесу
+
+Використовує бізнес-процес самостійної реєстрації з ручною модерацією.
+
+.Загальний вигляд схеми бізнес-процесу з фокусом на основному учаснику
+image::best-practices/officer-auto-register/combined-moderation/officer-self-register-combined-3.png[]
+
+Після Start Event додайте скриптову задачу для перевірки наявності параметра *ЄДРПОУ* в КЕП посадової особи.
+
+.Приклад скрипту для перевірки
+[source,groovy]
+----
+set_transient_variable('edrpou', initiator().getEdrpou())
+----
+
+image::best-practices/officer-auto-register/combined-moderation/officer-self-register-combined-2.png[]
+
+Для оптимізації процесу самореєстрації включіть XOR-шлюз з наступними налаштуваннями умов на стрілках:
+
+. *Автоматична модерація*: якщо в КЕП присутній параметр ЄДРПОУ, користувач направляється на бізнес-процес (БП) самореєстрації з автоматичною модерацією.
++
+[source,groovy]
+----
+Condition Expression: `${initiator().edrpou != null}`
+----
++
+.XOR-шлюз
+image::best-practices/officer-auto-register/combined-moderation/officer-self-register-combined-1.png[]
++
+.Стрілка умови наявності атрибута `edrpou` в КЕП
+image::best-practices/officer-auto-register/combined-moderation/officer-self-register-combined-4.png[]
++
+.Перехід до процесу з автоматичною модерацією
+image::best-practices/officer-auto-register/combined-moderation/officer-self-register-combined-5.png[]
+
+. *Ручна модерація*: на іншій стрілці встановіть умову, що якщо параметр ЄДРПОУ відсутній в КЕП, користувач направляється на БП самореєстрації з ручною модерацією виконаною іншою уповноваженою особою.
++
+.Умова для переходу до процесу з ручною модерацією
+[source,groovy]
+----
+Condition Expression: `${initiator().edrpou == null}`
+----
++
+Це означає, що обидва БП самореєстрації комбіновані в один загальний процес, на початку якого виконується перевірка на наявність параметра ЄДРПОУ в КЕП посадової особи.
++
+.Стрілка умови відсутності атрибута `edrpou` в КЕП
+image::best-practices/officer-auto-register/combined-moderation/officer-self-register-combined-6.png[]
++
+.Перехід до процесу із ручною модерацією
+image::best-practices/officer-auto-register/combined-moderation/officer-self-register-combined-7.png[]
