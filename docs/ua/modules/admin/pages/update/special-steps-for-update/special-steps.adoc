@@ -1,8 +1,6 @@
 = Оновлення Платформи та реєстрів до версії 1.9.7: спеціальні кроки
 include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
 
-CAUTION: Сторінка у процесі розробки. Завітайте пізніше.
-
 == Мета інструкції
 
 Метою цієї сторінки є відображення процесу оновлення та спеціальних кроків, необхідних для оновлення кластера Платформи та реєстрів з версії `1.9.6.34` до `1.9.7.42`.
@@ -10,51 +8,808 @@ CAUTION: Сторінка у процесі розробки. Завітайте
 [#update-platform]
 == Оновлення Платформи
 
-=== Запуск пайплайну platform-deploy
+=== Запуск пайплайну `platform-deploy`
 
-Запустіть пайплайн `platform-deploy` в Jenkins CICD2 з опціями оновлення та необхідною версією збірки, а саме `1.9.6.34`.
+Запустіть пайплайн `platform-deploy` в Jenkins CICD2 з опціями оновлення та необхідною версією збірки, а саме `1.9.7.42`.
 
 //TODO: QUESTION
 Вкажіть необхідний режим розгортання (`deploymentMode`).
 
-=== Оновлення cluster-mgmt
+=== Оновлення `cluster-mgmt`
 
-//TODO: HEREEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE
+Цей крок описує стандартний процес оновлення інфраструктурних компонентів Платформи за допомогою пайплайну *cluster-mgmt* в адміністративній панелі *Control Plane*.
 
-Цей крок описує стандартний процес оновлення інфраструктурних компонентів Платформи за допомогою пайплайну `cluster-mgmt` в адміністративній панелі *Control Plane*.
+Перед тим, як запускати оновлення пайплайну *cluster-mgmt*, необхідно створити *EDPComponent* `nexus` у просторі імен `control-plane`. Для цього:
 
+. Перейдіть до проєкту *control-plane*.
+. Відкрийте розділ *Home* > *Search*.
+. У пошуковому рядку введіть `EDPComponent` та натисніть кнопку *`Create EDPComponent`*.
++
+image:infrastructure/special-steps/special-steps-1-9-7-1.png[]
+
+. Вставте наступний код:
++
+[%collapsible]
+.*_Create EDPComponent_*
+====
+[source,yaml]
+----
+apiVersion: v1.edp.epam.com/v1
+kind: EDPComponent
+metadata:
+  annotations:
+    control-plane-console/description: >-
+      Центральне сховище артефактів, компонентів та їх залежностей, з яких
+      складається кожна окрема підсистема та Платформа в цілому. Збереження
+      артефактів платформи.
+    control-plane-console/display-name: Сховище артефактів Платформи (Control Plane Nexus)
+    control-plane-console/display-order: '3'
+    control-plane-console/operational-zone: platform-administration-zone
+    control-plane-console/platform-only: 'true'
+    meta.helm.sh/release-name: openshift-edp-components
+    meta.helm.sh/release-namespace: control-plane
+  name: nexus
+  namespace: control-plane
+  labels:
+app.kubernetes.io/managed-by: Helm
+spec:
+  icon: >-
+PHN2ZyB3aWR0aD0iNDYiIGhlaWdodD0iNTIiIHZpZXdCb3g9IjAgMCA0NiA1MiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTIzLjU0NDggMzMuMjMwOVYyNC4wNzRDMjMuOTcxOSAyMy41ODgzIDI0LjQ5NTggMjMuMTk3MyAyNS4wODMgMjIuOTI2QzI1LjY3MDEgMjIuNjU0NyAyNi4zMDc0IDIyLjUwOTEgMjYuOTU0MSAyMi40OTg2QzI3LjI5MjcgMjIuNDg4OCAyNy42MzEzIDIyLjUxNzcgMjcuOTYzMyAyMi41ODQ4VjE5LjAyNzhDMjcuMTEzNSAxOS4wNjQ4IDI2LjI4MTEgMTkuMjgwMSAyNS41MTk5IDE5LjY1OTZDMjQuNzU4NyAyMC4wMzkyIDI0LjA4NTggMjAuNTc0NSAyMy41NDQ4IDIxLjIzMDlWMTkuMzcyNEgxOS44NTI1VjMzLjIzMDlIMjMuNTQ0OFoiIGZpbGw9IiMyOUI0NzMiLz4KPHBhdGggZD0iTTAgMTIuNTI5MlYzOC44NDMxTDIyLjc2OTIgNTJMNDUuNTM4NSAzOC44NDMxVjEzLjkwNzdMMzkuOTUwOCAxNy4xMzIzVjM1LjYxODVMMjIuNzY5MiA0NS41Mzg1TDUuNiAzNS42MTg1VjE1Ljc2NjJMMjEuNjk4NSA2LjQ2MTU0VjBMMCAxMi41MjkyWiIgZmlsbD0iIzFDMUYyQSIvPgo8cGF0aCBkPSJNMjMuOTM4NyAwVjYuNDYxNTRMMzkuMDUyNiAxNS4yTDQ0LjY0MDMgMTEuOTc1NEwyMy45Mzg3IDBaIiBmaWxsPSIjMjlCNDczIi8+Cjwvc3ZnPg==
+  type: nexus
+  url: 'https://nexus.<dns-wildcard>/nexus/'
+  visible: true
+----
+====
++
+[IMPORTANT]
+====
+Переконайтеся, що параметр `url` вказує на правильне посилання до Nexus вашого кластера. Замініть `<dns-wildcard>` на домен та піддомени кластера, щоб вказати валідне посилання.
+
+Наприклад, якщо ваш домен кластера `cluster-environment.project-name.projects.example.com`, то посилання до `nexus` буде:
+
+[source,yaml]
+----
+metadata:
+  url: 'https://nexus.apps.cluster-environment.project-name.projects.example.com/nexus/'
+----
+
+Тобто `<dns-wildcard>` тут -- `apps.cluster-environment.project-name.projects.example.com`.
+====
+
+. Далі виконайте стандартну процедуру оновлення центральних/інфраструктурних компонентів Платформи за допомогою пайплайну *cluster-mgmt*.
++
 TIP: Див. детальніше на сторінці xref:admin:update/update_cluster-mgmt.adoc[].
 
 == Кроки після оновлення Платформи
 
-=== aaaaaaaaaaa
+=== Необхідні зміни у Wiremock Deployment після оновлення
 
-=== bbbbbbbbbbb
+Після оновлення Платформи, необхідно внести наступні зміни у файл _deploy-templates/templates/deployment.yaml_, у репозиторій _components/registry/wiremock_, до гілки `1.5.0-SNAPSHOT.7`:
 
-=== ccccccccccc
+[source,yaml]
+----
+spec:
+  ...
+  strategy:
+    type: Recreate
+----
+
+image:infrastructure/special-steps/special-steps-1-9-7-2.png[]
+
+Це забезпечить правильний рестарт компонента `wiremock` під час подальшого оновлення реєстру.
+
+=== Адаптація `registry-postgres` для сумісності з OKD 4.12
+
+Щоб запобігти проблемам при створенні реєстрів на версії 1.9.6 після оновлення OKD до 4.12 (_див. детальніше -- xref:update/update-okd-4-12.adoc[]_), необхідно внести зміни до репозиторію *_registry-postgres_*.
+
+. Увійдіть до Gerrit у простор імен `control-plane`. У розділі *BROWSE* оберіть *Repositories*.
++
+image:infrastructure/special-steps/special-steps-1-9-7-3.png[]
+
+. У вікні пошуку репозиторіїв вкажіть наступний шлях:
+
+    components/registry/registry-postgres
++
+image:infrastructure/special-steps/special-steps-1-9-7-4.png[]
+
+. Перейдіть до знайденого репозиторію *_registry-postgres_*.
+
+. Оберіть розділ *Commands* та натисніть кнопку *`Create change`*.
++
+image:infrastructure/special-steps/special-steps-1-9-7-5.png[]
+
+. У полі *Select branch for new change* введіть назву гілки `1.9.6.2` та у полі *Description* введіть наступний опис: `Change apiVersion for audit-clean-cron-job to v1`.
++
+image:infrastructure/special-steps/special-steps-1-9-7-6.png[]
+
+. Автоматично відкриється вікно редагування. У правому верхньому куті натисніть *`Edit`*.
++
+image:infrastructure/special-steps/special-steps-1-9-7-7.png[]
++
+Далі натисніть кнопку *`ADD/OPEN/UPLOAD`*.
++
+image:infrastructure/special-steps/special-steps-1-9-7-8.png[]
+
+. У автоматично відкритому вікні пошуку файлів вкажіть наступний шлях:
+
+    deploy-templates/templates/audit-clean-cron-job.yaml
++
+Оберіть знайдений файл та натисніть *`Confirm`*.
++
+image:infrastructure/special-steps/special-steps-1-9-7-9.png[]
+
+. У вікні редагування файлу _audit-clean-cron-job.yaml_ замініть перший рядок:
+
+    apiVersion: batch/v1beta1"
++
+на
+
+    apiVersion: batch/v1
++
+image:infrastructure/special-steps/special-steps-1-9-7-10.png[]
++
+Після виконаних змін, у правому верхньому куті натисніть *`Save & Publish`*.
++
+image:infrastructure/special-steps/special-steps-1-9-7-11.png[]
+
+. Після автоматичного переходу до сторінки із виконаною зміною, натисніть кнопку *`Start Review`*, виставте відповідні оцінки та натисніть *`Send and start review`*.
++
+image:infrastructure/special-steps/special-steps-1-9-7-12.png[]
+
+. Застосуйте запропоновану зміну. Для цього натисніть *`Submit`* у правому верхньому куті.
++
+image:infrastructure/special-steps/special-steps-1-9-7-13.png[]
+
+=== Адаптація `jaeger-operator` для сумісності з OKD 4.12
+
+Поточна версія `jaeger-operator` не може працювати з останньою версією OKD. Це відбувається через те, що у новій версії OKD було видалено Kubernetes API `batch/v1beta1`, яке використовується для ресурсу *CronJob*. Така зміна перешкоджає оновленню до OKD версії `4.12`. Додаткову інформацію можна знайти в https://docs.okd.io/4.12/updating/updating-cluster-prepare.html#update-preparing-list_updating-cluster-prepare[офіційній документації OKD].
+
+Для розв'язання цієї проблеми слід оновити `jaeger-operator` до версії `1.39.0`. Виконайте наступні кроки:
+
+. Застосуйте нові Custom Resources Definitions (CRD) через термінал. Для цього завантажте файли xref:attachment$special-steps/cert-manager-crds.yaml[_cert-manager-crds.yaml_] та xref:attachment$special-steps/jaeger-crd.yaml[_jaeger-crd.yaml_] й виконайте наступні команди:
++
+[source,bash]
+----
+$ oc apply -f cert-manager-crds.yaml
+$ oc replace -f jaeger-crd.yaml
+----
+
+. Відкрийте Gerrit та перейдіть до репозиторію *_service-mesh_*. Оберіть вкладку *Branches*.
++
+image:infrastructure/special-steps/special-steps-1-9-7-14.png[]
+
+. Створіть нову гілку, натиснувши у правому верхньому куті кнопку *`Create New`*. При створенні, підставте значення поля *Revision* з актуальної на цей час гілки (_наприклад, для Платформи версії 1.9.7 це гілка_ `1.9.7.7`).
++
+image:infrastructure/special-steps/special-steps-1-9-7-15.png[]
+
+. Через термінал клонуйте репозиторій _service-mesh_ зі створеною на попередньому кроці гілкою.
++
+[source,bash]
+----
+$ git clone -b 1.9.7.7-jaeger-update ...
+$ cd service-mesh
+----
+
+. Завантажте патчсет змін xref:attachment$special-steps/ccc6194.diff[_ccc6194.diff_], та покладіть файл у директорію *_service-mesh_*.
+
+[#apply-patchset-jaeger-operator]
+--
+[start=6]
+. Застосуйте зміни наступною командою:
++
+[source,bash]
+----
+$ git apply ccc6194.diff
+----
++
+NOTE: При застосуванні цього патчсету можуть показуватися попередження (WARNING). Таку поведінку можна ігнорувати та починати виконання наступного кроку.
++
+image:infrastructure/special-steps/special-steps-1-9-7-16.png[]
+--
+
+[#git-commit-update-jaeger-operator]
+--
+[start=7]
+. Переконайтеся, що зміни застосовано, внесіть ваші оновлення та виконайте `git push`.
++
+[source,bash]
+----
+$ git status
+$ git add deploy-templates/
+$ git commit -m "Update jaeger-operator"
+$ git push origin HEAD:refs/for/1.9.7.7-jaeger-update
+----
+--
+
+[start=8]
+. У щойно створеній зміні в Gerrit натисніть кнопку *`Reply`* та виставте відповідні оцінки.
++
+image:infrastructure/special-steps/special-steps-1-9-7-17.png[]
+
+. Застосуйте зміни натисканням кнопки *`Submit`* у правому верхньому куті.
+
+. Перейдіть до репозиторію *_cluster-mgmt_*. На вкладці *Commands* натисніть кнопку *`Create Change`* та заповніть наступні поля:
+
+.. У полі *Select branch for new change* вкажіть `master`.
+.. У полі *Description* вкажіть опис зміни: `update version of service-mesh`.
+
++
+image:infrastructure/special-steps/special-steps-1-9-7-18.png[]
+
+
+. Ви будете автоматично перенаправлені до новоствореної зміни. Натисніть кнопку *`Edit`*.
++
+image:infrastructure/special-steps/special-steps-1-9-7-19.png[]
+
+. У полі пошуку файлів знайдіть наступний файл за шляхом: `properties/cluster-mgmt.yaml`. Натисніть *`Confirm`*.
++
+image:infrastructure/special-steps/special-steps-1-9-7-20.png[]
+
+. У вікні редагування знайдіть блок для репозиторію _service-mesh_ та змініть поля `version` та `branch` на назву гілки, яку було створено одному з попередніх кроків. У нашому випадку назва гілки -- `1.9.7.7-jaeger-update`.
++
+.Приклад блоку після редагування
+[source,yaml]
+----
+- name: service-mesh
+  labels:
+    type: remote
+    update_scc: false
+    isbranch: false
+    path: components/infra/
+    repoURL: ssh://jenkins@gerrit.mdtu-ddm-edp-cicd:32114/mdtu-ddm/infrastructure/service-mesh.git
+    branch: 1.9.7.7-jaeger-update
+  version: 1.9.7.7-jaeger-update
+  values: []
+----
+
+. Після редагування коду, у верхньому правому куті натисніть кнопку *`Save & Publish`*.
++
+image:infrastructure/special-steps/special-steps-1-9-7-21.png[]
+
+. Повторіть процес виставлення оцінок та застосування зміни на прикладі кроків xref:#apply-patchset-jaeger-operator[Застосування патчсету для jaeger-operator] та xref:#git-commit-update-jaeger-operator[Commit та push змін до Gerrit].
++
+Після застосування зміни, запуститься пайплайн в Jenkins для `cluster-mgmt`.
++
+Після успішного проходження *cluster-mgmt*-пайплайну, слід перевірити версію ``jaeger-operato``r. Це можна зробити у поді `jaeger-operator` проєкту `istio-system`. Версія образу повинна дорівнювати `1.39.0`.
++
+image:infrastructure/special-steps/special-steps-1-9-7-22.png[]
++
+Також перевірте наявність роутів. Це можна зробити у розділі *Networking* > *Routes* проєкту `istio-system`. Має існувати роут `jaeger`.
++
+image:infrastructure/special-steps/special-steps-1-9-7-23.png[]
 
 == Оновлення реєстру
 
-. Оновіть реєстр до нової версії відповідно до інструкції xref:admin:update/update-registry-components.adoc[]. При сторенні запита на оновлення, не підтверджуйте його.
+. Оновіть реєстр до нової версії відповідно до інструкції xref:admin:update/update-registry-components.adoc[]. При створенні запита на оновлення, не підтверджуйте його. У 1.9.7 відбулися глобальні зміни з переходом на Єдиний шаблон (_див. детальніше -- xref:release-notes:whats-new/part-7/wn-7.adoc#single-template[Оптимізація процесу створення реєстрів: мінімізація шаблонів і гнучкість налаштувань]_), тому необхідно виконати ручні зміни у процесі оновлення реєстрів.
 
-. Перейдіть до міграції налаштувань, описаних нижче.
+Після створення запита на оновлення до версії 1.9.7, перейдіть у Gerrit за посиланням з Control Plane та виконайте міграцію налаштувань, описану нижче.
+
+image:infrastructure/special-steps/special-steps-1-9-7-24.png[]
+
+image:infrastructure/special-steps/special-steps-1-9-7-25.png[]
 
 === Оновлення наявних реєстрів
 
-...
+Для плавного переходу до нового підходу з єдиним шаблоном, необхідно внести зміни у файл *_deploy-templates/values.yaml_* реєстру.
+
+==== Налаштування параметрів віртуальних машин
+
+Залежно від типу інфраструктури, залиште необхідні параметри та заповніть значеннями, на яких працює реєстр. Для цього внесіть зміни у файл _deploy-templates/values.yaml_ до наступної секції:
+
+[source,yaml]
+----
+global:
+  ...
+  computeResources:
+    instanceCount: 2
+    awsInstanceType: "r5.2xlarge"
+    awsSpotInstance: false
+    awsSpotInstanceMaxPrice: ""
+    awsInstanceVolumeType: "gp3"
+    instanceVolumeSize: 80
+    vSphereInstanceCPUCount: 8
+    vSphereInstanceCoresPerCPUCount: 1
+    vSphereInstanceRAMSize: 32768
+----
+
+. Секція `computeResources` _ДО_ змін має такий вигляд:
++
+image:infrastructure/special-steps/special-steps-1-9-7-26.png[]
+
+. У налаштуваннях для AWS, значення параметрів змінені на значення з наявних налаштувань реєстру.
++
+[source,yaml]
+----
+global:
+  ...
+  computeResources:
+    instanceCount: 2
+    awsInstanceType: "r5.2xlarge"
+    awsSpotInstance: false
+    awsSpotInstanceMaxPrice: ""
+    awsInstanceVolumeType: "gp3"
+    instanceVolumeSize: 80
+----
++
+У цьому випадку наступні параметри за замовчуванням, що не стосуються AWS-провайдера, було видалено:
++
+[source,yaml]
+----
+vSphereInstanceCPUCount: 8
+vSphereInstanceCoresPerCPUCount: 1
+vSphereInstanceRAMSize: 32768
+----
+
+. Відповідно у випадку налаштувань для vSphere, видаліть параметри для AWS та внесіть актуальні значення, наприклад:
++
+[source,yaml]
+----
+global:
+  ...
+  computeResources:
+    vSphereInstanceCPUCount: 8
+    vSphereInstanceCoresPerCPUCount: 1
+    vSphereInstanceRAMSize: 32768
+----
+
+==== Редагування ресурсів, кількість реплік/або HPA
+
+Перенесіть встановлені значення з вашого реєстру. При використанні параметрів за замовчуванням, нічого змінювати не треба.
+
+.Приклад секції з параметрами за замовчуванням для компонента bpms
+[source,yaml]
+----
+global:
+  ...
+  registry:
+    ...
+    bpms:
+      replicas: 1
+      hpa:
+        enabled: false
+        minReplicas: 1
+        maxReplicas: 3
+      istio:
+        sidecar:
+          enabled: true
+      container:
+        envVars:
+          JAVA_OPTS: "-Xms1536m -Xmx1536m -Duser.timezone=UTC"
+----
+
+Якщо необхідно ввімкнути HPA, змінюйте значення у відповідній секції. Зверніть увагу, що в такому випадку необхідно встановити й параметри ресурсів контейнера:
+
+[source,yaml]
+----
+global:
+  ...
+  registry:
+    ...
+      hpa:
+        enabled: true
+        minReplicas: 1
+        maxReplicas: 3
+      container:
+        resources:
+          limits:
+            cpu: "2"
+          requests:
+            cpu: "1"
+            memory: "4Gi
+      ...
+----
+
+==== Редагування ресурсів контейнера та/або istio sidecar
+
+Параметри ресурсів контейнера необхідно внести й без включеного HPA, якщо вони були попередньо визначені.
+
+Також є можливість параметризувати ресурси для istio sidecar, якщо він був активований. Наприклад:
+
+[source,yaml]
+----
+global:
+  ...
+  registry:
+    ...
+    userProcessManagement:
+      replicas: 1
+      hpa:
+        enabled: false
+        minReplicas: 1
+        maxReplicas: 3
+      istio:
+        sidecar:
+          enabled: true
+          resources:
+            limits:
+              cpu: 350m
+              memory: 128Mi
+            requests:
+              cpu: 350m
+              memory: 128Mi
+       container:
+         envVars:
+          JAVA_OPTS: "-Xms512m -Xmx512m"
+         resources:
+          limits:
+            cpu: "2"
+          requests:
+            cpu: "1"
+            memory: 4Gi
+----
+
+==== Редагування `maxPoolSize` для компонентів `restApi` та `kafkaApi`
+
+За потреби відредагуйте значення `maxPoolSize` для компонентів `restApi` та `kafkaApi`, відповідно до попередніх налаштувань вашого реєстру:
+
+[source,yaml]
+----
+global:
+  ...
+  registry:
+    ...
+    kafkaApi:
+      ...
+      datasource:
+        maxPoolSize: 10
+----
+
+==== Додаткові умови при розгорнутому геосервері
+
+Якщо реєстр має геосервер, змініть значення параметра `geoServerEnabled` на `true`.
+
+[source,yaml]
+----
+global:
+  ...
+  geoServerEnabled: true
+----
 
 === Оновлення реєстрів версії 1.9.6, що були створені після оновлення Платформи до 1.9.7
 
-...
+Якщо реєстр 1.9.6 було створено на оновленій платформі 1.9.7, для його оновлення необхідно змінити значення анотації та перезапустити пайплайн *cluster-mgmt* у центральному Jenkins. Після цього з'явиться можливість оновити реєстр:
+
+*Project*: *`control-plane`* > *Codebases* > *Codebase details*
+
+----
+registry-parameters/template-name: templates/registry-tenant-template
+----
 
 == Відомі проблеми
 
-Проблема: ::
-...
+[cols="2*", options="header"]
+|===
+| Проблема | Тимчасове рішення (_за потреби_)
 
-Тимчасове рішення: ::
-...
+| *Невалідна валідація SSL-сертифіката* при попередньому включенні DNS та спроби змінити на недійсний SSL файл.
+| Перевірте файл на коректність (розширення, зміст). Поверніться до редагування Реєстру та завантажте правильний файл.
+
+| *Під час одночасного створення запита на оновлення* у двох різних реєстрах, Control Plane не знаходить Merge Request (MR).
+| Відхиліть зміни безпосередньо у Gerrit, потім виконайте новий запит на оновлення.
+
+| *Не збігаються статуси* на сторінці переліку реєстрів і сторінці інформації про реєстр.
+| Обхідний шлях не потрібен, функціональність Платформи не порушена.
+
+| *Після рестарту кластера падають* *Create-release* пайплайни у реєстрах.
+| Обхідний шлях не потрібен, функціональність Платформи не порушена.
+
+|===
 
 == Виправлення помилки при відновленні центрального компонента `control-plane`
 
-...
+Для коректного відновлення з резервної копії центрального компонента control-plane, потрібно внести зміни в `control-plane-gerrit`, в репозиторій *_backup-management_*, гілку `1.9.7.4`, та замінити повністю зміст двох файлів:
+
+. _deploy-templates/charts/velero/templates/control-plane-backup-clusterrole.yaml_
+. _deploy-templates/charts/velero/templates/control-plane-restore-control-plane.tpl_
+
+.*_Цільовий код у файлі deploy-templates/charts/velero/templates/control-plane-backup-clusterrole.yaml_*
+[%collapsible]
+====
+[source,yaml]
+----
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ .Values.cronJob.name }}-clusterrole
+rules:
+  - verbs:
+      - use
+    apiGroups:
+      - security.openshift.io
+    resources:
+      - securitycontextconstraints
+    resourceNames:
+      - anyuid
+  - verbs:
+      - '*'
+    apiGroups:
+      - rbac.authorization.k8s.io
+    resources:
+      - rolebindings
+  - verbs:
+      - get
+      - list
+    apiGroups:
+      - config.openshift.io
+    resources:
+      - infrastructures
+  - verbs:
+      - '*'
+    apiGroups:
+      - apps
+    resources:
+      - deployments
+      - deployments/scale
+  - verbs:
+      - get
+      - delete
+      - list
+      - patch
+    apiGroups:
+      - ''
+    resources:
+      - pods
+  - verbs:
+      - '*'
+    apiGroups:
+      - velero.io
+    resources:
+      - '*'
+  - verbs:
+      - create
+      - get
+      - list
+      - watch
+      - patch
+      - update
+      - delete
+    apiGroups:
+      - '*'
+    resources:
+      - secrets
+      - services
+      - adminconsoles
+      - cdstagedeployments
+      - cdstagejenkinsdeployments
+      - codebasebranches
+      - codebaseimagestreams
+      - codebases
+      - gerritgroupmembers
+      - gerritgroups
+      - gerritmergerequests
+      - gerritprojectaccesses
+      - gerritprojects
+      - gerritreplicationconfigs
+      - gerrits
+      - gitservers
+      - gittags
+      - imagestreamtags
+      - jenkins
+      - jenkinsagents
+      - jenkinsauthorizationrolemappings
+      - jenkinsauthorizationroles
+      - jenkinsfolders
+      - jenkinsjobbuildruns
+      - jenkinsjobs
+      - jenkinsscripts
+      - jenkinsserviceaccounts
+      - jenkinssharedlibraries
+      - jiraissuemetadatas
+      - jiraservers
+      - nexuses
+      - nexususers
+      - edpcomponents
+      - keycloakauthflows
+      - keycloakclients
+      - keycloakclientscopes
+      - keycloakrealmcomponents
+      - keycloakrealmgroups
+      - keycloakrealmidentityproviders
+      - keycloakrealmrolebatches
+      - keycloakrealmroles
+      - keycloakrealms
+      - keycloakrealmusers
+      - keycloaks
+      - endpointslices
+      - customresourcedefinitions
+      - routes
+      - routes/custom-host
+      - namespaces
+      - validatingwebhookconfigurations
+----
+====
+
+.*_Цільовий код у файлі deploy-templates/charts/velero/templates/control-plane-restore-control-plane.tpl_*
+[%collapsible]
+====
+[source,tpl]
+----
+{{- define "restore-script" }}
+#!/usr/bin/env bash
+set -e
+
+if [[ -z "${BACKUP_NAME}" ]] || [[ "${BACKUP_NAME}" = "REPLACE_IT" ]]; then
+    echo "Environment variable with backup_name is missing or value has not change.
+Please add/change ${BACKUP_NAME} to pod parameters"
+    exit 1
+fi
+
+backup_name="${BACKUP_NAME}"
+backup_secret_name="backup-credentials"
+edp_project="control-plane"
+resource_type="customresourcedefinition"
+resources_folder="/tmp/openshift_resources"
+
+declare -a crds_to_patch=("gerritmergerequests.v2.edp.epam.com" "codebases.v2.edp.epam.com" "jenkins.v2.edp.epam.com" "gerrits.v2.edp.epam.com")
+declare -a animals=("deployment,app=gerrit,gerrit" "deployment,app=jenkins,jenkins")
+
+execution_time=$(date '+%Y-%m-%d-%H-%M-%S')
+cloud_provider=$(oc get infrastructure cluster --no-headers -o jsonpath='{.status.platform}')
+
+
+restic_wait() {
+  while [[ $(oc get pods "${1}" -o 'jsonpath={..status.conditions[?(@.type=="Initialized")].status}' -n "${2}") != "True" ]]; do
+    sleep 10
+    echo "Restic is not initialized in pod ${1}"
+  done
+}
+
+delete_namespace(){
+    declare -a groups=( "v2.edp.epam.com" "v1.edp.epam.com" )
+    if [ ! "$(oc get namespace ${edp_project} --ignore-not-found | wc -c)" -eq 0 ]; then
+        if [ ! "$(oc get deployment -n ${edp_project} --ignore-not-found | wc -c)" -eq 0 ];then
+          oc -n "${edp_project}" scale deployments --all=true --replicas 0
+        else
+          echo "[DEBUG] Deployments already deleted from namespace ${edp_project}"
+        fi
+        for group in "${groups[@]}";do
+            for kind in $(oc get crd -o json | jq -r '.items[] | select(.spec.group == "'${group}'") | .spec.names.plural');do
+                if [ ! "$(oc -n "${edp_project}" get "${kind}" --ignore-not-found | wc -c)" -eq 0 ];then
+                    oc -n "${edp_project}" get "${kind}" --no-headers -o=custom-columns='NAME:.metadata.name' | xargs oc -n "${edp_project}" patch "${kind}" -p '{"metadata":{"finalizers":null}}' --type=merge
+                else
+                  echo "[DEBUG] CRs with kind ${kind} are already deleted, or not found."
+                fi
+            done
+        done
+        oc delete namespace ${edp_project} --wait=true
+    else
+      echo "Project ${edp_project} already deleted"
+    fi
+}
+
+minio_resources(){
+    declare -a resources_kind=("service" "route" "endpointslice")
+    resource_name="platform-minio"
+    for kind in "${resources_kind[@]}";do
+      if [ "${1}" == "delete" ];then
+              oc delete "${kind}" "${resource_name}" --ignore-not-found
+      else
+          if [ ! "$(oc get "${kind}" "${resource_name}" --ignore-not-found=true | wc -c)" -eq 0 ];then
+              echo "[INFO] Resource ${kind} ${resource_name} already exist. Continuing restore."
+          else
+              if [ ! "$(oc -n "${edp_project}" get "${kind}" "${resource_name}" --ignore-not-found=true | wc -c)" -eq 0 ];then
+                  oc get -n "${edp_project}" "${kind}" "${resource_name}" -o json | jq 'del(.metadata.namespace,.spec.clusterIPs,.spec.clusterIP,.metadata.resourceVersion,.metadata.uid,.metadata.managedFields,.metadata.selfLink,.metadata.ownerReferences)' | oc create -f -
+              else
+                  echo "Exit from script, resource ${kind} ${resource_name} not found in ${edp_project}"
+                  exit 1
+              fi
+          fi
+      fi
+   done
+}
+
+codebase_webhook() {
+   if [ ! "$(oc get ValidatingWebhookConfiguration "edp-codebase-operator-validating-webhook-configuration-${edp_project}" --ignore-not-found| wc -c)" -eq 0 ];then
+     oc get ValidatingWebhookConfiguration "edp-codebase-operator-validating-webhook-configuration-${edp_project}" -o yaml > codebase_webhook.yaml
+     oc delete -f codebase_webhook.yaml
+   else
+     if [ -f ./codebase_webhook.yaml ];then
+       oc apply -f codebase_webhook.yaml
+       rm -rf codebase_webhook.yaml
+     fi
+   fi
+}
+
+restore() {
+    replica_count=""
+
+    echo "Start restoring deployment application with label - ${3}"
+    velero create restore "${1}-${execution_time}-${5}" --selector "${3}" --from-backup "${1}"
+
+    timeout 200 bash -c 'while [[ ! $(oc get deployment -l '${3}' -n '${4}' --no-headers -o name) ]]; do sleep 10; echo "Waiting for deployment - '${3}'"; done'
+    replica_count=$(oc get deployment -l "${3}" -n "${4}" -o jsonpath='{.items[0].spec.replicas}' --ignore-not-found)
+
+    if [ -n "${replica_count}" ] && [ "${cloud_provider}" != "AWS" ]; then
+      deployment_pod_name=$(oc get pods -l "${3}" -n "${4}" -o json | jq -c '.items[] | select( .metadata.ownerReferences != null ) |.metadata.name' | tr -d '"')
+      restic_pod_name=$(oc get pods -l "${3}" -o=jsonpath="{range .items[*]}{.metadata.name},{.spec.initContainers[*].name}{'\n'}{end}" -n "${4}" | grep "restic-wait" | awk -F, '{ print $1 }')
+      if [[ "${deployment_pod_name}" != "${restic_pod_name}" ]]; then
+        oc scale deployment -l "${3}" -n "${4}" --replicas 0
+        oc delete pod "${deployment_pod_name}" -n "${4}" --grace-period=0 --force=true --ignore-not-found=true
+      fi
+      echo "Waiting for Restic pod in pod ${restic_pod_name}"
+      restic_wait "${restic_pod_name}" "${4}"
+      sleep 5
+      oc scale deployment -l "${3}" -n "${4}" --replicas "${replica_count}"
+    fi
+
+    sleep 30
+
+    echo "Delete pods with label ${3}. Root cause: network issue"
+    oc delete pod -l "${3}" -n "${4}" --wait=true
+    echo "[DEBUG]Restic restore done for label - ${3}, pod in Running state"
+}
+
+minio_resources "create"
+
+codebase_webhook
+
+delete_namespace
+
+echo "Initing restore"
+velero restore create --from-backup "${backup_name}" --include-resources secrets,configmaps --wait
+
+echo "Restoring resources from minio"
+minio_endpoint=$(oc get secret $backup_secret_name -n $edp_project  -o jsonpath='{.data.backup-s3-like-storage-url}' | base64 -d)
+minio_backup_bucket_name=$(oc get secret $backup_secret_name -n $edp_project  -o jsonpath='{.data.backup-s3-like-storage-location}' | base64 -d)
+minio_access_key=$(oc get secret ${backup_secret_name} -n ${edp_project}  -o jsonpath='{.data.backup-s3-like-storage-access-key-id}' | base64 -d)
+minio_secret_key=$(oc get secret ${backup_secret_name} -n ${edp_project}  -o jsonpath='{.data.backup-s3-like-storage-secret-access-key}' | base64 -d)
+
+mkdir -p ~/.config/rclone
+
+echo "
+[minio]
+type = s3
+env_auth = false
+access_key_id = ${minio_access_key}
+secret_access_key = ${minio_secret_key}
+endpoint = ${minio_endpoint}
+region = eu-central-1
+location_constraint = EU
+acl = bucket-owner-full-control" > ~/.config/rclone/rclone.conf
+
+mkdir -p "${resources_folder}"
+
+rclone copy "minio:/${minio_backup_bucket_name}/openshift-backups/backups/${backup_name}/openshift-resources" ${resources_folder}
+
+for resource_name in "${crds_to_patch[@]}";do
+    oc patch "${resource_type}" "${resource_name}" --type='json' -p='[{"op":"replace","path":"/spec/versions/0/subresources","value":null}]'
+done
+
+for op_object in "${resources_folder}"/*; do
+  [[ -e "${op_object}" ]] || break
+  oc apply -f "${op_object}";
+done
+
+codebase_webhook
+
+for resource_name in "${crds_to_patch[@]}";do
+    oc patch "${resource_type}" "${resource_name}" --type='json' -p='[{"op":"add","path":"/spec/versions/0/subresources","value":{"status":{}}}]'
+done
+
+rm -rf "${resources_folder}"
+
+oc adm policy add-scc-to-user anyuid -z jenkins -n "${edp_project}"
+oc adm policy add-scc-to-user anyuid -z istio-ingressgateway-control-plane-main-service-account -n "${edp_project}"
+
+for object in "${animals[@]}"; do
+  type=$(echo "${object}" | awk -F, '{ print $1 }')
+  label=$(echo "${object}" | awk -F, '{ print $2 }')
+  resource_name=$(echo "${object}" | awk -F, '{ print $3 }')
+  restore "${backup_name}" "${type}" "${label}" "${edp_project}" "${resource_name}"
+done
+
+echo "[DEBUG] Finish restoring process"
+velero create restore --from-backup "${backup_name}" --exclude-resources secrets,configmaps,persistentvolumes,persistentvolumeclaims,roles,rolebindings,clusterrolebindings,clusterroles,podsecuritypolicies --wait
+
+sleep 120 && oc delete pod -n "${edp_project}" -l name=jenkins-operator && sleep 120
+
+minio_resources "delete"
+{{- end }}
+----
+====
+
+Merge Request повинен виглядати наступним чином:
+
+image:infrastructure/special-steps/special-steps-1-9-7-27.png[]
+
+Після цього натисніть *`Reply`* > *`Code-Review +2`*, *`Verify +1`* > *`Submit`* та запустіть пайплайн *MASTER-Build-cluster-mgmt*. Дочекайтеся завершення збірки коду.
