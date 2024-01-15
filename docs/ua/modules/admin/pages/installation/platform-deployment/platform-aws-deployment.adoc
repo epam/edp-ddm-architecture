@@ -225,587 +225,23 @@ TIP: Докладніше процес створення IAM-користува
 [#deploy-additional-recources-for-okd]
 == Розгортання додаткових ресурсів для інсталяції OKD-кластера в AWS
 
-Для вдалого встановлення кластера та платформи, потрібно підняти наступні ресурси в AWS. На малюнку нижче зображена схема інфраструктури із ними.
+Для вдалого встановлення кластера та платформи, потрібно підняти наступні ресурси в AWS. На малюнку нижче зображена схема інфраструктури із ними. Це зроблено для спрощення інсталяції платформи та уникнення небажаних помилок, які можуть бути пов’язані з встановленням із локального комп'ютера.
 
-image:installation/aws/installation-aws-1.png[image,width=468,height=375]
+image:installation/aws/installation-aws-1.svg[image,width=468,height=375]
 
-Це можна зробити самостійно за рекомендаціями зазначеними нижче або використати підготовлений Terraform-код.
+=== Опис додаткових ресурсів
 
-=== Опис Terraform-коду
+Більш докладний опис додаткових ресурсів зі схеми подано нижче:
 
-Як приклад автоматизації процесу було реалізовано Terraform-код, який можна підлаштувати під свої параметри та використати для розгортання інфраструктури.
+* *S3 кошик* -- використовується для зберігання стану Terraform.
+* *DynamoDB* -- таблиця в DynamoDB, яка буде використовуватися для збереження інформації про блокування стану Terraform.
+* *NAT Gateway* -- використовується для забезпечення приватного сервера доступом до Інтернету.
+* *Bastion* -- використовується як проміжний сервер для забезпечення безпечного та обмеженого доступу до сервера у приватній мережі. Надалі, через цей бастіон буде прокинуто SSH-тунель до initial-node.
+* *Initial-node* -- сервер у приватній мережі, через який буде відбуватися інсталяція кластера та платформи.
 
-==== Початковий Terraform-код
+Розгорнути ці ресурси можна за допомогою підготовленого Terraform-коду в наступних кроках.
 
-Це Terraform-код, який створить ресурси для подальших кроків. До таких ресурсів відносяться:
-
-* S3 Bucket -- сховище для зберігання файлів _*.tfstate_;
-* DynamoDB Table -- таблиця, необхідна для блокування стану Terraform.
-
-.Початковий код. Опис шаблонів Terraform
-====
-.main.tf
-[%collapsible]
-=====
-[source,terraform]
-----
-data "aws_caller_identity" "current" {}
-
-module "s3_bucket" {
-  source  = "terraform-aws-modules/s3-bucket/aws"
-  version = "3.6.0"
-
-  bucket = "terraform-states-${data.aws_caller_identity.current.account_id}"
-  acl    = "private"
-  # S3 bucket-level Public Access Block configuration
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
-
-  versioning = {
-    enabled = true
-  }
-
-  tags = merge(var.tags)
-}
-
-module "dynamodb_table" {
-  source  = "terraform-aws-modules/dynamodb-table/aws"
-  version = "3.1.2"
-
-  name           = var.table_name
-  billing_mode   = "PROVISIONED"
-  read_capacity  = "1"
-  write_capacity = "1"
-  hash_key       = "LockID"
-
-  attributes = [
-    {
-      name = "LockID"
-      type = "S"
-    }
-  ]
-
-  tags = merge(var.tags, tomap({ "Name" = var.table_name }))
-}
-----
-=====
-
-
-.providers.tf
-[%collapsible]
-=====
-[source,terraform]
-----
-terraform {
-  required_version = "= 1.3.7"
-}
-
-provider "aws" {
-  region = var.region
-}
-----
-=====
-
-.terraform.tfvars
-[%collapsible]
-=====
-[source,terraform]
-----
-region = "eu-central-1"
-tags = {
-  "SysName"    = "EPAM"
-  "Department" = "MDTU-DDM"
-  "user:tag"   = "mdtuddm1"
-}
-----
-=====
-
-.variables.tf
-[%collapsible]
-=====
-[source,terraform]
-----
-variable "region" {
-  description = "The AWS region to deploy the cluster into, e.g. eu-central-1"
-  type        = string
-}
-
-variable "s3_states_bucket_name" {
-  description = "Prefix for S3 bucket name. Since the name should be unique the account number will be added as suffix, e.g. terraform-states-<AWS_ACCOUNT_ID>"
-  type        = string
-  default     = "terraform-states"
-}
-
-variable "table_name" {
-  description = "the name of DynamoDb table to store terraform tfstate lock"
-  type        = string
-  default     = "terraform_locks"
-}
-
-variable "tags" {
-  description = "A map of tags to apply to all resources"
-  type        = map(any)
-}
-----
-=====
-====
-
-==== Основний Terraform-код
-
-Основний Terraform-код, розгортає усі необхідні ресурси. Опис шаблонів наведено нижче.
-
-.Основний код. Опис шаблонів Terraform
-====
-
-.main.tf
-[%collapsible]
-=====
-[source,terraform]
-----
-module "vpc" {
-  source  = "terraform-aws-modules/vpc/aws"
-  version = "3.19.0"
-
-  name = var.platform_name
-
-  cidr            = var.platform_cidr
-  azs             = var.subnet_azs
-  private_subnets = var.private_cidrs
-  public_subnets  = var.public_cidrs
-
-  enable_dns_hostnames   = true
-  enable_dns_support     = true
-  enable_nat_gateway     = true
-  single_nat_gateway     = true
-  one_nat_gateway_per_az = false
-
-  tags = var.tags
-}
-
-module "ec2_instance" {
-  source  = "terraform-aws-modules/ec2-instance/aws"
-  version = "4.3.0"
-
-  name = var.node_name
-
-  ami                    = var.node_ami
-  instance_type          = var.node_type
-  key_name               = module.key_pair.key_pair_name
-  vpc_security_group_ids = [aws_security_group.sg_private.id]
-  subnet_id              = module.vpc.private_subnets[0]
-  user_data              = templatefile("files/user_data.sh.tpl", { cross_account_role = var.cross_account_role_arn })
-  iam_instance_profile   = aws_iam_instance_profile.node_profile.name
-  enable_volume_tags     = false
-
-  root_block_device = [
-    {
-      encrypted   = false
-      volume_type = var.volume_type
-      volume_size = var.volume_size
-      tags        = var.tags
-    },
-  ]
-
-  tags = var.tags
-}
-
-module "ec2_bastion" {
-  source  = "terraform-aws-modules/ec2-instance/aws"
-  version = "4.3.0"
-
-  name = "bastion"
-
-  ami                    = var.node_ami
-  instance_type          = "t2.nano"
-  key_name               = module.key_pair.key_pair_name
-  vpc_security_group_ids = [aws_security_group.sg_public.id]
-  subnet_id              = module.vpc.public_subnets[0]
-  enable_volume_tags     = false
-
-  tags = var.tags
-}
-
-module "key_pair" {
-  source  = "terraform-aws-modules/key-pair/aws"
-  version = "2.0.1"
-
-  key_name   = var.key_pair
-  public_key = trimspace(tls_private_key.main.public_key_openssh)
-  tags = merge(var.tags, {
-    "Name" = var.key_pair
-  })
-}
-----
-=====
-
-.providers.tf
-[%collapsible]
-=====
-[source,terraform]
-----
-terraform {
-  required_version = "= 1.3.7"
-
-  # Fill the gaps instead <...>
-  backend "s3" {
-    bucket         = "terraform-states-<ACCOUNT_ID>"
-    key            = "node/eu-central-1/terraform/terraform.tfstate"
-    region         = "eu-central-1"
-    acl            = "bucket-owner-full-control"
-    dynamodb_table = "terraform_locks"
-    encrypt        = true
-  }
-
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = ">= 4.51.0"
-    }
-  }
-}
-
-provider "aws" {
-  region = var.region
-}
-----
-=====
-
-.iam-node-role.tf
-[%collapsible]
-=====
-[source,terraform]
-----
-data "aws_iam_policy_document" "assume_role_policy" {
-  statement {
-    actions = ["sts:AssumeRole"]
-
-    principals {
-      type        = "Service"
-      identifiers = ["ec2.amazonaws.com"]
-    }
-
-  }
-}
-
-resource "aws_iam_role" "node_role" {
-  name                  = var.role_name
-  description           = "IAM role to assume to initial node"
-  assume_role_policy    = data.aws_iam_policy_document.assume_role_policy.json
-  force_detach_policies = true
-
-  inline_policy {
-    name = "CrossAccountPolicy"
-
-    policy = jsonencode({
-      Version = "2012-10-17"
-      Statement = [
-        {
-          Action   = "sts:AssumeRole"
-          Effect   = "Allow"
-          Resource = var.cross_account_role_arn
-        },
-      ]
-    })
-  }
-  tags = merge(var.tags, tomap({ "Name" = var.role_name }))
-}
-
-resource "aws_iam_instance_profile" "node_profile" {
-  name = var.role_name
-  role = aws_iam_role.node_role.name
-
-  tags = var.tags
-}
-----
-=====
-
-.elastic-ip.tf
-[%collapsible]
-=====
-[source,terraform]
-----
-resource "aws_eip" "bastion_ip" {
-  instance = module.ec2_bastion.id
-
-  tags = merge(var.tags, {
-    "Name" = "bastion-ip"
-  })
-}
-----
-=====
-
-.security-groups.tf
-[%collapsible]
-=====
-[source,terraform]
-----
-resource "aws_security_group" "sg_public" {
-  name   = "sg public for bastion"
-  vpc_id = module.vpc.vpc_id
-  ingress {
-    from_port = var.ssh_port
-    to_port   = var.ssh_port
-    protocol  = "tcp"
-    #    cidr_blocks = var.ingress_cidr_blocks
-    prefix_list_ids = [var.prefix_list_ids]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-  tags = merge(var.tags, {
-    "Name" = "sg-public"
-  })
-}
-
-resource "aws_security_group" "sg_private" {
-  name   = "sg private for node"
-  vpc_id = module.vpc.vpc_id
-  ingress {
-    from_port       = var.ssh_port
-    to_port         = var.ssh_port
-    protocol        = "tcp"
-    security_groups = [aws_security_group.sg_public.id]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-  tags = merge(var.tags, {
-    "Name" = "sg-private"
-  })
-}
-----
-=====
-
-.ssh-key.tf
-[%collapsible]
-=====
-[source,terraform]
-----
-resource "tls_private_key" "main" {
-  algorithm = "RSA"
-}
-
-resource "null_resource" "main" {
-  provisioner "local-exec" {
-    command = "echo \"${tls_private_key.main.private_key_pem}\" > private.key"
-  }
-
-  provisioner "local-exec" {
-    command = "chmod 600 private.key"
-  }
-}
-----
-=====
-
-.files/user_data.sh.tpl
-[%collapsible]
-=====
-[source,sh]
-----
-#!/bin/bash
-export VERSION_STRING=5:20.10.23~3-0~ubuntu-bionic
-
-# Install docker
-sudo apt-get update -y
-sudo apt-get install \
-    ca-certificates \
-    curl \
-    gnupg \
-    lsb-release -y
-sudo mkdir -p /etc/apt/keyrings
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-echo \
-  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
-  $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-sudo apt-get update -y
-sudo apt-get install docker-ce=$VERSION_STRING docker-ce-cli=$VERSION_STRING containerd.io docker-compose-plugin -y
-sudo usermod -aG docker ubuntu
-
-# Install unzip
-sudo apt install unzip -y
-
-# Install aws-cli-v2
-curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-unzip awscliv2.zip
-sudo ./aws/install
-
-# Configure config for cross account integration
-mkdir -p /home/ubuntu/.aws
-touch /home/ubuntu/.aws/config
-cat <<EOT >> /home/ubuntu/.aws/config
-[profile cross-account-role]
-role_arn = ${cross_account_role}
-credential_source = Ec2InstanceMetadata
-EOT
-----
-=====
-
-.terraform.tfvars
-[%collapsible]
-=====
-[source,terraform]
-----
-# Check out all the inputs based on the comments below and fill the gaps instead <...>
-# More details on each variable can be found in the variables.tf file
-
-region        = "eu-central-1"
-platform_name = "okd-4-11" # the name of the cluster and AWS resources
-platform_cidr = "10.0.0.0/16"
-# The following will be created or used existing depending on the create_vpc value
-subnet_azs    = ["eu-central-1a", "eu-central-1b", "eu-central-1c"]
-private_cidrs = ["10.0.1.0/24"]
-public_cidrs  = ["10.0.101.0/24"]
-
-ssh_port = 22
-
-# Uncomment this line to use a custom IP address for the SSH connection
-#ingress_cidr_blocks = ["<CUSTOM_IP>"]
-
-# Using prefix-list from epam-east-eu
-prefix_list_ids = "pl-0ede2509a36215538"
-
-node_name = "initial-node"
-node_ami  = "ami-0e0102e3ff768559b"
-node_type = "t2.medium"
-key_pair  = "node_key"
-
-volume_type = "gp3"
-volume_size = 150
-
-role_name              = "CustomEC2Role"
-cross_account_role_arn = "arn:aws:iam::764324427262:role/CustomCrossAccountRole"
-
-tags = {
-  "SysName"    = "EPAM"
-  "Department" = "MDTU-DDM"
-  "user:tag"   = "mdtuddm1"
-}
-----
-=====
-
-.variables.tf
-[%collapsible]
-=====
-[source,terraform]
-----
-variable "region" {
-  description = "The AWS region to deploy the cluster into, e.g. eu-central-1"
-  type        = string
-}
-
-variable "platform_name" {
-  description = "The name of the node that is used for tagging resources. Match the [a-z0-9_-]"
-  type        = string
-}
-
-variable "platform_cidr" {
-  description = "CIDR of your future VPC"
-  type        = string
-}
-
-variable "subnet_azs" {
-  description = "Available zones of your future or existing subnets"
-  type        = list(any)
-  default     = []
-}
-
-variable "private_cidrs" {
-  description = "CIDR of your future VPC"
-  type        = list(any)
-  default     = []
-}
-
-variable "public_cidrs" {
-  description = "CIDR of your future VPC"
-  type        = list(any)
-  default     = []
-}
-
-variable "node_name" {
-  description = "The name of the node that is used for tagging resources. Match the [a-z0-9_-]"
-  type        = string
-}
-
-variable "node_ami" {
-  description = "The ami of the node"
-  type        = string
-}
-
-variable "node_type" {
-  description = "Type of the node"
-  type        = string
-}
-
-variable "key_pair" {
-  description = "The name of DynamoDb table to store terraform tfstate lock"
-  type        = string
-}
-
-variable "volume_type" {
-  description = "Root volume type of the node"
-  type        = string
-}
-
-variable "volume_size" {
-  description = "Root volume size of the node"
-  type        = number
-}
-
-variable "ssh_port" {
-  description = "Open the 22 port"
-  type        = number
-}
-
-#Use this for a custom IP address for the SSH connection
-#variable "ingress_cidr_blocks" {
-#  description = "IP CIDR blocks for bastion"
-#  type        = list(string)
-#}
-
-variable "prefix_list_ids" {
-  description = "IP CIDR blocks for bastion"
-  type        = string
-}
-
-variable "role_name" {
-  description = "The AWS IAM role name for initial node"
-  type        = string
-}
-
-variable "cross_account_role_arn" {
-  description = "The AWS IAM role arn to assume from another AWS account"
-  type        = string
-}
-
-
-variable "tags" {
-  description = "A map of tags to apply to all resources"
-  type        = map(any)
-}
-----
-=====
-
-====
-
-[NOTE]
-====
-IP-адреса ::
-Для підключення через SSH до додаткової віртуальної машини потрібно додати в файл terraform.tfvars необхідну IP адресу. Якщо потрібно відкрити для підключення декілька адрес, то потрібно створити префікс **``prefix-list ``**та використовувати його.
-====
-
-WARNING: Якщо для підняття додаткових компонентів використано Terraform-код, то перейдіть одразу до пункту xref:#launch-openshift-install[].
-
-=== Рекомендовані налаштування бастіону
+==== Рекомендовані налаштування бастіону
 
 У таблиці нижче наведено рекомендовані налаштування для бастіону.
 
@@ -825,7 +261,7 @@ WARNING: Якщо для підняття додаткових компонен�
 
 |===
 
-=== Рекомендовані налаштування додаткової віртуальної машини
+==== Рекомендовані налаштування додаткової віртуальної машини
 
 У таблиці нижче наведено рекомендовані налаштування для додаткової віртуальної машини.
 
@@ -843,58 +279,242 @@ WARNING: Якщо для підняття додаткових компонен�
 
 |===
 
-=== Налаштування AWS cross account
+=== Додаткові налаштування
 
-Щоб встановити кластер та Платформу, необхідно завантажити на додаткову віртуальну машину _Docker-образ для контейнера_ та _Інсталер_. Це можливо лише за умови, що створена спеціальна IAM-роль.
+==== Встановлення необхідних інструментів
 
-Потрібно перейти до AWS IAM-сервісу та створити роль для EC2-сервісу із наступними дозволами:
+Для подальших дій потрібно встановити необхідні інструменти на локальний комп’ютер.
 
-.*_Trusted entities_*
-[%collapsible]
-====
-[source,json]
-----
-{
-    "Version": "2012-10-17",
-    "Statement": [
-        {
-            "Sid": "",
-            "Effect": "Allow",
-            "Principal": {
-                "Service": "ec2.amazonaws.com"
-            },
-            "Action": "sts:AssumeRole"
-        }
-    ]
-}
-----
+* unzip
+* https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html[aws cli v2]
+* https://docs.docker.com/engine/install/[terraform v1.6.6]
+
+Перевірити правильність встановлення інструментів можна за допомогою наступних команд:
+
+.Перевірка встановлення інструментів
 ====
 
-.*_Inline permissions policies_*
-[%collapsible]
-====
-[source,json]
+.Перевірка unzip
 ----
-{
-    "Version": "2012-10-17",
-    "Statement": [
-        {
-            "Action": "sts:AssumeRole",
-            "Effect": "Allow",
-            "Resource": "arn:aws:iam::764324427262:role/CustomCrossAccountRole"
-        }
-    ]
-}
+$ unzip -v
 ----
+
+.Перевірка aws cli
+----
+$ aws --version
+----
+
+.Перевірка terraform
+----
+$ terraform version
+----
+
 ====
 
-Після цього необхідно приєднати створену IAM роль до додаткової віртуальної машини.
+==== Налаштування AWS CLI
 
-TIP: Докладніше про створення IAM-ролі та приєднання її до віртуальної машини описано в офіційній документації на сайті AWS: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/iam-roles-for-amazon-ec2.html[IAM roles for Amazon EC2].
+За допомогою AWS CLI автентифікуйтесь в обліковому записі AWS. Для цього виконайте наступну команду:
 
-=== Додаткові налаштування віртуальної машини
+.*Автентифікація в обліковому записі AWS*
+[source,bash]
+----
+$ aws configure
+AWS Access Key ID [None]: AKIAIOSFODNN7EXAMPLE
+AWS Secret Access Key [None]: JalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+Default region name [None]: eu-central-1
+Default output format [None]: json
+----
 
-==== Підключення до додаткової віртуальної машини
+TIP: Докладніше процес автентифікація в обліковому записі AWS за допомогою AWS CLI описано в офіційній документації на сайті AWS: https://docs.aws.amazon.com/cli/latest/userguide/cli-authentication-user.html#cli-authentication-user-configure.title[Configure the AWS CLI].
+
+==== Налаштування AWS cross account
+
+Перед запуском Terraform-код його необхідно завантажити. Для цього треба отримати доступ до AWS S3 бакету, в якому він знаходиться. Це можливо лише за умови, що створена спеціальна IAM-роль. Це можна зробити, виконавши наступні кроки:
+
+. Створіть AWS IAM-роль.
++
+[source,bash]
+----
+$ aws iam create-role \
+      --role-name UserCrossAccountRole \
+      --description "Role for uploading terraform files from AWS S3" \
+      --assume-role-policy-document '{
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Action": "sts:AssumeRole",
+                    "Effect": "Allow",
+                    "Principal": {
+                        "AWS": "arn:aws:iam::<YourAccountId>:root"
+                    }
+                }
+            ]
+          }'
+----
++
+[NOTE]
+====
+*`<YourAccountId>`* -- додайте сюди ID від облікового запису AWS
+====
+
+. Створіть AWS IAM-політику.
++
+[source,bash]
+----
+$ aws iam create-policy \
+      --policy-name UserCrossAccountPolicy \
+      --policy-document '{
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Action": "sts:AssumeRole",
+                    "Effect": "Allow",
+                    "Resource": "arn:aws:iam::764324427262:role/CustomCrossAccountRole"
+                }
+            ]
+          }'
+----
+
+. Приєднайте політику до ролі.
++
+[source,bash]
+----
+$ aws iam attach-role-policy \
+      --role-name UserCrossAccountRole \
+      --policy-arn arn:aws:iam::<YourAccountId>:policy/UserCrossAccountPolicy
+----
++
+[NOTE]
+====
+*`<YourAccountId>`* -- додайте сюди ID від облікового запису AWS
+====
+
+. Додайте до файлу `config` необхідні значення для ролі.
++
+[source,bash]
+----
+$ cat <<EOT >> ~/.aws/config
+[profile user-cross-account-role]
+role_arn = arn:aws:iam::764324427262:role/CustomCrossAccountRole
+source_profile = default
+EOT
+----
+
+. Після цього необхідно звернутися до команди підтримки, які повинні додати ID облікового запису AWS в Trust relationships для ролі `CustomCrossAccountRole` в їх обліковому записі AWS.
+
+==== Завантаження Terraform-коду
+
+. Завантажте архів з Terraform-кодом.
++
+[source,bash]
+----
+$ aws s3 cp s3://mdtu-ddm-platform-installer/terraform/terraform.zip terraform.zip  --profile user-cross-account-role
+----
+
+. Розпакуйте Terraform-код в окрему директорію.
++
+[source,bash]
+----
+$ unzip terraform.zip -d ~/terraform
+----
+
+=== Опис Terraform-коду
+
+Як приклад автоматизації процесу було реалізовано Terraform-код, який можна підлаштувати під свої параметри та використати для розгортання інфраструктури.
+
+==== Початковий Terraform-код
+
+Це Terraform-код, який створить ресурси для подальших кроків. До таких ресурсів відносяться:
+
+* S3 Bucket
+* DynamoDB Table
+
+{empty}
+
+Початковий код. Опис Terraform-файлів: ::
+
+* `main.tf` – основний конфігураційний Terraform файл. Він містить модулі для створення:
+** S3-бакету
+** таблиці DynamoDB
+* `providers.tf` – використовується для визначення версії Terraform, необхідних плагінів та параметрів провайдера AWS.
+* `variables.tf` - використовується для опису всіх змінних, які використовуються в конфігурації Terraform.
+* `terraform.tfvars` - містить значення для конкретних змінних, які визначені у конфігураційних файлах Terraform. За потреби змініть значення для наступних параметрів на необхідні:
+** `region` – ця змінна використовується для визначення регіону AWS, в якому будуть створюватися ресурси.
+** `tags` - ця змінна, використовується для додавання тегів (міток) для ресурсів.
+
+==== Основний Terraform-код
+
+Основний Terraform-код, розгортає усі необхідні ресурси. Опис шаблонів наведено нижче.
+
+Основний код. Опис Terraform-файлів: ::
+
+* `main.tf` -- основний конфігураційний Terraform файл. Він містить модулі для створення:
+** `VPC`;
+** `ec2_bastion`;
+** `ec2_instance`;
+** `key_pair`.
+* `providers.tf` -- використовується для визначення версії Terraform, необхідних плагінів та параметрів провайдера AWS. Обов'язково змініть значення для наступних параметрів на необхідні:
+** bucket - ця змінна містить ім’я S3-бакета. Змініть `<ACCOUNT_ID>` на ID від облікового запису AWS.
+* `iam-node-role.tf` -- використовується для створення спеціальної IAM-ролі із необхідними дозволами. Це дасть змогу налаштувати AWS cross account resource access та завантажити Docker-образ для контейнера та Інсталера.
+* `elastic-ip.tf` -- використовується для створення ресурсу AWS Elastic IP (EIP) за допомогою Terraform.
+* `security-groups.tf` - створюються Security Groups, які дозволяють SSH-з'єднання (TCP порт 22) для бастіону та initial-node.
+* `ssh-key.tf` -- містить код для створення SSH приватного ключа та збереження ключа у файл та налаштування його прав доступу.
+* `files/user_data.sh.tpl` -- шаблон скрипту, який буде виконуватися при створенні або оновленні EC2 інстансу в середовищі AWS. Цей скрипт зробить наступне для initial-node:
+** встановить Docker;
+** встановить Unzip;
+** встановить AWS CLI v2;
+** додатково налаштує AWS cross account resource access.
+* `variables.tf` -- використовується для опису всіх змінних, які використовуються в конфігурації Terraform.
+* `terraform.tfvars` -- містить значення для конкретних змінних, які визначені у конфігураційних файлах Terraform. За потреби змініть значення для наступних параметрів на необхідні:
+** `region` -- ця змінна використовується для визначення регіону AWS, в якому будуть створюватися ресурси.
+** `platform_name` -- ця змінна використовується для додавання назви для кластера та ресурсів AWS.
+** `ingress_cidr_blocks` -- для підключення через SSH до додаткової віртуальної машини потрібно додати сюди необхідну IP адресу.
+** `prefix_list_ids` -- якщо потрібно відкрити для підключення декілька адрес, то потрібно створити префікс prefix-list та використовувати в цьому параметрі його ID.
+** `tags` -- ця змінна, використовується для додавання тегів (міток) для ресурсів.
+
+=== Запуск Terraform-коду
+
+Після зробленних змін в минулих кроках, Terraform-код тепер готовий до запуску.
+
+==== Запуск початкового Terraform-коду
+. Послідовно виконуйте наступні команди для того, щоб увійти до директорії з початковим Terraform-кодом та ініціалізувати робочу Terraform-директорію.
++
+[source,bash]
+----
+$ cd ~/terraform/initCode
+
+$ terraform init
+----
+
+. Використайте наступну команду для застосування змін, визначених у конфігураційних файлах та створення ресурсів.
++
+[source,bash]
+----
+$ terraform apply -auto-approve
+----
+
+. Дочекайтеся створення ресурсів.
+
+==== Запуск основного Terraform-коду
+. Послідовно виконуйте наступні команди для того, щоб увійти до директорії з основним Terraform-кодом та ініціалізувати робочу Terraform-директорію.
++
+[source,bash]
+----
+$ cd ~/terraform/mainCode
+
+$ terraform init
+----
+
+. Використайте наступну команду для застосування змін, визначених у конфігураційних файлах та створення ресурсів.
++
+[source,bash]
+----
+$ terraform apply -auto-approve
+----
+
+. Дочекайтеся створення ресурсів.
+
+=== Підключення до додаткової віртуальної машини
 
 Щоб під'єднатися з локального комп'ютера до додаткової віртуальної машини, потрібно створити SSH-тунель. Це потрібно зробити наступною командою:
 
@@ -920,64 +540,6 @@ $ ssh -i <SSH_KEY> ubuntu@localhost -p 1256
 
 З додаткової віртуальної машини потрібно виконувати усі подальші кроки, а саме інсталяцію кластера та встановлення платформи.
 ====
-
-==== Встановлення необхідних інструментів
-
-Для подальших дій потрібно встановити необхідні інструменти на додаткову віртуальну машину.
-
-* unzip
-* https://docs.docker.com/engine/install/[docker]
-* https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html[aws cli v2]
-
-Перевірити правильність встановлення інструментів можна за допомогою наступних команд:
-
-.Перевірка встановлення інструментів
-====
-
-.Перевірка unzip
-----
-$ unzip -v
-----
-
-.Перевірка docker
-----
-$ docker --version
-----
-
-.Перевірка aws cli
-----
-$ aws --version
-----
-
-====
-
-==== Використання профілю для AWS cross account
-
-Необхідно виконати наступні кроки, щоб авторизуватися під роллю, яка має доступ до Docker образу для контейнера та Інсталера.
-
-. Авторизуватися на машині від IAM-користувача.
-+
-----
-$ export AWS_ACCESS_KEY_ID=<КЛЮЧ_ДОСТУПУ>
-$ export AWS_SECRET_ACCESS_KEY=<СЕКРЕТНИЙ_КЛЮЧ_ДОСТУПУ>
-----
-
-. Створити директорію *_.aws_* та файл *_config_* усередині:
-+
-----
-$ mkdir -p ~/.aws
-$ touch ~/.aws/config
-----
-
-. Додати до файлу *_config_* необхідні значення для ролі.
-+
-----
-$ cat <<EOT >> ~/.aws/config
-[profile cross-account-role]
-role_arn = arn:aws:iam::764324427262:role/CustomCrossAccountRole
-credential_source = Ec2InstanceMetadata
-EOT
-----
 
 [#launch-openshift-install]
 === Запуск контейнера openshift-install
@@ -1053,21 +615,35 @@ $ sudo docker run --rm -it --name openshift-install-v3 \
 $ cd /tmp/openshift-cluster
 ----
 
+. Виконайте дії, які описані в офіційній документації на сайті OKD https://docs.openshift.com/container-platform/4.11/installing/installing_aws/installing-aws-customizations.html[Installing a cluster on AWS with customizations], до кроку *Obtaining an AWS Marketplace image*: https://docs.openshift.com/container-platform/4.11/installing/installing_aws/installing-aws-customizations.html#installation-aws-marketplace-subscribe_installing-aws-customizations[Obtaining an AWS Marketplace image]. +
+
 . Завантажте кастомізований OKD інсталер, що містить виправлення blocker-проблеми, описаної в https://issues.redhat.com/browse/OCPBUGS-11636.
 +
 [source,bash]
 ----
-$ aws s3 cp s3://mdtu-ddm-platform-installer/okd-installer/openshift-install-zver-fix-aws-4.11.0-0.okd-2022-08-20-022-fix-aws.tar.gz openshift-install-zver-fix-aws-4.11.0-0.okd-2022-08-20-022-fix-aws.tar.gz --profile cross-account-role
+$ aws s3 cp s3://mdtu-ddm-platform-installer/okd-installer/openshift-install-fix-aws-4.11.0-0.okd-2022-08-20-022-fix-aws.tar.gz openshift-install-fix-aws-4.11.0-0.okd-2022-08-20-022-fix-aws.tar.gz --profile cross-account-role
 ----
 
-
-. Виконайте дії, які описані в офіційній документації на сайті OKD, до кроку *Deploying the cluster*: https://docs.openshift.com/container-platform/4.11/installing/installing_aws/installing-aws-customizations.html[Installing a cluster on AWS with customizations]. +
-Зверніть увагу, що пункт https://docs.openshift.com/container-platform/4.11/installing/installing_aws/installing-aws-customizations.html#installation-obtaining-installer_installing-aws-customizations[Obtaining the installation program] можна пропустити у зв'язку з використанням власного openshift-installer, що був завантажений раніше.
+. Розархівуйте програму встановлення із завантаженого архіву.
++
+[source,bash]
+----
+$ tar xvfz openshift-install-fix-aws-4.11.0-0.okd-2022-08-20-022-fix-aws.tar.gz
+----
 +
 [CAUTION]
 Щоб налаштувати встановлення, потрібно створити файл *_install-config.yaml_* і внести до нього необхідні параметри перед тим, як встановити кластер.
+
+. Створіть нову директорію для конфігураційних файлів кластера та файл install-config.yaml. Для цього виконайте послідовно наступні команди:
 +
-Після створення файлу потрібно заповнити необхідні параметри, які будуть представлені в контекстному меню. Створений конфігураційний файл включає тільки необхідні параметри для мінімального розгортання кластера. Для кастомізації налаштувань можна звернутись до офіційної документації.
+[source,bash]
+----
+$ mkdir /tmp/openshift-cluster/cluster-state
+
+$ touch /tmp/openshift-cluster/cluster-state/install-config.yaml
+----
++
+Після створення файлу потрібно заповнити його необхідними параметрами. Створений конфігураційний файл включає тільки необхідні параметри для мінімального розгортання кластера. Для кастомізації налаштувань можна звернутись до офіційної документації.
 +
 Рекомендовані параметри для файлу *_install-config.yaml_*: ::
 +
@@ -1090,6 +666,7 @@ compute:
           size: 80
           type: gp3
         type: r5.2xlarge
+        amiID: ami-094fe1584439e91dd
     replicas: 3
 controlPlane:
   architecture: amd64
@@ -1102,17 +679,17 @@ controlPlane:
       rootVolume:
         size: 80
         type: gp3
-      type: r5.2xlarge
+      type: r5.xlarge
   replicas: 3
 metadata:
-  name: <CLUSTER_NAME>
+  name: <CLUSTER_NAME>(2)
 networking:
   clusterNetwork:
     - cidr: 10.128.0.0/14
       hostPrefix: 23
   machineNetwork:
     - cidr: 10.0.0.0/16
-  networkType: OpenShiftSDN
+  networkType: OVNKubernetes
 platform:
   aws:
     region: eu-central-1
@@ -1187,7 +764,14 @@ TIP: Докладніше про це описано в п. 5 офіційної
 
 ====
 +
-WARNING: Після запуску процесу розгортання кластера, Інсталер видаляє *install-config.yam*, тому рекомендовано виконати резервування цього файлу, якщо є потреба розгортання кількох кластерів.
+WARNING: Після запуску процесу розгортання кластера, Інсталер видаляє *install-config.yaml*, тому рекомендовано виконати резервування цього файлу, якщо є потреба розгортання кількох кластерів.
+
+. Також виконайте наступну команду для кастомізації встановлення OpenShift кластеру версії 4.11. Ця змінна дозволяє вказати конкретний образ, який буде використовуватися під час інсталяції.
++
+[source,bash]
+----
+$ export OPENSHIFT_INSTALL_RELEASE_IMAGE_OVERRIDE="quay.io/openshift/okd:4.11.0-0.okd-2022-08-20-022919"
+----
 
 == Запуск OKD4-інсталера та розгортання порожнього кластера OKD4
 
@@ -1327,6 +911,12 @@ $ unzip mdtu-ddm-platform-(version).zip -d ./installer-<VERSION>
 $ cp ~/openshift-cluster/cluster-state/auth/kubeconfig ./installer-<VERSION>
 ----
 
+. Перенесіть *_kubeconfig_* від встановленого кластера.
++
+----
+$ cp ~/openshift-cluster/cluster-state/auth/kubeconfig ./installer-<VERSION>
+----
+
 . Перенесіть сертифікати та допоміжні файли сервісу `digital-signature-ops` в директорію *_certificates_* та увійдіть до директорії з Інсталером.
 +
 [source,bash]
@@ -1351,7 +941,7 @@ $ cd installer-<VERSION>
 +
 [source,bash]
 ----
-$ IMAGE_CHECKSUM=$(sudo docker load -i control-plane-installer.img | sed -r "s#.*sha256:(.*)#\\1#" \| tr -d '\n')
+$ IMAGE_CHECKSUM=$(sudo docker load -i control-plane-installer.img | sed -r "s#.*sha256:(.*)#\1#" \| tr -d '\n')
 ----
 +
 [source,bash]
@@ -1374,9 +964,11 @@ $ sudo docker run --rm \
     --net host \
     -v $(pwd):/tmp/installer \
     --env KUBECONFIG=/tmp/installer/kubeconfig \
-    --env idgovuaClientId=f90ab33dc272f047dc330c88e5663b75 \
-    --env idgovuaClientSecret=cba49c104faac8c718e6daf3253bc55f2bf11d9e \
-    --env deploymentMode=<DEPLOYMENT_MODE> \
+    --env ID_GOV_UA_CLIENT_ID=mock \
+    --env ID_GOV_UA_CLIENT_SECRET=mock \
+    --env PLATFORM_DEPLOYMENT_MODE=<DEPLOYMENT_MODE> \
+    --env PLATFORM_LANGUAGE=<LANGUAGE> \
+    --env PLATFORM_REGION=<REGION> \
     --entrypoint "/bin/sh" control-plane-installer:<VERSION> \
     -c "./install.sh -i"
 ----
@@ -1385,6 +977,8 @@ $ sudo docker run --rm \
 ====
 * *`--rm`* -- цей параметр автоматично видалить контейнер після завершення його роботи. Параметр можна прибрати, якщо потрібно дізнатися статус та лог завершеного контейнера або при нестабільному інтернет-з'єднанні.
 * *`DEPLOYMENT_MODE`* -- може бути *`development`* чи *`production`*.
+* *`LANGUAGE`* -- може бути *`uk`* чи *`en`*.
+* *`REGION`* -- може бути *`ua`* чи *`global`*.
 ====
 
 ==== Статус розгортання
@@ -1425,9 +1019,10 @@ $ docker rm $(docker ps --latest -q)
 ====
 Стан додаткових ресурсів ::
 
-Після виконання усіх дій, бастіон та додаткову віртуальну машину можна вимкнути.
+Після виконання усіх дій, бастіон та додаткову віртуальну машину можна вимкнути. Вони не будуть потрібні до наступного оновлення платформи.
 ====
 
+[#installer-update]
 === Оновлення
 
 ==== Передумови
@@ -1450,6 +1045,12 @@ $ sudo aws s3 cp --profile cross-account-role s3://mdtu-ddm-platform-installer/<
 [source,bash]
 ----
 $ unzip mdtu-ddm-platform-(version).zip -d ./installer-<VERSION>
+----
+
+. Перенесіть *_kubeconfig_* від встановленого кластера.
++
+----
+$ cp ~/openshift-cluster/cluster-state/auth/kubeconfig ./installer-<VERSION>
 ----
 
 . Перенесіть *_kubeconfig_* від встановленого кластера.
@@ -1507,7 +1108,7 @@ $ ~/installer/installer-<VERSION>/terraform/vault/aws/private.key ./terraform/va
 +
 [source,bash]
 ----
-$ IMAGE_CHECKSUM=$(sudo docker load -i control-plane-installer.img | sed -r "s#.*sha256:(.*)#\\1#" \| tr -d '\n')
+$ IMAGE_CHECKSUM=$(sudo docker load -i control-plane-installer.img | sed -r "s#.*sha256:(.*)#\1#" \| tr -d '\n')
 ----
 +
 [source,bash]
@@ -1530,9 +1131,8 @@ $ sudo docker run --rm \
     --net host \
     -v $(pwd):/tmp/installer \
     --env KUBECONFIG=/tmp/installer/kubeconfig \
-    --env idgovuaClientId=f90ab33dc272f047dc330c88e5663b75 \
-    --env idgovuaClientSecret=cba49c104faac8c718e6daf3253bc55f2bf11d9e \
-    --env deploymentMode=<DEPLOYMENT_MODE> \
+    --env ID_GOV_UA_CLIENT_ID=mock \
+    --env ID_GOV_UA_CLIENT_SECRET=mock \
     --entrypoint "/bin/sh" control-plane-installer:<VERSION> \
     -c "./install.sh -u"
 ----
@@ -1540,7 +1140,6 @@ $ sudo docker run --rm \
 [NOTE]
 ====
 * *`--rm`* -- цей параметр автоматично видалить контейнер після завершення його роботи. Параметр можна прибрати, якщо потрібно дізнатися статус та лог завершеного контейнера або при нестабільному інтернет-з'єднанні.
-* *`DEPLOYMENT_MODE`* -- може бути development чи production (залежить від минулого запуску).
 ====
 +
 [WARNING]
@@ -1580,6 +1179,13 @@ $ docker rm $(docker ps --latest -q)
 . Перейдіть до розділу xref:admin:update/overview.adoc[Оновлення].
 . Виконайте необхідні спеціальні кроки для оновлення до вашої версії Платформи.
 . В рамках виконання спеціальних кроків оновіть xref:update/update_cluster-mgmt.adoc[інфраструктурні компоненти Платформи] через інтерфейс Control Plane.
+
+[NOTE]
+====
+Стан додаткових ресурсів ::
+
+Після виконання усіх дій, бастіон та додаткову віртуальну машину можна вимкнути. Вони не будуть потрібні до наступного оновлення платформи.
+====
 
 == Типові помилки під час розгортання платформи
 
