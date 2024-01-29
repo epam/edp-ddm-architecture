@@ -3,16 +3,14 @@ include::platform:ROOT:partial$templates/document-attributes/default-set-en.adoc
 
 include::platform:ROOT:partial$admonitions/language-en.adoc[]
 
-This page provides a practical guide for seamlessly migrating between two OKD clusters.
+This page provides practical guidance on migration between OKD clusters A and B.
 
-== Terminology
+== Notations and abbreviations
 
-We use the following names to identify the clusters:
+* [.underline]#Cluster A#—the cluster where the existing registry is deployed.
+* [.underline]#Cluster B#—the cluster to which the existing registry will be migrated (target cluster).
 
-* [.underline]#Cluster A# is the cluster that hosts the registry _before the migration_ (source cluster).
-* [.underline]#Cluster B# is the cluster that will host the registry _after the migration_ (target cluster).
-
-NOTE: Registry migration is performed by first moving the latest backup copy of the registry from cluster A to cluster B, then restoring the registry on cluster B.
+NOTE: Registry migration is carried out from the latest backup of the existing registry and, according to the instructions, will be transferred from cluster A to cluster B and restored on this cluster.
 
 == Prerequisites for migration
 
@@ -20,125 +18,109 @@ NOTE: Registry migration is performed by first moving the latest backup copy of 
 ====
 📌 Note on organizing migration::
 
-. _Planning_: It's crucial to develop a clear migration schedule. It should include:
+. _Planning_: It's essential to develop a clear migration schedule. It should include:
 
-* Date and time for creating the backup.
-* Restoration time.
-* The time for service providers to complete their work before the backup.
+* Date and time for backup creation.
+* Time for restoration.
+* Defined time for service providers to finish their work before the backup.
 
-. _Communication_: It's vital to ensure all service provider users are duly informed:
+. _Communication_: Ensure that all service provider users are timely informed:
 
-* Notify users via external communication channels outside of the Platform.
-* Inform them about the need to finish their work by the time specified in the schedule.
+* Notify users through external communication channels outside the Platform.
+* Inform them about completing their work before the scheduled time.
 
-Following these recommendations will ensure a smooth migration process without unnecessary delays and inconveniences for the users.
+Following these recommendations will ensure a smooth migration process without unnecessary delays and inconvenience for users.
 ====
 
-Before you start the migration, check these prerequisites and ensure that all requirements are met.
-
-. During the migration, you will need to run a bash script that transfers data from cluster A to cluster B. For a successful migration, this script must be executed on a Linux platform with an `x86-64` microprocessor architecture (also known as `AMD64`, `Intel 64`, or `x64`).
-
-. The user performing the migration must be added as the Platform administrator on both clusters via *`control-plane-console`*.
+. The migration process involves running a bash script that transfers data from clusters A to B. This script must be executed on a Linux platform with an `x86-64` (also known as `AMD64`, Intel 64, or `x64`) microprocessor architecture for successful migration.
+. The user transferring the registry to another cluster should be added as an administrator of the Platform on both clusters through *`control-plane-console`*.
 +
-TIP: For details, see xref:admin:registry-management/control-plane-assign-platform-admins.adoc[].
-+
-
-. The Platform deployed on cluster B (target cluster) must have the same `control-plane-gerrit` version as the registry you are migrating. For example, Platform version `1.9.4.11` with `control-plane-gerrit` version `1.9.4.7` will be compatible with the registry version `1.9.4.7`. To verify the `control-plane-gerrit` version, check whether a corresponding branch exists in the `cluster-mgmt` repository of the central Gerrit component. If the branch that matches the registry version exists, the registry can be migrated to cluster B. If not, you have two options:
+TIP: See more details—xref:admin:registry-management/control-plane-assign-platform-admins.adoc#add-platform-admin-cp[Creating a platform administrator].
+. On the cluster to which the registry is being migrated, the platform version should be deployed, where the `control-plane-gerrit` version matches the registry version (for example, platform version -- *`1.9.4.11`*, registry version -- *`1.9.4.7`*, `control-plane-gerrit` version – *`1.9.4.7`*). This version can be verified by a branch in the *`cluster-mgmt`* repository in the central *Gerrit*. If the branch with the registry version exists, then the registry version can be migrated to cluster B. If not, there are two paths:
 
 * Update the Platform on cluster B to match the registry version.
+* Update the registry on cluster A to a version already on cluster B.
 
-* Update the registry on cluster A to match the version available on cluster B.
+. Simultaneous access to both cluster A and cluster B.
 
-. Make sure you have simultaneous access to clusters A and B.
-
-. During the migration, you will need the following terminal commands:
+. Availability of the following commands in the Terminal:
 
 * `oc`
 * `velero`
 * `rclone`
 * `vault`
 
-. Make sure you have a stable Internet connection. _The greater the bandwidth, the faster the migration will run_. Alternatively, you can use an AWS or other cloud provider's *jumpbox* with access to both clusters. Using a jumpbox reduces the time it takes to transfer the backup copy from one cluster to another.
+. Stable internet connection. _The more significant the bandwidth, the faster the migration will be_. Otherwise, a *jumpbox* (with access to both clusters) in AWS or another cloud provider can be used. Using a jumpbox will reduce the time of transferring the backup from one cluster to another.
 +
 [NOTE]
 ====
-
-When using a *jumpbox*, you need to check whether the Platform's MinIO and Vault are accessible from the jumpbox's IP address. To get the jumpbox's IP, use the following command:
+If using a *jumpbox*, verify access to platform Minio/Vault from the *jumpbox* IP address. To get the IP of the *jumpbox*, execute the following command:
 ----
 ssh sshmyip.com
 ----
 
-Next, you need to make sure the jumpbox's IP address is added to the list of allowed CIDRs at the Platform management level for clusters A and B. For details, see xref:admin:registry-management/control-plane-cidr-access-endpoints.adoc[].
+Then verify or add the *jumpbox* IP address to the list of allowed CIDRs at the platform management level for both cluster A and cluster B ( _see more on the page xref:admin:registry-management/control-plane-cidr-access-endpoints.adoc[]_).
 
-If you cannot access `control-plane-console`, contact the L2 support team to request access.
+If there's no access to the control-plane-console, contact the L2 team to check access.
 ====
 +
 [IMPORTANT]
 ====
+For registry migration, it's crucial that there are no registry-related resources on cluster B before starting the migration.
 
-Before migrating the registry, make sure cluster B does not contain any resources related to the registry.
+_If the registry did not previously exist on this cluster, further actions are unnecessary._
 
-_If the registry was never deployed on cluster B previously, skip the rest of the steps in this section._
-
-If the registry was previously deployed on cluster B, you need to remove all of its resources by checking the following: ::
-
-
-. Delete the registry from cluster B using the Control Plane admin console.
+If the registry existed, check/delete the following to remove all resources: ::
+* Delete the registry through the Control Plane administrative panel interface.
 +
-TIP: For details, see xref:registry-management/control-plane-remove-registry.adoc[].
+TIP: More details can be found on the page xref:registry-management/control-plane-remove-registry.adoc[].
 +
+////
+Go to the control-plane-console on cluster B (Openshift-console > Projects > control-plane > Networking > control-plane-console), authenticate through openshift-sso, go to the - Registries subdivision, and click on the basket opposite the name of the registry, confirm changes and wait for the registry to be deleted.
+////
 
-. Confirm the changes and wait until the registry is deleted.
+* Confirm changes and wait for the registry to be deleted.
 
-. After deleting the registry, verify that the project is absent in the central Gerrit component.
+* After deletion, check for the absence of the project in the central Gerrit component.
 
-.. Open Gerrit (*Openshift* console > *Projects* > *`control-plane`* > *Networking* > *Routes* > *`control-plane-gerrit`*).
+** Go to Gerrit (*Openshift* console > *Projects* > *`control-plane`* > *Networking* > *Routes* > *`control-plane-gerrit`* ).
+** Authenticate through *openshift-sso*, open the *Browse* menu > *Repositories* and search by the registry name.
+** If the search finds the repository, then go to *Openshift*-console > *Projects* > *`control-plane`* > *Home* > *API Explorer* > in the search ( `Filter by kind ...` ) find `gerritproject` > `<registry name>` > *Actions* > *`Delete GerritProject`*.
+** After deleting the Gerrit project, go to the Gerrit console and check that the repository is absent. If the repository exists, delete it through the Gerrit console (open the registry repository > *Commands* > *Delete project*).
 
-.. Sign in with *openshift-sso*, go to *Browse* > *Repositories*, and search by registry name.
+* Delete the directory in Minio.
 
+** To check the created directories in Minio, go to *MinioUI* (for vSphere clusters this Route can be found in *OpenShift*-console > *Projects* > *`control-plane`* > *Networking* > *Routes* > *`platform-minio-ui`*.
 
-.. If the repository appears in search results, go to *Openshift* console > *Projects* > *`control-plane`* > *Home* > *API Explorer* > search for `gerritproject` in the *Filter by kind* field -> `<registry-name>` -> *Actions* > *Delete GerritProject*.
-
-.. After deleting the Gerrit project, go to the Gerrit console and verify that the repository is absent. If the repository exists, delete it via the Gerrit console by opening the registry repository > *Commands* > *Delete project*.
-
-. Delete the directory in MinIO.
-
-.. To check the MinIO directories, go to *MinioUI*. For vSphere clusters, you can find this route in *OpenShift* console > *Projects* > *`control-plane`* > *Networking* > *Routes* > *`platform-minio-ui`*.
-
-
-.. If the route is missing, go to secrets using the following path: *Openshift* console > *Projects* > *`control-plane`* > *Workloads* > *Secrets* > *`backup-credentials`*, copy the `backup-s3-like-storage-url` field and add the port to the URL (for example, `https://endpoint.com:9001`).
+** If there is no Route, go to the secrets at: +
+*Openshift*-console > *Project* > *`control-plane`* > *Workloads* > *Secrets* > *`backup-credentials`*, copy the `backup-s3-like-storage-url` field and add the port to the URL (For example, `https://endpoint.com:9001` ).
 +
+TIP: Authentication data in Minio is located in *Openshift*-console > *Project* > *`control-plane`* > *Secrets* > *`backup-credentials`*, where *`username`* is the field *`backup-s3-like-storage-access-key-id`*, and `*password*` is *`backup-s3-like-storage-secret-access-key`*.
 
-TIP: To find MinIO credentials, go to *Openshift* console > *Projects* > *`control-plane`* > *Secrets* > *`backup-credentials`*. The *`backup-s3-like-storage-access-key-id`* is the username, and the *`backup-s3-like-storage-secret-access-key`* is the password.
-+
-
-.. Sign in to MinIO and delete the directories in the registry's bucket:
-* _openshift-backups/backups/<registry-name>*_
-* _openshift-backups/restic/<registry-name>_
-* _obc-backups/<registry name>_
+** After authentication, check/delete the directories related to the registry in the bucket. These include:
+*** _openshift-backups/backups/<registry-name>*_;
+*** _openshift-backups/restic/<registry-name>_;
+*** _obc-backups/<registry name>_.
 
 ====
 
 == Preparing the registry for migration
 
-[IMPORTANT, caption=Before Migration]
-Before starting the migration, it is essential to restrict end-user access to this registry completely.
+[IMPORTANT,caption=Before starting the migration]
+Before beginning the migration, it is essential to restrict end-user access to this registry completely.
 
-. Make a backup copy of the registry on cluster A.
+. Create a backup of the registry on cluster A.
 +
-
-Before migrating the registry to a new cluster, run the *Create-registry-backup-`<registry-name>`* Jenkins process.
+Before transferring the registry to a new cluster, initiate the Jenkins process *`Create-registry-backup-<registry name>`*.
 +
-
-If the Jenkins pipeline has completed with a *Success* status, the backup copy was created successfully.
+If the Jenkins pipeline completes with a *`Success`* status, the backup has been successfully created.
 +
 [NOTE]
 ====
-
-To get the name of the backup copy, go to the output log from the latest Jenkins execution (*Console Output*) and look for a message similar to this:
+To obtain the backup name, go to the logs/event journal of the last Jenkins pipeline run (*Console Output*) and search the page for a message like:
 
 ----
-[INFO] Velero backup - <registry-name>-<timestamp> done with Completed status
+[INFO] Velero backup - <registry name>-<timestamp> done with Completed status
 ----
 
 For example:
@@ -147,94 +129,123 @@ For example:
 [INFO] Velero backup - abc-02-2023-04-18-19-03-14 done with Completed status
 ----
 
-In this case, *`abc-02-2023-04-18-19-03-14`* is the name of the backup copy.
+* where *`abc-02-2023-04-18-19-03-14`* is the backup name.
 
 ====
 +
 [WARNING]
 ====
-
-If the registry version is earlier than 1.9.3, you need to execute the following command in the terminal:
+For registry versions < 1.9.3, execute the following command in Terminal:
 
 ----
-velero backup describe <backup-name>
+velero backup describe <backup name>
 ----
 
-You can find the name of the backup in the output log from the last execution of the *Create-registry-backup-`<registry-name>`* Jenkins process.
+Find the backup name in the logs of the last run of the Jenkins process *`Create-registry-backup-<registry name>`*.
 ====
 +
 [TIP]
 ====
-
-For details on backing up and restoring registries, see xref:backup-restore/overview.adoc[].
+For more information on creating backups and restoring registries, see xref:backup-restore/overview.adoc[].
 ====
 
-. If the latest Velero backup has a *Completed* status, you can proceed. If the status of the Velero backup is not *Completed*, you will need to contact an L2-L3 support team to ensure the Jenkins pipeline functions properly.
+. You can proceed if the last velero backup is finished with a *`Completed`* status. If the velero backup status is different from `Completed`, involve L2-L3 technical support specialists to check the operability of the Jenkins pipeline.
 
-. Prevent modifying the registry using Jenkins pipelines.
+. Obtain consistent data in backups of the migrating registry buckets.
 +
-
-For each registry pipeline, go to *Configure* > *Build Triggers*, select the *Disable this project* option, then click *Save*.
-
-== Migrating the backup copy from cluster A to cluster B
-
-. Get login commands for both clusters.
+Get the latest backups of S3 buckets in the `velero` project. Open the *Workloads* section, then go to *CronJobs*. Use the search panel here to filter buckets by the registry name, for example, `migrationreg`.
 +
+.CronJobs
+image::admin:migrate-registry/migrate-registry-01.png[]
 
-To do this, sign in to the Openshift console, click your username in the upper-right corner, and select *Copy login command* from the menu. In the new window or tab that opens, copy the entire login command from the *Log in with this token* field and save it in any text editor.
+.. Open each *CronJob* and change its start time to the nearest possible. For example, set it to run in the next 10-15 minutes. To do this, go to the settings of each CronJob, open its *YAML* configuration, and change the `spec.schedule` parameter. For instance, to run a CronJob daily at 10:50 UTC, use the following configuration:
 +
-NOTE: Do this for both clusters, A and B.
+.CronJob details. YAML Configuration
+[source,yaml]
+----
+spec:
+  schedule: 50 10 * * *
+----
++
+[CAUTION]
+====
+When working with `cron`, the time is set in https://time.is/UTC[UTC].
+====
++
+.CronJob details. Schedule
+image::admin:migrate-registry/migrate-registry-02.png[]
 
-. Get the name of the latest backup copy created on cluster A (for example, `abc-02-2023-04-18-19-03-14`).
+.. After this, wait for all the CronJobs to start and complete. You can check the progress and status in the *Jobs* section by selecting the relevant Job and viewing the *Status* section, where a `✅ Complete` mark should be present.
++
+.CronJob details. Jobs
+image::admin:migrate-registry/migrate-registry-03.png[]
++
+.Job details. Status
+image::admin:migrate-registry/migrate-registry-04.png[]
+
+.. By following these steps, you will obtain consistent data from the backups of registry buckets in the migration process.
+
+. Prohibit changes to the registry through Jenkins pipelines.
++
+In each pipeline for the registry, go to the *Configure* section and find the *`Disable this project`* option under the *Build Triggers* section, check the box next to it, and save the changes using the *`Save`* button.
+
+== Migrating the backup from cluster A to cluster B
+
+. Obtain the login commands for both clusters.
++
+For this, log in to the Openshift console and in the top right corner, by clicking on your username, go to *`Copy login command`*, copy the access token in the *`Log in with token`* field, and save it in a text editor.
+
++
+NOTE: Repeat this operation for both clusters: A and B.
+
+. Obtain the name of the latest backup created on cluster A (for example, `abc-02-2023-04-18-19-03-14`).
 
 . Open the terminal and execute the following commands:
 +
-.Export login for cluster A
+.Export login for Cluster A
 ----
 export A_CLUSTER_LOGIN="oc login --token …"
 ----
 +
-Copy the login command for cluster A that you saved in step 1 and paste it after the `--token` parameter inside the double quotes. Make sure there are no line breaks at the end of the login command.
+Insert between the quotes *`"..."`* after `--token` the login command obtained in step 1 for Cluster A. There should be no line break at the end of the login command.
+
 +
-.Export login for cluster B
+.Export login for Cluster B
 ----
 export B_CLUSTER_LOGIN="oc login --token …"
 ----
 +
-Copy the login command for cluster B that you saved in step 1 and paste it after the `--token` parameter inside the double quotes. Make sure there are no line breaks at the end of the login command.
+Insert between the quotes *`"..."`* after `--token` the login command obtained in step 1 for Cluster B. There should be no line break at the end of the login command.
 
 +
-.Export registry name
+.Export Registry Name
 ----
-export REGISTRY_NAME="<registry-name>"
-----
-+
-
-TIP: Here is an example of the registry name: `*abc-02*`.
-
-+
-.Export backup copy name
-----
-export BACKUP_NAME="<backup-name>"
+export REGISTRY_NAME="abc-02"
 ----
 +
+TIP: `abc-02` is the registry name
 
-TIP: Here is an example of the backup name: `*abc-02-2023-04-18-19-03-14*`.
++
+.Export Backup Name
+----
+export BACKUP_NAME="<backup name>"
+----
++
+TIP: Example of a backup name: `*abc-02-2023-04-18-19-03-14*`.
 +
 [WARNING]
 ====
-
-If the registry was previously migrated to cluster A instead of being deployed on its Platform directly, perform an additional *`export`*:
+If the registry was previously migrated to Cluster A rather than deployed on this Platform, execute an additional *`export`*:
 
 [source,bash]
 ----
-export VAULT_KEY="<key-name>"
+export VAULT_KEY="<key name>"
 ----
 
-where `<key-name>` is the key for the unseal process, which can be found in the Openshift console (Cluster A) > *Projects* -> `<registry-name>` -> *ConfigMaps* > *`hashicorp-vault-config`*. The *key_name* field is the name of the key.
-
+* where *`<key name>`* is the key for the unseal process, which can be found in the *Openshift* console (Cluster A) > *Projects* > `<registry name>` > *ConfigMaps* > *`hashicorp-vault-config`*. The field *key_name* is the key name.
++
 For example:
-
++
 [source,hcl]
 ----
 key_name        = "autounseal-migration"
@@ -244,76 +255,44 @@ key_name        = "autounseal-migration"
 +
 [WARNING]
 ====
-
-When migrating a large registry, export the following variable:
+In the case of migrating an extensive registry, perform the export of the following variable:
 [source,bash]
 ----
 export LARGE_DATA="true"
 ----
 ====
-
-. Download the link:{attachmentsdir}/migrate-registry/registry-migration.zip[registry-migration.zip] file, then extract it to a new directory using the following command:
+. Download and unzip the archive with the command:
 +
 ----
 unzip registry-migration.zip -d registry-migration
 ----
 +
-
-Go to the _registry-migration_ directory (via `cd`) and execute this command:
+Navigate to the registry-migration directory (`cd`) and execute the command:
 +
 ----
-chmod +x && ./migration.sh
+chmod +x migration.sh && ./migration.sh
 ----
 
-. After running the script, log in to the terminal via *oc cli* on cluster B and verify the following:
+. After executing the script, log in to the terminal using *oc cli* on Cluster B and verify the following:
 
-* Velero backup is present on cluster B.
+* The presence of velero backup on Cluster B.
+* The presence of directories named _keycloak-export_ in the folder where the script is located.
 
-* A directory named _keycloak-export-<registry-name>-*_ is present inside the directory with the script.
+== Preparing for restoration on cluster B
 
-== Preparing the restore on cluster B
+. Create the registry through *`control-plane-console`*.
 
-. Migrate realms.
-+
-
-To migrate realms, sign in to Keycloak on cluster B:
-
-
-.. In the Openshift console, find the *`user-management`* project (or namespace), go to *Networking* > *Routes*, and click the *`keycloak`* link.
-+
-
-TIP: You can obtain Keycloak credentials from keycloak secrets in the same project. Go to *Workloads* > *Secrets*, search for a secret named *`keycloak`*, and copy the credentials from the *Data* section.
-
-.. In Keycloak, go to `*Select realm*` (1) > *`Add realm`* (2) > *`Import`* (3), select the _keycloak-export-<registry-name>-*/*-realm.json_ file, and create realms using the *SKIP* strategy suggested by Keycloak. Do this for all directories with the name _keycloak-export-<registry-name>-*_.
-+
-image:admin:migrate-registry/migrate-registry-1.png[image,width=514,height=194]
-
-. Migrate users.
-+
-
-Without leaving the Keycloak admin console, go to the realm (1) that was created via import. In the realm menu on the left, select *`Import`* (2) (when importing, select the *SKIP* strategy), then click *`Select file`* (3) and select the file from the following directory: _keycloak-export-<registry-name>-<realm-name>/<realm-name>-users-*.json_.
-+
-NOTE: If there are several files in this directory, import all of them.
-+
-image:admin:migrate-registry/migrate-registry-2.png[image,width=601,height=417]
-
-. Create a registry via *`control-plane-console`*.
-
-.. Create a registry with the same name and version on cluster B. When creating the registry, assign the same administrators as on cluster A and provide up-to-date information.
+* Create a registry with the same name and version on Cluster B. When creating the registry, assign all administrators who were in the registry on Cluster A and provide up-to-date data.
 +
 [NOTE]
 ====
-
-Key info ::
-
-You can provide valid keys for your registry or use test keys. After the migration, you can update the key data via the *Control Plane* admin console. To obtain the key data, contact an L2-L3 support team.
+Registry key data ::
+Fill in the fields either with the current keys for this registry or use test keys. After the migration, the key data can be updated through the *Control Plane* console. For key data, refer to L2-L3 support.
 +
-
-For details on updating registry keys, see xref:admin:registry-management/system-keys/control-plane-registry-keys.adoc[].
+For more information on updating registry keys, see xref:admin:registry-management/system-keys/control-plane-registry-keys.adoc[].
 
 Registry template ::
-
-Select the same template as used by the registry on cluster A. To find the template name, go to the *Openshift* console > *Projects* > *`control-plane`* > *API Explorer* > search for `codebase` > go to `codebase` > *Instances* > open `codebase <registry-name>` and check the following settings:
+Choose the same template as the one used for this registry on Cluster A. To obtain the template name, go to the *Openshift* console > *Projects* > *`control-plane`* > *API Explorer* > In the search define `codebase` > Go to `codebase` > *Instances* > Open `codebase <registry name>` > Check the following settings:
 +
 .codebase.yaml
 =====
@@ -322,98 +301,57 @@ metadata:
   annotations:
     registry-parameters/template-name: templates/registry-tenant-template-minimal
 ----
-
-In this case, *`templates/registry-tenant-template-minimal`* is the name of the registry deployment template.
+* where *`templates/registry-tenant-template-minimal`* is the registry deployment template name.
 =====
 ====
 +
+NOTE: If the console functionality allows adding DNS for Keycloak or portals, skip this step, as traffic is still configured to Cluster A).
 
-NOTE: If the console allows you to add DNS for Keycloak and user portals, skip this step, as traffic is still configured for cluster A.
-
-.. Right after creating the registry, go to Jenkins (*`control-plane`* namespace > *Networking* > *Routes* > *`jenkins`*), and stop the first *MASTER-Build-`<registry-name>`* build.
+* After creation, immediately go to Jenkins (namespace *`control-plane`* > *Networking* > *Routes* > *`jenkins`*), and stop the first build *`MASTER-Build-<registry name>`*.
 +
+NOTE: Wait for the creation of the directory `<registry name>` and the Jenkins pipeline. After starting, immediately do an *Abort* of the build.
 
-NOTE: Wait until the `<registry-name>` directory and Jenkins pipeline are created. Immediately after the build starts, select *Abort*.
+. While still in the Jenkins console, change the configuration of *MASTER-Build-`<registry name>`*: +
+Go to *MASTER-Build-`<registry name>`* > *Configure*, and in the *Build Triggers* section, check the box for *Disable this project*. Then save the changes with the *`Save`* button.
 
+. Transfer the *_values.yaml_* and *_values.gotmpl_* configuration files from the registry repository of Cluster A to Cluster B.
 
-. Without leaving the Jenkins console, edit the *MASTER-Build-`<registry-name>`* configuration:
+* Go to the registry repository on Cluster A: +
+Open *Control-plane-console* > *Dashboard* > *Gerrit* > *Browse* > *Repositories* > select the repository *`<registry name>`*. +
+In the registry repository, go to *Branches* > `master`, then to *deploy-templates* and open the *_values.yaml_* ( *_values.gotmpl_* ) file > Copy the *raw* code to the clipboard.
+* Then go to the registry repository on Cluster B: +
+*Control-plane-console* > *Dashboard* > *Gerrit* ) > *Browse* > *Repositories* and select the repository *`<registry name>`*. Through *commands* > *`Create change`*, create a change with the following parameters:
+
+** `Select branch for new change: master`.
+** `Description: Update registry before migration`.
 +
-Go to *MASTER-Build-`<registry-name>`* > *Configure* > *Build Triggers*, select the *Disable this project* option, then click *Save*.
+After creating the change, in the change itself click *`Edit`* > *`ADD/OPEN/UPLOAD`* -- find the *_values.yaml_* (*_values.gotmpl_*) file.
+Transfer the copied *_values.yaml_* (*_values.gotmpl_*) configuration from Cluster A to this file.
+* Repeat the operation for both files: *_values.yaml_* and *_values.gotmpl_*.
+* Save the changes, wait for the *Code Review* pipeline to pass (*CI Jenkins `+1`*), set `*Code-review +2*`, and merge the changes to the `master` branch with the `*Submit*` button.
 
-. Move the _values.yaml_ and _values.gotmpl_ configuration files from the registry's repository on cluster A to cluster B.
-
-.. Go to the registry repository on cluster A:
-+
-
-... Go to *Control-plane-console* > *Dashboard* > *Gerrit*.
-+
-... In Gerrit, go to *Browse* > *Repositories* and open the `<registry-name>` repository.
-+
-
-... In the registry repository, go to *Branches* > `master`, switch to *deploy-templates*, and open the _values.yaml_ (_values.gotmpl_) file. Copy its raw code to the clipboard and save it in any text editor.
-
-.. Go to the registry repository on cluster B:
-+
-
-... Go to *Control-plane-console* > *Dashboard* > *Gerrit*.
-+
-... In Gerrit, go to *Browse* > *Repositories* and open the `<registry-name>` repository.
-+
-... Go to *Commands* and click *`Create change`* to create a change with the following parameters:
-
-** *Select branch for new change*: `master`.
-** *Description*: `Update registry before migration`.
-+
-
-Once the change is created, click *`Edit`* > *`ADD/OPEN/UPLOAD`* and locate the _values.yaml_ (_values.gotmpl_) file.
-
-Copy the configuration from the _values.yaml_ (_values.gotmpl_) file on cluster A that you saved earlier and paste it inside this file.
-
-.. Do this for both files: _values.yaml_ and _values.gotmpl_.
-
-.. Save your changes, wait until the *Code Review* (*СІ Jenkins `+1`*) pipeline completes, then apply *`Code-review +2`* and merge changes to the `master` branch using the `*Submit*` button.
-
-. Check for `*CustomResourceDefintition*`.
-+
-[WARNING]
-====
-
-If no registries were deployed on cluster B previously, be sure to check for *`CustomResourceDefintition`*. To do this, log in to cluster B via *`oc cli`* and execute the following command:
-
-----
-oc get customresourcedefinition ingressclassparameterses.configuration.konghq.com
-----
-
-If this command ends with an error and returns a *`No resources found`* message in the console, go to the directory where the _migration.sh_ script is located and execute the following command from the root:
-
-----
-for file in $(ls crds); do oc apply -f crds/$file; done
-----
-====
+. Go to Jenkins, change the configuration of *MASTER-Build-`<registry name>`*: +
+Go to *MASTER-Build-`<registry name>`* > *Configure*, and in the *Build Triggers* section, uncheck the box for *Disable this project*. Then save the changes with the *`Save`* button.
 
 == Restoring the registry on cluster B
 
-[IMPORTANT]
-Only return access to the registry once the restoration process is complete.
+IMPORTANT: Enable access for end users to the registry _ONLY_ after the registry restoration process is complete.
 
-. Go to Jenkins (*`control-plane`* namespace > *Networking* > *Routes* > *`jenkins`*) and open the folder with your registry name, then run the *Restore-registry-`<registry-name>`* pipeline. After starting the pipeline, select the version to restore at the `cleanup-registry-before-restore` stage, and wait until the process completes.
+. Open Jenkins (namespace *`control-plane`* > *Networking* > *Routes* > *`jenkins`*), navigate to the folder with the registry name and start the Jenkins pipeline *`Restore-registry-<registry name>`*. After launching the pipeline, select the version (at the `cleanup-registry-before-restore` stage) and wait for the process to complete.
 +
-NOTE: If the process ends with an error or runs for more than 1-2 hours, contact an L2-L3 support team.
+NOTE: The process may finish with a *`UNSTABLE`* status. This is related to the configuration change of the pipeline *MASTER-Build-`<registry-name>`*, where `<registry-name>` is the name of the registry.
++
+NOTE: If the process finishes with an error or takes more than 1-2 hours, contact L2-L3 technical support specialists.
 
-. After the pipeline completes, go to the Openshift console > *Projects* -> `<registry-name>` and ensure no pods have an error status.
+. After the pipeline completes, go to the Openshift console -> Projects -> `<registry-name>`, and ensure that there are no pods in error states and all pods are in `Running/Completed` status.
 +
 [NOTE]
 ====
+If a pod named *`bpms-*`* is not started and has an error status, correct the passwords in `postgres` for *`operational-instance`* and *`analytical-instance`* pods. For this, you need to:
 
-If the *`bpms-*`* pod is not running and has an error status, you must fix the passwords for the *`operational-instance`* and *`analytical-instance`* pods in `postgres`. To do this, perform these steps:
-
-.. Go to *Openshift* console > *Secrets* and find the following secrets:
-** *`operational-pguser-postgres`* secret for `operational-instance`
-** *`analytical-pguser-postgres`* secret for `analytical-instance`
-
-.. Open the secrets and copy the *password* field.
-
-.. Go to *Openshift* console > *Pods* and find the *`operational-instance`* and *`analytical-instance`* pods. For each pod, execute the following commands successively:
+* Go to *Openshift* console > *Secrets*, find the secret for `operational-instance` -- *`operational-pguser-postgres`* (for `analytical-instance` -- it is *`analytical-pguser-postgres`*).
+* Go to *Secret* and copy the *`password`* field.
+* Go to *Openshift* console > *Pods* > find the *`operational-instance`* or *`analytical-instance`* pod and execute the following commands sequentially:
 +
 [source,bash]
 ----
@@ -424,20 +362,18 @@ psql
 ----
 ALTER ROLE postgres WITH PASSWORD '<password>';
 ----
-+
-where *`<password>`* is the password you copied from the secret for each corresponding pod instance, `operational` and `analytical`.
 
+** where *`<password>`* is the `password` field, copied from *Secret*, for the respective instance -- `operational` or `analytical`.
 
-.. After performing these steps, delete the *`bpms`* pod and wait until its status changes to *Running*.
+* After performing all operations, delete the *`bpms`* pod and wait until it is in *`Running`* status (active/started).
 ====
 +
 [NOTE]
 ====
+If the *`registry-rest-api`* pod starts with an `ImagePullBackOff` error, add the IP of Cluster B to the annotation of *Openshift Route* > *Nexus*.
 
-If the *`registry-rest-api`* pod returns an `ImagePullBackOff` error, add cluster B's IP to the *Openshift Route* > *Nexus* annotation.
-
-To add the IP, go to *Openshift* console > *Projects* -> `<registry-name>` -> *Routes* > *Nexus* > *YAML* and check the following field in the _.yaml_ configuration:
-
+* For this, go to *Openshift* console > *Project* > `<registry name>` > *Routes* > *Nexus* > *YAML* and check the following field in the _.yaml_ configuration:
++
 .route.yaml
 =====
 ----
@@ -446,31 +382,30 @@ metadata:
     haproxy.router.openshift.io/ip_whitelist: <NAT Cluster IP>/32,....
 ----
 =====
++
+If the IP address of Cluster B is missing, add it to *`haproxy.router.openshift.io/ip_whitelist`* with a mask of *`/32`*.
 
-If the IP address of cluster B is missing, add it to *`haproxy.router.openshift.io/ip_whitelist`* with a *`/32`* mask.
 ====
 +
-
-. After ensuring all pods have a *Running* status, transfer the registry configuration to _values.yaml/values.gotmpl_.
+. Go to Jenkins and change the configuration of *`MASTER-Build-<registry-name>`*:
 +
+Go to *`MASTER-Build-<registry-name>`* > *`Configure`*, and in the *`BuildTriggers`* section, uncheck the box for *Disable this project*. Then save the changes with the *`Save`* button.
 
-.. Go to *_control-plane-gerrit_* (*Openshift* console > *Projects* > *`control-plane`* > *Networking* > *`gerrit`* > sign in via *`openshift-sso`*).
 +
-
-.. In Gerrit, go to *Browse* > *Repositories* and select the repository with your registry name.
+. Transfer the registry configuration to *_values.yaml/values.gotmpl_*.
 +
-.. Go to *Commands* and click *`Create change`* to create a change with the following parameters:
-
-** *Select branch for new change*: `master`.
-** *Description*: `Update registry before migration`.
+* Log in to *_control-plane-gerrit_* (*Openshift* console > *Projects* -> *`control-plane`* -> *Networking* -> *`gerrit`* > Log in via *`openshift-sso`*).
 +
+Go to *Browse* > *Repositories* in Gerrit and select the repository *`<registry name>`*. Through *`commands`* > *`Create change`*, create a change with the following parameters:
 
-.. Once the change is created, click *`Edit`*.
-
-.. Add `vault` configuration to _values.gotmpl_.
+** `Select branch for new change: master`.
+** `Description: Update registry after migration`.
 +
+After creating the change, click *`Edit`* in the change itself.
 
-To do this, take the current `vault` configuration from the *`hashicorp-vault-config`* config-map (*Openshift* console > *Projects* -> `<registry-name>` -> *Workloads* > *ConfigMaps* > *`hashicorp-vault-config`*) and copy the field as shown in the following example:
+* Add `vault` configuration to *_values.gotmpl_*.
++
+For this, take the current `vault` configuration from the config-map *`hashicorp-vault-config`* (*Openshift* console > *Projects* > `<registry name>` > *Workloads* > *ConfigMaps* > *`hashicorp-vault-config`*) and copy the field as in the following example:
 +
 ----
 ui = true
@@ -478,25 +413,25 @@ ui = true
 listener "tcp" {
   tls_disable = 1
   address = "[::]:8200"
-  cluster_address = "[::]:8201"
+  cluster_address = "[::]:820
+
+1"
 }
 storage "file" {
   path = "/vault/data"
 }
 seal "transit" {
-   address         = "https://<vault-url>"
+   address         = "https://<vault url>"
    disable_renewal = "false"
-   key_name        = "<key-name>"
+   key_name        = "<key name>"
    mount_path      = "transit/"
    tls_skip_verify = "true"
 }
 ----
 +
-
-where *`<vault-url>`* is the link to the *`vault`* and *`<key-name>`* is the name of the key. The `config-map` contains up-to-date values.
+* where *`<vault URL>`* is the link to *`vault`*, *`<key name>`* is the key name (the config-map will have the current fields).
 +
-
-.. Next, click *`ADD/OPEN/UPLOAD`* inside the change, search for _values.gotmpl_, and select the file. Inside the file, add the configuration as shown in the following example:
+Then, in the change, click *`ADD/OPEN/UPLOAD`*; in the search, specify *_values.gotmpl_* and select the required file. In the file itself, add the configuration as in the example:
 +
 [source,yaml]
 ----
@@ -523,192 +458,61 @@ vault:
          path = "/vault/data"
        }
        seal "transit" {
-          address         = "https://<vault-url>"
+          address         = "https://<vault url>"
           disable_renewal = "false"
-          key_name        = "<key-name>"
+          key_name        = "<key name>"
           mount_path      = "transit/"
           tls_skip_verify = "true"
        }
 ----
 
-.. Click *`Save`*.
+* After adding, click *Save and Publish*. Wait for the Jenkins Code-Review pipeline to pass (a +1 rating from edp-ci should appear), then click *Reply* > *Code-Review - +2* > *Submit*
 
-.. Resize `kafka` disks. Without leaving the template file, find the following field:
-+
-[source,yaml]
-----
-storage:
-  zookeeper:
-    size: 5Gi
-  kafka:
-    size: 20Gi
-----
-+
+. After applying the changes, the Jenkins process *`MASTER-Build-<registry name>`* should start. Wait for the Jenkins pipeline *`MASTER-Build-<registry name>`* to complete.
 
-
-.. Modify the `kafka.size` value according to the current disk size in *Openshift* (*Openshift* console > *Projects* -> `<registry-name>` -> *Storage* > *`PersistentVolumeClaims`*). Search for *`data-0-kafka-cluster-kafka-0`* and find out its *`Capacity`*. Go back to _values.gotmpl_ and set the desired disk size. For example:
+. Transfer users.
 +
-----
-storage:
-  zookeeper:
-    size: 5Gi
-  kafka:
-    size: 40Gi
-----
+In the Keycloak admin console, go to the realm (1), and in the left menu of the realm, select *`Import`* (2). For the import, choose the *`SKIP`* strategy, then click *`Select file`* (3) and select the file from the directory _keycloak-export/<realm name>-users-*.json.
 +
+NOTE: If there is more than one file, import all files.
 
-where 40Gi is the current disk size that matches `Capacity`.
 +
+image:admin:migrate-registry/migrate-registry-2.png[image,width=601,height=417]
 
-.. Delete all *`GerritGroupMember`*. To do this, log in to cluster B via `os cli` and execute the following command:
-+
-----
-oc -n <registry-name> delete gerritgroupmember --all
-----
-+
-
-. After the changes are applied, the *MASTER-Build-`<registry-name>`* Jenkins process should start.
-
-. After the *MASTER-Build-`<registry-name>`* Jenkins process completes, fix Jenkins credentials in the Jenkins registry.
+. Correct Jenkins Credentials in the registry Jenkins.
 +
 [NOTE]
 ====
-
-If you don't have access, add yourself as a registry administrator via *`control-plane-console`*.
+If you do not have access, add yourself as a registry administrator through control-plane-console.
 ====
+* For this, go to *Openshift console* > *Projects* > `<registry name>` > *Workloads* > *Secrets* > *`gerrit-control-plane-sshkey`* and copy the *`id_rsa`* field.
 
-.. To do this, go to *Openshift* console > *Projects* -> `<registry-name>` -> *Workloads* > *Secrets* > *`gerrit-control-plane-sshkey`* and copy the *id_rsa* field.
-+
+* Then go to the registry Jenkins (*Networking* > *Routes* > `*jenkins*`) > Manage Jenkins > Manage Credentials > *`edp-ci`* (*`gerrit-control-plane-sshkey`*) > click *`Update`*.
 
-.. Then go to the registry Jenkins (*Networking* > *Routes* > `*jenkins*`) and open *Manage Jenkins* > *Manage Credentials*, find *`gerrit-ci-users-sshkey`* (*`gerrit-control-plane-sshkey`*), and click *`Update`*.
-+
+* In the *`Private Key`* field, insert the copied value using *`Replace`*.
 
-.. In the *Private Key* field, paste and *`Replace`* the *id_rsa* value you copied earlier.
-+
-
-. Update Nexus URL in the regulations repository.
-+
-To do this, go to *Openshift* console > *Projects* -> `<registry-name>` -> *Gerrit* and sign in to Gerrit.
-+
-Next, make sure you have access to projects in Gerrit and clone the *_registry-regulations_* repository locally. To do this, perform these steps:
-
-.. In the Gerrit web interface, go to settings > *HTTP Credentials* and click `*Generate New Password*` to generate a new password. Save this password in any text editor.
-+
-
-.. Go to the *`registry-regulations`* repository and copy the contents of the *Clone with commit-msg hook* text box in the *Anonymous HTTP* tab.
-+
-
-.. Paste the repository clone command into the terminal and execute. The command will prompt you for a login and password. For the login, enter your email. For the password, paste the one you generated earlier in step A.
-+
-TIP: For details on working with Gerrit repositories, see xref:registry-develop:registry-admin/regulations-deploy/registry-admin-deploy-regulation.adoc[].
-+
-[NOTE]
-====
-
-If your Git user is different from your Gerrit user, execute the following commands:
-----
-git config --global user.name "New Author Name"
-git config --global user.email "<email@address.example>"
-----
-
-For example:
-----
-git config --global user.name "Jonh Doe"
-git config --global user.email "jong_doe@doemail.com"
-----
-====
-+
-
-
-. Change the minor version in _settings.yaml_ in the root directory of the *_registry-regulations_* repository, as shown in the following example:
-+
-----
-settings:
-  general:
-    package: ua.gov.mdtu.ddm.dataplatform.template
-    register: registry
-    version: 2.21.0
-----
-For example, add `+1` to the version:
-+
-----
-settings:
-  general:
-    package: ua.gov.mdtu.ddm.dataplatform.template
-    register: registry
-    version: 2.21.1
-----
-+
-
-. Replace all mentions of cluster A DNS with cluster B. To do this, go to the *_registry-regulations/data-model_* directory in the terminal:
-+
-----
-cd registry-regulations/data-model
-----
-+
-Then execute the following command to replace DNS:
-+
-----
-find "." \( -type d -name .git -prune \) -o -type f -print0 | xargs -0 sed -i -e  's/<Cluster A DNS wildcard> /<Cluster B DNS Wildcard> /g'
-----
-+
-[TIP]
-====
-
-`Cluster A DNS wildcard/Cluster B DNS wildcard` refers to *`apps.*`* (for example, `*apps.reestr1.eua.gov.ua*`).
-
-Here is how a sed rule should look:
-----
-'s/apps.cluster-a.dns.wildcard.com/apps.cluster-b.dns.wildcard.com/g'
-----
-====
-+
-
-. Commit and push changes to the repository:
-+
-[source,git]
-----
-git add --all
-----
-+
-[source,git]
-----
-git commit -m "Update nexus URL"
-----
-+
-[source,git]
-----
-git push origin refs/heads/master:refs/for/master
-----
-+
-
-. Go to the registry Gerrit, apply *`Code-review +2`*, and merge changes to the `master` branch using the `*Submit*` button.
-+
-
-. After updating the master branch, go to the registry Jenkins and make sure the pipelines in the *registry-regulations* folder have been completed with a *Success* status.
+. After updating the *`Private Key`*, go to the folder *`registry-regulations`* and select the pipeline *`MASTER-Build-registry-regulations`*, then click *`Build with Parameters`* and select the checkbox for *`FULL_DEPLOY`* and click *`Build`*. Wait for it to complete with a *`Success`* status.
 
 == Testing the registry
 
-. Make sure the user portals are working correctly and the business processes have migrated successfully.
-+
+. Ensure that the User portals function as expected and that business processes have migrated successfully.
 
-. All Jenkins pipelines should complete with a *Success* status.
+. All Jenkins pipelines should complete with a *`Success`* status.
 
-== Migrating the registry configuration
+== Migrating registry configuration
 
-Migrate the registry configuration from cluster A to cluster B according to the following documentation: ::
+Transfer the registry configuration from Cluster A to Cluster B according to the documentation: ::
 
-* *Administrators* (for details, see xref:registry-develop:registry-admin/create-users/create-registry-admins.adoc[]).
-* *Key info*  (for details, see xref:admin:registry-management/system-keys/control-plane-registry-keys.adoc[]).
-* *Mail server* (for details, see xref:registry-develop:registry-admin/user-notifications/email/config-smtp-server.adoc[]).
+* *Administrators* (_see more on the page xref:registry-develop:registry-admin/create-users/create-registry-admins.adoc[]_).
+* *Key data*  (_see more on the page xref:admin:registry-management/system-keys/control-plane-registry-keys.adoc[]_).
+* *Mail server* (_see more on the page xref:registry-develop:registry-admin/user-notifications/email/config-smtp-server.adoc[]_).
 * *Registry resources*
 +
 [NOTE]
+Transfer the settings parameters from the _values.yaml_ file (section `global.registry` ) of the registry on Cluster A to the settings in the _values.yaml_ file of the registry on Cluster B.
 
-Transfer registry configuration parameters (the `global.registry` section) from the _values.yaml_ file on cluster A to the _values.yaml_ file on cluster B.
-
-* *DNS* (for details, see xref:admin:registry-management/custom-dns/custom-dns-overview.adoc[]).
-* *Access restrictions* (for details, see xref:admin:registry-management/control-plane-cidr-access-endpoints.adoc[]).
-* *Service providers authentication* (for details, see xref:registry-develop:registry-admin/cp-auth-setup/cp-auth-setup-officers.adoc[] and xref:registry-develop:registry-admin/cp-auth-setup/cp-officer-self-registration.adoc[]).
-* *Service recipients authentication* (for details, see xref:registry-develop:registry-admin/cp-auth-setup/cp-auth-setup-citizens.adoc[])
-* *Backup* (for details, see xref:admin:backup-restore/control-plane-backup-restore.adoc[] and xref:admin:backup-restore/backup-schedule-registry-components.adoc[]).
+* DNS (_see more on the page xref:admin:registry-management/custom-dns/custom-dns-overview.adoc[]_).
+* *Access restrictions* (_see more on the page xref:admin:registry-management/control-plane-cidr-access-endpoints.adoc[]_).
+* *Service provider authentication* (_see more on the pages xref:registry-develop:registry-admin/cp-auth-setup/cp-auth-setup-officers.adoc[] and xref:registry-develop:registry-admin/cp-auth-setup/cp-officer-self-registration.adoc[]_).
+* *Service recipient authentication* (_see more on the page xref:registry-develop:registry-admin/cp-auth-setup/cp-auth-setup-citizens.adoc[]_)
+* *Backup* (_see more on the pages xref:admin:backup-restore/control-plane-backup-restore.adoc[] and xref:admin:backup-restore/backup-schedule-registry-components.adoc[]_).
