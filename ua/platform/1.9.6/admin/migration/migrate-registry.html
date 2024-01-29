@@ -3912,6 +3912,70 @@
 <p>Якщо останній velero backup завершився зі статусом <strong><code>Completed</code></strong>, то можна переходити далі. У випадку, коли статус velero backup відрізняється від <code>Completed</code>, необхідно долучати спеціалістів із технічної підтримки L2-L3 для перевірки працездатності Jenkins-пайплайну.</p>
 </li>
 <li>
+<p>Отримайте консистентні дані у бекапах бакетів реєстру, що мігрується.</p>
+<div class="olist loweralpha">
+<ol class="loweralpha" type="a">
+<li>
+<p>Для початку, отримайте актуальні бекапи S3-бакетів реєстру в проєкті <code>velero</code>. Відкрийте розділ <strong>Workloads</strong>, потім перейдіть до <strong>CronJobs</strong>. Тут використовуйте пошукову панель для фільтрації бакетів за назвою реєстру, наприклад, <code>migrationreg</code>.</p>
+<div class="imageblock">
+<div class="content">
+<img src="../_images/migrate-registry/migrate-registry-01.png" alt="migrate registry 01">
+</div>
+<div class="title">Зображення 1. CronJobs</div>
+</div>
+</li>
+<li>
+<p>Відкрийте кожну <strong>CronJob</strong> і змініть час її запуску на найближчий можливий. Для прикладу, встановіть запуск через 10-15 хвилин. Щоб це зробити, перейдіть до налаштувань кожної CronJob, відкрийте її <strong>YAML</strong>-конфігурацію і змініть параметр <code>spec.schedule</code>. Наприклад, для запуску CronJob щодня о 10:50 за UTC, використовуйте наступну конфігурацію:</p>
+<div class="listingblock">
+<div class="title">CronJob details. YAML-конфігурація</div>
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-yaml hljs" data-lang="yaml">spec:
+  schedule: 50 10 * * *</code></pre>
+</div>
+</div>
+<div class="admonitionblock caution">
+<table>
+<tr>
+<td class="icon">
+<i class="fa icon-caution" title="УВАГА"></i>
+</td>
+<td class="content">
+<div class="paragraph">
+<p>При роботі з <code>cron</code>, час вказується за <a href="https://time.is/UTC">UTC</a>.</p>
+</div>
+</td>
+</tr>
+</table>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="../_images/migrate-registry/migrate-registry-02.png" alt="migrate registry 02">
+</div>
+<div class="title">Зображення 2. CronJob details. Schedule</div>
+</div>
+</li>
+<li>
+<p>Після цього дочекайтеся запуску і завершення усіх CronJob. Прогрес і статус можна перевірити в розділі <strong>Jobs</strong>, обравши відповідний Job і переглянувши розділ <strong>Status</strong>, де має бути позначка <code>✅ Complete</code>.</p>
+<div class="imageblock">
+<div class="content">
+<img src="../_images/migrate-registry/migrate-registry-03.png" alt="migrate registry 03">
+</div>
+<div class="title">Зображення 3. CronJob details. Jobs</div>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="../_images/migrate-registry/migrate-registry-04.png" alt="migrate registry 04">
+</div>
+<div class="title">Зображення 4. Job details. Status</div>
+</div>
+</li>
+<li>
+<p>Завдяки цим діям ви отримаєте консистентні дані з бекапів бакетів реєстру, який перебуває у процесі міграції.</p>
+</li>
+</ol>
+</div>
+</li>
+<li>
 <p>Забороніть робити зміни у реєстрі за допомогою Jenkins пайплайнів.</p>
 <div class="paragraph">
 <p>У кожному пайплайні для реєстру перейдіть до секції <strong>Configure</strong> та знайдіть параметр <strong><code>Disable this project</code></strong> у секції <strong>Build Triggers</strong>, встановіть напроти нього прапорець та збережіть зміни за допомогою кнопки <kbd><strong>Save</strong></kbd>.</p>
@@ -4251,7 +4315,7 @@
 <i class="fa icon-note" title="ПРИМІТКА"></i>
 </td>
 <td class="content">
-Процесс може заверишитись зі статусом <strong><code>UNSTABLE</code></strong>, це пов&#8217;язано зі зміною конфігурації <strong><code>MASTER-Build-&lt;назва реєстру&gt;</code></strong> pipeline.
+Процесс може заверишитись зі статусом <strong><code>UNSTABLE</code></strong>. Це пов&#8217;язано зі зміною конфігурації пайплайну <strong>MASTER-Build-<code>&lt;registry-name&gt;</code></strong>, де <code>&lt;registry-name&gt;</code>&#8201;&#8212;&#8201;назва реєстру.
 </td>
 </tr>
 </table>
@@ -4270,7 +4334,7 @@
 </div>
 </li>
 <li>
-<p>Після завершення пайплайну перейдіть в Openshift-консоль &#8594; Projects &#8594; &lt;registry-name&gt;, та перевірте, що немає под у статусі помилок, та усі поди у статусі Running/Сompleted.</p>
+<p>Після завершення пайплайну перейдіть в Openshift-консоль &#8594; Projects &#8594; <code>&lt;registry-name&gt;</code>, та перевірте, що відсутні поди у статусі з помилками, та усі поди у статусі <code>Running/Сompleted</code>.</p>
 <div class="admonitionblock note">
 <table>
 <tr>
@@ -4356,9 +4420,9 @@
 </div>
 </li>
 <li>
-<p>Перейдіть в Jenkins, змініть конфігурацію <strong><code>MASTER-Build-&lt;назва реєстру&gt;</code></strong>:</p>
+<p>Перейдіть в Jenkins, змініть конфігурацію <strong><code>MASTER-Build-&lt;registry-name&gt;</code></strong>:</p>
 <div class="paragraph">
-<p>Перейдіть до <strong><code>MASTER-Build-&lt;назва реєстру&gt;</code></strong> &gt; <strong><code>Configure</code></strong>, та у секції <strong><code>BuildTriggers</code></strong>  приберіть прапорець на параметрі <strong><code>Disable this project</code></strong>. Далі збережіть зміни кнопкою <strong><code>Save</code></strong>.</p>
+<p>Перейдіть до <strong><code>MASTER-Build-&lt;registry-name&gt;</code></strong> &gt; <strong><code>Configure</code></strong>, та у секції <strong><code>BuildTriggers</code></strong> приберіть прапорець на параметрі <strong>Disable this project</strong>. Далі збережіть зміни кнопкою <strong><code>Save</code></strong>.</p>
 </div>
 </li>
 <li>
@@ -4462,7 +4526,7 @@ seal "transit" {
 <li>
 <p>Перенесіть користувачів.</p>
 <div class="paragraph">
-<p>В адмін-консолі Keycloak, перейдіть до реалму (1), та у лівому меню реалму оберіть  <strong><code>Import</code></strong> (2) (при імпорті оберіть стратегію <strong><code>SKIP</code></strong>), далі натисніть <strong><code>Select file</code></strong> (3) та виберіть файл із директорії <em>keycloak-export/&lt;ім’я реалму&gt;-users-*.json</em>.</p>
+<p>В адмін-консолі Keycloak, перейдіть до реалму (1), та у лівому меню реалму оберіть  <strong><code>Import</code></strong> (2). При імпорті оберіть стратегію <strong><code>SKIP</code></strong>), далі натисніть <strong><code>Select file</code></strong> (3) та виберіть файл із директорії <em>keycloak-export/&lt;ім’я реалму&gt;-users-*.json</em>.</p>
 </div>
 <div class="admonitionblock note">
 <table>
