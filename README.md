@@ -1,3 +1,5 @@
+![Build Status](https://github.com/epam/edp-ddm-architecture/actions/workflows/antora-build.yml/badge.svg)
+
 # Developing and maintaining technical product documentation
 
 ## Description of tools
