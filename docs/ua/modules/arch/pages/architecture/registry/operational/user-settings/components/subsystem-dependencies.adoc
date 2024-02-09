@@ -1,0 +1,49 @@
+= Компоненти та звʼязки підсистеми управління налаштуваннями користувачів
+
+== Загальний опис
+Ця сторінка відображає діаграму компонент підсистеми управління налаштуваннями користувачів.
+
+Наступна діаграма відображає критичні залежності між окремими компонентами підсистеми, розподіленими по трьом ключовим рівням:
+
+* Рівень Helmfile – залежності helm-чартів та порядок розгортання
+* Рівень Readiness Probes – залежності на готовність компонента до прийому трафіку
+* Рівень Init-контейнерів – залежність на ініціалізацію компонента підсистеми.
+
+.Діаграма компонент та їх залежностей
+[plantuml]
+----
+@startuml
+skinparam Linetype ortho
+
+package "Підсистема управління налаштуваннями користувачів" #MediumSeaGreen {
+component [user-settings-service-api]
+}
+
+package "Підсистема управління реляційними базами даних" #SkyBlue {
+component [operational pool]
+}
+
+package "Підсистема асинхронного обміну повідомленнями" #SkyBlue {
+component [kafka-cluster]
+}
+
+package "Підсистема управління нереляційними базами даних" #SkyBlue {
+component [rfs-redis-sentinel]
+}
+
+[user-settings-service-api] -> [operational pool]
+[user-settings-service-api] -up-> [kafka-cluster]
+[user-settings-service-api] -down-> [rfs-redis-sentinel]
+
+note top of [user-settings-service-api]
+     1. To Start: init container (postgres),
+         readiness probe (postgres, kafka, redis)
+     2. Helmfile needs: postgres
+end note
+
+@enduml
+
+----
+
+Діаграма служить як комплексний графічний засіб для допомоги наданню більш прозорого розуміння структури підсистеми,
+розв'язання проблем сполучення компонентів і планування оптимізації підсистеми реєстру.

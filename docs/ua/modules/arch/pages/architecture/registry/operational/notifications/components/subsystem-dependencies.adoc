@@ -1,0 +1,54 @@
+= Компоненти та звʼязки підсистеми нотифікацій користувачів
+
+== Загальний опис
+Ця сторінка відображає діаграму компонент підсистеми нотифікацій користувачів.
+
+Наступна діаграма відображає критичні залежності між окремими компонентами підсистеми, розподіленими по трьом ключовим рівням:
+
+* Рівень Helmfile – залежності helm-чартів та порядок розгортання
+* Рівень Readiness Probes – залежності на готовність компонента до прийому трафіку
+* Рівень Init-контейнерів – залежність на ініціалізацію компонента підсистеми.
+
+.Діаграма компонент та їх залежностей
+[plantuml]
+----
+@startuml
+skinparam Linetype ortho
+
+package "Підсистема нотифікацій користувачів" #MediumSeaGreen {
+component [ddm-notification-service]
+}
+
+package "Підсистема управління реляційними базами даних" #SkyBlue {
+component [operational pool]
+}
+
+package "Підсистема управління користувачами та ролями" #SkyBlue {
+component [keycloak]
+}
+
+package "Підсистема асинхронного обміну повідомленнями" #SkyBlue {
+component [kafka-cluster]
+}
+
+package "Підсистема журналювання подій аудиту" #SkyBlue {
+component [kafka-schema-registry]
+}
+
+[ddm-notification-service] --> [operational pool]
+[ddm-notification-service] --> [keycloak]
+[ddm-notification-service] --> [kafka-cluster]
+[ddm-notification-service] --> [kafka-schema-registry]
+
+note top of [ddm-notification-service]
+    1. To Start: init container (postgres, kafka, kafka-schema-registry),
+    readiness probe (postgres, keycloak)
+    2. Helmfile needs: kafka
+end note
+
+@enduml
+
+----
+
+Діаграма служить як комплексний графічний засіб для допомоги наданню більш прозорого розуміння структури підсистеми,
+розв'язання проблем сполучення компонентів і планування оптимізації підсистеми реєстру.

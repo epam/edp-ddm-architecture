@@ -1,0 +1,53 @@
+= Компоненти та звʼязки підсистеми моделювання регламенту реєстру
+
+== Загальний опис
+Ця сторінка відображає діаграму компонент підсистеми моделювання регламенту реєстру.
+
+Наступна діаграма відображає критичні залежності між окремими компонентами підсистеми, розподіленими по трьом ключовим рівням:
+
+* Рівень Helmfile – залежності helm-чартів та порядок розгортання
+* Рівень Readiness Probes – залежності на готовність компонента до прийому трафіку
+* Рівень Init-контейнерів – залежність на ініціалізацію компонента підсистеми.
+
+.Діаграма компонент та їх залежностей
+[plantuml]
+----
+@startuml
+skinparam Linetype ortho
+
+package "Підсистема моделювання регламенту реєстру" #MediumSeaGreen {
+component [admin-portal (common-web-app)]
+component [redash-admin]
+component [gerrit]
+component [registry-regulation-management]
+component [ddm-language-server]
+component [report-exporter]
+}
+
+package "Підсистема управління зовнішнім трафіком операційної зони реєстру" #SkyBlue {
+component [kong-admin-tools]
+}
+
+[admin-portal (common-web-app)] -up-> [kong-admin-tools]
+note top of [admin-portal (common-web-app)]
+ 1. Helmfile needs: kafka, postgres, jenkins,
+ gerrit, keycloak, nexus, form-schema-provider,
+ kong,kong-admin-tools
+end note
+
+[redash-admin] -up-> [kong-admin-tools]
+
+[gerrit] -up-> [kong-admin-tools]
+
+note top of [report-exporter]: Helmfile needs: redash
+note bottom of [ddm-language-server]: Helmfile needs: [admin-portal (common-web-app)]
+note bottom of [registry-regulation-management]: Helmfile needs: postgres,\ngerrit, codebase
+note bottom of [gerrit]: Helmfile needs: keycloak,\nkong-admin-tools
+note bottom of [redash-admin]: Helmfile needs: kafka, postgres, jenkins,\ngerrit, keycloak, nexus
+
+@enduml
+
+----
+
+Діаграма служить як комплексний графічний засіб для допомоги наданню більш прозорого розуміння структури підсистеми,
+розв'язання проблем сполучення компонентів і планування оптимізації підсистеми реєстру.

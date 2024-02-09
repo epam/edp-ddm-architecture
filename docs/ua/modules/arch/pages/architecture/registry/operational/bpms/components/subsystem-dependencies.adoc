@@ -1,0 +1,95 @@
+= Компоненти та звʼязки підсистеми виконання бізнес-процесів
+
+== Загальний опис
+Ця сторінка відображає діаграму компонент підсистеми виконання бізнес-процесів.
+
+Наступна діаграма відображає критичні залежності між окремими компонентами підсистеми, розподіленими по трьом ключовим рівням:
+
+* Рівень Helmfile – залежності helm-чартів та порядок розгортання
+* Рівень Readiness Probes – залежності на готовність компонента до прийому трафіку
+* Рівень Init-контейнерів – залежність на ініціалізацію компонента підсистеми.
+
+.Діаграма компонент та їх залежностей
+[plantuml]
+----
+@startuml
+skinparam Linetype ortho
+
+package "Підсистема виконання бізнес-процесів" #MediumSeaGreen {
+component [user-task-management]
+component [user-process-management]
+component [digital-document-service]
+component [process-history-service-api]
+component [form-submission-validation]
+component [bpms]
+component [process-history-service-persistence]
+component [form-schema-provider]
+}
+
+package "Підсистема управління реляційними базами даних" #SkyBlue {
+component [registry-postgres]
+}
+
+package "Підсистема асинхронного обміну повідомленнями" #SkyBlue {
+component [kafka-cluster]
+}
+
+package "Підсистема управління нереляційними базами даних" #SkyBlue {
+component [rfs-redis-sentinel]
+}
+
+[bpms] -up-> [registry-postgres]
+note bottom of [bpms]
+1. To Start: init container,
+readiness probe (to Redis, to Postgres)
+2. Helmfile needs: kafka, postgres, gerrit,
+keycloak, nexus, external-secrets
+end note
+
+[digital-document-service] -up-> [kafka-cluster]
+note bottom of [digital-document-service]
+1. To Start: init container
+2. Helmfile needs: strimzi-kafka-operator
+end note
+
+[process-history-service-api] -up-> [registry-postgres]
+note bottom of [process-history-service-api]
+1. To Start: init container, readiness probe (to postgres)
+2. Helmfile needs: registry-postgres
+end note
+
+[user-task-management] -up-> [rfs-redis-sentinel]
+note bottom of [user-task-management]
+1. To Start: readiness probe
+2. Helmfile needs: strimzi-kafka-operator,
+registry-postgres, jenkins-operator,
+gerrit-operator, keycloak, nexus
+end note
+
+[user-process-management] -up-> [rfs-redis-sentinel]
+note bottom of [user-process-management]
+1. To Start: readiness probe
+2. Helmfile needs: jenkins-operator,
+gerrit-operator,
+keycloak, nexus, bpms
+end note
+
+[form-schema-provider] -> [rfs-redis-sentinel]
+note bottom of [form-schema-provider]
+1. To Start: readiness probe
+2. Helmfile needs: redis
+end note
+
+[process-history-service-persistence] -> [registry-postgres]
+[process-history-service-persistence] -> [kafka-cluster]
+note bottom of [process-history-service-persistence]
+1. To Start: init container (to postgres, to Kafka),
+readiness probe (to postgres, to Kafka)
+2.Helmfile needs: kafka, postgres
+end note
+
+@enduml
+----
+
+Діаграма служить як комплексний графічний засіб для допомоги наданню більш прозорого розуміння структури підсистеми,
+розв'язання проблем сполучення компонентів і планування оптимізації підсистеми реєстру.

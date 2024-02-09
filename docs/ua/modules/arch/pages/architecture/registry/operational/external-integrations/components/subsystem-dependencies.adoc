@@ -1,0 +1,64 @@
+= Компоненти та звʼязки підсистеми зовнішніх інтеграцій
+
+== Загальний опис
+Ця сторінка відображає діаграму компонент підсистеми зовнішніх інтеграцій.
+
+Наступна діаграма відображає критичні залежності між окремими компонентами підсистеми, розподіленими по трьом ключовим рівням:
+
+* Рівень Helmfile – залежності helm-чартів та порядок розгортання
+* Рівень Readiness Probes – залежності на готовність компонента до прийому трафіку
+* Рівень Init-контейнерів – залежність на ініціалізацію компонента підсистеми.
+
+.Діаграма компонент та їх залежностей
+[plantuml]
+----
+@startuml
+skinparam Linetype ortho
+
+package "Підсистема зовнішніх інтеграцій" #MediumSeaGreen {
+component [bp-webservice-gateway]
+component [platform-gateway]
+component [registry-soap-api]
+component [registry-rest-api-ext]
+}
+
+package "Підсистема управління нереляційними базами даних" #SkyBlue {
+component [rfs-redis-sentinel]
+}
+
+package "Підсистема асинхронного обміну повідомленнями" #SkyBlue {
+component [kafka-cluster]
+}
+
+package "Підсистема управління реляційними базами даних" #SkyBlue {
+component [operational pool]
+}
+
+package "Підсистема управління даними реєстру" #MediumSeaGreen {
+component [registry-rest-api]
+}
+
+package "Підсистема управління користувачами та ролями" #SkyBlue {
+component [keycloak]
+}
+
+[bp-webservice-gateway] -> [rfs-redis-sentinel]
+[registry-soap-api] -down-> [registry-rest-api]
+[registry-soap-api] -down-> [keycloak]
+
+note top of [bp-webservice-gateway]: 1. To Start: readiness probe (to Redis)
+
+note bottom of [registry-soap-api]
+  1. To Start: readiness probe (to keycloak, to registry-rest-api)
+end note
+
+[registry-rest-api-ext] -down-> [operational pool]
+[registry-rest-api-ext] -up-> [rfs-redis-sentinel]
+[registry-rest-api-ext] -down-> [kafka-cluster]
+
+@enduml
+
+----
+
+Діаграма служить як комплексний графічний засіб для допомоги наданню більш прозорого розуміння структури підсистеми,
+розв'язання проблем сполучення компонентів і планування оптимізації підсистеми реєстру.

@@ -1,0 +1,45 @@
+= Компоненти та звʼязки підсистеми обслуговування операційної зони реєстру
+
+== Загальний опис
+Ця сторінка відображає діаграму компонент підсистеми обслуговування операційної зони реєстру.
+
+Наступна діаграма відображає критичні залежності між окремими компонентами підсистеми, розподіленими по трьом ключовим рівням:
+
+* Рівень Helmfile – залежності helm-чартів та порядок розгортання
+* Рівень Readiness Probes – залежності на готовність компонента до прийому трафіку
+* Рівень Init-контейнерів – залежність на ініціалізацію компонента підсистеми.
+
+.Діаграма компонент та їх залежностей
+[plantuml]
+----
+@startuml
+skinparam Linetype ortho
+
+package "Підсистема обслуговування операційної зони реєстру" #MediumSeaGreen {
+component [business-process-administration-portal]
+component [kafka-ui]
+component [pgadmin]
+}
+
+package "Підсистема управління реляційними базами даних" #SkyBlue {
+component [operational pool]
+}
+
+package "Підсистема асинхронного обміну повідомленнями" #SkyBlue {
+component [kafka-cluster]
+}
+
+[business-process-administration-portal] -up-> [operational pool]
+note bottom of [business-process-administration-portal]
+ 1. To Start: readiness probe (to postgres)
+ 2. Helmfile needs: bpms, gerrit-operator,
+ keycloak-operator, nexus, common-web-app
+end note
+
+[kafka-ui] -up-> [kafka-cluster]
+note bottom of [kafka-ui]: 1. To Start: init container (to kafka)
+@enduml
+----
+
+Діаграма служить як комплексний графічний засіб для допомоги наданню більш прозорого розуміння структури підсистеми,
+розв'язання проблем сполучення компонентів і планування оптимізації підсистеми реєстру.

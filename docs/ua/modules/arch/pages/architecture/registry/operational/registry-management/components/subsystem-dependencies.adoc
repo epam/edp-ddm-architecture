@@ -1,0 +1,64 @@
+= Компоненти та звʼязки підсистеми управління даними реєстру
+
+== Загальний опис
+Ця сторінка відображає діаграму компонент підсистеми управління даними реєстру.
+
+Наступна діаграма відображає критичні залежності між окремими компонентами підсистеми, розподіленими по трьом ключовим рівням:
+
+* Рівень Helmfile – залежності helm-чартів та порядок розгортання
+* Рівень Readiness Probes – залежності на готовність компонента до прийому трафіку
+* Рівень Init-контейнерів – залежність на ініціалізацію компонента підсистеми.
+
+.Діаграма компонент та їх залежностей
+[plantuml]
+----
+@startuml
+skinparam Linetype ortho
+
+package "Підсистема управління даними реєстру" #MediumSeaGreen {
+component [registry-rest-api]
+component [registry-kafka-api]
+component [registry-postgres]
+}
+
+package "Підсистема асинхронного обміну повідомленнями" #SkyBlue {
+component [kafka-cluster]
+}
+
+package "Підсистема управління реляційними базами даних" #SkyBlue {
+component [operational pool]
+}
+
+package "Підсистема управління нереляційними базами даних" #SkyBlue {
+component [rfs-redis-sentinel]
+}
+
+package "Підсистема цифрових підписів" #SkyBlue {
+component [digital-signature-ops]
+}
+
+[registry-rest-api] -> [operational pool]
+[registry-rest-api] -up-> [rfs-redis-sentinel]
+[registry-rest-api] -down-> [kafka-cluster]
+[registry-kafka-api] -up-> [operational pool]
+[registry-kafka-api] -> [registry-rest-api]
+[registry-kafka-api] -down-> [kafka-cluster]
+[registry-postgres] -up-> [operational pool]
+[registry-rest-api] -> [digital-signature-ops]
+
+note bottom of [registry-rest-api]
+ 1. To Start: init container (postgres),
+ readiness probe (to Redis, to Postgres, to Kafka)
+end note
+
+note bottom of [registry-kafka-api]
+1. To Start: init container (postgres, registry-rest-api),
+readiness probe (to Postgres, to Kafka, to DSO)
+end note
+
+@enduml
+
+----
+
+Діаграма служить як комплексний графічний засіб для допомоги наданню більш прозорого розуміння структури підсистеми,
+розв'язання проблем сполучення компонентів і планування оптимізації підсистеми реєстру.
