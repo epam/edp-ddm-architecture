@@ -1,0 +1,58 @@
+= Registry deployment optimization
+
+== Загальний опис
+Наразі існує декілька проблем з процесами розгортання реєстру:
+
+1. Компоненти реєстру при створенні розгортаються одночасно, що призводить до великого навантаження на CPU та його тротлінгу.
+2. При включенні ноди, всі додатки реєстру запускаються одночасно, що призводить до великого навантаження на CPU та його тротлінгу.
+3. Черга розгортання ресурсів побудована не ефективно.
+
+Пропонується оптимізувати процеси розгортання реєстру.
+
+=== Дослідження
+
+==== Поточна конфігурація
+* Характеристики віртуальної машини: 1x `r5.2xlarge` (8 CPU/64 RAM)
+* Розгортання з поточною чергою в helmfile needs, readiness probes та init-контейнерами.
+* Час розгортання: ~15 хвилин
+* Час старту вимкненого реєстру: ~15 хвилин
+
+.Розгортання реєстру з нуля
+image::architecture-workspace/research/registry-deployment-optimization/current-config-deployment.png[]
+
+.Ввімкнення існуючого реєстру
+image::architecture-workspace/research/registry-deployment-optimization/current-config-startup.png[]
+
+==== Поточна конфігурація з меншими ресурсами
+* Характеристики віртуальної машини: 1x `r5.xlarge` (4 CPU/32 RAM)
+* Розгортання з поточною чергою в helmfile needs, readiness probes та init-контейнерами.
+* Час розгортання: ~55-60 хвилин
+* Час старту вимкненого реєстру: ~45 хвилин
+
+.Розгортання реєстру з нуля на машині з меншими ресурсами
+image::architecture-workspace/research/registry-deployment-optimization/current-config-deployment-reduced-resources.png[]
+
+.Ввімкнення існуючого реєстру на машині з меншими ресурсами
+image::architecture-workspace/research/registry-deployment-optimization/current-config-startup-reduced-resources.png[]
+
+==== Поточна конфігурація з меншими ресурсами та заданою concurrency
+* Характеристики віртуальної машини: 1x `r5.xlarge` (4 CPU/32 RAM)
+* Розгортання з `--concurrency 4` та поточними helmfile needs, readiness probes та init-контейнерами.
+* Час розгортання: ~44 хвилини
+* Час старту вимкненого реєстру: ~44 хвилин
+
+.Розгортання реєстру з нуля на машині з меншими ресурсами та заданою concurrency
+image::architecture-workspace/research/registry-deployment-optimization/concurrency4-deployment.png[]
+
+.Розгортання реєстру з нуля на машині з меншими ресурсами та заданою concurrency 6 та 10
+image::architecture-workspace/research/registry-deployment-optimization/concurrency.png[]
+
+
+=== Висновки
+
+1. Надати можливість задавати `--concurrency` для helmfile в залежності від обраної типової конфігурації реєстру (мінімальна, операційна тощо) для зменшення тротлінгу CPU під час розгортання.
+2. Надати можливість задавати `Recreate` deployment стратегію замість `Rolling` в залежності від обраної типової конфігурації реєстру.
+3. Параметризувати requests ресурсів для `redash-admin-install` job (допоможе реєстру розгорнутись на 4/32)
+4. Переглянути можливість групування `excertps` компонентів
+5. Переглянути поточні helmfile needs та прибрати зайві (e.g bpms -> nexus)
+6. Не інвестувати в чергу розгортання при старті кластеру (mutation webhook + init container with script).
