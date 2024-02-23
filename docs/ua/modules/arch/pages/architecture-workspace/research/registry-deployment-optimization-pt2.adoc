@@ -1,0 +1,79 @@
+= Registry deployment optimization - Part 2
+
+== Загальний опис
+Наразі існує декілька проблем з процесами розгортання реєстру, вони описані в першій частині даного дослідження.
+
+https://ddm-architecture-mdtu-ddm-edp-cicd-documentation-dev.apps.cicd2.mdtu-ddm.projects.epam.com/ua/platform/1.9.8/arch/architecture-workspace/research/registry-deployment-optimization.html[Registry deployment optimization - Part 1]
+
+В даному розділі проведено дослідження, після оптимізації процесу розгоратання реєстру з першої частини, а саме:
+
+. Надана можливість задавання `--concurrency` в `values.yaml` реєстру для helmfile, в залежності від обраної типової
+конфігурації реєстру (мінімальна, операційна тощо) для зменшення тротлінгу CPU під час розгортання.
+. Переглянуті поточні helmfile needs та прибрані зайві для оптимізації черги розгортання реєстрових компонентів.
+. Згруповані `excertps` компоненти для зменшення навантаження на CPU під час розгортання реєстру.
+
+=== Дослідження
+
+==== Поточна конфігурація
+* Характеристики віртуальної машини: 1x `r5.2xlarge` (8 CPU/64 RAM).
+* Розгортання з оптимізованою чергою в helmfile needs, readiness probes та init-контейнерами.
+* Час розгортання: ~15 хвилин.
+
+.Розгортання реєстру з нуля
+image::architecture-workspace/research/registry-deployment-optimization/optimized-config-deployment.png[]
+
+==== Поточна конфігурація з меншими ресурсами
+* Характеристики віртуальної машини: 1x `r5.xlarge` (4 CPU/32 RAM).
+* Розгортання з оптимізованою чергою в helmfile needs, readiness probes та init-контейнерами.
+* Час розгортання: ~34-37 хвилин.
+
+.Розгортання реєстру з нуля на машині з меншими ресурсами
+image::architecture-workspace/research/registry-deployment-optimization/optimized-config-deployment-reduced-resources.png[]
+
+==== Поточна конфігурація з меншими ресурсами та заданою concurrency
+* Характеристики віртуальної машини: 1x `r5.xlarge` (4 CPU/32 RAM).
+* Розгортання з `--concurrency 8` та оптимізованою чергою helmfile needs, readiness probes та init-контейнерами.
+* Час розгортання: ~35-38 хвилин.
+
+.Розгортання реєстру з нуля на машині з меншими ресурсами та заданою concurrency
+image::architecture-workspace/research/registry-deployment-optimization/optimized-config-deployment-reduced-resources-concurrency8-deployment.png[]
+
+==== Поточна конфігурація з меншими ресурсами, заданою concurrency та оптимізованими `excertps` компонентами
+* Характеристики віртуальної машини: 1x `r5.xlarge` (4 CPU/32 RAM).
+* Розгортання з `--concurrency 8` та оптимізованою чергою helmfile needs, readiness probes та init-контейнерами.
+* Час розгортання: ~30-33 хвилини.
+
+.Розгортання реєстру з нуля на машині з меншими ресурсами, заданою concurrency та оптимізованими `excertps` компонентами
+image::architecture-workspace/research/registry-deployment-optimization/optimized-config-deployment-reduced-resources-concurrency8-excerpts-deployment.png[]
+
+=== Висновки
+. Проведена часткова оптимізація процесу розгоратання реєстру з висновків першої частини, а саме:
+.. Надання можливості задання `--concurrency` в `values.yaml` реєстру, оптимізація helmfile needs, згруповані
+`excertps` компоненти, це все призвело до того, що процес розгортання реєстру на інстансі з меншими ресурсами займає
+30-33 хвилини, що на 27-30 хвилин менше ніж під час проведення першого дослідження.
+. Слід зазначити, що в проведеннях наступних дослідженнях буде зроблено:
+.. Переглянути поточні readiness probes та init-контейнери в деплойментах компонентів.
+.. Надати можливість задавати `Recreate` deployment стратегію замість `Rolling` в залежності від обраної типової
+конфігурації реєстру.
+.. Параметризувати requests ресурсів для `redash-admin-install` job (допоможе реєстру розгорнутись на 4/32)
+.. Не інвестувати в чергу розгортання при старті кластеру (mutation webhook + init container with script).
+
+=== Посилання
+
+https://ddm-architecture-mdtu-ddm-edp-cicd-documentation-dev.apps.cicd2.mdtu-ddm.projects.epam.com/ua/platform/1.9.8/arch/architecture-workspace/research/registry-deployment-optimization.html[Registry deployment optimization - Part 1]
+
+https://ddm-architecture-mdtu-ddm-edp-cicd-documentation-dev.apps.cicd2.mdtu-ddm.projects.epam.com/ua/platform/1.9.8/arch/architecture/registry/operational/user-settings/components/subsystem-dependencies.html[Поточні залежності підсистеми налаштувань користувачів]
+
+https://ddm-architecture-mdtu-ddm-edp-cicd-documentation-dev.apps.cicd2.mdtu-ddm.projects.epam.com/ua/platform/1.9.8/arch/architecture/registry/administrative/regulation-management/components/subsystem-dependencies.html[Поточні залежності підсистеми моделювання регламенту реєстру]
+
+https://ddm-architecture-mdtu-ddm-edp-cicd-documentation-dev.apps.cicd2.mdtu-ddm.projects.epam.com/ua/platform/1.9.8/arch/architecture/registry/administrative/operational-maintenance/components/subsystem-dependencies.html[Поточні залежності підсистеми обслуговування операційної зони реєстру]
+
+https://ddm-architecture-mdtu-ddm-edp-cicd-documentation-dev.apps.cicd2.mdtu-ddm.projects.epam.com/ua/platform/1.9.8/arch/architecture/registry/operational/bpms/components/subsystem-dependencies.html[Поточні залежності підсистеми виконання бізнес-процесів]
+
+https://ddm-architecture-mdtu-ddm-edp-cicd-documentation-dev.apps.cicd2.mdtu-ddm.projects.epam.com/ua/platform/1.9.8/arch/architecture/registry/operational/registry-management/components/subsystem-dependencies.html[Поточні залежності підсистеми управління даними реєстру]
+
+https://ddm-architecture-mdtu-ddm-edp-cicd-documentation-dev.apps.cicd2.mdtu-ddm.projects.epam.com/ua/platform/1.9.8/arch/architecture/registry/operational/external-integrations/components/subsystem-dependencies.html[Поточні залежності підсистеми зовнішніх інтеграцій]
+
+https://ddm-architecture-mdtu-ddm-edp-cicd-documentation-dev.apps.cicd2.mdtu-ddm.projects.epam.com/ua/platform/1.9.8/arch/architecture/registry/operational/excerpts/components/subsystem-dependencies.html[Поточні залежності підсистеми витягів реєстру]
+
+https://ddm-architecture-mdtu-ddm-edp-cicd-documentation-dev.apps.cicd2.mdtu-ddm.projects.epam.com/ua/platform/1.9.8/arch/architecture/registry/operational/notifications/components/subsystem-dependencies.html[Поточні залежності підсистеми нотифікацій]
