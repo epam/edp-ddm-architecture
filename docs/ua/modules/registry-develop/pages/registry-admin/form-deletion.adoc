@@ -1,0 +1,37 @@
+= Видалення форм з регламенту реєстру
+
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+На даний момент, форми, що вже не потрібні для використання, з регламенту реєстру можливо видалити через інтерфейс _Кабінету адміністратора регламентів_ або через _Gerrit_ реєстру.
+
+Проте насправді при виконанні даної операції виконується видалення файлу лише з системи контролю версій, в якій зберігається регламент.
+
+Постійним сховищем для форм є _Redis_, і видалення з нього наразі не відбувається.
+
+Це означає, що навіть після видалення файлу форми з регламенту, вона буде доступна для використання у бізнес-процесах та картках.
+
+Якщо виникає необхідність у зміні цієї поведінки та повноцінному видаленні форми, необхідно виконати наступні кроки:
+
+. Авторизуватись до Openshift консолі
+
+. Завантажити `OpenShift command line interface` та через неї авторизуватись до Openshift з локального середовища (приклад - xref:registry-admin/remote_connection.adoc[], пункти 1, 4-7)
+
+. Виконати порт-форвардінг до сервіса *form-schema-provider* у необхідному проєкті.
++
+[source, bash]
+----
+oc port-forward svc/form-schema-provider 8080:8080 project_name
+----
+де `project_name` – назва необхідного проєкту (реєстру).
+
+. Відкрити Swagger сервіса *form-schema-provider* у локальному браузері за шляхом _http://localhost:8080/openapi_ та відкрити ендпоінт _DELETE /api/forms/{key}_
++
+image:registry-develop:registry-admin/form-deletion/swagger-view-example.png[]
+
+. Отримати у Keycloak токен, з яким можна виконати запит до сервіса. Приклад отримання токена - у статті xref:registry-develop:registry-admin/external-integration/api-publish/get-jwt-token-postman.adoc[]. Як keycloak рілм бажано використати admin-рілм реєстру, як клієнта можливо використати *jenkins-deployer*
++
+image:registry-develop:registry-admin/form-deletion/keycloak-admin.png[]
+
+. Підставити у Swagger-шаблон запиту отриманий токен, назву форми як *key* та натиснути *Execute*. Код відповіді 204 означатиме успішне видалення
++
+image:registry-develop:registry-admin/form-deletion/swagger-execute-example.png[]
