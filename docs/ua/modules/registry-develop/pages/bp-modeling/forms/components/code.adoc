@@ -18,6 +18,8 @@ API ::
 
 TIP: У цій функції використовується JS вставка. xref:bp-modeling/forms/components/general/eval.adoc[Детальніше про JS вставки.]
 
+* *`Allow code to run during component initialization`*: дозволити виконання коду під час ініціалізації компонента.
+
 ====
 
 == Формат даних
@@ -29,24 +31,35 @@ TIP: У цій функції використовується JS вставка
 ----
 
 == Сценарії використання
-=== Запит до API та встановлення нового значення для компоненту
+=== Запит до API та встановлення нового значення для компоненту editgrid
+В компонент _Code_ вносимо JavaScript код для запиту на сервер:
+
 [source,javascript]
 ----
-  fetch('/api/data-factory/sample-by-id' + queryParams)
-    .then((response) => {
-      return response.json();
-    .then((data) => {
-      setValue('editgrid', data);
+  // якщо data.editGrid пустий, не відображаємо editGrid
+  getComponent('editGrid').visible = !!data.editGrid?.length; 
+  if (!getComponent('textfield').pristine) { // робити запит тільки після змін в компоненті textfield
+    fetch('/api/data-factory/sample-by-id' + queryParams)
+      .then((response) => {
+        return response.json();
+      .then((res) => {
+        // якщо data.editGrid не пустий, відображаємо editGrid
+        getComponent('editGrid').visible = !!res.length;
+        if (res.length) {
+          // встановлюємо дані в editGrid
+          setValue('editGrid', res);
+        }
+      });
     });
-  });
+  }
 ----
 
-В цьому прикладі ми робимо _GET_ запит на сервер передаючи query параметри, використовуючи _fetch_ функцію. Отримані дані встановлюємо в значення компоненту, використовуючи функцію _setValue_ (перший аргумент назва компоненту(Property Name з таби API), другий нове значення).
+В цьому прикладі ми робимо _GET_ запит на сервер передаючи query параметри, використовуючи _fetch_ функцію.
 
 === Клік по кнопці
 
 В компоненті _Button_ обираємо _Custom Action_ та в поле _Button Custom Logic_ вносимо таке значення:
-[source]
+[source,javascript]
 ----
 instance.root.getComponent('code').runCode()
 ----
@@ -55,12 +68,10 @@ instance.root.getComponent('code').runCode()
 === Зміна значення в текстовому полі
 
 В компоненті _Textfield_ в _Calculated Value_ вносимо таке значення:
-[source]
+[source,javascript]
 ----
-if (value) {
-    instance.root.getComponent('code').runCode();
-}
+
+instance.root.getComponent('code').runCode();
+
 ----
 При зміні тексту буде викликатися JavaScript код який був внесений в компоненті _Code_.
-
-TIP: Обов'язково використовуйте перевірку на існування _value_, щоб запобігти нескінченного циклу.
