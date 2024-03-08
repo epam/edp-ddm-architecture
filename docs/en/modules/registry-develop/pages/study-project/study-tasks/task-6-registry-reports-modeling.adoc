@@ -3,68 +3,50 @@ include::platform:ROOT:partial$templates/document-attributes/default-set-en.adoc
 
 include::platform:ROOT:partial$admonitions/language-en.adoc[]
 
-//== Мета завдання
 == Goal
 
-//Мета завдання -- навчити розробляти звіти у середовищі Redash.
 The goal of this task is to learn to develop reports in the Redash environment.
 
-//В рамках цього завдання моделювальники мають: ::
 In this task, you will learn to: ::
 +
 [%interactive]
-//* [ ] змоделювати аналітичне представлення;
+
 * [ ] Model an analytics view.
-//* [ ] надати доступ до аналітичного представлення;
 * [ ] Provide access to the analytics view.
-//* [ ] створити 3 запити (Query) в Redash;
 * [ ] Create three queries in Redash.
-//* [ ] створити дашборд в Redash;
 * [ ] Create a dashboard in Redash.
-//* [ ] вивантажити архів із дашбордом;
 * [ ] Download the archive with the dashboard.
-//* [ ] розпакувати архів у регламенті;
 * [ ] Unpack the archive in the regulations.
-//* [ ] перенести зміни до віддаленого Gerrit-репозиторію;
 * [ ] Apply the changes to the remote Gerrit repository.
-//* [ ] перевірити сформований звіт.
 * [ ] Verify the report.
 
-//== Процес виконання завдання
 == Task steps
 
 [#create-analytical-views]
-//=== Створення аналітичного прошарку на рівні бази даних
+
 === Creating an analytical layer at the database level
 
-//Система формування аналітичної звітності *Redash* має доступ лише до [.underline]#репліки бази даних#, і лише до [.underline]#аналітичних представлень#. Для створення таких представлень використовуйте тег `*<ext:createAnalyticsView>*`, подібний до тегу для створення критеріїв пошуку (Search Conditions).
 The *Redash* analytical reporting system has access only to the replica of the database and exclusively to analytics views. To create these views, use the `*<ext:createAnalyticsView>*` tag, similar to creating search conditions.
 
 [TIP]
 ====
-//Детальну інформацію щодо [.underline]#створення аналітичних представлень# та [.underline]#критеріїв пошуку# на рівні моделі даних можна переглянути на сторінці за посиланнями:
+
 For details on creating analytics views and search conditions at the data model level, see:
 
 * xref:data-modeling/data/physical-model/liquibase-ddm-ext.adoc#create-search-conditions[Managing search conditions]
 * xref:data-modeling/data/physical-model/liquibase-ddm-ext.adoc#create-analytical-views[Managing analytics views]
 ====
 
-//NOTE: Для аналітичних представлень створіть окремий файл *_createAnalyticsViews.xml_* із шаблону _link:{attachmentsdir}/study-project/task-6/xml-temp/createAnalyticsViews.xml[createAnalyticsViews.xml]_
 NOTE: Create a separate *_createAnalyticsViews.xml_* file for analytics views using the _link:{attachmentsdir}/study-project/task-6/xml-temp/createAnalyticsViews.xml[createAnalyticsViews.xml]_ template.
 
-//IMPORTANT: Назва аналітичного представлення має починатися префіксом *`report_`*.
 IMPORTANT: The name of the analytics view must start with the *`report_`* prefix.
 
-//==== Створення аналітичного представлення "Розгорнута інформація по лабораторіях"
 ==== Creating an analytics view for laboratory details
 
-//* Назва аналітичного представлення: `*report_laboratory*`.
 * Analytics view name: `*report_laboratory*`.
-//* Інформація з таблиць: `*laboratory*`, `*koatuu*` (область, населений пункт), `*ownership*`.
 * Information is taken from the following tables: `*laboratory*`, `*koatuu*` (region, town), `*ownership*`.
 
-//.Приклад. ХМL-шаблон створення аналітичного представлення
-.An XML template for creating an analytics view
+.XML template for creating an analytics view
 [source,xml]
 ----
     <changeSet author="registry owner" id="create report_laboratory view">
@@ -119,7 +101,6 @@ IMPORTANT: The name of the analytics view must start with the *`report_`* prefix
     </changeSet>
 ----
 
-//.Вихідний SQL-запит на базі XML-шаблону
 .SQL query based on XML template
 [source,sql]
 ----
@@ -141,12 +122,9 @@ SELECT l.laboratory_id,
  WHERE ko.type = 'О';
 ----
 
-//==== Створення аналітичного представлення "Довідник КОАТУУ"
 ==== Creating an analytics view for the territorial codes directory (KOATUU)
 
-//* Назва аналітичного представлення: `*report_koatuu*`.
 * Analytics view name: `*report_koatuu*`.
-//* Інформація з таблиці: `*koatuu*`.
 * Information is taken from the following table: `*koatuu*`.
 
 .An XML template for creating an analytics view
@@ -174,13 +152,12 @@ SELECT koatuu.koatuu_id,
   FROM koatuu;
 ----
 
-//==== Створення аналітичного представлення "Довідник типів власності"
 ==== Creating an analytics view for the ownership types directory
 
 * Analytics view name: `*report_ownership*`.
 * Information is taken from the following table: `*ownership*`.
 
-.An XML template for creating an analytics view
+.XML template for creating an analytics view
 [source,xml]
 ----
     <changeSet author="registry owner" id="create report_ownership view">
@@ -201,17 +178,13 @@ SELECT ownership.ownership_id,
 FROM ownership;
 ----
 
-//=== Видача прав доступу до аналітичних представлень
 === Providing access to analytics views
 
-//Кожна роль, що вказана у файлі _roles/officer.yml_ Gerrit-репозиторію реєстру, має користувача бази даних на репліці з префіксом `*analytics_*` (наприклад, `analytics_officer`).
 Each role specified in the _roles/officer.yml_ file in the registry Gerrit repository has a database user in the replica prefixed with `*analytics_*` -- for example, `analytics_officer`.
 
-//Для правильного функціонування звітів потрібно надати права до створених представлень відповідній ролі. Перевірте файл _officer.yml_, та додайте роль `officer` (якщо такої ще немає).
 For the reports to work correctly, you must grant access to the analytics views for the corresponding role. Check the _officer.yml_ file and add the `officer` role if it is not specified.
 
-//.Приклад вмісту файлу _officer.yml_ із регламентною роллю officer
-.Specifying the regulations officer role in the _officer.yml_ file
+.Specifying the registry regulations' officer role in the _officer.yml_ file
 ====
 [source,yaml]
 ----
@@ -222,14 +195,12 @@ roles:
 ====
 
 [grant-access-analytical-views-1-5-plus]
-//==== Механізм видачі прав на платформі реєстрів версії 1.5. та вище
+
 ==== Providing access rights on the Platform version 1.5 or later
 
-//У файлі _createAnalyticsViews.xml_, додайте тег `*<ext:grantAll>*`, додавши в середину тег `*<ext:role>*` з атрибутом `name="analytics_officer"`.
 In the _createAnalyticsViews.xml_ file, add the `*<ext:grantAll>*` tag. Inside this tag, put the `*<ext:role>*` tag with the `name="analytics_officer"` attribute.
 
-//.Приклад. ХМL-шаблон для видачі прав
-.An XML template for granting access rights
+.XML template for granting access rights
 [source,xml]
 ----
  <changeSet author="registry owner" id="grants to all analytics users">
@@ -238,16 +209,13 @@ In the _createAnalyticsViews.xml_ file, add the `*<ext:grantAll>*` tag. Inside t
     </ext:grantAll>
 </changeSet>
 ----
-//Покладіть створений файл *_createAnalyticsViews.xml_* до папки *_data-model_* Gerrit-репозиторію.
+
 Copy the *_createAnalyticsViews.xml_* file to the *_data-model_* folder of the Gerrit repository.
 
-//=== Застосування змін до моделі бази даних
 === Applying changes to the database model
 
-//Виконайте наступні кроки для застосування змін: ::
 To apply changes, perform the following steps: ::
-
-//. У файлі _main-liquibase.xml_ додайте тег `*<include>*` з обов'язковим вказанням атрибуту `file="data-model/createAnalyticsViews.xml"` у кінці тегу `<databaseChangeLog>`:
++
 . In the _main-liquibase.xml_ file, add the `*<include>*` tag with the `file="data-model/createAnalyticsViews.xml"` attribute at the end of the `<databaseChangeLog>` tag:
 +
 [source,xml]
@@ -256,69 +224,60 @@ To apply changes, perform the following steps: ::
     <include file="data-model/createAnalyticsViews.xml"/>
 </databaseChangeLog>
 ----
-+
-//. Оновіть версію регламенту у файлі _settings.yaml_, що знаходиться у кореневій папці Gerrit-репозиторію.
-. Update the regulations version in the _settings.yaml_ file in the root directory of the Gerrit repository.
+
+. Update the registry regulations' version in the _settings.yaml_ file in the root directory of the Gerrit repository.
 +
 image:registry-develop:study-project/task-6/task-6-13-redash.png[]
-+
-//. Застосуйте зміни до Gerrit (`git commit`, `git push`).
+
 . Apply changes to Gerrit (`git commit`, `git push`).
-//. Проведіть процедуру рецензування коду вашого commit. За відсутності прав, попросіть про це відповідальну особу.
+
 . Perform a code review of your commit. If you don't have the reviewer permissions, contact another reviewer.
-//. Дочекайтеся виконання *Jenkins*-пайплайну *MASTER-Build-registry-regulations*.
+
 . Wait until the *MASTER-Build-registry-regulations* Jenkins pipeline completes successfully.
 
-//=== Процес створення звіту в Redash
 === Creating a report in Redash
 
-//Розробка аналітичної звітності ведеться на базі admin-екземпляра *Redash*. Необхідно мати роль `redash-admin` у реалмі `-admin` реєстру. Роль призначає адміністратор безпеки в інтерфейсі сервісу *Keycloak*. Зверніться до сторінки xref:admin:user-management-auth/keycloak-create-users.adoc[] за детальною інформацією щодо керування ролями.
-Analytical reporting is developed in the admin instance of *Redash*. To access it, you need to have the `redash-admin` role in the `-admin` realm of the registry. The role is assigned by the security administrator in the *Keycloak* service interface. For details on role management, see xref:admin:user-management-auth/keycloak-create-users.adoc[].
+Analytical reporting is developed in the admin instance of *Redash*. To access it, you need to have the `redash-admin` role in the `-admin` realm of the registry. The role is assigned by the security administrator in the *Keycloak* service interface. For details on role management, see xref:registry-admin/create-users/overview.adoc[].
 
 [TIP]
 ====
 
-//* Використовуйте екземпляр `*redash-viewer*` для [.underline]#перегляду# аналітичної звітності, а також дослідження подій у журналах аудиту.
 * Use the `*redash-viewer*` instance to view analytical reports and monitor events in the audit logs.
 +
-//Користувачі Кабінету посадової особи мають роль `officer` за замовчуванням. Роль надає доступ до особистого кабінету, а також стандартних звітів відповідного реєстру.
+
 Officer portal users have the `officer` role assigned by default. This role provides access to the user portal and standard reports of the corresponding registry.
 +
-//Система передбачає додаткову розширену роль `auditor`. Вона призначена для перегляду журналів аудиту у сервісі Redash.
+
 The system provides an additional `auditor` role. This extended role is meant for viewing audit logs in the Redash service.
 +
-//* Використовуйте екземпляр `*redash-admin*` для [.underline]#створення# та перегляду аналітичної звітності адміністраторами реєстру.
+
 * Use the `*redash-admin*` instance for creating and viewing analytical reports by the registry administrators.
 +
-//Адміністратор звітності отримує роль `redash-admin` у реалмі `-admin` реєстру. Після цього він матиме повний доступ до звітності у сервісі Redash.
+
 A reports administrator gets the `redash-admin` role in the `-admin` realm of the registry. This role provides full access to reporting in the Redash service.
 +
-//* Знайти посилання до екземплярів Redash можна в інтерфейсі OpenShift-консолі за https://console-openshift-console.apps.envone.dev.registry.eua.gov.ua/[посиланням].
-//TODO: Removing the gov.ua link
+
+
 * You can find links to Redash instances in the OpenShift admin console.
 +
 image:registry-develop:study-project/task-6/task-6-12-redash.png[]
 ====
 
-//==== Створення запита для параметра "Тип Власності"
 ==== Creating a query for the ownership type parameter
 
-//На цьому кроці треба створити запит для параметра, який дозволить бачити лабораторії лише певного типу власності.
 In this step, you need to create a query for the parameter that will only show laboratories with a specific ownership type.
 
-//Найперше створіть *Snippet* (запит за замовчуванням): ::
 First, create a *Snippet* (a default query): ::
-//. Відкрийте [.underline]#Налаштування# (*Settings*).
++
 . In *Redash*, go to *Settings*.
 +
 image:registry-develop:study-project/task-6/task-6-1-redash.png[]
-+
-//. Оберіть вкладку [.underline]#Фрагменти запита#, натисніть `Новий запит Snippet` та заповніть обов'язкові поля:
+
 . Open the *Query Snippets* tab, click the *`New Snippet`* button, and fill out the required fields:
 +
-// * `Активатор` -- значенням `select_query_based_dropdown_list`
+
 * *Trigger*: Enter `select_query_based_dropdown_list`.
-// * `Фрагмент` -- *sql* кодом:
+
 * *Snippet*: Enter the following SQL code:
 +
 .SQL request template
@@ -343,35 +302,30 @@ ORDER BY rn, name;
 +
 image:registry-develop:study-project/task-6/task-6-2-redash.png[]
 
-//Далі створіть новий запит: ::
 Next, create a new query: ::
-//. В інтерфейсі адміністратора *Redash* (`redash-admin`) відкрийте секцію [.underline]#Запити# та натисніть `Новий Запит`.
+
 . Go to the `redash-admin` instance of *Redash*.
 . Open the *Queries* section and click *`New Query`*.
 +
 image:registry-develop:study-project/task-6/task-6-2-1-redash.png[]
-+
-//. У полі для запита введіть `select_`, після чого виберіть з випадного списку готовий шаблон запита для створення параметрів у звітах -- *`select_query_based_dropdown_list`*.
+
 . In the query box, type `select_`, then select a request template for creating parameters in reports from the dropdown list: *`select_query_based_dropdown_list`*.
 +
 image:registry-develop:study-project/task-6/task-6-3-redash.png[]
-+
-//. Змініть `<OBJ_PK_UUID>` та `<OBJ_NAME>` на -> `ownership_id` та `report_ownership_v` (назви мають відповідати тим, що були визначені на кроці xref:#create-analytical-views[] поточного завдання).
+
 . Change `<OBJ_PK_UUID>` to `ownership_id`, and `<OBJ_NAME>` to `report_ownership_v`. The names must correspond to the ones defined during the xref:#create-analytical-views[] step of this task.
 +
 [TIP]
 ====
-//* `report_ownership` -- назва аналітичного представлення, створеного на кроці xref:#create-analytical-views[] у файлі _createAnalyticsViews.xml_.
+
 The `report_ownership` is the analytics view created in the _createAnalyticsViews.xml_ file during the xref:#create-analytical-views[] step.
 
-//Система автоматично додає постфікс `_v` при розгортанні. Тому завжди звертайтеся до будь-якого аналітичного представлення у Redash за такою схемою:
 The system adds the `_v` postfix during the deployment. Always refer to all analytics views in Redash using the following pattern:
 
 ----
 analytics_view_name + _v.
 ----
 
-//.Назва, вказана при створенні аналітичного представлення
 .The name specified when creating the analytics view
 =====
 [source,xml]
@@ -380,87 +334,71 @@ analytics_view_name + _v.
 ----
 =====
 
-//.Назва представлення, фактично згенерована при розгортанні
 .The name generated during the deployment
 =====
 image:registry-develop:study-project/task-6/task-6-2-2-redash.png[]
 =====
 
 ====
-+
-//. Натисніть на кнопку `Виконати`, щоб надіслати запит до БД.
+
 . Click the *`Execute`* button to send the query to the database.
 +
-//У нижній частині ви побачите таблицю з даними.
+
 The table with data is displayed below the query box.
 +
 image:registry-develop:study-project/task-6/task-6-4-redash.png[]
 +
-//. Натисніть на назву запита вгорі -- `Новий Запит` та вкажіть для нього нову назву, наприклад _Вибір типу власності_. Далі натисніть `Enter`.
+
 . Select the query name at the top (by default, it's `New Query`) and provide a new name -- for example, `Select ownership type`. Press kbd:[Enter].
 +
 image:registry-develop:study-project/task-6/task-6-4-1-redash.png[]
-+
-//. Натисніть кнопку `Зберегти`, щоб зберегти запит.
+
 . Click *`Save`* to save your query.
-+
-//. Натисніть кнопку `Опублікувати`, щоб опублікувати запит.
+
 . Click *`Publish`* to publish your query.
 
-//==== Створення запита для параметра "Область"
 ==== Creating a query for the region parameter
 
-//На цьому кроці необхідно створити запит для параметра, який надасть можливість бачити лабораторії, розташовані у певній області.
 In this step, you need to create a query for the parameter that will only show laboratories from a specific region.
 
-//Створіть новий запит: ::
 Create a new query: ::
 
-//. В інтерфейсі адміністратора Redash (`redash-admin`) відкрийте секцію [.underline]#Запити# та натисніть `Новий Запит`.
 . Go to the `redash-admin` instance of *Redash*.
 . Open the *Queries* section and click *`New Query`*.
 +
 image:registry-develop:study-project/task-6/task-6-2-1-redash.png[]
 +
-//. У полі для запита введіть `select_`, та оберіть з випадного списку готовий шаблон запита для створення параметрів у звітах -- *`select_query_based_dropdown_list`*.
+
 . In the query box, type `select_`, then select a request template for creating parameters in reports from the dropdown list: *`select_query_based_dropdown_list`*.
 +
 image:registry-develop:study-project/task-6/task-6-3-redash.png[]
 +
-//. Змініть `<OBJ_PK_UUID>` та `<OBJ_NAME>` на -> `koatuu_id` та `report_koatuu_v`, додавши умову `WHERE type = 'О'`. Вираз *where* має обмежити значення лише областями.
+
 . Change `<OBJ_PK_UUID>` to `koatuu_id`, and `<OBJ_NAME>` to `report_koatuu_v`. Add a `WHERE type = 'R'` condition to limit the values to regions.
-+
-//CAUTION: Будьте уважні. Буква 'О' тут -- українська, не латиниця.
-//TODO: Changed the O to R
-//. Натисніть кнопку `Виконати`, щоб надіслати запит до БД.
+
 . Click the *`Execute`* button to send the query to the database.
 +
-//У нижній частині ви побачите таблицю з даними.
 The table with data is displayed below the query box.
-//. Натисніть назву запита вгорі -- `Новий Запит` та вкажіть нове значення, наприклад _Вибір області_. Далі натисніть `Enter`.
-. Select the query name at the top (by default, it's `New Query`) and provide a new name -- for example, `Select region`. Press kbd:[Enter].
+
+. Select the query name at the top (by default, it's `New Query`) and provide a new name—for example, `Select region`. Press kbd:[Enter].
 +
 image:registry-develop:study-project/task-6/task-6-5-1-redash.png[]
-+
-//. Натисніть кнопку `Зберегти`, щоб зберегти запит.
+
 . Click *`Save`* to save your query.
-//. Натисніть кнопку `Опублікувати` щоб опублікувати запит.
+
 . Click *`Publish`* to publish your query.
 
-//==== Створення основного запита для звіту
 ==== Creating the main report query
 
 [NOTE]
-//Основний запит посилається на попередні запити для їх використання як параметри фільтрації.
+
 The main query uses previous queries as filtering parameters.
 
-//Створіть новий запит: ::
-Create a new query: ::
+I.Create a new query: ::
 
-//. В інтерфейсі адміністратора Redash (`redash-admin`) відкрийте секцію [.underline]#Запити# та натисніть `Новий Запит`.
 . Go to the `redash-admin` instance of *Redash*.
 . Open the *Queries* section and click *`New Query`*.
-//. У полі для запита введіть *SQL*-скрипт:
+
 . In the query box, enter the following SQL script:
 +
 .SQL query template
@@ -476,70 +414,58 @@ SELECT name AS "Laboratory name",
  WHERE region_id = ''
 ----
 
-//Налаштування параметра фільтрації за Областю ::
-Set the filtering by region option: ::
-
-//. Перемістіть курсор між одинарних лапок та натисніть кнопку створення параметра (`*Add New Parameter*`):
+II. Set the filtering by region option: ::
++
 . Put the cursor between the single quotes and click the `*Add New Parameter*` button.
 +
 image:registry-develop:study-project/task-6/task-6-6-redash.png[]
 +
-//. Задайте наступні значення у формі:
+
 . Fill out the form using the following values:
 +
 * *Keyword*: `region`
 * *Title*: `Region`
 * *Type*: `Query Based Dropdown List`
 * *Query*: `Select region`
-+
-//. Натисніть на кнопку *`Add Parameter`* (`Додати Параметр`).
+
 . Click the *`Add Parameter`* button.
 +
-//Ви отримаєте вираз вигляду: `… WHERE region_id = '{{ region }}'`.
 You will get an expression like this: `… WHERE region_id = '{{ region }}'`.
 +
-//.Фінальний вигляд випадного списку для вибору області
 .Region selection dropdown (final view)
 +
 image::registry-develop:study-project/task-6/task-6-7-redash.png[]
 +
-//. Додайте до отриманого виразу, що фільтрує, логічний предикат *`OR`* та наступний вираз -- `'{{ region }}'= uuid_nil()`. Він необхідний для врахування та опрацювання умови `“( Всі значення )”`.
-. To this filtering expression, add the *`OR`* logical operator and the following expression: `'{{ region }}'= uuid_nil()`. This handles the "All values" condition.
+
+. To this filtering expression, add the *`OR`* logical operator and the following expression: `'{{ region }}'= uuid_nil()`. This handles the _All values_ condition.
 +
-//. Загорніть вирази зліва та справа від `OR` у дужки.
+
 . Enclose the expressions to the left and right of the `OR` operator in parentheses.
 
-//Налаштування параметра фільтрації за Власником ::
-Set the filtering by ownership option: ::
+III. Set the filtering by ownership option: ::
 
-//. З нового рядка додайте до отриманого виразу умову опрацювання фільтрації за власником лабораторії: `AND ownership_id = ''`.
 . In a new line, add the condition for filtering by the laboratory owner: `AND ownership_id = ''`.
-//. Перемістіть курсор між одинарних лапок та натисніть кнопку створення параметра (`*Add New Parameter*`).
+
 . Put the cursor between the single quotes and click the `*Add New Parameter*` button.
-//. Задайте наступні значення у формі:
+
 . Fill out the form using the following values:
 +
 * *Keyword*: `ownership`
 * *Title*: `Ownership`
 * *Type*: `Query Based Dropdown List`
 * *Query*: `Select ownership type`
-+
-//. Натисніть на кнопку `*Add Parameter*` (`Додати Параметр`). Ви отримаєте вираз вигляду: `… AND ownership_id = '{{ ownership }}'`;
+
 . Click the *`Add Parameter`* button.
 +
 You will get an expression like this: `… AND ownership_id = '{{ ownership }}'`.
 +
-//.Фінальний вигляд випадного списку для вибору власника
 .Ownership selection dropdown (final view)
 +
 image::registry-develop:study-project/task-6/task-6-8-redash.png[]
-+
-//. Додайте до отриманого виразу, що фільтрує, логічний предикат `OR` та наступний вираз -- `'{{ ownership }}'= uuid_nil()` -- необхідний для врахування та опрацювання умови `“( Всі значення )”`.
+
 . To this filtering expression, add the *`OR`* logical operator and the following expression: `'{{ ownership }}'= uuid_nil()`. This handles the "All values" condition.
-+
-//. Загорніть вирази зліва та справа від предиката `OR` у дужки.
+
 . Enclose the expressions to the left and right of the `OR` operator in parentheses.
-//.Вираз `WHERE`, який ви маєте отримати в результаті
 +
 .The `WHERE` expression you should get as a result
 [source,sql]
@@ -547,121 +473,120 @@ image::registry-develop:study-project/task-6/task-6-8-redash.png[]
 WHERE (region_id = '{{ region }}' OR '{{ region }}' = uuid_nil() )
   AND (ownership_id = '{{ ownership }}' OR '{{ ownership }}' = uuid_nil())
 ----
-+
-//. Натисніть на кнопку `Виконати`.
+
 . Click the *`Execute`* button.
 +
-//У таблиці результатів мають з'явитися створені раніше лабораторії.
-The results table will contain the laboratories that were created earlier.
+
+The result table will contain the laboratories that were created earlier.
 +
 image:registry-develop:study-project/task-6/task-6-9-redash.png[]
-+
-//. Натисніть назву запита вгорі -- `Новий Запит` та вкажіть для нього нове значення, наприклад _Перелік лабораторій_. Далі натисніть `Enter`.
-. Select the query name at the top (by default, it's `New Query`) and provide a new name -- for example, `List of laboratories`. Press kbd:[Enter].
+
+. Select the query name at the top (by default, it's `New Query`) and provide a new name—for example, `List of laboratories`. Press kbd:[Enter].
 +
 image:registry-develop:study-project/task-6/task-6-10-redash.png[]
 +
-//. Натисніть кнопку `Зберегти`, щоб зберегти запит.
+
 . Click *`Save`* to save your query.
-//. Натисніть кнопку `Опублікувати` щоб опублікувати запит.
+
 . Click *`Publish`* to publish your query.
 
-//==== Створення Інформаційної Панелі (Дашборду)
 ==== Creating a dashboard
 
-//Створіть нову інформаційну панель (*Dashboard*):
 Create a dashboard: ::
 
-//. В інтерфейсі адміністратора Redash (`redash-admin`) відкрийте секцію [.underline]#Дашборди# та натисніть `Нова інформаційна панель`.
 . Go to the `redash-admin` instance of *Redash*.
 . Open the *Dashboards* section and click *`New dashboard`*.
 +
 image:registry-develop:study-project/task-6/task-6-11-redash.png[]
-+
-//. Вкажіть назву -- `Лабораторії`.
+
 . Specify the dashboard name: `Laboratories`.
-//. Натисніть кнопку `*Add Widget*` (`Додати віджет`), оберіть запит `Перелік лабораторій` зі списку та натисніть кнопку `*Add to Dashboard*` (`Додати до Панелі`).
+
 . Click the `*Add Widget*` button, select the `List of laboratories` query from the list and click the `*Add to Dashboard*` button.
-//. Розтягніть додану панель за шириною та довжиною екрана.
+
 . Resize the widget to fit the screen.
-//. Натисніть кнопку `*Done Editing*` (`Закінчити Редагування`).
+
 . Click the `*Done Editing*` button.
-//. Опублікуйте створену панель кнопкою `*Publish*` (`Опублікувати`).
+
 . Click the *`Publish`* button to publish your dashboard.
 
 [WARNING]
 ====
-//Особливості роботи із назвами дашбордів ::
+
 Notes on dashboard names ::
 +
-//* Рекомендуємо використовувати латиницю для назв дашбордів у Redash.
+
 * We recommend using Latin characters for dashboard names in Redash.
 +
-image:registry-develop:study-project/task-6/dashboard-naming/dashnoard-naming-1.png[]
+image:registry-develop:study-project/task-6/dashboard-naming/dashboard-naming-1-en.png[]
 +
-//* Починаючи із версії Redash 10, нові дашборди створюються за шаблоном `<порядковий_номер>-<slug_ім'я>`. Раніше призначалося лише ім'я дашборда.
+
 * Starting with Redash version 10, new dashboards are named according to the following pattern: `<sequence_number>-<slug>`.
 +
 [TIP]
 =====
-//Параметр `*slug*` -- псевдонім, який додається до ідентифікатора дашборда в URL через дефіс. У нашому прикладі *`"slug": "laboratories"`* (_див. зображення нижче_).
+
 The `*slug*` parameter is an alias appended to the dashboard ID in the URL with a hyphen. In our example, it's *`"slug": "laboratories"`* (see the following image).
 =====
 +
-image:registry-develop:study-project/task-6/dashboard-naming/dashnoard-naming-2.png[]
+image:registry-develop:study-project/task-6/dashboard-naming/dashboard-naming-2-en.png[]
+
+* To obtain a JSON representation of a dashboard by its ID, pass the _environment's root path_ where *`redash-admin`* is deployed + `*/api/dashboards/<resource-id>*` to the Redash API.
 +
-//* Отримати JSON-представлення дашборда за його ID можна, передавши до Redash API _кореневий шлях оточення_, на якому розгорнуто *`redash-admin`* + `*/api/dashboards/<resource-id>*`.
-* You can get a JSON representation of a dashboard by its ID. To do this, use the _root path of the environment_ where *`redash-admin`* is deployed, plus `*/api/dashboards/<resource-id>*`.
-//.Приклад. Запит на отримання дашборда №8
+.Link template to the redash-admin service
+----
+https://admin-tools-<registry-name>-main.<dns-wildcard>/reports
+----
+
+** `<registry-name>` -- the name of the registry;
+** `-main` -- a system constant;
+** `<dns-wildcard>` -- defines the domain and subdomains of the environment.
+** `/reports` -- the endpoint for accessing the service.
 +
-.A query to get dashboard No. 8
+*Example:*
+https://admin-tools-platform-demo-main.example.com/reports
++
+TIP: See more about forming links: xref:admin:registry-management/control-plane-quick-links.adoc[].
++
+.Example. Request to obtain dashboard #8 from the `platform-demo` registry, deployed in the environment `apps.envone.dev.registry.eua.gov.ua`
 [source,http]
 ----
-https://redash-admin-<registry-name>.apps.envone.dev.registry.eua.gov.ua/api/dashboards/8
+https://redash-admin-platform-demo.apps.envone.dev.registry.eua.gov.ua/api/dashboards/8
 ----
 +
-image:registry-develop:study-project/task-6/dashboard-naming/dashnoard-naming-3.png[]
-//TODO: Skipping the part about cyrillic chars
-//* Якщо перейменувати назву дашборда кирилицею, то в URL ви отримаєте ідентифікатор дашборда та прочерк.
-//+
-//image:registry-develop:study-project/task-6/dashboard-naming/dashnoard-naming-4.png[]
-//+
-//image:registry-develop:study-project/task-6/dashboard-naming/dashnoard-naming-5.png[]
+image:registry-develop:study-project/task-6/dashboard-naming/dashboard-naming-3-ua.png[]
+
+* If you rename the dashboard using Cyrillic characters, you will get the dashboard identifier and a dash in the URL.
 +
-//TIP: Детальніше про Redash API ви можете переглянути за посиланням: https://redash.io/help/user-guide/integrations-and-api/api[].
-TIP: For details on Redash API, refer to https://redash.io/help/user-guide/integrations-and-api/api[].
+image:registry-develop:study-project/task-6/dashboard-naming/dashboard-naming-4.png[]
++
+image:registry-develop:study-project/task-6/dashboard-naming/dashboard-naming-5.png[]
++
+TIP: You can find more about the Redash API at the link: https://redash.io/help/user-guide/integrations-and-api/api[].
 ====
 
 [#reports-publication]
-//==== Публікація створених об'єктів користувачам
 ==== Publishing the objects to users
 
-//Опублікуйте створені об'єкти в регламенті:
 Publish the objects you created in the regulations:
 
-//. Увійдіть до [.underline]#Кабінету адміністратора регламентів#.
-. Sign in to the regulations administrator portal.
-//. Перейдіть на сторінку [.underline]#Шаблони звітів#.
+. Sign in to the Administrative portal.
+
 . Open the *Report templates* section.
 +
 image:registry-develop:study-project/task-6/task-6-1-reports.png[]
-+
-//. Натисніть `&#10515;` (_іконку завантаження_) на записі _Лабораторії_.
+
 . Click the download icon (`&#10515;`) next to the `Laboratories` record.
-//. Розпакуйте отриманий архів та покладіть отримані файли до папки _reports/officer_ Gerrit-репозиторію.
+
 . Unzip the archive and copy the files to the _reports/officer_ folder of the Gerrit repository.
 +
 image:registry-develop:study-project/task-6/task-6-2-reports.png[]
 +
 image:registry-develop:study-project/task-6/task-6-3-reports.png[]
-
 +
 [NOTE]
 ====
-//Файли із дашбордами повинні мати унікальні назви (_dashboard_1.json_, _dashboard_2.json_, _dashboard_3.json_ тощо).
-Dashboard files must have unique names -- for example, _dashboard_1.json_, _dashboard_2.json_, _dashboard_3.json_, and so on.
+Dashboard files must have unique names—for example, _dashboard_1.json_, _dashboard_2.json_, _dashboard_3.json_, and so on.
 
-//У папці _reports/<назва-ролі>/queries/_ завжди повинен бути лише один файл із назвою *_queries.json_*. Він повинен містити запити, що присутні у файлах _queries.json_ із різних архівів. Тобто ви НЕ підміняєте один файл на інший, а розширюєте наявний файл новими запитами. Це може виглядати, наприклад, ось так:
 The _reports/<role-name>/queries/_ folder must contain only one file named *_queries.json_*. This file must contain all the queries from the _queries.json_ files from different archives. That is, you don't overwrite one file with another but append new queries to the existing file. Here is an example of how this might look:
 
 [source,json]
@@ -684,28 +609,23 @@ The _reports/<role-name>/queries/_ folder must contain only one file named *_que
 }
 ----
 
-//.Файл queries.json, що містить запити (queries) із різних архівів
 .A queries.json file with queries from different archives
 image::registry-develop:study-project/task-6/task-6-14-redash.png[]
 ====
-
 +
-//NOTE: Видаліть _.zip_-файл із папки _reports/officer_.
 NOTE: Delete the _.zip_ file from the _reports/officer_ folder.
 
-//. Застосуйте зміни до *Gerrit* (`git commit`, `git push`).
 . Apply changes to *Gerrit* (`git commit`, `git push`).
-//. Проведіть процедуру рецензування коду вашого commit. За відсутності прав, попросіть про це відповідальну особу.
-. Perform a code review of your commit. If you don't have the reviewer permissions, contact another reviewer.
-//. Дочекайтеся виконання *Jenkins*-пайплайну *MASTER-Build-registry-regulations*.
+
+. Perform a code review of your commit. If you don't have the reviewer's permissions, contact another reviewer.
+
 . Wait until the *MASTER-Build-registry-regulations* Jenkins pipeline completes successfully.
-//. Перевірте наявність створеної інформаційної панелі на *viewer*-екземплярі Redash.
+
 . Check the dashboard you created in the *viewer* instance of Redash.
 +
 image:registry-develop:study-project/task-6/task-6-4-reports.png[]
 
 [TIP]
 ====
-//Додаткову інформацію щодо доступу до даних та розмежування прав ви можете переглянути на сторінках:
 For details on data access and access control, see xref:registry-develop:data-modeling/data/physical-model/liquibase-ddm-ext.adoc#create-analytical-views[Managing analytics views].
 ====
