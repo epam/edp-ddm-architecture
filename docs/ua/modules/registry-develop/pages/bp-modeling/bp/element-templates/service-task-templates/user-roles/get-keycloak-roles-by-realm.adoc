@@ -1,0 +1,106 @@
+= Отримання ролей з Keycloak-реалму: _Get Keycloak roles by realm_
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+Цей документ пояснює, як отримати перелік системних та реєстрових ролей з певного Keycloak-реалму.
+
+== Загальна інформація
+
+Інтеграційне розширення *Get Keycloak roles by realm* дозволяє вам отримати список усіх ролей з певного Keycloak-реалму.
+
+.Короткі відомості про делегат
+|===
+|Назва |Пояснення
+
+|Бізнес-назва інтеграційного розширення
+|*Get Keycloak roles by realm*
+
+|Службова назва інтеграційного розширення
+|`${keycloakGetRolesByRealmConnectorDelegate}`
+
+|Назва файлу в бібліотеці розширень
+|_keycloakGetRolesByRealmConnectorDelegate.json_
+|===
+
+== Перед початком
+
+include::partial$admonitions/install-element-templates.adoc[]
+
+== Налаштування делегата
+
+Делегат *Get Keycloak roles by realm* призначений для використання у сервісних завданнях (Service Task) бізнес-процесу. Він отримує список усіх ролей з певного Keycloak-реалму:
+
+* `citizen` -- список ролей для призначення отримувачам послуг.
+* `officer` -- список ролей для призначення надавачам послуг.
+
+=== Налаштування сервісного завдання
+
+. Створіть завдання типу *Service Task* у вашому бізнес-процесі.
+. Назвіть завдання, наприклад, `Отримання переліку можливих регламентих ролей для реалма`.
+. Застосуйте шаблон делегата, обравши відповідний зі списку в налаштуваннях завдання.
++
+image:bp-modeling/bp/element-temp/service-task/get-kc-roles-by-realm/get-keycloak-roles-by-realm-1.png[]
+
+=== Налаштування делегата
+
+. У полі *Realm* оберіть `Officer` для надавачів послуг або `Citizen` для отримувачів послуг.
+. Оберіть *Role Type*, щоб визначити, які ролі повертати: `REGISTRY ROLES`, `PLATFORM ROLES` або `ALL ROLES`. Ви можете запитати всі (системні та реєстрові), лише системні, або лише реєстрові ролі, доступні для використання у реєстрі. _За замовчуванням встановлено_ `REGISTRY ROLES`.
+. Вкажіть змінну процесу (наприклад, `rolesResponse`), куди буде збережено відповідь. Ця змінна буде тимчасовою (transient). Це дозволяє ефективно управляти отриманими даними без зайвого зберігання інформації в базі даних.
+
+Результатом виконання запита буде повернення переліку назв ролей певного користувача для визначеного реалма: `List<String>`.
+
+.Приклад відповіді зі списком ролей у форматі JSON
+[source,json]
+----
+[
+  "user",
+  "admin",
+  "hierarchy-registry-manager",
+  "personnel-officer-admin",
+  "reviewer"
+]
+----
+
+Надалі ви зможете використовувати отриманий список ролей для різних цілей у бізнес-процесі. Наприклад, ви зможете отримати лише певну роль зі списку за індексом, сформувати payload із відповідним значенням та зберегти до тимчасової змінної для подальшого застосування у процесі:
+
+.Приклад groovy-скрипту для отримання першої ролі з масиву
+[source,groovy]
+----
+// Визначення масиву ролей
+def roles = ["user", "admin", "hierarchy-registry-manager", "personnel-officer-admin", "reviewer"]
+
+// Отримання першої ролі з масиву
+def firstRole = roles[0]
+
+// Формування результату. Наприклад, створимо Map для тимчасової змінної payload
+def payload = [firstRole: firstRole]
+
+// Припустимо, що весь масив ролей є доступними ролями, які ми хочемо зберегти
+def availableRoles = roles
+
+// Запис даних у змінні процесу
+set_transient_variable('payload', payload)
+set_variable('availableRoles', availableRoles)
+----
+
+== Приклад
+
+Ось референтний приклад, який показує, як відповідний делегат використовується у бізнес-процесі:
+
+.Референтний приклад. Управління користувачами
+image::bp-modeling/bp/element-temp/service-task/get-kc-roles-by-realm/get-keycloak-roles-by-realm-2.png[]
+
+[TIP]
+====
+[%collapsible]
+.Де можна знайти приклад референтного бізнес-процесу?
+=====
+include::registry-develop:partial$snippets/demo-reg-reference-examples-ua.adoc[]
+
+Приклад BPMN-схеми процесу буде доступний у регламенті демо-реєстру за пошуком по ключовим словам -- *_reference-officers-management_*. Назви форм ви можете знайти всередині відповідних користувацьких задач бізнес-процесу у полі *`Form key`*.
+=====
+====
+
+== Пов'язані сторінки
+
+* xref:bp-modeling/bp/element-templates/service-task-templates/user-roles/get-keycloak-roles-from-user.adoc[]
+* xref:bp-modeling/bp/element-templates/service-task-templates/save-user-roles.adoc[]

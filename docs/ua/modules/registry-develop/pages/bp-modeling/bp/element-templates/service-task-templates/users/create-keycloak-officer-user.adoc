@@ -1,0 +1,107 @@
+= Створення користувача в Keycloak: _Create Keycloak officer user_
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+Цей документ пояснює, як створювати надавачів послуг у вашому реєстрі через бізнес-процес.
+
+== Загальна інформація
+
+Інтеграційне розширення *Create Keycloak officer user* дозволяє вам отримати список усіх ролей з певного Keycloak-реалму.
+
+.Короткі відомості про делегат
+|===
+|Назва |Пояснення
+
+|Бізнес-назва інтеграційного розширення
+|*Create Keycloak officer user*
+
+|Службова назва інтеграційного розширення
+|`${keycloakCreateOfficerUserDelegate}`
+
+|Назва файлу в бібліотеці розширень
+|_keycloakCreateOfficerUserDelegate.json_
+|===
+
+== Перед початком
+
+include::partial$admonitions/install-element-templates.adoc[]
+
+== Налаштування делегата
+
+Делегат *Create Keycloak officer user* призначений для використання у сервісних завданнях (Service Task) бізнес-процесу. Він створює користувачів (надавачів послуг) у Keycloak-реалмі `officer` зі збереженням визначених атрибутів. Це охоплює як обов'язкові атрибути, зокрема `fullName`, `edrpou` та `drfo` так і будь-які додаткові, надаючи більш гнучке налаштування профілів користувачів залежно від конкретних вимог бізнесу та безпеки.
+
+=== Налаштування сервісного завдання
+
+. Створіть завдання типу *Service Task* у вашому бізнес-процесі.
+. Назвіть завдання, наприклад, `Створення користувача в Keycloak`.
+. Застосуйте шаблон делегата, обравши відповідний зі списку в налаштуваннях завдання.
++
+image:bp-modeling/bp/element-temp/service-task/create-kc-officer-user/create-keycloak-officer-user-1.png[]
+
+=== Налаштування делегата
+
+. У розділі *Inputs* вкажіть map атрибутів користувача з Keycloak.
+
+.. menu:Local variable assignment[`ON`].
+.. Assignment type: `String or expression`.
+.. У полі *Value* вкажіть перелік додаткових атрибутів. Наприклад, `${attributes.value}`. Додаткові атрибути _не є обов'язковими_ для створення користувача у Keycloak і використовуються у специфічних сценаріях, відповідно до передбаченої бізнес-логіки.
++
+[NOTE]
+====
+Map атрибутів формується попередньо у скрипт-задачі бізнес-процесу. Наприклад, це може виглядати так:
+
+[source,groovy]
+----
+def formData = submission('UserTask_SignOfficerAttributes').formData
+        def attributes = [:]
+        if(formData.hasProp('workStartDate') && !formData.prop('workStartDate').value().isEmpty()) {
+        attributes.workStartDate = formData.prop('workStartDate').value()
+        }
+
+        attributes.hierarchy_code = formData.prop('unit').prop('hierarchyCode').value()
+        set_transient_variable('attributes', attributes)
+----
+====
+
+. У розділі *Custom properties* вкажіть перелік основних _обов'язкових_ атрибутів користувача, а також змінну для збереження результату.
+
+.. У полі *Full name* вкажіть прізвище, ім'я та по батькові користувача. Відповідає Keycloak-атрибуту `fullName`. Наприклад, `${submission('UserTask_SignOfficerAttributes').formData.prop('fullName').value()}`. У цьому прикладі передаємо значення атрибута, отримане з UI-форми `UserTask_SignOfficerAttributes` за допомогою кастомної JUEL-функції `submission()`.
+
+.. У полі *Drfo* вкажіть РНОКПП (ідентифікаційний номер) користувача. Відповідає Keycloak-атрибуту `drfo`. Наприклад, `${submission('UserTask_SignOfficerAttributes').formData.prop('drfo').value()}`. У цьому прикладі передаємо значення атрибута, отримане з UI-форми `UserTask_SignOfficerAttributes` за допомогою кастомної JUEL-функції `submission()`.
+
+.. У полі *Edrpou* вкажіть ЄДРПОУ користувача. Відповідає Keycloak-атрибуту `edrpou`. Наприклад, `${submission('UserTask_SignOfficerAttributes').formData.prop('fullName').value()}`. У цьому прикладі передаємо значення атрибута, отримане з UI-форми `UserTask_SignOfficerAttributes` за допомогою кастомної JUEL-функції `submission()`.
+
+.. Вкажіть змінну процесу (наприклад, `keycloakUserName`), куди буде збережено відповідь. Ця змінна буде тимчасовою (transient). Це дозволяє ефективно управляти отриманими даними без зайвого зберігання інформації в базі даних.
+
+Результатом виконання запита буде створений користувач зі збереженим списком атрибутів у БД Keycloak.
+
+[NOTE]
+====
+Після завершення операції, делегат отримує у відповідь ім'я користувача у форматі рядка (String). Наприклад:
+
+[source,bash]
+----
+username
+----
+====
+
+== Приклад
+
+Ось референтний приклад, який показує, як відповідний делегат використовується у бізнес-процесі:
+
+.Референтний приклад. Управління посадовими особами
+image::bp-modeling/bp/element-temp/service-task/create-kc-officer-user/create-keycloak-officer-user-2.png[]
+
+[TIP]
+====
+[%collapsible]
+.Де можна знайти приклад референтного бізнес-процесу?
+=====
+include::registry-develop:partial$snippets/demo-reg-reference-examples-ua.adoc[]
+
+Приклад BPMN-схеми процесу буде доступний у регламенті демо-реєстру за пошуком по ключовим словам -- *_reference-officers-management_*. Назви форм ви можете знайти всередині відповідних користувацьких задач бізнес-процесу у полі *`Form key`*.
+=====
+====
+
+== Пов'язані сторінки
+
+* xref:registry-develop:bp-modeling/bp/element-templates/service-task-templates/users/save-officer-user-attributes-to-kc.adoc[]
