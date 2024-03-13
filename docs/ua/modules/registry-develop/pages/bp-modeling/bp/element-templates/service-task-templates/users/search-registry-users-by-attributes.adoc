@@ -1,0 +1,194 @@
+= Пошук користувачів реєстру за атрибутами: _Search registry users by attributes_
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+Цей документ надає інструкції щодо використання інтеграційного розширення для пошуку користувачів у реєстрі за атрибутами через REST API.
+
+== Загальна інформація
+
+Інтеграційне розширення *Search registry users by attributes* надає змогу виконувати пошук користувачів у реєстрі за різними атрибутами, сприяючи оптимізації процесів взаємодії з користувачами.
+
+.Короткі відомості про делегат
+|===
+|Назва | Пояснення
+
+|Бізнес-назва інтеграційного розширення
+|*Search registry users by attributes*
+
+|Службова назва інтеграційного розширення
+|*`${searchRegistryUsersByAttributes}`*
+
+|Назва файлу у бібліотеці розширень
+|*_searchRegistryUsersByAttributes.json_*
+|===
+
+== Перед початком
+
+include::partial$admonitions/install-element-templates.adoc[]
+
+== Налаштування делегата
+
+Делегат *Search registry users by attributes* призначений для використання у сервісних завданнях (Service Task) бізнес-процесу. Він дозволяє виконати пошук користувачів у реєстрі за заданими атрибутами. Keycloak API отримує `GET`-запити із заданими параметрами та повертає масив імен (username) користувачів, які надалі можна використати у бізнес-процесі.
+
+[NOTE]
+====
+Наразі обов'язковими атрибутами для всіх реєстрів є `*edrpou*`, `*drfo*` та `*fullName*`.
+
+Реєстри можуть також використовувати довільні атрибути. Наприклад, `*hierachy_code*`.
+
+Зверніть увагу, що залежно від контексту вашої бізнес-логіки, довільний атрибут може бути обов'язковим. Наприклад, коли ви використовуєте ієрархічну модель доступу до даних. Більш детально про це -- див. xref:registry-develop:registry-admin/hierarchical-model.adoc[].
+====
+
+=== Налаштування сервісного завдання
+
+. Створіть завдання типу *Service Task* у вашому бізнес-процесі.
+. Назвіть завдання, наприклад, `Отримання переліку посадових осіб реалма`.
+. Застосуйте шаблон делегата, обравши відповідний зі списку в налаштуваннях завдання.
+
++
+image:bp-modeling/bp/element-temp/service-task/search-registry-users-by-attributes/search-registry-users-by-attributes-01.png[]
+
+=== Налаштування делегата
+
+У розділі *Custom properties* налаштуйте параметри пошуку. Секція *Inputs* дозволяє задати параметри для виконання пошуку.
+
+==== Пошукові критерії
+
+Ця секція описує можливі пошукові критерії, які можна використовувати для пошуку користувачів у реєстрі за атрибутами.
+
+NOTE: Важливо розуміти, що подані приклади наведені у вигляді JSON-об'єктів для зручності пояснення і можуть варіюватися залежно від специфіки API, через який ви робите запит.
+
+Attributes Equals::
+Map атрибутів для точного пошуку.
++
+Критерій `Attributes Equals` використовується для знаходження користувачів, атрибути яких точно збігаються зі вказаними значеннями.
++
+.Приклад JSON
+[source,json]
+----
+{
+  "Attributes Equals": {
+    "department": "HR",
+    "role": "manager"
+  }
+}
+----
+У цьому прикладі система знайде користувачів, у яких атрибут `department` точно дорівнює `"HR"` і атрибут `role` точно дорівнює `"manager"`.
+
+Attributes Starts With::
+Map атрибутів для пошуку за початковими символами.
++
+Критерій `Attributes Starts With` шукає користувачів, атрибути яких починаються з вказаних у запиті символів.
++
+.Приклад JSON
+[source,json]
+----
+{
+  "Attributes Starts With": {
+    "lastName": "Iva"
+  }
+}
+----
+Тут пошук буде здійснюватися серед користувачів, прізвище яких починається з "Iva", наприклад, `"Ivanenko"`, `"Ivanov"` тощо.
+
+Attributes that are start for::
+Map, що містить атрибути, значення яких мають бути початком для значень вказаних атрибутів користувача.
++
+Критерій `Attributes that are start for` перевертає логіку пошуку `Attributes Starts With`, шукаючи користувачів, значення атрибутів яких є початком для значення, заданого в запиті.
++
+.Приклад JSON
+[source,json]
+----
+{
+  "Attributes that are start for": {
+    "projectCode": "Proj123"
+  }
+}
+----
+У цьому випадку будуть знайдені користувачі, атрибути яких містять значення, що є початком для `"Proj123"`. Наприклад, якщо користувач має атрибут `projectCode` зі значенням `"Proj"`, він відповідає критерію.
+
+==== Приклад пошуку за критерієм _Attributes Starts With_
+
+Розглянемо приклад використання пошукового критерію *Attributes Starts With*.
+
+Цей приклад виконає пошук користувачів, атрибут `hierarchy_code` яких починається з `"01"`.
+
+. menu:Inputs[Attributes Starts With].
+.. menu:Local variable assignment[ON]
+.. *Assignment type*: `Map`
+.. *Map entries*: Задайте пари ключ-значення для пошуку.
+.. *Realm*: Вкажіть реалм (`OFFICER` або `CITIZEN`), у якому потрібно здійснити пошук користувачів.
+.. *Limit*: Максимальна кількість користувачів для виведення. Якщо не задано або ≤ 0, буде повернуто весь список користувачів.
+.. *Continue token*: Токен, що вказує на початок сторінки. У відповіді кожного пошуку користувачів від цього розширення буде `continueToken`, який вказує на наступну сторінку.
+
+. menu:Outputs[Result variable]. +
+Вкажіть змінну процесу, до якої буде записано відповідь зі списком користувачів, наприклад, `usersResponse`.
+
+.Приклад формування map атрибутів для пошуку
+[source,json]
+----
+{
+  "hierarchy_code": "${initiator().attributes["hierarchy_code"].get(0)}",
+  "realm": "OFFICER",
+  "limit": 10
+}
+----
+
+Після успішного завершення операції, делегат отримує відповідь наступного формату:
+
+.Приклад. Тіло відповіді. Об'єкт зі списком користувачів та додатковою інформацією про пагінацію
+[source,json]
+----
+{
+  "users": [
+    {
+      "id": "userId",
+      "userName": "userName",
+      "fullName": "Іванов Іван Іванович",
+      "attributes": {
+        "edrpou": "11111111",
+        "drfo": "1010101010"
+      }
+    },
+    {
+      "id": "userId2",
+      "userName": "userName2",
+      "fullName": "Петров Петро Петрович",
+      "attributes": {
+        "edrpou": "22222222",
+        "drfo": "2020202020"
+      }
+    }
+  ],
+  "pagination": {
+    "continueToken": 42
+  }
+}
+----
+
+== Приклад
+
+Нижче наведено референтний приклад, який демонструє використання делегата *Search registry users by attributes*:
+
+.Приклад. Референтний процес. Отримання списку користувачів реалму
+image::bp-modeling/bp/element-temp/service-task/search-registry-users-by-attributes/search-registry-users-by-attributes-02.png[]
+
+.Приклад. Референтний процес. Отримання списку користувачів реалму. Attributes Starts With
+image::bp-modeling/bp/element-temp/service-task/search-registry-users-by-attributes/search-registry-users-by-attributes-03.png[]
+
+[TIP]
+====
+[%collapsible]
+.Де можна знайти приклад референтного бізнес-процесу?
+=====
+include::registry-develop:partial$snippets/demo-reg-reference-examples-ua.adoc[]
+
+Приклад BPMN-схеми процесу буде доступний у регламенті демо-реєстру за пошуком по ключовим словам -- *_reference-officers-management_*. Назви форм ви можете знайти всередині відповідних користувацьких задач бізнес-процесу у полі *`Form key`*.
+=====
+====
+
+
+== Пов'язані сторінки
+
+* xref:bp-modeling/bp/element-templates/service-task-templates/users/create-keycloak-officer-user.adoc[]
+* xref:bp-modeling/bp/element-templates/service-task-templates/users/save-officer-user-attributes-to-kc.adoc[]
+* xref:registry-admin/hierarchical-model.adoc[]
