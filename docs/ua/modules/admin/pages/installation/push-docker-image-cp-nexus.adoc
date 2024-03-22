@@ -1,0 +1,78 @@
+= Перенесення Docker-образів до Nexus-кластера
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+Цей документ надає детальні інструкції щодо опублікування docker-образів у Nexus-кластері, сховищі артефактів.
+
+== Передумови
+
+Перед початком переконайтесь, що ви маєте встановлені наступні компоненти:
+
+* Docker
+* oc CLI
+
+== Перенесення локального образу до Nexus-кластера
+
+Якщо у вас є локальний образ і ви хочете його перенести до Nexus-кластера, виконайте наступні кроки:
+
+. Увійдіть до вашого Docker реєстру за допомогою команди:
++
+[source,bash]
+----
+docker login -u ваш_користувач -p ваш_пароль
+----
+
+. Витягніть образ, який ви хочете перенести:
++
+[source,bash]
+----
+docker pull ваше_ім'я_репозиторію/ім'я_образу:тег
+----
+
+. Після отримання усіх необхідних образів локально, перейменуйте їх, використовуючи `docker image tag`:
++
+[source,bash]
+----
+docker image tag ваше_ім'я_репозиторію/ім'я_образу:тег localregistry:5000/control-plane/ім'я_образу:тег
+----
+
+. Автентифікуйтеся на Платформі використовуючи oc CLI, токен можна отримати через консоль Openshift у розділі *Copy login command*.
++
+image::admin:installation/push-docker-images/push-docker-image-1.png[width="428px"]
+
+. Якщо ви користувач Windows, додайте наступний запис до `C:\Windows\System32\drivers\etc\hosts`. Якщо ви на Linux, додайте його до `/etc/hosts`:
++
+[source,bash]
+----
+127.0.0.1 localregistry
+----
+
+. Відкрийте кілька терміналів, в одному з них виконайте перенаправлення порту до поду *Nexus*, який можна знайти у проєкті `control-plane-nexus` в menu:Openshift[Workloads > Pods].
++
+[source,bash]
+----
+oc port-forward <ім'я_поди_nexus> 5000:5000 -n control-plane-nexus
+----
+
+. Увійдіть до Nexus, пароль можна знайти у секреті `nexus-admin-password` проєкту `control-plane-nexus`.
++
+[source,bash]
+----
+docker login -u admin -p <секретний_пароль> localregistry:5000
+----
+
+. Ви повинні побачити, що вхід успішний, після чого можна виконати `push`.
++
+NOTE: Пам'ятайте, що в іншому терміналі має бути активним перенаправлення порту.
++
+[source,bash]
+----
+docker push localregistry:5000/control-plane/ім'я_образу:тег
+----
++
+Процес може зайняти деякий час. Будь ласка, зачекайте.
+
+. Після того, як ваш образ з'явиться в Nexus, ви можете переглянути всі образи у розділі menu:Browse[docker-registry].
++
+TIP: Ви можете потрапити в docker-registry через menu:Openshift[Networking > Routes > Nexus] у проєкті `control-plane-nexus`.
++
+image::admin:installation/push-docker-images/push-docker-image-2.png[height="150px"]
