@@ -1,0 +1,362 @@
+= Knative: трансформація отриманих даних
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+== Загальний опис
+
+Цей бізнес-процес описує сценарій, в якому дані, отримані з дата-фабрики, підлягають трансформації за допомогою `knative`-функції, з подальшим представленням оригінальних та трансформованих даних користувачу для перевірки. Процес починається зі зчитування даних, включає етап трансформації за допомогою виклику відповідної knative-функції та завершується відображенням результату користувачу.
+
+*_Knative-функції_* слугують ключовим елементом для забезпечення еластичності та ефективності обробки даних у хмарних середовищах. Вони дозволяють виконувати обчислення як реакцію на події чи HTTP-запити, що робить їх ідеальними для інтеграції в автоматизовані бізнес-процеси.
+
+Основна взаємодія з knative-функціями відбувається через HTTP-конектори, налаштованими на відправлення запитів до конкретних URL, де розташовані ці функції, з використанням методів `GET` або `POST`.
+
+HTTP-конектор використовує такі налаштування: ::
++
+|===
+| Параметр | Опис
+
+|`method`
+|Метод HTTP-запита (`GET` або `POST`).
+
+|`url`
+|URL-адреса knative-функції, до якої направляється запит.
+
+|`headers`
+|Заголовки запита, що можуть містити, наприклад, токен доступу чи тип контенту (`Content-Type`).
+|===
+
+Groovy-скрипти використовуються для обробки відповідей від knative-функцій, отриманих у форматі JSON. Це дозволяє динамічно обробляти дані та підготовлювати їх до відображення користувачу або подальшої обробки в процесі.
+
+Процес розпочинається зі стартової події, далі виконується сервісне завдання для виклику knative-функції, що зчитує оригінальні дані. Після цього, користувачу показуються оригінальні дані для перевірки. Наступний крок включає трансформацію даних за допомогою іншої knative-функції, після чого трансформовані дані представляються користувачу. Процес завершується кінцевою подією, підсумовуючи виконання бізнес-процесу.
+
+TIP: Дізнайтеся детальніше про Knative-функції на сторінці xref:registry-develop:bp-modeling/bp/knative-functions/index.adoc[].
+
+== Налаштування завдань процесу
+
+Для демонстрації роботи Knative-функцій розглянемо референтний бізнес-процес. Він написаний із використанням мови програмування `typescript` та дозволяє взаємодіяти із Фабрикою даних.
+
+Бізнес-процес демонструє простий приклад отримання даних з дата-фабрики, із перетворенням масиву отриманих даних.
+
+[TIP]
+====
+[%collapsible]
+.Де можна знайти приклад референтного бізнес-процесу?
+=====
+include::registry-develop:partial$snippets/demo-reg-reference-examples-ua.adoc[]
+
+Приклад BPMN-схеми процесу буде доступний у регламенті демо-реєстру за пошуком по ключовим словам -- *_reference-knative-read-transform_*. Назви форм ви можете знайти всередині відповідних користувацьких задач (User Task) бізнес-процесу у полі *Form key*.
+=====
+====
+
+.Загальний вигляд процесу
+image::best-practices/knative/knative-read-transform/knative-read-transform-00.png[]
+
+=== Початок процесу
+
+Змоделюйте початкову подію для запуску процесу та вкажіть, хто цей процес ініціює. Для цього у полі *Start initiator* вкажіть `initiator`.
+
+.Початок процесу
+image::best-practices/knative/knative-read-transform/knative-read-transform-01.png[]
+
+=== Виклик knative-функції зчитування
+
+Зчитайте оригінальні дані з таблиці у базі даних. Для цього використовуйте HTTP-метод `GET`. Вкажіть URL knative-сервісу для зчитування даних. Використовуйте Groovy-скрипт для перетворення отриманих даних у JSON-формат для подальшої обробки.
+
+. Створіть сервісне завдання (*Service Task*).
+
+. У розділі *General* налаштуйте наступні поля:
+.. *Name*: вкажіть назву задачі, яка відображатиметься у процесі. Наприклад, `Виклик knative-функції`.
+.. *ID*: ідентифікатор задачі. Присвоюється автоматично. Вкажіть власний за потреби. Наприклад, `Activity_call-function-original`.
+
++
+.Сервісне завдання. Виклик knative-функції зчитування
+image::best-practices/knative/knative-read-transform/knative-read-transform-02.png[]
+
+. У розділі *Implementation* налаштуйте реалізацію взаємодії із knative-сервісом через HTTP-конектор:
+.. menu:Type[Connector].
+.. *Connector ID*: `http-connector`.
+
++
+[NOTE]
+====
+Потрібно вказати саме значення `http-connector`.
+
+Camunda Connect має клас `Connectors`, який автоматично виявляє кожний конектор у classpath. Його можна використовувати для отримання екземпляра HTTP-конектора за ID конектора, який є `http-connector`.
+
+.Отримання екземпляра HTTP-конектора у бібліотеці Camunda Connect
+[source,java]
+----
+HttpConnector http = Connectors.getConnector(HttpConnector.ID);
+----
+
+Більше деталей ви можете дізнатися з https://docs.camunda.org/manual/7.20/reference/connect/http-connector/[офіційної документації].
+====
+
++
+.Сервісне завдання. Імплементація
+image::best-practices/knative/knative-write-transform/knative-write-transform-03.png[]
+
+. У розділі *Connector inputs* налаштуйте HTTP-метод та URL knative-сервісу:
+
+.. *headers*:
+... *Local variable name*: `headers`.
+... menu:Assignment type[Map].
+... *Map entries*:
++
+|===
+| Key | Value
+
+| Content-Type
+| `application/json`
+
+| X-Access-Token
+| `${initiator().accessToken}`
+|===
++
+[TIP]
+====
+Отримати токен ініціатора процесу можна за допомогою JUEL-функції `initiator()` та метода `accessToken`.
+
+Детальніше про кастомні JUEL-функції читайте на сторінці xref:registry-develop:bp-modeling/bp/modeling-facilitation/modelling-with-juel-functions.adoc[].
+====
+
++
+.Сервісне завдання. Заголовки запита
+image::best-practices/knative/knative-read-transform/knative-read-transform-03.png[]
+
+.. *method*:
+... *Local variable name*: `method`.
+... menu:Assignment type[String or expression].
+... *Value*: `GET`.
+
+.. *url*:
+... *Local variable name*: `url`.
+... menu:Assignment type[String or expression].
+... *Value*:
++
+ http://knative-read-transform.abc-01.svc.cluster.local
++
+[TIP]
+====
+_де_:
+
+* `knative-read-transform` -- назва knative-функції у регламенті вашого реєстру.
+* `abc-01` -- службова назва (namespace) вашого реєстру.
+* `svc.cluster.local` -- доменне ім'я кластера, де ваш реєстр розгорнуто.
+
+Читайте більш детально про формування URL у розділі xref:registry-develop:bp-modeling/bp/knative-functions/index.adoc#create-knative-function[Створення Knative-функції].
+====
+
++
+.Сервісне завдання. Метод та URL запита
+image::best-practices/knative/knative-read-transform/knative-read-transform-04.png[]
+
+. У розділі *Connector outputs* налаштуйте параметри для збереження відповіді від сервісу:
+
+.. *Process variable name*: `response`.
+.. menu:Assignment type[Script].
+.. *Format*: `Groovy`.
+.. menu:Type[Inline script].
+.. *Script*:
++
+[source,groovy]
+----
+def output = S([:], 'application/json')
+output.prop('knownUsers', S(response))
+output
+----
+
++
+.Сервісне завдання. Параметри відповіді
+image::best-practices/knative/knative-read-transform/knative-read-transform-05.png[]
+
++
+У цьому випадку повертається список користувачів. Результат зберігається до змінної `response`, яку можна використати надалі у бізнес-процесі.
+
+=== Відображення оригінальних даних
+
+Змоделюйте користувацьку задачу для показу оригінальних даних із таблиці в БД для перевірки. Для відображення даних на UI-формі використовується відповідь, отримана у попередній задачі.
+
+. Створіть завдання користувача (*User Task*).
+
+. У розділі *General* налаштуйте загальні параметри:
+
+.. *Name*: вкажіть назву задачі. Наприклад, `Показати оригінальний список`.
+
+.. *ID*: вкажіть ідентифікатор задачі. Наприклад, `Activity_show-known-users`.
+
+. У розділі *Template* оберіть зі списку шаблон делегата для налаштування завдання користувача -- *User Form*.
+
+. У розділі *Custom properties* налаштуйте параметри делегата:
+
+.. *Form key*: вкажіть ключ UI-форми. За цим ключем користувацька задача у бізнес-процесі та UI-форма взаємодіють. Наприклад, `reference-knative-show-original-users`.
+
+.. *Assignee*: вкажіть виконавця завдання. У цьому випадку -- `${initiator}`.
+.. *Form data pre-population*: вкажіть дані для передзаповнення UI-форми. Використайте змінну із попередньої сервісної задачі, тут -- `${response}`.
+
+.Завдання користувача. Відображення оригінального списку
+image::best-practices/knative/knative-write-transform/knative-write-transform-06.png[]
+
+//TODO: HEREEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE
+
+=== Виклик knative-функції із трансформацією
+
+Отримайте дані з дата-фабрики, що підлягають трансформації за допомогою `knative`-функції. Для цього, використовуйте HTTP-метод `GET`. Отримайте дані у форматі JSON та використовуйте Groovy-скрипт для перетворення відповіді сервісу знову у JSON-формат для подальшої обробки.
+
+. Створіть сервісне завдання (*Service Task*).
+
+. У розділі *General* налаштуйте наступні поля:
+.. *Name*: назва завдання, яка буде відображатися у процесі, наприклад, `Виклик knative-функції трансформації`.
+.. *ID*: ідентифікатор завдання, який присвоюється автоматично, але ви можете вказати власний за потреби, наприклад, `Activity_call-transform-function`.
+
++
+.Сервісне завдання. Виклик knative-функції із трансформацією
+image::best-practices/knative/knative-read-transform/knative-read-transform-06.png[]
+
+. У розділі *Implementation* налаштуйте реалізацію взаємодії із knative-сервісом через HTTP-конектор:
+.. menu:Type[Connector].
+.. *Connector ID*: `http-connector`.
+
++
+[NOTE]
+====
+Обов'язково використовуйте значення `http-connector` для Connector ID.
+
+Camunda Connect має клас `Connectors`, що автоматично виявляє кожен конектор у classpath. Його можна застосувати для отримання екземпляра HTTP-конектора за ідентифікатором конектора, який є `http-connector`.
+
+.Отримання екземпляра HTTP-конектора у бібліотеці Camunda Connect
+[source,java]
+----
+HttpConnector http = Connectors.getConnector(HttpConnector.ID);
+----
+
+Додаткову інформацію можна знайти в https://docs.camunda.org/manual/7.20/reference/connect/http-connector/[офіційній документації].
+====
+
++
+.Сервісне завдання. Імплементація
+image::best-practices/knative/knative-write-transform/knative-write-transform-03.png[]
+
+. У розділі *Connector inputs* налаштуйте вхідні параметри для HTTP-запита:
+
+.. *headers*:
+... *Local variable name*: `headers`.
+... menu:Assignment type[Map].
+... *Map entries*:
++
+|===
+| Key | Value
+
+| Content-Type
+| `application/json`
+
+| X-Access-Token
+| `${completer('Activity_show-known-users').accessToken}`
+|===
++
+[TIP]
+====
+Отримати токен ініціатора процесу можна за допомогою JUEL-функції `completer()`, якій необхідно передати ID завдання користувача, та метода `accessToken`.
+
+Детальніше про кастомні JUEL-функції читайте на сторінці xref:registry-develop:bp-modeling/bp/modeling-facilitation/modelling-with-juel-functions.adoc[].
+====
+
++
+.Сервісне завдання. Заголовки запита
+image::best-practices/knative/knative-read-transform/knative-read-transform-07.png[]
+
+.. *method*:
+... *Local variable name*: `method`.
+... menu:Assignment type[String or expression].
+... *Value*: `GET`.
+
+.. *url*:
+... *Local variable name*: `url`.
+... menu:Assignment type[String or expression].
+... *Value*:
++
+ http://knative-read-transform.abc-01.svc.cluster.local/?transform=true
++
+[TIP]
+====
+_де_:
+
+* `knative-read-transform` -- назва knative-функції для трансформації даних.
+* `abc-01` -- службова назва (namespace) вашого реєстру.
+* `svc.cluster.local` -- доменне ім'я кластера, де розгорнуто ваш реєстр.
+* `?transform=true` -- query-параметр, який передається в URL. Визначає, чи потрібно трансформувати отримані дані. Формується у коді вашого knative-сервісу в регламенті реєстру.
++
+.Приклад
+[source,typescript]
+----
+if (context.query?.transform) {
+      const knowUsers = data as KnowUser[];
+      return {
+        statusCode: 200,
+        body: knowUsers.map((user) => ({
+          fullName: user.firstName.concat(' ', user.middleName, ' ', user.lastName),
+          id: user.id
+        }))
+      };
+    }
+----
+
+Більше про формування URL можна дізнатися у розділі xref:registry-develop:bp-modeling/bp/knative-functions/index.adoc#create-knative-function[Створення Knative-функції].
+====
+
++
+.Сервісне завдання. Метод і параметри запита
+image::best-practices/knative/knative-read-transform/knative-read-transform-08.png[]
+
+. У розділі *Connector outputs* налаштуйте параметри для збереження відповіді від сервісу:
+
+.. *Process variable name*: `transformedKnownUsers`.
+.. menu:Assignment type[Script].
+.. *Format*: `Groovy`.
+.. menu:Type[Inline script].
+.. *Script*:
++
+[source,groovy]
+----
+def output = S([:], 'application/json')
+output.prop('transformedKnownUsers', S(response))
+output
+----
+
++
+.Сервісне завдання. Параметри відповіді
+image::best-practices/knative/knative-write-transform/knative-write-transform-09.png[]
+
++
+У цьому випадку, результатом є видозмінений список користувачів, що зберігається до процесної змінної `transformedKnownUsers`. Ви можете використовувати її у наступних етапах бізнес-процесу.
+
+=== Відображення видозмінених даних про користувачів
+
+Змоделюйте користувацьку задачу для відображення даних після їх трансформації для перевірки кінцевим користувачем. Для цього використовується відповідь, отриману від попередньої задачі з викликом knative-функції трансформації.
+
+. Створіть завдання для користувача (*User Task*).
+
+. У розділі *General* налаштуйте загальні параметри:
+
+.. *Name*: назва завдання, яка буде відображатися у процесі. Наприклад, `Показати трансформований список`.
+
+.. *ID*: унікальний ідентифікатор задачі для відстеження та взаємодії в рамках процесу. Наприклад, `Activity_show-transformed-users-form`.
+
+. У розділі *Template* виберіть зі списку шаблон для налаштування користувацького завдання -- *User Form*.
+
+. У розділі *Custom properties* налаштуйте специфічні параметри:
+
+.. *Form key*: ключ форми для взаємодії між завданням у бізнес-процесі та UI-формою. Задайте значення, яке відповідає шаблону UI-форми, наприклад, `reference-knative-show-transformed-users`.
+
+.. *Assignee*: особа або роль, яка відповідальна за виконання завдання. Використовуйте змінну для динамічного призначення, наприклад, `${initiator}`.
+
+.. *Form data pre-population*: дані для автоматичного заповнення UI-форми. Вкажіть змінну з відповіддю від попередньої задачі, тут -- `${transformedUsers}`.
+
+.Завдання користувача. Відображення видозмінених даних
+image::best-practices/knative/knative-write-transform/knative-write-transform-09.png[]
+
+Змоделюйте *End Event* та завершіть процес.
+
+== Пов'язані сторінки
+
+* xref:registry-develop:best-practices/knative/knative-write-transform.adoc[]
+* xref:registry-develop:bp-modeling/bp/knative-functions/index.adoc[]
