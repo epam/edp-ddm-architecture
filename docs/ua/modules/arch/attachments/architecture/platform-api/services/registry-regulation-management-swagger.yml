@@ -7,6 +7,8 @@ servers:
 - url: http://localhost:8080
   description: Generated server url
 tags:
+- name: candidate-version-i18n-api
+  description: Registry regulations version-candidate I18n management Rest API
 - name: candidate-version-business-processes-api
   description: Registry regulations version-candidate Business processes management
     Rest API
@@ -25,6 +27,8 @@ tags:
   description: Registry regulations candidate version Groups management Rest API
 - name: candidate-version-settings-api
   description: Registry regulations version candidates settings Rest API
+- name: master-version-i18n-api
+  description: Registry regulations Master version I18n management Rest API
 - name: candidate-version-data-model-tables-api
   description: Registry regulations version-candidate data-model tables file management
     Rest API
@@ -41,6 +45,269 @@ tags:
 - name: master-version-business-processes-api
   description: Registry regulations master Business processes management Rest API
 paths:
+  /versions/master/i18n/{name}:
+    get:
+      tags:
+      - master-version-i18n-api
+      summary: Get specific i18n bundle full details
+      description: |-
+        ### Endpoint purpose:
+        This endpoint is used for retrieving a JSON representation of a __i18n bundle__ directly from the __master__ version. This operation retrieves a single _i18n bundle_ based on the specified __name__. If you need to retrieve list of _i18n bundles_, you can use the [GET](#master-version-i18n-api/getI18nListFromMaster) endpoint.
+      operationId: getI18n
+      parameters:
+      - name: X-Access-Token
+        in: header
+        description: Token used for endpoint security
+        required: true
+        schema:
+          type: string
+      - name: name
+        in: path
+        description: I18n bundle name
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: I18n bundle successfully retrieved.
+          content:
+            application/json:
+              example:
+                English translate: Some other language translate
+        "401":
+          description: Unauthorized
+          content:
+            application/json: {}
+        "403":
+          description: Forbidden
+          content:
+            application/json: {}
+        "404":
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailedErrorResponse'
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailedErrorResponse'
+    put:
+      tags:
+      - master-version-i18n-api
+      summary: Update existing i18n bundle within master version.
+      description: |-
+        ### Endpoint purpose:
+        This endpoint is used for updating a json representation of a __i18n bundle__ directly in __master__ version. Just as if _version-candidate_ was created, the _i18n bundle_ was updated in that _version-candidate_ and then the _version-candidate_ was submitted. It can be used if there is needed to update __a single i18n bundle__. If you need to make some changes in several entities at one time, it's still preferred to make this changes through a _version-candidate_.
+        ### Conflict resolving:
+        In this endpoint [Conditional requests](https://datatracker.ietf.org/doc/html/rfc9110#name-conditional-requests) are supported. You can use an __ETag__ header value, that can be previously obtained in [GET](#master-version-i18n-api/getI18n) request, as a value for __If-Match__ header so you can be sure that you're updating the last version of an _i18n bundle_. But if your __If-Match__ value is differs from the servers you will receive a _409 Conflict_ instead of _412 Precondition Failed_. For _registry-regulation-management_ service this situation's considered as a conflict. If __If-Match__ is not present then conflict checking won't be performed.
+        ### I18n bundle validation:
+        Before saving the content to the storage, the __validation__ of a _i18n bundle_ is executed. The _i18n bundle_ must be a __json__ document
+         ### Missing i18n bundle handling:
+         If the updated _i18n bundle_ is missing and the _If-Match_ header is not present (or equal to __"*"__) then the _i18n bundle_ will be __created__ instead.
+      operationId: updateI18n
+      parameters:
+      - name: X-Access-Token
+        in: header
+        description: Token used for endpoint security
+        required: true
+        schema:
+          type: string
+      - name: If-Match
+        in: header
+        description: ETag to verify whether user has latest data
+        schema:
+          type: string
+      - name: name
+        in: path
+        description: Name of the i18n bundle to be updated
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: string
+            example:
+              English translate: Some other language translate
+        required: true
+      responses:
+        "200":
+          description: I18n bundle successfully updated.
+          headers:
+            ETag:
+              description: New ETag value for conflict verification
+              style: simple
+              schema:
+                type: string
+          content:
+            application/json:
+              example:
+                English translate: Some other language translate
+        "400":
+          description: Request body is not a valid json
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden
+        "409":
+          description: Conflict. __If-Match__ input value doesn't equal to servers
+            value. It means that i18n bundle already has been updated/deleted after
+            user obtained __ETag__.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailedErrorResponse'
+        "422":
+          description: Unprocessable Entity. I18n bundle is not valid.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailedErrorResponse'
+        "500":
+          description: Internal server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailedErrorResponse'
+    post:
+      tags:
+      - master-version-i18n-api
+      summary: Create new i18n bundle within master
+      description: |-
+        ### Endpoint purpose:
+        This endpoint is used for creating a JSON representation of a __i18n bundle__ directly in the __master__ version. It is intended for situations that require the creation of a new _i18n bundle_. This operation creates a single _i18n bundle_ and should be used when multiple resources do not need to be created or modified simultaneously. If you need to create or modify several resources at once, it is still recommended to use a _version-candidate_.
+        ### I18n bundle validation:
+        Before saving the new _i18n bundle_ to the storage, the server validates the _i18n bundle_. The _i18n bundle_ must be a valid __json__ document
+        ### Missing i18n bundle handling:
+        If the specified _i18n bundle_ does not already exist, the server will create a new _i18n bundle_ with the provided data. If the _i18n bundle_ does exists, the server will return a _409 Conflict_ error indicating that the _i18n bundle_ already exists.
+      operationId: i18nCreate
+      parameters:
+      - name: X-Access-Token
+        in: header
+        description: Token used for endpoint security
+        required: true
+        schema:
+          type: string
+      - name: name
+        in: path
+        description: Name of the new i18n bundle to be created
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: string
+            example:
+              English translate: Some other language translate
+        required: true
+      responses:
+        "201":
+          description: I18n bundle successfully created
+          headers:
+            ETag:
+              description: New ETag value for conflict verification
+              style: simple
+              schema:
+                type: string
+          content:
+            application/json:
+              example:
+                English translate: Some other language translate
+        "401":
+          description: Unauthorized
+          content:
+            application/json: {}
+        "403":
+          description: Forbidden
+          content:
+            application/json: {}
+        "409":
+          description: Conflict. It means that i18n bundle already has been created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailedErrorResponse'
+        "422":
+          description: Unprocessable Entity. I18n bundle is not valid.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailedErrorResponse'
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailedErrorResponse'
+    delete:
+      tags:
+      - master-version-i18n-api
+      summary: Delete existing i18n bundle within master
+      description: |-
+        ### Endpoint purpose:
+        This endpoint is used for deleting a JSON representation of a __i18n bundle__ directly from the __master__ version.
+        ### Conflict resolving:
+        In this endpoint, [Conditional requests](https://datatracker.ietf.org/doc/html/rfc9110#name-conditional-requests) are supported. You can use an __ETag__ header value, which can be previously obtained in a [GET](#master-version-i18n-api/getI18n) request, as a value for the __If-Match__ header. This ensures that you're deleting the latest version of the _i18n bundle_. However, if your __If-Match__ value differs from the server's value, you will receive _409 Conflict_ instead of _412 Precondition Failed_. For the _registry-regulation-management_ service, this situation is considered a conflict. If the __If-Match__ header is not present, conflict checking will not be performed.
+        ### Missing i18n bundle handling:
+        If the specified _i18n bundle_ is missing and the _If-Match_ header is not present (or equal to __"*"__), the server will return a 404 Not Found error indicating that the specified _i18n bundle_ does not exist.
+      operationId: deleteI18n
+      parameters:
+      - name: X-Access-Token
+        in: header
+        description: Token used for endpoint security
+        required: true
+        schema:
+          type: string
+      - name: If-Match
+        in: header
+        description: ETag to verify whether user has latest data
+        schema:
+          type: string
+      - name: name
+        in: path
+        description: Name of the i18n bundle to be deleted
+        required: true
+        schema:
+          type: string
+      responses:
+        "204":
+          description: No Content. I18n bundle successfully deleted.
+          content:
+            application/json: {}
+        "401":
+          description: Unauthorized
+          content:
+            application/json: {}
+        "403":
+          description: Forbidden
+          content:
+            application/json: {}
+        "404":
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailedErrorResponse'
+        "409":
+          description: Conflict. __If-Match__ input value doesn't equal to servers
+            value. It means that i18n bundle already has been updated/deleted after
+            user obtained __ETag__.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailedErrorResponse'
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailedErrorResponse'
   /versions/master/forms/{formName}:
     get:
       tags:
@@ -908,6 +1175,295 @@ paths:
             application/json: {}
         "404":
           description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailedErrorResponse'
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailedErrorResponse'
+  /versions/candidates/{versionCandidateId}/i18n/{name}:
+    get:
+      tags:
+      - candidate-version-i18n-api
+      summary: Get full details of the specific I18n bundle within version-candidate
+      description: |-
+        ### Endpoint purpose:
+        This endpoint is used for retrieving a JSON representation of a __i18n bundle__ from the __version-candidate__. This operation retrieves a single _I18n bundle_ based on the specified __name__. If you need to retrieve list of _i18n bundles_, you can use the [GET](#candidate-version-i18n-api/getI18nListByVersionId) endpoint.
+      operationId: getI18n_1
+      parameters:
+      - name: X-Access-Token
+        in: header
+        description: Token used for endpoint security
+        required: true
+        schema:
+          type: string
+      - name: versionCandidateId
+        in: path
+        description: Version candidate identifier
+        required: true
+        schema:
+          type: string
+      - name: name
+        in: path
+        description: I18n name
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: I18n bundle successfully retrieved.
+          content:
+            application/json:
+              example:
+                English translate: Some other language translate
+        "401":
+          description: Unauthorized
+          content:
+            application/json: {}
+        "403":
+          description: Forbidden
+          content:
+            application/json: {}
+        "404":
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailedErrorResponse'
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailedErrorResponse'
+    put:
+      tags:
+      - candidate-version-i18n-api
+      summary: Update existing i18n bundle within version-candidate
+      description: |-
+        ### Endpoint purpose:
+        This endpoint is used for updating a json representation of a __i18n bundle__ in __version-candidate__.
+        ### Conflict resolving:
+        In this endpoint [Conditional requests](https://datatracker.ietf.org/doc/html/rfc9110#name-conditional-requests) are supported. You can use an __ETag__ header value, that can be previously obtained in [GET](#candidate-version-i18n-api/getI18n) request, as a value for __If-Match__ header so you can be sure that you're updating the last version of a _i18n bundle_. But if your __If-Match__ value is differs from the servers you will receive a _409 Conflict_ instead of _412 Precondition Failed_. For _registry-regulation-management_ service this situation's considered as a conflict. If __If-Match__ is not present then conflict checking won't be performed.
+        ### I18n bundle validation:
+        Before saving the content to the storage, the __validation__ of a _i18n bundle_ is executed. The _i18n bundle_ must be a __json__ document.
+        ### Missing i18n bundle handling:
+        If the updated _i18n bundle_ is missing and the _If-Match_ header is not present (or equal to __"*"__) then the _i18n bundle_ will be __created__ instead.
+      operationId: updateI18n_1
+      parameters:
+      - name: X-Access-Token
+        in: header
+        description: Token used for endpoint security
+        required: true
+        schema:
+          type: string
+      - name: If-Match
+        in: header
+        description: ETag to verify whether user has latest data
+        schema:
+          type: string
+      - name: versionCandidateId
+        in: path
+        description: Version candidate identifier
+        required: true
+        schema:
+          type: string
+      - name: name
+        in: path
+        description: Name of the i18n bundle to be updated
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: string
+            example:
+              English translate: Some other language translate
+        required: true
+      responses:
+        "200":
+          description: I18n bundle successfully updated.
+          headers:
+            ETag:
+              description: New ETag value for conflict verification
+              style: simple
+              schema:
+                type: string
+          content:
+            application/json:
+              example:
+                English translate: Some other language translate
+        "401":
+          description: Unauthorized
+          content:
+            application/json: {}
+        "403":
+          description: Forbidden
+          content:
+            application/json: {}
+        "409":
+          description: Conflict. __If-Match__ input value doesn't equal to servers
+            value. It means that i18n bundle already has been updated/deleted after
+            user obtained __ETag__.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailedErrorResponse'
+        "422":
+          description: Unprocessable Entity. I18n bundle is not valid.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailedErrorResponse'
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailedErrorResponse'
+    post:
+      tags:
+      - candidate-version-i18n-api
+      summary: Create new i18n bundle within specific version-candidate
+      description: |-
+        ### Endpoint purpose:
+        This endpoint is used for creating a JSON representation of a __i18n bundle__ in the __version-candidate__.
+        ### I18n bundle validation:
+        Before saving the new _i18n bundle_ to the storage, the server validates the _i18n bundle_. The _i18n bundle_ must be a valid __json__ document
+        ### Missing i18n bundle handling:
+        If the specified _i18n bundle_ does not already exist, the server will create a new _i18n bundle_ with the provided data. Otherwise, the server will return a _409 Conflict_ error indicating that the _i18n bundle_ already exists.
+      operationId: i18nCreate_1
+      parameters:
+      - name: X-Access-Token
+        in: header
+        description: Token used for endpoint security
+        required: true
+        schema:
+          type: string
+      - name: versionCandidateId
+        in: path
+        description: Version candidate identifier
+        required: true
+        schema:
+          type: string
+      - name: name
+        in: path
+        description: Name of the new i18n bundle to be created
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: string
+            example:
+              English translate: Some other language translate
+        required: true
+      responses:
+        "201":
+          description: I18n bundle successfully created
+          headers:
+            ETag:
+              description: New ETag value for conflict verification
+              style: simple
+              schema:
+                type: string
+          content:
+            application/json:
+              example:
+                English translate: Some other language translate
+        "401":
+          description: Unauthorized
+          content:
+            application/json: {}
+        "403":
+          description: Forbidden
+          content:
+            application/json: {}
+        "409":
+          description: Conflict. It means that i18n bundle already has been created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailedErrorResponse'
+        "422":
+          description: Unprocessable Entity. I18n bundle is not valid.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailedErrorResponse'
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailedErrorResponse'
+    delete:
+      tags:
+      - candidate-version-i18n-api
+      summary: Delete existing i18n bundle within version-candidate
+      description: |-
+        ### Endpoint purpose:
+        This endpoint is used for deleting a JSON representation of a __i18n bundle__ from the __version-candidate__.
+        ### Conflict resolving:
+        In this endpoint, [Conditional requests](https://datatracker.ietf.org/doc/html/rfc9110#name-conditional-requests) are supported. You can use an __ETag__ header value, which can be previously obtained in a [GET](#candidate-version-i18n-api/getI18n) request, as a value for the __If-Match__ header. This ensures that you're deleting the latest version of the _i18n bundle_. However, if your __If-Match__ value differs from the server's value, you will receive _409 Conflict_ instead of _412 Precondition Failed_. For the _registry-regulation-management_ service, this situation is considered a conflict. If the __If-Match__ header is not present, conflict checking will not be performed.
+        ### Missing i18n bundle handling:
+        If the specified _i18n bundle_ is missing and the _If-Match_ header is not present (or equal to __"*"__), the server will return a 404 Not Found error indicating that the specified _i18n bundle_ does not exist.
+      operationId: deleteI18n_1
+      parameters:
+      - name: X-Access-Token
+        in: header
+        description: Token used for endpoint security
+        required: true
+        schema:
+          type: string
+      - name: If-Match
+        in: header
+        description: ETag to verify whether user has latest data
+        schema:
+          type: string
+      - name: versionCandidateId
+        in: path
+        description: Version candidate identifier
+        required: true
+        schema:
+          type: string
+      - name: name
+        in: path
+        description: Name of the i18n bundle to be deleted
+        required: true
+        schema:
+          type: string
+      responses:
+        "204":
+          description: No Content. I18n bundle successfully deleted.
+          content:
+            application/json: {}
+        "401":
+          description: Unauthorized
+          content:
+            application/json: {}
+        "403":
+          description: Forbidden
+          content:
+            application/json: {}
+        "404":
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailedErrorResponse'
+        "409":
+          description: Conflict. __If-Match__ input value doesn't equal to servers
+            value. It means that i18n bundle already has been updated/deleted after
+            user obtained __ETag__.
           content:
             application/json:
               schema:
@@ -1844,7 +2400,7 @@ paths:
       summary: Get list of existing opened version-candidates
       description: |-
         ### Endpoint purpose:
-         This endpoint is used for retrieving a list of JSON representations of __version information__ from the __version-candidate__, containing only brief information about each __version information__. If you need to retrieve full details of a single __version information__ based on its __versionCandidateId__, you can use the [GET](#candidate-version-api/getVersionDetails) endpoint.
+        This endpoint is used for retrieving a list of JSON representations of __version information__ from the __version-candidate__, containing only brief information about each __version information__. If you need to retrieve full details of a single __version information__ based on its __versionCandidateId__, you can use the [GET](#candidate-version-api/getVersionDetails) endpoint.
       operationId: getVersionsList
       parameters:
       - name: X-Access-Token
@@ -2000,6 +2556,59 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DetailedErrorResponse'
+  /versions/candidates/{versionCandidateId}/i18n/{name}/rollback:
+    post:
+      tags:
+      - candidate-version-i18n-api
+      summary: Rollback existing i18n bundle within version-candidate
+      description: |-
+        ### Endpoint purpose:
+        This endpoint is used for rolling back a __i18n bundle__ from the __version-candidate__. It is intended for situations where a __i18n bundle__ needs to be reverted to a prior version, such as to mitigate data corruption or to restore a previous state.
+      operationId: rollbackI18n
+      parameters:
+      - name: X-Access-Token
+        in: header
+        description: Token used for endpoint security
+        required: true
+        schema:
+          type: string
+      - name: versionCandidateId
+        in: path
+        description: Version candidate identifier
+        required: true
+        schema:
+          type: string
+      - name: name
+        in: path
+        description: Name of the i18n bundle to be rolled back
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: OK. I18n bundle successfully rolled back.
+          content:
+            application/json: {}
+        "401":
+          description: Unauthorized
+          content:
+            application/json: {}
+        "403":
+          description: Forbidden
+          content:
+            application/json: {}
+        "404":
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailedErrorResponse'
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailedErrorResponse'
   /versions/candidates/{versionCandidateId}/forms/{formName}/rollback:
     post:
       tags:
@@ -2060,7 +2669,7 @@ paths:
       summary: Abandon the existing opened version-candidate.
       description: |-
         ### Endpoint purpose:
-         This endpoint is used to decline an available open __version-candidate__. It is intended for situations where the __candidate version__ is no longer needed. After this operation the __version-candidate__ won't take any changes anymore.
+        This endpoint is used to decline an available open __version-candidate__. It is intended for situations where the __candidate version__ is no longer needed. After this operation the __version-candidate__ won't take any changes anymore.
       operationId: declineVersionCandidate
       parameters:
       - name: X-Access-Token
@@ -2761,6 +3370,48 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DetailedErrorResponse'
+  /versions/master/i18n:
+    get:
+      tags:
+      - master-version-i18n-api
+      summary: Get a list of i18n bundles with brief details for the master version
+      description: |-
+        ### Endpoint purpose:
+        This endpoint is used for retrieving a list of JSON representations of __i18n bundles__ directly from the __master__ version, containing only brief information about each _i18n bundle_. If you need to retrieve full details of a single _i18n bundle_ based on its __name__, you can use the [GET](#master-version-i18n-api/getI18n) endpoint.
+      operationId: getI18nListFromMaster
+      parameters:
+      - name: X-Access-Token
+        in: header
+        description: Token used for endpoint security
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: OK. I18n bundles successfully retrieved.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/I18nDetailsShort'
+              example:
+              - name: en
+              - name: uk
+        "401":
+          description: Unauthorized
+          content:
+            application/json: {}
+        "403":
+          description: Forbidden
+          content:
+            application/json: {}
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailedErrorResponse'
   /versions/master/forms:
     get:
       tags:
@@ -2965,7 +3616,7 @@ paths:
       summary: Acquire version-candidate full details
       description: |-
         ### Endpoint purpose:
-         This endpoint is used for retrieving a JSON representations of _version information_ from the __version-candidate__. This operation retrieves a single __version information__ based on the specified __versionCandidateId__ with full details. If you need to retrieve a list of __version information__ with brief details, you can use the [GET](#candidate-version-api/getVersionsList) endpoint.
+        This endpoint is used for retrieving a JSON representations of _version information_ from the __version-candidate__. This operation retrieves a single __version information__ based on the specified __versionCandidateId__ with full details. If you need to retrieve a list of __version information__ with brief details, you can use the [GET](#candidate-version-api/getVersionsList) endpoint.
       operationId: getVersionDetails
       parameters:
       - name: X-Access-Token
@@ -3173,6 +3824,54 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DetailedErrorResponse'
+  /versions/candidates/{versionCandidateId}/i18n:
+    get:
+      tags:
+      - candidate-version-i18n-api
+      summary: Acquire list of i18n bundles with brief details for specific version-candidate
+      description: |-
+        ### Endpoint purpose:
+        This endpoint is used for retrieving a list of JSON representations of __i18n bundles__ from the __version-candidate__, containing only brief information about each _i18n bundle_. If you need to retrieve full details of a single _i18n bundle_ based on its __name__, you can use the [GET](#candidate-version-i18n-api/getI18n) endpoint.
+      operationId: getI18nListByVersionId
+      parameters:
+      - name: X-Access-Token
+        in: header
+        description: Token used for endpoint security
+        required: true
+        schema:
+          type: string
+      - name: versionCandidateId
+        in: path
+        description: Version candidate identifier
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: OK. I18n bundles successfully retrieved.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/I18nDetailsShort'
+              example:
+              - name: en
+              - name: uk
+        "401":
+          description: Unauthorized
+          content:
+            application/json: {}
+        "403":
+          description: Forbidden
+          content:
+            application/json: {}
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailedErrorResponse'
   /versions/candidates/{versionCandidateId}/forms:
     get:
       tags:
@@ -3230,7 +3929,7 @@ paths:
       summary: Get version changes by version-candidate id
       description: |-
         ### Endpoint purpose:
-         This operation retrieves _changes_ made to the data elements in a __version-candidate__ compared to the _master_ version. The endpoint allows you to review the changes made in a candidate version before merging with the main version.
+        This operation retrieves _changes_ made to the data elements in a __version-candidate__ compared to the _master_ version. The endpoint allows you to review the changes made in a candidate version before merging with the main version.
       operationId: getVersionChanges
       parameters:
       - name: X-Access-Token
@@ -3264,6 +3963,9 @@ paths:
                 changedGroups:
                 - title: JohnDoe's group
                   status: NEW
+                changedI18nFiles:
+                - name: en
+                  status: DELETED
         "401":
           description: Unauthorized
           content:
@@ -3757,6 +4459,18 @@ components:
           items:
             $ref: '#/components/schemas/Column'
       description: Current table unique constraint index map (primary key excluded)
+    I18nDetailsShort:
+      required:
+      - eTag
+      - name
+      type: object
+      properties:
+        name:
+          type: string
+          description: I18n bundle name
+        eTag:
+          type: string
+          description: I18n eTag used for optimistic locking
     FormDetailsShort:
       required:
       - created
@@ -3854,13 +4568,14 @@ components:
           type: boolean
           description: Is entity has conflicts
           nullable: true
-      description: List of changed groups
+      description: List of changed i18n bundles
     VersionChangesInfo:
       required:
       - changedBusinessProcesses
       - changedDataModelFiles
       - changedForms
       - changedGroups
+      - changedI18nFiles
       type: object
       properties:
         changedForms:
@@ -3881,5 +4596,10 @@ components:
         changedGroups:
           type: array
           description: List of changed groups
+          items:
+            $ref: '#/components/schemas/EntityChangesInfo'
+        changedI18nFiles:
+          type: array
+          description: List of changed i18n bundles
           items:
             $ref: '#/components/schemas/EntityChangesInfo'
