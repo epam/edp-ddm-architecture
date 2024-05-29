@@ -1,0 +1,267 @@
+:toc-title: ЗМІСТ
+:toc: auto
+:toclevels: 5
+:experimental:
+:important-caption:     ВАЖЛИВО
+:note-caption:          ПРИМІТКА
+:tip-caption:           РЕСУРС
+:warning-caption:       ПОПЕРЕДЖЕННЯ
+:caution-caption:       УВАГА
+:example-caption:           Приклад
+:figure-caption:            Зображення
+:table-caption:             Таблиця
+:appendix-caption:          Додаток
+:sectnums:
+:sectnumlevels: 5
+:sectanchors:
+:sectlinks:
+
+= Тестування продуктивності Платформи 1.9.10 при навантаженні 250 користувачів на 1 годину
+
+Тестування продуктивності Платформи проводиться на базі потужностей «EPAM» для конкретного релізу. Цей процес включає використання заздалегідь встановленої конфігурації кластера Openshift для одного розгорнутого реєстру, що обслуговує 250 активних користувачів під час планового максимального навантаження у робочі години.
+
+== Конфігурація кластера Openshift на базі інфраструктури «EPAM»
+
+Конфігурація кластера *Openshift* на базі інфраструктури «EPAM» наведена нижче в таблиці та подана у розрізі за типом пристроїв та їх призначенням.
+
+.Типи пристроїв та їх призначення
+[width="99%",cols="23%,11%,8%,34%,7%,6%,11%",options="header",]
+|===
+|*Пристрій*                    |*Кількість* |*ОС*   |*Призначення*                                        |*vCPU* |*RAM (GB)* |*Сховище*
+|Ceph                          |3           |Fedora |Функціонування об'єктного сховища Ceph               |16     |128        |642 GB x3
+|Control plane                 |3           |Fedora |Функціонування панелі управління Openshift           |8      |64         | 80 GB x3
+|Infra Nodes                   |3           |Fedora |Функціонування централізованих сервісів Платформи |4      |32         |80 GB x3
+|Logging                       |3           |Fedora |Функціонування сховища логів ElasticSearch        |8      |32         |453 GB x3
+a|Registry Node                |1           |Fedora |Функціонування сервісів реєстру                   |8      |32         |80 GB x4
+|Load generator – perf-testing |1           |Ubuntu |Запуск JMeter                                        |4      |32         |50 GB
+|Vault                         |1           |Ubuntu |Менеджмент секретів                                  |1      |1          |18 GB
+|Minio                         |1           |Ubuntu |Об'єктне сховище                                     |1      |1          |308 GB
+|===
+
+
+== Результати запуску тестів навантаження
+
+=== Умови виконання тесту
+
+.Умови виконання тесту
+[width="100%",cols="51%,49%",options="header",]
+|===
+|*Умова* |*Метрика*
+|Кількість користувачів (осіб) |250
+|Час виконання (години) |1
+|Оточення (інфраструктура) |AWS
+|Кількість реєстрів (шт.) |1
+|Вебпортал, що перевіряється |officer portal
+|===
+
+=== Конфігурація Реєстру
+
+.Конфігурація горизонтального масштабування реєстру
+[width="100%",cols="72%,28%",options="header",]
+|===
+|Сервіс |Кількість копій (інстансів)
+|Admin-portal/Officer-portal/Citizen-portal |1
+|BPMS |1
+|BP-Webservice-Gateway |1
+|BP-Admin-Portal |1
+|Operational DB/Analytical DB |1
+|Digital-Document-Service |1
+|Digital-Signature-Ops-Service |1
+|Excerpt-Service-Api  |1
+|Form-Schema-Provider |1
+|Form-Submission-Validation |1
+|Geoserver |1
+|Istio Gateway |1
+|Infra (Jenkins/Gerrit/Nexus etc.) |1
+|Kafka Services (Exporter, Schema Registry) |1
+|Kafka Cluster |1
+|Kafka Cluster Zookeeper |1
+|Kong |1
+|Process-History-Service-Persistence |1
+|Redash Services (Admin, Viewer) |1
+|Registry-Rest-Api |1
+|Registry-Rest-Api-Ext |1
+|Registry-Rest-Api-Public |1
+|Redis rfr |2
+|Redis rfs |3
+|User-Process-Management |1
+|User-Settings-Service-Api |1
+|Wiremock |1
+|===
+
+Додатково застосовані усі налаштування, необхідні для xref:registry-develop:registry-admin/registry-min-config.adoc[конфігурації реєстру з максимальною щільністю]
+
+=== Загальний опис виконання запитів з Carrier
+
+[TIP]
+====
+URL запита: +
+`https://platform.getcarrier.io/-/performance/backend/results?result_id=2132`
+====
+
+.Загальні характеристики сценарію
+image::testing:perf-test/1-9-10/250-1/img-1.png[]
+
+.Основний графік виконання
+image::testing:perf-test/1-9-10/250-1/img-2.png[]
+
+=== Таблиця параметрів за кожним типом запитів
+
+.Параметри за кожним типом запитів
+[width="100%",cols="46%,8%,9%,8%,6%,8%,8%,7%",options="header",]
+|===
+|Назва (*NAME*) |Кількість запитів (*TTL REQ, COUNT*) |Пропускна здатність, кількість запитів/с (*THRGHPT, REQ/SEC*) |Кількість помилок (*ERRORS, COUNT*) |Найменша кількість часу на запит (*MIN, MS*) | Найбільша кількість часу на запит (*MAX, MS*) |Середнє значення, час на запит (*MEDIAN, MS*) |95-й процентиль (*PCT95, MS*)
+| All                                                                             | 220253 | 62.697 | 0 | 2   | 5650 | 45  | 188
+8+^| Операції читання даних з реєстру на рівні Дата Платформи
+| [portal][sc:get:subject-equal-subject-type-equal-subject-code]                  | 1495   | 0.426  | 0 | 10  | 327  | 18  | 35
+| [portal][sc:get:staff-equal-laboratory-id-contains-full-name]                   | 1250   | 0.356  | 0 | 8   | 219  | 17  | 36
+| [portal][sc:get:staff-contains-name]                                            | 2000   | 0.569  | 0 | 7   | 440  | 17  | 36
+| [portal][sc:get:research-contains-name]                                         | 2000   | 0.569  | 0 | 8   | 275  | 17  | 34
+| [portal][sc:get:refusal-reason-equal-constant-code-contains-name]               | 22800  | 6.49   | 0 | 7   | 272  | 17  | 37
+| [portal][sc:get:ownership-contains-name]                                        | 11249  | 3.202  | 0 | 7   | 1142 | 17  | 37
+| [portal][sc:get:laboratory-equal-subject-code-name]                             | 5060   | 1.44   | 0 | 9   | 314  | 18  | 39
+| [portal][sc:get:kopfg-contains-name]                                            | 11250  | 3.202  | 0 | 7   | 443  | 18  | 38
+| [portal][sc:get:koatuu-obl-contains-name]                                       | 9000   | 2.562  | 0 | 8   | 676  | 18  | 37
+| [portal][sc:get:koatuu-np-starts-with-name-by-obl]                              | 11249  | 3.202  | 0 | 7   | 676  | 18  | 39
+| [portal][sc:get:factor-physical-contains-name]                                  | 1297   | 0.369  | 0 | 8   | 652  | 19  | 39
+| [portal][sc:get:factor-pesticides-contains-name]                                | 1297   | 0.369  | 0 | 9   | 554  | 20  | 43
+| [portal][sc:get:factor-labour-contains-name]                                    | 1297   | 0.369  | 0 | 8   | 279  | 18  | 38
+| [portal][sc:get:factor-chemical-obrb-contains-name]                             | 1297   | 0.369  | 0 | 9   | 115  | 19  | 43
+| [portal][sc:get:factor-chemical-hygiene-contains-name]                          | 1297   | 0.369  | 0 | 9   | 143  | 18  | 40
+| [portal][sc:get:factor-chemical-host-contains-name]                             | 1297   | 0.369  | 0 | 9   | 556  | 20  | 44
+| [portal][sc:get:factor-chemical-arbitrary-contains-name]                        | 1297   | 0.369  | 0 | 9   | 165  | 18  | 39
+| [portal][sc:get:factor-bio-contains-name]                                       | 1297   | 0.369  | 0 | 9   | 746  | 19  | 41
+8+^| Операції запису даних в реєстр на рівні Дата Платформи
+| [portal][bp:update-lab][task:update-laboratory-data][sign-form]                 | 750    | 0.213  | 0 | 153 | 3099 | 282 | 486
+| [portal][bp:update_personnel][task:update-personnel-data][sign-form]            | 750    | 0.213  | 0 | 152 | 2039 | 285 | 486
+| [portal][bp:update_personnel][task:update-personnel-data][sign-form]            | 750    | 0.213  | 0 | 22  | 567  | 44  | 86
+| [portal][bp:update_chemical_dict][task:update-chemical-dict][sign-form]         | 710    | 0.202  | 0 | 126 | 2567 | 260 | 476
+| [portal][bp:create-subject][task:create-subject][sign-form]                     | 745    | 0.212  | 0 | 133 | 4245 | 248 | 446
+| [portal][bp:create-lab][task:create-lab][sign-form]                             | 750    | 0.213  | 0 | 141 | 3425 | 273 | 537
+| [portal][bp:create_app_primary][task:sign-create-app-primary][sign-form]        | 694    | 0.198  | 0 | 174 | 865  | 301 | 527
+| [portal][bp:create_app_expanse][task:sign-create-app-expanse][sign-form]        | 603    | 0.172  | 0 | 176 | 1463 | 306 | 530
+| [portal][bp:create_app_exclude][task:sign-create-app-exclude][sign-form]        | 514    | 0.146  | 0 | 157 | 1076 | 285 | 478
+| [portal][bp:add_personnel][task:fill-personnel-data][sign-form]                 | 750    | 0.213  | 0 | 147 | 3641 | 265 | 453
+8+^| Операції виконання користувацьких задач без підпису
+| [portal][bp:update-lab][task:update-laboratory-data][complete]                  | 1500   | 0.427  | 0 | 80  | 2949 | 167 | 311
+| [portal][bp:update_personnel][task:update-personnel-data][complete]             | 750    | 0.213  | 0 | 91  | 2953 | 180 | 339
+| [portal][bp:update_chemical_dict][task:update-chemical-dict][complete]          | 710    | 0.202  | 0 | 85  | 1795 | 176 | 359
+| [portal][bp:read_personnel][task:read-personnel][complete]                      | 500    | 0.142  | 0 | 91  | 1184 | 178 | 334
+| [portal][bp:read_lab][task:read-lab][complete]                                  | 500    | 0.142  | 0 | 91  | 1230 | 182 | 333
+| [portal][bp:create-lab][task:fill-laboratory-data][complete]                    | 750    | 0.213  | 0 | 95  | 2110 | 181 | 351
+| [portal][bp:create_app_primary][task:letter_data][complete]                     | 694    | 0.198  | 0 | 78  | 798  | 152 | 287
+| [portal][bp:create_app_primary][task:decision_include][complete]                | 694    | 0.198  | 0 | 79  | 489  | 148 | 285
+| [portal][bp:create_app_primary][task:create_app_primary][complete]              | 694    | 0.198  | 0 | 83  | 3466 | 175 | 339
+| [portal][bp:create_app_primary][task:check_complience][complete]                | 694    | 0.198  | 0 | 90  | 879  | 176 | 333
+| [portal][bp:create_app_primary][task:add_bio_phys_labor_factors_task][complete] | 694    | 0.198  | 0 | 83  | 593  | 162 | 317
+| [portal][bp:create_app_expanse][task:decision_include][complete]                | 603    | 0.172  | 0 | 80  | 1292 | 151 | 283
+| [portal][bp:create_app_expanse][task:create_app_expanse][complete]              | 603    | 0.172  | 0 | 84  | 1202 | 160 | 313
+| [portal][bp:create_app_expanse][task:check_complience][complete]                | 1206   | 0.343  | 0 | 79  | 903  | 160 | 308
+| [portal][bp:create_app_expanse][task:add_bio_phys_labor_factors_task][complete] | 603    | 0.172  | 0 | 83  | 698  | 161 | 307
+| [portal][bp:create_app_exclude][task:letter_data][complete]                     | 514    | 0.146  | 0 | 79  | 529  | 145 | 262
+| [portal][bp:create_app_exclude][task:create_app_exclude][complete]              | 514    | 0.146  | 0 | 84  | 936  | 166 | 328
+| [portal][bp:create_app_exclude][task:create_app_exclude_decision][complete]     | 514    | 0.146  | 0 | 83  | 477  | 157 | 279
+| [portal][bp:create_app_exclude][task:create_app_exclude_check][complete]        | 514    | 0.146  | 0 | 95  | 699  | 179 | 325
+| [portal][bp:add_personnel][task:fill-personnel-data][complete]                  | 750    | 0.213  | 0 | 101 | 5626 | 192 | 342
+8+^| Операції отримання інформації про задачу
+| [portal][bp:update-lab][task:update-laboratory-data][get-task]                  | 750    | 0.213  | 0 | 22  | 487  | 43  | 83
+| [portal][bp:update-lab][task:sign-laboratory-data][get-task]                    | 750    | 0.213  | 0 | 22  | 607  | 42  | 75
+| [portal][bp:update-lab][task:fill-laboratory-data][get-task]                    | 750    | 0.213  | 0 | 22  | 642  | 45  | 83
+| [portal][bp:update_personnel][task:update-personnel-data][get-task]             | 750    | 0.213  | 0 | 22  | 364  | 41  | 79
+| [portal][bp:update_chemical_dict][task:update-chemical-dict][get-task]          | 710    | 0.202  | 0 | 21  | 201  | 41  | 81
+| [portal][bp:update_chemical_dict][task:sign-update-chemical-dict][get-task]     | 710    | 0.202  | 0 | 21  | 844  | 45  | 88
+| [portal][bp:read_personnel][task:read-personnel][get-task]                      | 500    | 0.142  | 0 | 23  | 186  | 41  | 78
+| [portal][bp:read_lab][task:read-lab][get-task]                                  | 500    | 0.142  | 0 | 21  | 271  | 42  | 78
+| [portal][bp:create-subject][task:create-subject][get-task]                      | 745    | 0.212  | 0 | 21  | 5599 | 45  | 70
+| [portal][bp:create-lab][task:sign-create-lab][get-task]                         | 750    | 0.213  | 0 | 22  | 833  | 43  | 84
+| [portal][bp:create-lab][task:fill-laboratory-data][get-task]                    | 750    | 0.213  | 0 | 21  | 299  | 40  | 79
+| [portal][bp:create_app_primary][task:sign-create-app-primary][get-task]         | 694    | 0.198  | 0 | 21  | 186  | 40  | 73
+| [portal][bp:create_app_primary][task:letter_data][get-task]                     | 694    | 0.198  | 0 | 21  | 188  | 41  | 77
+| [portal][bp:create_app_primary][task:decision_include][get-task]                | 694    | 0.198  | 0 | 21  | 364  | 41  | 76
+| [portal][bp:create_app_primary][task:create_app_primary][get-task]              | 694    | 0.198  | 0 | 26  | 657  | 52  | 96
+| [portal][bp:create_app_primary][task:check_complience][get-task]                | 694    | 0.198  | 0 | 20  | 276  | 43  | 90
+| [portal][bp:create_app_primary][task:add_bio_phys_labor_factors_task][get-task] | 694    | 0.198  | 0 | 22  | 634  | 43  | 87
+| [portal][bp:create_app_expanse][task:sign-create-app-expanse][get-task]         | 603    | 0.172  | 0 | 21  | 247  | 40  | 75
+| [portal][bp:create_app_expanse][task:letter_data][get-task]                     | 603    | 0.172  | 0 | 21  | 184  | 40  | 76
+| [portal][bp:create_app_expanse][task:decision_include][get-task]                | 603    | 0.172  | 0 | 21  | 209  | 40  | 74
+| [portal][bp:create_app_expanse][task:create_app_expanse][get-task]              | 603    | 0.172  | 0 | 25  | 436  | 52  | 101
+| [portal][bp:create_app_expanse][task:check_complience][get-task]                | 603    | 0.172  | 0 | 22  | 240  | 43  | 76
+| [portal][bp:create_app_expanse][task:add_bio_phys_labor_factors_task][get-task] | 602    | 0.171  | 0 | 22  | 201  | 41  | 74
+| [portal][bp:create_app_exclude][task:sign-create-app-exclude][get-task]         | 514    | 0.146  | 0 | 22  | 257  | 41  | 77
+| [portal][bp:create_app_exclude][task:letter_data][get-task]                     | 513    | 0.146  | 0 | 20  | 185  | 40  | 76
+| [portal][bp:create_app_exclude][task:create_app_exclude][get-task]              | 514    | 0.146  | 0 | 26  | 284  | 52  | 100
+| [portal][bp:create_app_exclude][task:create_app_exclude_decision][get-task]     | 513    | 0.146  | 0 | 22  | 215  | 43  | 86
+| [portal][bp:create_app_exclude][task:create_app_exclude_check][get-task]        | 514    | 0.146  | 0 | 21  | 328  | 44  | 86
+| [portal][bp:add_personnel][task:sign-personnel-data][get-task]                  | 750    | 0.213  | 0 | 22  | 727  | 42  | 80
+| [portal][bp:add_personnel][task:fill-personnel-data][get-task]                  | 749    | 0.213  | 0 | 21  | 540  | 40  | 70
+8+^| Операції старту виконання бізнес процесу
+| [portal][bp:update-lab][start-with-form]                                        | 750    | 0.213  | 0 | 111 | 5650 | 220 | 380
+| [portal][bp:update_personnel][start-with-form]                                  | 750    | 0.213  | 0 | 98  | 1263 | 183 | 342
+| [portal][bp:update_chemical_dict][start]                                        | 710    | 0.202  | 0 | 32  | 672  | 73  | 156
+| [portal][bp:read_personnel][start-with-form]                                    | 500    | 0.142  | 0 | 97  | 635  | 181 | 324
+| [portal][bp:read_lab][start-with-form]                                          | 500    | 0.142  | 0 | 110 | 693  | 205 | 360
+| [portal][bp:create-subject][start-with-form]                                    | 750    | 0.213  | 0 | 84  | 646  | 147 | 278
+| [portal][bp:create-lab][start-with-form]                                        | 750    | 0.213  | 0 | 71  | 1135 | 137 | 280
+| [portal][bp:create_app_primary][start-with-form]                                | 694    | 0.198  | 0 | 118 | 1677 | 224 | 406
+| [portal][bp:create_app_expanse][start-with-form]                                | 603    | 0.172  | 0 | 114 | 744  | 218 | 427
+| [portal][bp:create_app_exclude][start-with-form]                                | 514    | 0.146  | 0 | 95  | 874  | 188 | 361
+| [portal][bp:add_personnel][start-with-form]                                     | 750    | 0.213  | 0 | 74  | 5584 | 140 | 253
+8+^| Інші операції
+| [portal][logout]                                                                | 500    | 0.142  | 0 | 18  | 343  | 43  | 142
+| [portal][login]                                                                 | 750    | 0.213  | 0 | 85  | 380  | 119 | 210
+| [portal][get-user-tasks-lightweight]                                            | 27531  | 7.837  | 0 | 18  | 1154 | 35  | 66
+| [portal][get-user-tasks-count]                                                  | 1750   | 0.498  | 0 | 14  | 400  | 29  | 58
+| [portal][get-user-runtime-process-instances]                                    | 750    | 0.213  | 0 | 8   | 154  | 19  | 42
+| [portal][get-user-info]                                                         | 7792   | 2.218  | 0 | 6   | 372  | 20  | 49
+| [portal][get-user-history-tasks]                                                | 750    | 0.213  | 0 | 9   | 283  | 22  | 49
+| [portal][get-user-history-process-instances]                                    | 749    | 0.213  | 0 | 9   | 683  | 19  | 41
+| [portal][get-user-history-process-instances-count]                              | 750    | 0.213  | 0 | 7   | 222  | 15  | 30
+| [portal][get-task]                                                              | 7016   | 1.997  | 0 | 15  | 517  | 30  | 57
+| [portal][get-process-definitions]                                               | 6561   | 1.868  | 0 | 13  | 551  | 29  | 58
+| [portal][get-process-definitions-count]                                         | 750    | 0.213  | 0 | 17  | 252  | 29  | 53
+| [portal][get-login-page]                                                        | 750    | 0.213  | 0 | 2   | 599  | 7   | 17
+| [portal][get-home-page]                                                         | 750    | 0.213  | 0 | 9   | 194  | 17  | 42
+| [portal][get-grouped-process-definitions]                                       | 750    | 0.213  | 0 | 23  | 142  | 39  | 78
+| [portal][get-form-by-key]                                                       | 26824  | 7.636  | 0 | 2   | 753  | 15  | 33
+|===
+
+=== Використання ресурсів
+
+.Використання ЦП (CPU)
+image::testing:perf-test/1-9-10/250-1/img-3.png[]
+
+.Використання пам'яті
+image::testing:perf-test/1-9-10/250-1/img-4.png[]
+
+.Використання мережі
+image::testing:perf-test/1-9-10/250-1/img-5.png[]
+
+=== Аналіз помилок
+
+Помилок у процесі виконання тесту виявлено не було
+
+=== Метрики
+
+==== Значення затримки при повному навантаженні (95-й процентиль)
+
+* [*] [.underline]#Операції читання# даних з реєстру на рівні Дата Платформи (за переліком ключових полів, без запитів до сторонніх реєстрів) ~ `*38*` мс.
+* [*] [.underline]#Операції запису# даних в реєстр на рівні Дата Платформи ~ `*450*` мс.
+
+==== Значення пропускної здатності при повному навантаженні
+
+* [*] [.underline]#Пропускна здатність для операцій читання# з реєстру на рівні Дата Платформи -- `*24.97*` запитів/с.
+* [*] [.underline]#Пропускна здатність для операції запису# даних в реєстр на рівні Дата Платформи -- `*1.995*` запитів/с.
+* [*] [.underline]#Пропускна здатність для операції запуску нових бізнес-процесів# -- `*2.067*` запитів/с.
+* [*] [.underline]#Пропускна здатність для операції виконання користувацьких задач без підпису# -- `*3.98*` запитів/с.
+* [*] [.underline]#Середня пропускна здатність# (усереднена для усіх типів запитів, включно з логіном, опрацюванням бізнес-процесів тощо) -- `*62*` запити/c.
+
+==== Загальна кількість операцій при повному навантаженні
+
+* [*] [.underline]#Загальна кількість операцій збереження даних до реєстру# -- `*7016*` запитів.
+* [*] [.underline]#Загальна кількість виконаних бізнес-процесів# -- `*7271*` запитів.
+
+=== Висновки
+
+Платформа з [.underline]#`*1*` розгорнутим реєстром# атестованих лабораторій [.underline]#під навантаженням `*250*`# користувачів протягом 1 години відпрацьовує з [.underline]#`*0.00%*` помилок# та залишається в межах виділених ресурсів.
+
+NOTE: Цей тест демонструє приклад роботи реєстру, розгорнутого у конфігурації з максимальною щільністю, в робочий час.
