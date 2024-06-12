@@ -1,68 +1,67 @@
-:toc: auto
-:toclevels: 5
-:experimental:
-:sectnums:
-:sectnumlevels: 5
-:sectanchors:
-:sectlinks:
-:partnums:
+= Setting up integration with the Stripe payment system
+include::platform:ROOT:partial$templates/document-attributes/default-set-en.adoc[]
 
-= Setting up integration with Stripe Payment System
+== Overview
 
+*_Stripe_* is a powerful online payment processing tool that businesses of all sizes use. Integrating Stripe allows you to accept payments directly on your platform, providing a seamless checkout experience for your users. This document outlines the steps to configure Stripe within your system, utilizing the Control Plane administrative console to ensure secure and efficient payment processing.
 
-== General Description
+== Prerequisites
 
-In order to use User Task for payment process by cabinet users (Payment Task) and a separate standard extension for receiving information about the status of the completed payment from the payment system, it is necessary to first perform configurations at the level of the registry instance in the Control Plane administrative console. This will allow you to deploy *`Service Entry`* and open access for traffic beyond the Platform cluster, as well as create a secret for accessing the resources of the external payment system.
+Before you begin, ensure you have administrative access to the
+include::platform:ROOT:partial$templates/links/platform/administrative/control-plane.adoc[]
+and the necessary permissions to manage registries and deploy services. It would help to have an active Stripe account ready to link with your system.
+
+== General description
+
+Several configurations are required at the registry instance level within the Control Plane administrative console to integrate Stripe for handling payment tasks in user portals and receiving updates on payment statuses. These configurations allow for deploying a *Service Entry*, facilitating outbound traffic from the Platform cluster, and creating a secret key for secure communication with Stripe.
 
 [TIP]
 ====
-* Service Entry is created automatically when deploying the registry using the Jenkins pipeline -- `*MASTER-Build-<registry-name>*`.
-* Secrets (token, password, etc.) are also created automatically after applying settings with the Jenkins pipeline -- `*MASTER-Build-<registry-name>*`. It is added to *user-management:hashicorp-vault* for the system/service to which requests need to be performed.
+* The system automatically creates *Service Entry* when deploying the registry via the Jenkins pipeline — *MASTER-Build-`<registry-name>`*. Service entries are required to establish communication with services hosted on external systems.
+* Secrets like tokens and passwords are also generated automatically post-configuration via the Jenkins pipeline — *MASTER-Build-`<registry-name>`*. These are stored securely in `user-management:hashicorp-vault` for systems/services requiring external requests.
+
+`<registry-name>` is the name of a registry where you apply your configuration. For instance, `abc-01`.
 ====
 
 [#stripe-account-creation]
-== Creating an Account in the Stripe System
+== Creating the Stripe account
 
-This subsection gives a description of the steps for creating an account in the `Stripe` payment system.
+To create an account in the *Stripe* payment system, please follow these steps:
 
-. Follow the link link:https://dashboard.stripe.com/login[] and create an account in the system
+. Visit the https://dashboard.stripe.com/login[] page and create an account. You can find detailed instructions on creating a Stripe account at https://docs.stripe.com/payments/account[official documentation].
 +
 image:registry-admin/external-integration/cp-integrate-payment/stripe-dashboard-login-page.png[]
-+
-[TIP]
-====
-Steps for creating a Stripe account are described in the official documentation (see link:https://docs.stripe.com/payments/account[Set up account])
-====
 
-. After successful registration and account setup, click on the Developers section on the dashboard page.
+. After successfully setting up your account, log in to your dashboard and click on the *Developers* section.
 +
 image:registry-admin/external-integration/cp-integrate-payment/stripe-dashboard-home-page.png[]
-+
-[#stripe-api-keys]
 
-. Go to the API keys section, where the Key Tokens are stored (Publishable key & Secret key) and save both of them. These tokens will be used in the future setup of the integration in Control Plane console and registry Payment User Task.
+[start=3]
+[#key-tokens]
+. Go to the *API keys* section to find your key tokens, including the _Publishable key_ and _Secret key_. Save both of these keys, as you will need them to set up future integration in the Control Plane console and registry Payment User Task.
 +
 image:registry-admin/external-integration/cp-integrate-payment/stripe-api-keys-page.png[]
 
-
 [#stripe-integration-in-cp]
-== Setting up External Integration in Control Plane
+== Setting up external integration in the Control Plane
 
-This subsection provides an example of setting up integration with the external payment system `Stripe` .
+This section provides an example of integrating with the *Stripe* external payment system.
 
-. Sign in to the *Control Plane* admin console as a registry administrator.
+. Sign in to the
+include::platform:ROOT:partial$templates/links/platform/administrative/control-plane.adoc[]
+console as a registry administrator.
 +
 image:registry-admin/external-integration/cp-integrate-payment/cp-login-page.png[]
 
-. Open the *Registries* section and open your registry.
+. Navigate to the *Registries* section and open your registry.
 +
 [IMPORTANT]
 ====
 You can only configure external integrations when editing a registry.
 
 Here is the general procedure: ::
-.. First, create a registry.
-.. Then an administrator can configure external integrations and secure exchange gateway (SEG).
+.. Create a registry if you haven't already.
+.. Then an administrator can configure external integrations.
 .. After the configuration is applied, the Service Entry and the service authorization secret are deployed automatically.
 ====
 +
@@ -74,7 +73,7 @@ image:registry-admin/external-integration/cp-integrate-payment/cp-registry-page.
 +
 image:registry-admin/external-integration/cp-integrate-payment/cp-add-external-system-button.png[]
 
-. In the *Add external system for interaction* window that opens, configure the external integration with the payment system.
+. In the *Add external system for interaction* window that appears, configure the external integration with the payment system.
 +
 NOTE: Network access policies are created automatically.
 
@@ -82,39 +81,37 @@ NOTE: Network access policies are created automatically.
 +
 [CAUTION]
 ====
-The name affects the integration and should be exactly like it stated above, you cannot change it once you apply the registry configuration.
+Ensure the system name is entered as shown above. It is critical for integration and cannot be modified once the registry configuration is applied.
 ====
 * *External system address*: Enter the base URL of the Stripe payment server to connect to -- `https://api.stripe.com`.
 +
 image:registry-admin/external-integration/cp-integrate-payment/cp-add-external-system-popup.png[]
 
-* The integration protocol -- *`REST`*.
+* *Integration protocol*: `REST`.
 
-* Specify the authentication type -- `*AUTH_TOKEN*`. +
-+
-* Specify the authorization token -- saved `Secret Key` from the step 2 above.
+* *Specify the authentication type*: `*AUTH_TOKEN*`.
+
+* *Specify authorization token*: Enter the saved _Secret key_ obtained during the xref:#key-tokens[Stripe account creation].
 +
 image:registry-admin/external-integration/cp-integrate-payment/cp-add-external-system-popup-filled.png[]
 
-. Click kbd:[Add] to save the settings.
+. Click *`Add`* to save the settings.
 +
 As a result, the system creates a registry configuration update request.
 
+. In the registry settings, scroll down to the *Change requests* section and click the view icon 👁 to open your request.
 +
-. In registry settings, scroll down to the *Update requests* section and click the view icon 👁 to open your request.
-+
-NOTE: The system automatically confirms the changes and saves them to the registry configuration _deploy-templates/values.yaml_ file.
+NOTE: The system automatically confirms and saves the changes to the registry configuration _deploy-templates/values.yaml_ file.
 +
 image:registry-admin/external-integration/cp-integrate-payment/cp-registry-edit-created.png[]
 
-. Review the parameters added to the configurations in the *Update request* window.
+. Review the parameters added to the configurations in the *Change request* window.
 +
-TIP: The comparison window provides a convenient way of reviewing the differences between the two versions: the current (left) and the new (right).
+TIP: The comparison window provides a convenient way of reviewing the differences between the current (left) and the new (right) versions.
 +
-In our example, the configuration looks like this:
+In our example, the configuration looks as follows:
 +
 .Configuring an external integration using the AUTH_TOKEN method in deploy-templates/values.yaml
-====
 [source,yaml]
 ----
 external-systems:
@@ -127,7 +124,6 @@ external-systems:
             type: AUTH_TOKEN
         mock: false
 ----
-====
 +
 image:registry-admin/external-integration/cp-integrate-payment/cp-registry-change-request-details.png[]
 +
@@ -141,9 +137,7 @@ image:registry-admin/external-integration/cp-integrate-payment/cp-external-syste
 +
 As a result, the *MASTER-Build-`<registry-name>`* pipeline starts. It applies the integration settings you provided.
 +
-. Wait until the build is completed. This may take up to 15 minutes.
-+
-To monitor the build status and result, use the link in the *CI* column.
+. Wait until the build is completed. It may take up to 15 minutes. Use the link in the *CI* column to monitor the build status and result.
 +
 image:registry-admin/external-integration/cp-integrate-payment/cp-configuration-ci-button.png[]
 +
@@ -154,31 +148,45 @@ image:registry-admin/external-integration/cp-integrate-payment/cp-registry-jenki
 +
 [#result-service-entry]
 [start=9]
-. Once the build is completed successfully, the system applies your configuration and creates a new Service Entry in your registry project. You can check the result in the Openshift console (Search -> select `ServiceEntry` resource -> select Project - registry name -> find `stripe` serviceEntry -> open YAML view).
+. Once the build is completed successfully, the system will apply your configuration and create a new Service Entry in your registry project. +
+You can check the result in the menu:Openshift console[Home > Search > ServiceEntries]. Select the necessary `ServiceEntry` resource, choose the project with your registry, find the `stripe` serviceEntry, and open the YAML tab.
++
+As a result, you can observe the service entry created and connected to the `api.stripe.com` host, indicating that the integration has been successfully established.
 +
 image:registry-admin/external-integration/cp-integrate-payment/stripe-service-entry.png[]
 
 [#stripe-integration-in-oc]
-== Setting up Publishable Key in Stripe payment user form task in Administrative portal
-Once integration with payment system in Control Plane was completed the final setup in Administrative portal should be applied.
+== Business process modeling: Integrating _publishable keys_ in the Stripe Payment User Form task
 
-. Navigate to Quick links tab of your registry in Conrol Plane console and click on 'Registry modelling web interface (Administrative portal)' link from Registry Administration Zone section.
+Once integration with the payment system in Control Plane is completed, the final setup in the Administrative portal should be applied.
+
+. Navigate to the *Quick links* tab in the Control Plane console and refer to the Registry modeling web interface (Administrative portal) in the Registry Administration Zone section.
 +
 image:registry-admin/external-integration/cp-integrate-payment/cp-registry-quick-links.png[]
 +
-. Login as registry administrator into Administrative portal.
-. Navigate to Process models -> List of business processes -> click on kbd:[Create new process] button -> Create candidate version
+. Log in as a registry administrator to the Administrative portal.
+. Navigate to menu:Process models[List of business processes] and click on *`Create new process`* button. Use the *Create candidate version* option to work with your process in a separate git branch. Alternatively, you may proceed in the master version of the registry regulations.
 +
 image:registry-admin/external-integration/cp-integrate-payment/ap-process-models.png[]
 +
-. Navigate to Builder tab of new process -> Add task element to the process -> select `User Task` type -> click on kbd:[Select] buton in Template section -> Select `Stripe Payment User form` element template
+. Navigate to the *Builder* tab of the new process and create a User Task. Apply the appropriate template—the *Stripe Payment User form*.
++
 image:registry-admin/external-integration/cp-integrate-payment/ap-process-builder-user-task.png[]
 +
 image:registry-admin/external-integration/cp-integrate-payment/ap-stripe-payment-element-template.png[]
 +
-. Setup next required fields in element template:
-* *Form key* -- enter the form key that will correspond to the form service name;
-* *Stripe Publishable Key* -- value of `Publishable Key` taken from Stripe account Api keys on step 2 before
-* *Currency* -- select from dropdown target currency (USD, EUR, UAH)
-* *Charge amount* -- enter amount to be charged on business process (Charge amount without any thousand separators. Accepted decimal separator is dot - '.' or comma - ','. Cannot be 0 or negative.)
-. Save all changes for business process and apply them to master
+. Set up the element template as follows:
+* *Form key*: Enter the form key corresponding to the form service name.
+* *Stripe Publishable Key*: Enter the value of *Publishable key* taken from Stripe account's API keys before.
+* *Currency*: Select appropriate value from the dropdown target currency -- `USD`, `EUR` or `UAH`.
+* *Charge amount*: Enter an amount to be charged in the business process.
++
+NOTE: Enter the amount to be charged without using a thousand separators. Use either a dot (`.`) or a comma (`,`) as the decimal separator. The amount must be positive and cannot be zero.
+
+. Save all changes for the business process and apply them to the master branch.
++
+TIP: For additional information on modeling Stripe payments, refer to the xref:best-practices/payments/bp-create-driving-license.adoc[] page.
+
+== Related pages
+
+* xref:best-practices/payments/bp-create-driving-license.adoc[]
