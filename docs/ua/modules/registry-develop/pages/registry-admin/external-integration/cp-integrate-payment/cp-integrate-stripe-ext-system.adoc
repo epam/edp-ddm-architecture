@@ -1,0 +1,193 @@
+= Налаштування інтеграції з платіжною системою Stripe
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+include::platform:ROOT:partial$admonitions/language-ua.adoc[]
+
+[CAUTION]
+Поточна функціональність реалізована для глобального регіону використання. Опис адаптовано українською мовою для україномовної аудиторії. Деякі назви полів, функцій, а також знімки екрана доступні лише англійською мовою.
+
+== Огляд Stripe
+
+*_Stripe_* — це потужний інструмент обробки онлайн-платежів, який використовують бізнеси різного розміру. Інтеграція з Stripe дозволяє приймати платежі безпосередньо на вашій Платформі, забезпечуючи безперебійний процес оформлення замовлення для ваших користувачів. У цьому документі описані кроки для налаштування Stripe у вашій системі з використанням адміністративної консолі Control Plane для забезпечення безпечної та ефективної обробки платежів.
+
+== Передумови
+
+Перед початком переконайтеся, що у вас є адміністративний доступ до
+include::platform:ROOT:partial$templates/links/platform/administrative/control-plane.adoc[]
+та необхідні дозволи для управління реєстрами та розгортання сервісів. Вам також знадобиться активний обліковий запис Stripe, готовий до підключення до вашої системи.
+
+== Загальний опис
+
+Для інтеграції Stripe для обробки платіжних завдань у користувацьких порталах та отримання оновлень про статус платежів потрібні кілька налаштувань на рівні інстанції реєстру в адміністративній консолі Control Plane. Ці налаштування дозволяють розгорнути *Service Entry*, забезпечуючи вихідний трафік з кластера платформи, та створити секретний ключ для безпечного зв'язку зі Stripe.
+
+[TIP]
+====
+* Система автоматично створює *Service Entry* під час розгортання реєстру через Jenkins pipeline — *MASTER-Build-`<registry-name>`*. Сервісні записи потрібні для встановлення зв'язку з сервісами, розміщеними на зовнішніх системах.
+* Секрети, такі як токени та паролі, також генеруються автоматично після налаштування через Jenkins pipeline — *MASTER-Build-`<registry-name>`*. Вони зберігаються надійно в `user-management:hashicorp-vault` для систем/сервісів, які вимагають зовнішніх запитів.
+
+`<registry-name>` — це назва реєстру, де ви застосовуєте свої налаштування. Наприклад, `abc-01`.
+====
+
+[#stripe-account-creation]
+== Створення облікового запису Stripe
+
+Щоб створити обліковий запис у платіжній системі *Stripe*, виконайте наступні кроки:
+
+. Відвідайте сторінку https://dashboard.stripe.com/login[] та створіть обліковий запис. Детальні інструкції щодо створення облікового запису Stripe можна знайти в https://docs.stripe.com/payments/account[офіційній документації].
++
+image:registry-admin/external-integration/cp-integrate-payment/stripe-dashboard-login-page.png[]
+
+. Після успішного налаштування облікового запису увійдіть у свій кабінет та натисніть на розділ *Developers*.
++
+image:registry-admin/external-integration/cp-integrate-payment/stripe-dashboard-home-page.png[]
+
+[start=3]
+[#key-tokens]
+. Перейдіть до розділу *API keys*, щоб знайти свої токени ключів, включаючи _Publishable key_ та _Secret key_. Збережіть обидва ці ключі, оскільки вони знадобляться вам для налаштування інтеграції в консолі Control Plane та завданні *Payment User Task* у реєстрі.
++
+image:registry-admin/external-integration/cp-integrate-payment/stripe-api-keys-page.png[]
+
+[#stripe-integration-in-cp]
+== Налаштування зовнішньої інтеграції в Control Plane
+
+У цьому розділі наводиться приклад інтеграції з зовнішньою платіжною системою *Stripe*.
+
+. Увійдіть у
+include::platform:ROOT:partial$templates/links/platform/administrative/control-plane.adoc[]
+консоль як адміністратор реєстру.
++
+image:registry-admin/external-integration/cp-integrate-payment/cp-login-page.png[]
+
+. Перейдіть до розділу *Registries* та відкрийте свій реєстр.
++
+[IMPORTANT]
+====
+Ви можете налаштовувати зовнішні інтеграції лише під час редагування реєстру.
+
+Ось загальна процедура: ::
+.. Створіть реєстр, якщо ви цього ще не зробили.
+.. Потім адміністратор може налаштувати зовнішні інтеграції.
+.. Після застосування налаштувань, запит на оновлення конфігурації реєстру створюється автоматично.
+====
++
+image:registry-admin/external-integration/cp-integrate-payment/cp-registries-page.png[]
++
+image:registry-admin/external-integration/cp-integrate-payment/cp-registry-page.png[]
+
+. Розгорніть розділ *Settings for interaction with other systems* та натисніть *`Add external system`*.
++
+image:registry-admin/external-integration/cp-integrate-payment/cp-add-external-system-button.png[]
+
+. У вікні *Add external system for interaction*, що з'явиться, налаштуйте зовнішню інтеграцію з платіжною системою.
++
+NOTE: Політики доступу до мережі створюються автоматично.
+
+* *External system name*: Введіть назву зовнішньої системи — `stripe`.
++
+[CAUTION]
+====
+Переконайтеся, що назва системи введена як показано вище. Це критично для інтеграції та не може бути змінено після застосування конфігурації реєстру.
+====
+* *External system address*: Введіть базову URL-адресу сервера Stripe для підключення — `https://api.stripe.com`.
++
+image:registry-admin/external-integration/cp-integrate-payment/cp-add-external-system-popup.png[]
+
+* *Integration protocol*: `REST`.
+
+* *Specify the authentication type*: `*AUTH_TOKEN*`.
+
+* *Specify authorization token*: Введіть збережений _Secret key_, отриманий під час xref:#key-tokens[створення облікового запису Stripe].
++
+image:registry-admin/external-integration/cp-integrate-payment/cp-add-external-system-popup-filled.png[]
+
+. Натисніть *`Add`*, щоб зберегти налаштування.
++
+В результаті система створює запит на оновлення конфігурації реєстру.
+
+. У налаштуваннях реєстру прокрутіть вниз до розділу *Запити на оновлення* та натисніть іконку перегляду 👁, щоб відкрити свій запит.
++
+NOTE: Система автоматично підтверджує та зберігає зміни до конфігураційного файлу реєстру _deploy-templates/values.yaml_.
++
+image:registry-admin/external-integration/cp-integrate-payment/cp-registry-edit-created.png[]
+
+. Перегляньте параметри, додані до конфігурацій у вікні *Запита на оновлення*.
++
+TIP: Вікно порівняння надає зручний спосіб перегляду відмінностей між поточною (ліворуч) та новою (праворуч) версіями.
++
+У нашому прикладі конфігурація виглядає наступним чином:
++
+.Налаштування зовнішньої інтеграції за допомогою методу AUTH_TOKEN у deploy-templates/values.yaml
+[source,yaml]
+----
+external-systems:
+    stripe:
+        url: https://api.stripe.com
+        type: registry
+        protocol: REST
+        auth:
+            secret: vault:registry-kv/registry/{registryName}/external-systems/{stripeClientSecret}
+            type: AUTH_TOKEN
+        mock: false
+----
++
+image:registry-admin/external-integration/cp-integrate-payment/cp-registry-change-request-details.png[]
++
+[TIP]
+====
+Перегляньте налаштування інтеграції для вибраної системи. +
+Ви можете редагувати або скасувати ці налаштування за допомогою іконок редагування (🖉) або видалення (🗑).
+
+image:registry-admin/external-integration/cp-integrate-payment/cp-external-system-section.png[]
+====
++
+В результаті запускається pipeline *MASTER-Build-`<registry-name>`*. Він застосовує налаштування інтеграції, які ви надали.
++
+. Зачекайте, поки збірка буде завершена. Це може зайняти до 15 хвилин. Використовуйте посилання в стовпці *CI*, щоб відстежувати статус та результат збірки.
++
+image:registry-admin/external-integration/cp-integrate-payment/cp-configuration-ci-button.png[]
++
+image:registry-admin/external-integration/cp-integrate-payment/cp-registry-jenkins.png[]
++
+image:registry-admin/external-integration/cp-integrate-payment/cp-registry-jenkins-build.png[]
+
++
+[#result-service-entry]
+[start=9]
+. Після успішного завершення збірки система застосує вашу конфігурацію та створить новий Service Entry у вашому проєкті реєстру. +
+Ви можете перевірити результат у menu:Openshift console[Home > Search > ServiceEntries]. Виберіть необхідний ресурс `ServiceEntry`, виберіть проєкт із вашим реєстром, знайдіть `stripe` serviceEntry та відкрийте вкладку YAML.
++
+У результаті ви можете бачити створений сервісний запис та підключення до хоста `api.stripe.com`, що вказує на успішне встановлення інтеграції.
++
+image:registry-admin/external-integration/cp-integrate-payment/stripe-service-entry.png[]
+
+[#stripe-integration-in-oc]
+== Моделювання бізнес-процесів: Інтеграція _publishable keys_ у завданні _Stripe Payment User Form_
+
+Після завершення інтеграції з платіжною системою в Control Plane, необхідно виконати фінальне налаштування в Адміністративному порталі.
+
+. Перейдіть до вкладки *Quick links* у консолі Control Plane та зверніться до Вебінтерфейсу моделювання реєстрів (Адміністративний портал) у розділі *Registry Administration Zone*.
++
+image:registry-admin/external-integration/cp-integrate-payment/cp-registry-quick-links.png[]
++
+. Увійдіть в Адміністративний портал як адміністратор реєстру.
+. Перейдіть до menu:Process models[Список бізнес-процесів] та натисніть кнопку *`Створити новий процес`*. Використовуйте опцію *Створити версію-кандидат*, щоб працювати зі своїм процесом в окремій git-гілці. Альтернативно, ви можете продовжити у мастер-версії регламенту реєстру.
++
+image:registry-admin/external-integration/cp-integrate-payment/ap-process-models.png[]
++
+. Перейдіть на вкладку *Конструктор* нового процесу та створіть *User Task*. Застосуйте відповідний шаблон делегата — *Stripe Payment User form*.
++
+image:registry-admin/external-integration/cp-integrate-payment/ap-process-builder-user-task.png[]
++
+image:registry-admin/external-integration/cp-integrate-payment/ap-stripe-payment-element-template.png[]
++
+. Налаштуйте шаблон делегата наступним чином:
+* *Form key*: Введіть ключ форми, що відповідає імені сервісу форми.
+* *Stripe Publishable Key*: Введіть значення *Publishable key*, отримане з API keys облікового запису Stripe раніше.
+* *Currency*: Виберіть відповідне значення з випадного списку цільової валюти — `USD`, `EUR` або `UAH`.
+* *Charge amount*: Введіть суму для стягнення в бізнес-процесі.
++
+NOTE: Введіть суму для стягнення без використання розділювачів тисячних. Використовуйте крапку (`.`) або кому (`,`) як десятковий розділювач. Сума повинна бути позитивною та не може бути нульовою.
+
+. Збережіть усі зміни для бізнес-процесу та застосуйте їх до основної гілки.
++
+TIP: Для додаткової інформації про моделювання Stripe payments, зверніться до сторінки *Reference business process: Creating a driving license* англійської версії документації.
