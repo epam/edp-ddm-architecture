@@ -1,0 +1,389 @@
+= Представлення даних реєстру у вигляді карток
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+include::platform:ROOT:partial$admonitions/language-ua.adoc[]
+
+== Загальний опис
+
+Адміністратор може представити дані у вигляді інформаційних карток в UI-форми за допомогою атрибута *Картка*. Після вибору цього параметра, форма буде відображатися у вигляді картки в Кабінеті отримувача або надавача послуг.
+
+Щоб надати формі атрибут *Картка*, створіть нову форму та на вкладці *Загальна* у полі *Тип форми* оберіть значення *Card*.
+
+image::bp-modeling/forms/cards/1.png[]
+
+Після цього під *Типом форми* з'являться два додаткових параметри:
+
+* *Поле для внесення переліку ролей*, для яких картка буде доступною для перегляду в Кабінеті. Назви ролей потрібно знати заздалегідь та прописати їх вручну. Після внесення першої ролі натисніть кнопку *`Додати роль`*, якщо потрібно додати ще ролі.
++
+CAUTION: Будь ласка, введіть назву ролі точно та заздалегідь визначте її, оскільки це важливо для правильного відображення картки у Кабінеті.
++
+image::bp-modeling/forms/cards/2.png[]
+
+* Чекбокс *Показати в списку карток*. Якщо цей чекбокс активовано, картка буде відображатися у списку карток у Кабінетах користувачів.
++
+image::bp-modeling/forms/cards/3.png[]
+
+NOTE: Атрибут *Картка* можна присвоїти як при створенні нової форми, так і при редагуванні вже наявної.
+
+Усі створені картки зберігаються в директорії *_forms_* регламенту реєстру разом з іншими UI-формами.
+
+Розробник регламенту може налаштувати запуск певного бізнес-процесу з картки, змоделювавши відповідну кнопку або посилання. Детальний приклад розглянемо нижче.
+
+== Приклади моделювання форм з атрибутом _Card_ та запуск бізнес-процесу з однієї з форм
+
+=== Моделювання картки для пошуку інформації щодо сутності
+
+У версії-кандидат створіть нову UI-форму. На вкладці *Загальна* виконайте наступні налаштування:
+
+. У полі *Бізнес-назва форми* внесіть `Search for celestial entities`.
+. У полі *Службова назва форми* додайте feature-search-for-celestial-entities.
+. У полі *Тип форми* оберіть `card`.
+. Додайте ролі `op-regression`, `cp-regression`, `cp-layouts`, `op-layouts`.
+. Активуйте чекбокс *Показати в списку карток*.
+
+image::bp-modeling/forms/cards/4.png[]
+
+[constructor-tab]
+==== Налаштування вкладки "Конструктор"
+
+Перейдіть на вкладку *Конструктор*, додайте на форму наступні дані:
+
+Компонент *Text Field*: ::
++
+. На вкладці *Display*, у полі *Label* вкажіть значення `Name (start with)`
++
+image::bp-modeling/forms/cards/5.png[]
+
+. На вкладці *Data*, у полі menu:Calculated value[JavaScript] вкажіть наступний скрипт:
++
+[source,javascript]
+----
+instance.root.getComponent('code').runCode();
+----
++
+image::bp-modeling/forms/cards/6.png[]
+
+. На вкладці *API*, у полі *Property Name* вкажіть `name`.
++
+image::bp-modeling/forms/cards/7.png[]
+
+Компонент Button: ::
++
+. На вкладці *Display*:
+
+.. У полі *Label* вкажіть значення `Search`.
+.. У випадному списку *Action* оберіть значення `Custom`,
+.. У полі *Button Custom Logic* вкажіть наступний скрипт:
++
+----
+instance.root.getComponent('code').runCode()
+----
++
+image::bp-modeling/forms/cards/8.png[]
+
+. Перейдіть на вкладку *API* та у полі *Property Name* вкажіть `search`.
++
+image::bp-modeling/forms/cards/9.png[]
+
+Компонент Code: ::
+Додайте на форму компонент *Code* та пропишіть наступний код:
++
+[source,javascript]
+----
+if (data.name) {
+  fetch('/api/data-factory/stellaris-by-name?name=' + data.name, {
+      credentials: 'include',
+    })
+    .then((response) => {
+      response.json().then((res) => {
+        instance.root.getComponent('editGrid').visible = !!res.length;
+        setValue('editGrid', res);
+      });
+    });
+}
+----
++
+image::bp-modeling/forms/cards/10.png[]
++
+У такому випадку, при внесенні в поле *Name (start with)* певного значення, одразу відбудеться його пошук у Фабриці даних, і, за наявності цього значення, на формі стане видимим компонент Edit Grid (див. приклад нижче) зі знайденими значеннями.
+
+Компонент EditGrid: ::
++
+. На вкладці *Display* активуйте чекбокси *Read Only* та *Hide view button*.
++
+image::bp-modeling/forms/cards/11.png[]
+
+. На вкладці *Logic*, у розділі *Record Actions* зазначте наступне:
+.. У полі *Label* додайте значення `Перейти до view-celestial-entity картки`.
+.. У полі *Action* додайте `/form-list/feature-view-celestial-entity?id={id}`.
+.. Додайте ще один рядок натисканням кнопки *`Add another`*.
+.. У полі *Label* додайте значення `Редагувати`.
+.. У полі *Action* додайте `/process-list/feature-update-celestial-entity/start-form?id={id}`.
++
+image::bp-modeling/forms/cards/12.png[]
++
+У такому випадку користувачу Кабінету будуть доступні дві дії над кожним знайденим записом у таблиці.
++
+TIP: Детальніше про функціональність Edit Grid Read Only можна знайти xref:registry-develop:best-practices/edit-grid-rows-action.adoc#modeling-forms[за посиланням].
++
+image::bp-modeling/forms/cards/13.png[]
+
+. При виборі значення `Перейти до view-celestial-entity картки`, користувача буде перенаправлено до наступної форми *feature-view-celestial-entity* для перегляду інформації про сутність (_див. розділ xref:#form-modeling-view-entity-info[]_). При виборі значення *`Редагувати`*, буде запущено стартову форму бізнес-процесу редагування, і користувача буде перенаправлено на цю форму (_див. розділ xref:#bp-modeling-for-editing-entity-and-forms[]_).
+
+. Всередину компонента *Edit Grid* додайте два компоненти *Text Field* з іменами *ID* та *Назва*.
++
+image::bp-modeling/forms/cards/14.png[]
+
+[#form-modeling-view-entity-info]
+=== Моделювання форми для перегляду інформації про сутність
+
+Форма для перегляду має службову назву -- *feature-view-celestial-entity*, її можна знайти у регламенті демо-реєстру Форма не є частиною бізнес-процесу і містить такі поля:
+
+* *id*
+* *Назва*
+* *Right Ascension (RA)*
+* *Declination (Dec)*
+
+image::bp-modeling/forms/cards/15.png[]
+
+Усі поля мають формат *Text Field* та моделюються згідно з наявною реалізацією.
+
+Компонент Code: ::
+Додайте компонент *Code* та вкажіть наступний скрипт:
++
+[source,javascript]
+----
+if (queryParams.includes('id')) {
+  fetch('/api/data-factory/stellaris-by-id' + queryParams, {
+      credentials: 'include',
+    })
+    .then((response) => {
+      response.json().then((res) => {
+        setValue('id', res[0].id);
+        setValue('name', res[0].name);
+        setValue('rightAscension', res[0].rightAscension);
+        setValue('declination', res[0].declination);
+      });
+    });
+----
+image::bp-modeling/forms/cards/16.png[]
++
+За допомогою цього коду відбувається отримання ідентифікатора запису з попередньої картки, а також запит до Фабрики даних для отримання детальної інформації за цим ідентифікатором.
+
+Компонент Button: ::
+Додайте компонент *Button* із назвою *Редагувати*:
+
+. На вкладці *Display*, у полі *Label* вкажіть значення `Редагувати`.
+. У випадному списку *Action* оберіть значення `Portal navigation`.
++
+Значення додано для можливості налаштування навігації за сторінками Кабінету при натисканні на кнопку.
+
+. У полі *Path* name впишіть значення `/process-list/feature-update-celestial-entity/start-form?id={id}`.
++
+Цей код визначає, що при натисканні кнопки *Редагувати*, буде запущено стартову форму бізнес-процесу редагування, і користувача буде перенаправлено на цю форму (_див. розділ xref:#bp-modeling-for-editing-entity-and-forms[]_).
+
+. На вкладці *API*, у полі *Property Name* вкажіть `editEntity`.
++
+image::bp-modeling/forms/cards/17.png[]
+
+
+//TODO: HEREEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE
+
+[#bp-modeling-for-editing-entity-and-forms]
+=== Моделювання бізнес-процесу для редагування сутності та форм до нього
+
+==== Моделювання бізнес-процесу
+
+[TIP]
+====
+[%collapsible]
+.Де можна знайти приклад референтного бізнес-процесу?
+=====
+include::partial$snippets/demo-reg-reference-examples-ua.adoc[]
+
+Приклад BPMN-схеми процесу буде доступний у регламенті демо-реєстру за пошуком по ключовим словам -- *_feature-update-celestial-entity_*. Назви форм ви можете знайти всередині відповідних користувацьких задач (User Task) бізнес-процесу у полі *`Form key`*.
+=====
+====
+
+Короткий огляд компонентів процесу та їх призначення: ::
+
+. Стартова подія зі стартовою формою.
+. Форма підписання, дані для якої передаються зі стартової за допомогою виразу `${submission('StartEvent').formData}` у полі *Form data pre-population*.
++
+image::bp-modeling/forms/cards/18.png[]
+
+. Скриптова задача для підготовки payload для збереження даних у дата-фабриці.
++
+.Скрипт
+[source,groovy]
+----
+def formData = submission('StartEvent').formData
+def payload = [:]
+payload['id'] = formData.prop('id').value()
+payload['name'] = formData.prop('name').value()
+payload['rightAscension'] = formData.prop('rightAscension').value()
+payload['declination'] = formData.prop('declination').value()
+
+println 'payload: ' + payload
+execution.removeVariable('payload')
+set_transient_variable('payload', S(payload, 'application/json'))
+----
++
+image::bp-modeling/forms/cards/19.png[]
+
+. Сервісна задача для накладання системного підпису на дані.
+
+.. У полі *Payload* вкажіть ${payload}.
+.. У полі *X-Access-Token source* вкажіть `${completer('sign-updated-entity').accessToken}`.
+.. У полі *Result variable* вкажіть `systemSignature`.
+
++
+image::bp-modeling/forms/cards/20.png[]
+
+. Сервісна задача для збереження даних до фабрики даних за допомогою інтеграційного розширення Update entity in data factory.
+
+.. У полі *Resource* вкажіть `stellaris`.
+.. У полі *Resource id* вкажіть `${submission('StartEvent').formData.prop('id').value()}`.
+.. У полі *Payload* вкажіть `${payload}`.
+.. У полі *X-Access-Token* вкажіть `${completer('sign-updated-entity').accessToken}`.
+.. У полі *X-Digital-Signature* source вкажіть `${systemSignature}`.
+.. У полі *X-Digital-Signature-Derived source* вкажіть `${systemSignature}`.
+.. У полі *Result variable* вкажіть `response`.
+
++
+image::bp-modeling/forms/cards/21.png[]
+
+==== Моделювання UI-форм для бізнес-процесу
+
+Стартова форма: ::
+Стартова форма бізнес-процесу має службову назву *_feature-edit-celestial-entity_*.
++
+Форма містить такі поля:
+
+* *id*
+* *Назва*
+* *Right Ascension (RA)*
+* *Declination (Dec)*
+
++
+NOTE: Усі поля мають формат *Text Field* та моделюються згідно з наявною реалізацією.
+
++
+image::bp-modeling/forms/cards/22.png[]
+
+Компонент Code: ::
+Додайте на форму компонент *Code* та вкажіть наступний скрипт:
++
+[source,groovy]
+----
+if (queryParams.includes('id')) {
+  fetch('/api/data-factory/stellaris-by-id' + queryParams, {
+    credentials: 'include',
+  })
+    .then((response) => {
+      response.json().then((res) => {
+      setValue('id', res[0].id);
+      setValue('name', res[0].name);
+      setValue('rightAscension', res[0].rightAscension);
+      setValue('declination', res[0].declination);
+    });
+  });
+----
++
+image::bp-modeling/forms/cards/23.png[]
++
+За допомогою цього коду відбувається отримання ідентифікатора запису з попередньої картки, а також запит у Фабрику даних для отримання детальної інформації за цим ідентифікатором.
+
+Компонент Button: ::
+Компонент *Button* з назвою *`Submit`*. Він не містить додаткових налаштувань і змодельований згідно з наявною реалізацією для переходу бізнес-процесу на наступний крок.
+
+Форма підписання: ::
+Форма підписання у бізнес-процесі має службову назву *_feature-sign-updated-celestial-entity_*.
++
+Форма містить такі поля:
+
+* *id*
+* *Назва*
+* *Right Ascension (RA)*
+* *Declination (Dec)*
+
++
+NOTE: Усі поля мають формат *Text Field* та моделюються згідно з наявною реалізацією.
+
+Компонент Button: ::
+Компонент *Button* з назвою *`Submit`*. Він не містить додаткових налаштувань і змодельований згідно з наявною реалізацією для переходу бізнес-процесу на наступний крок.
++
+image::bp-modeling/forms/cards/24.png[]
+
+//TODO: HEREEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE
+
+=== Створення моделі даних
+
+Щоб зберегти змінені дані у дата-фабриці, створено таблицю `stellaris` з наступними атрибутами:
+
+[source,groovy]
+----
+<changeSet id="table stellaris" author="alisa">
+    <createTable tableName="stellaris" ext:historyFlag="true">
+        <column name="id" type="UUID" defaultValueComputed="uuid_generate_v4()">
+            <constraints nullable="false" primaryKey="true" primaryKeyName="stellaris_id"/>
+        </column>
+        <column name="name" type="TEXT">
+            <constraints nullable="false"/>
+        </column>
+        <column name="right_ascension" type="TEXT">
+            <constraints nullable="false"/>
+        </column>
+        <column name="declination" type="TEXT">
+            <constraints nullable="false"/>
+        </column>
+    </createTable>
+</changeSet>
+----
+
+Щоб відобразити дані на картці або на формі, було створено наступні критерії пошуку:
+
+[source,groovy]
+----
+<changeSet id="sc stellaris_by_id" author="alisa">
+    <ext:createSearchCondition name="stellaris_by_id" limit="100">
+        <ext:table name="stellaris">
+            <ext:column name="id" searchType="equal"/>
+            <ext:column name="name"/>
+            <ext:column name="right_ascension"/>
+            <ext:column name="declination"/>
+        </ext:table>
+    </ext:createSearchCondition>
+</changeSet>
+
+<changeSet id="sc stellaris_by_name" author="alisa">
+    <ext:createSearchCondition name="stellaris_by_name" limit="100">
+        <ext:table name="stellaris">
+            <ext:column name="id"/>
+            <ext:column name="name" searchType="startsWith"/>
+        </ext:table>
+    </ext:createSearchCondition>
+</changeSet>
+----
+
+== Отримувачам та надавачам послуг
+
+У Кабінеті отримувача або надавача послуг з'явилася нова вкладка -- *Доступні картки*.
+
+На цій вкладці показані всі UI-форми, змодельовані розробником регламенту як Картки, тобто форми, що містять інформацію для користувачів з певною роллю, і для перегляду яких немає потреби ініціювати будь-яку послугу з переліку доступних.
+
+image::bp-modeling/forms/cards/25.png[]
+
+При натисканні на назву картки відображається наступна форма, яка містить інформацію ознайомчого характеру. У нашому прикладі змодельовано поле для пошуку небесних тіл, всі знайдені записи відображаються під кнопкою пошуку у вигляді таблиці. Після внесення першої літери `а`, в базі даних було знайдено декілька записів.
+
+image::bp-modeling/forms/cards/26.png[]
+
+При натисканні на іконку трьох крапок (`⋮`), навпроти певного запису відображається можливий перелік дій над записом. У нашому випадку -- це дії перегляду та редагування.
+
+image::bp-modeling/forms/cards/27.png[]
+
+У разі вибору опції перегляду відображається наступна форма з більш детальною інформацією про запис.
+
+image::bp-modeling/forms/cards/28.png[]
+
+У разі вибору опції редагування відображається наступна форма з більш детальною інформацією про запис.
