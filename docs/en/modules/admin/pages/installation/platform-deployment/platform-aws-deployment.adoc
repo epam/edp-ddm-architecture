@@ -9,43 +9,6 @@ This guide provides detailed information on deploying the Platform from scratch 
 
 Before deploying and configuring the platform, be sure to perform the following steps.
 
-[#preconditions-first-stage]
-=== Required elements for the initial stage
-
-Before starting any actions, you need to have a set of resources that are mandatory for the subsequent steps:
-
-Documentation: ::
-
-* [*] Document xref:release-notes:release-notes.adoc[Release notes];
-* [*] Document xref:release-notes:breaking-changes.adoc[Backward incompatible changes];
-* [*] Document xref:update/overview.adoc[]. It is needed only for the platform update procedure.
-
-Digital signature certificates (digital-signature-ops certificates): ::
-
-* [*] *_Key-6.dat_* -- the organization's private key (_for file key only_);
-* [*] *_allowed-key.yaml_* -- a list of all issued keys. Initially, this is only the primary _Key-6.dat_. When changing the key, information about the new key is added there without deleting the old one;
-* [*] *_CAs.json_* -- a list of all CAs, taken from the https://iit.com.ua/downloads[ІIT] website;
-* [*] *_CACertificates.p7b_* - the public key, taken from the https://iit.com.ua/downloads[ІIT] website.
-
-Configuration files for file and hardware keys: ::
-
-* 3 files filled with values—for file carrier (_see attached examples_):
-
-* [*] _link:{attachmentsdir}/aws-deployment/sign.key.device-type[sign.key.device-type]_ -- specify the type of carrier for the key (file);
-* [*] _link:{attachmentsdir}/aws-deployment/sign.key.file.issuer[sign.key.file.issuer]_ -- specify the CA that issued the key (replace the value in the file with your own);
-* [*] _link:{attachmentsdir}/aws-deployment/sign.key.file.password[sign.key.file.password]_ -- specify the password for the file key (replace the value in the file with your own).
-
-+
-4 files with empty values—for hardware carrier (_create 4 empty files with corresponding names_):
-
-* [*] *_sign.key.hardware.device_* -- type of carrier for the key (hardware);
-* [*] *_sign.key.hardware.password_* -- hardware key password;
-* [*] *_sign.key.hardware.type_* -- key type;
-* [*] *_osplm.ini_* -- INI configuration.
-
-+
-TIP: More details on loading/updating keys and digital signature certificates can be found on the xref:registry-management/system-keys/control-plane-platform-keys.adoc[] page.
-
 === Creating an AWS account
 
 Before installing OpenShift Container Platform on Amazon Web Services (AWS), you need to create an AWS account.
@@ -92,16 +55,16 @@ NOTE: You must also increase the CPU limit for *_on-demand_* virtual machines in
 
 * Remove any *Service control policies (SCPs*) restrictions from the AWS account.
 +
-NOTE: During cluster creation, an associated AWS OpenID Connect (OIDC) identity provider is also created. This OIDC provider configuration is based on an open key located in the AWS region *`us-east-1`*. Clients with AWS SCP must allow the use of the AWS region *`us-east-1`* even if the cluster will be deployed in another region. Without proper policy settings, permission errors may occur immediately, as the OKD installer checks the correctness of these settings.
+NOTE: During cluster creation, an associated AWS OpenID Connect (OIDC) identity provider is also created. This OIDC provider configuration is based on an open key located in the AWS region *`us-east-1`*. Clients with AWS SCP must allow the use of the AWS region *`us-east-1`* even if the cluster is deployed in another region. Without proper policy settings, permission errors may occur immediately, as the OKD installer checks the correctness of these settings.
 +
 TIP: Detailed information can be obtained in the official documentation, in section *1.1. DEPLOYMENT PREREQUISITES* of the https://access.redhat.com/documentation/en-us/red_hat_openshift_service_on_aws/4/pdf/prepare_your_environment/red_hat_openshift_service_on_aws-4-prepare_your_environment-en-us.pdf[Red Hat OpenShift Service on AWS 4. Prepare your environment] document.
 
 * Correctly set the *_permissions boundary_* for the created IAM user.
 +
-Below is an example of a permissions boundary policy. You can use it, or completely remove any permissions boundary.
+Below is an example of a permissions boundary policy. You can use it or completely remove any permissions boundary.
 +
 [%collapsible]
-._Example. Setting the *permissions boundary_ policy
+._Example. Setting the permissions boundary_ policy
 ====
 [source,json]
 ----
@@ -233,11 +196,11 @@ image:installation/aws/installation-aws-1.svg[image,width=468,height=375]
 
 A more detailed description of additional resources from the diagram is shown below:
 
-* *S3 bucket* -- used for storing the Terraform state;
-* *DynamoDB table* -- used for storing information about Terraform state locking;
-* *NAT Gateway* -- used to provide a private server with internet access;
-* *Bastion* -- used as an intermediate server to provide secure and restricted access to the server in the private network. Later, an SSH tunnel will be created to the deployer-node through this bastion;
-* *Deployer-node* -- a server in the private network through which the cluster and Platform installation will take place.
+* *S3 bucket*—used for storing the Terraform state;
+* *DynamoDB table*—used for storing information about Terraform state locking;
+* *NAT Gateway*—used to provide a private server with internet access;
+* *Bastion*—used as an intermediate server to provide secure and restricted access to the server in the private network. Later an SSH tunnel will be created to the deployer-node through this bastion;
+* *Deployer-node*—a server in the private network through which the cluster and Platform installation will take place.
 
 These resources can be deployed using the prepared Terraform code in the following steps.
 
@@ -282,7 +245,7 @@ The table below shows the recommended settings for the deployer-node.
 
 === Additional settings
 
-==== Installing necessary tools
+==== Installing the necessary tools
 
 To proceed, you need to install the necessary tools on your local computer:
 
@@ -316,7 +279,7 @@ $ terraform version
 
 Authenticate in your AWS account using AWS CLI. To do this, execute the following command:
 
-.*Authenticate in AWS account*
+.*Authenticate in an AWS account*
 [source,bash]
 ----
 $ aws configure
@@ -328,7 +291,7 @@ Default output format [None]: json
 
 TIP: The process of authenticating in an AWS account using AWS CLI is described in detail in the official documentation on the AWS website: https://docs.aws.amazon.com/cli/latest/userguide/cli-authentication-user.html#cli-authentication-user-configure.title[Configure the AWS CLI].
 
-==== Setting up AWS cross account
+==== Setting up AWS cross-account
 
 Before running the Terraform code, it needs to be downloaded. To do this, you need access to the AWS S3 bucket where it is located. This is possible only if a special IAM role is created. This can be done by following these steps:
 
@@ -452,23 +415,23 @@ The main Terraform code deploys all the necessary resources. The template descri
 ** `ec2_instance`;
 ** `key_pair`.
 * `providers.tf` -- used to define the version of Terraform, required plugins, and AWS provider parameters. Be sure to change the values for the following parameters to the required ones:
-** `bucket` -- this variable contains the name of the S3 bucket. Change <ACCOUNT_ID> to the AWS account ID.
+** `bucket` -- this variable contains the name of the S3 bucket. Change `<ACCOUNT_ID>` to the AWS account ID.
 * `iam-node-role.tf` -- used to create a special IAM role with the necessary permissions. This will allow setting up AWS cross-account resource access and downloading Docker images for the container and Installer;
-* `elastic-ip.tf` – used to create an AWS Elastic IP (EIP) resource using Terraform;
-* `security-groups.tf` - creates Security Groups that allow SSH connections (TCP port 22) for bastion and deployer-node;
-* `ssh-key.tf` - contains code for creating an SSH private key, saving the key to a file, and setting its access permissions;
-* `files/user_data.sh.tpl` - a script template that will be executed when creating or updating an EC2 instance in the AWS environment. This script will do the following for the deployer-node:
+* `elastic-ip.tf` — used to create an AWS Elastic IP (EIP) resource using Terraform;
+* `security-groups.tf` — creates Security Groups that allow SSH connections (TCP port 22) for bastion and deployer-node;
+* `ssh-key.tf` — contains code for creating an SSH private key, saving the key to a file, and setting its access permissions;
+* `files/user_data.sh.tpl` — a script template that will be executed when creating or updating an EC2 instance in the AWS environment. This script will do the following for the deployer-node:
 ** install Docker;
 ** install Unzip;
 ** install AWS CLI v2;
-** additionally set up AWS cross-account resource access.
-* `variables.tf` -- used to describe all variables used in the Terraform configuration;
-* `terraform.tfvars` -- contains values for specific variables defined in the Terraform configuration files. If necessary, change the values for the following parameters to the required ones:
+** additionally, set up AWS cross-account resource access.
+* `variables.tf` — used to describe all variables used in the Terraform configuration;
+* `terraform.tfvars` — contains values for specific variables defined in the Terraform configuration files. If necessary, change the values for the following parameters to the required ones:
 ** `region` -- this variable is used to define the AWS region where the resources will be created;
-** `platform_name` -- this variable is used to add the name for the cluster and AWS resources;
-** `ingress_cidr_blocks` -- to connect via SSH to the deployer-node, add the required IP address here;
-** `prefix_list_ids` -- if you need to open several addresses for connection, create a prefix-list and use its ID in this parameter;
-** `tags` -- this variable is used to add tags (labels) for resources.
+** `platform_name` — this variable is used to add the name for the cluster and AWS resources;
+** `ingress_cidr_blocks` — to connect via SSH to the deployer-node, add the required IP address here;
+** `prefix_list_ids` — if you need to open several addresses for connection, create a prefix-list and use its ID in this parameter;
+** `tags` — this variable is used to add tags (labels) for resources.
 
 === Running the Terraform code
 
@@ -591,4 +554,724 @@ $ sudo docker run --rm -it --name openshift-install-v3 \
     openshift-install:v3 bash
 ----
 
-//TODO: HEREEEEEEEEEEEEEEEEE
+[#okd-aws-install-preparation]
+== Preparing for OKD cluster installation in AWS
+
+In version `4.12` of OpenShift Container Platform, it is possible to install a customized cluster on infrastructure provided by the installer on Amazon Web Services (AWS).
+
+[NOTE]
+====
+OKD version ::
+
+The recommended OKD version is *`4.12.0-0.okd-2023-04-16-041331`*.
+====
+
+To install the cluster, perform the following steps:
+
+. While in the container, navigate to the directory *_/tmp/openshift-cluster_*.
++
+[source,bash]
+----
+$ cd /tmp/openshift-cluster
+----
+
+. Follow the actions described in the official documentation on the OKD website https://docs.openshift.com/container-platform/4.12/installing/installing_aws/installing-aws-customizations.html[Installing a cluster on AWS with customizations], up to the step *Obtaining an AWS Marketplace image*: https://docs.openshift.com/container-platform/4.12/installing/installing_aws/installing-aws-customizations.html#installation-aws-marketplace-subscribe_installing-aws-customizations[Obtaining an AWS Marketplace image]. +
+
+. Download the OKD installer from the official GitHub repository.
++
+[source,bash]
+----
+$ wget https://github.com/okd-project/okd/releases/download/4.12.0-0.okd-2023-04-16-041331/openshift-install-linux-4.12.0-0.okd-2023-04-16-041331.tar.gz
+----
+
+. Extract the installer from the downloaded archive.
++
+[source,bash]
+----
+$ tar xvfz openshift-install-linux-4.12.0-0.okd-2023-04-16-041331.tar.gz
+----
++
+[CAUTION]
+To configure the installation, you need to create an *_install-config.yaml_* file and enter the necessary parameters before installing the cluster.
+
+. Create a new directory for cluster configuration files and the install-config.yaml file. To do this, execute the following commands in sequence:
++
+[source,bash]
+----
+$ mkdir /tmp/openshift-cluster/cluster-state
+
+$ touch /tmp/openshift-cluster/cluster-state/install-config.yaml
+----
++
+After creating the file, you need to fill it with the required parameters. The created configuration file includes only the necessary parameters for minimal cluster deployment. For customization settings, refer to the official documentation on the OKD website: https://docs.openshift.com/container-platform/4.12/installing/installing_aws/installing-aws-customizations.html#installation-initializing_installing-aws-customizations[Creating the installation configuration file].
++
+Recommended parameters for the *_install-config.yaml_* file: ::
++
+[%collapsible]
+.*_install-config.yaml_*
+====
+[source,yaml]
+----
+apiVersion: v1
+baseDomain: <BASE_DOMAIN> <1>
+compute:
+  - architecture: amd64
+    hyperthreading: Enabled
+    name: worker
+    platform:
+      aws:
+        zones:
+          - eu-central-1c
+        rootVolume:
+          size: 80
+          type: gp3
+        type: r5.2xlarge
+        amiID: ami-094fe1584439e91dd
+    replicas: 3
+controlPlane:
+  architecture: amd64
+  hyperthreading: Enabled
+  name: master
+  platform:
+    aws:
+      zones:
+        - eu-central-1c
+      rootVolume:
+        size: 80
+        type: gp3
+      type: r5.2xlarge
+  replicas: 3
+metadata:
+  name: <CLUSTER_NAME> <2>
+networking:
+  clusterNetwork:
+    - cidr: 10.128.0.0/14
+      hostPrefix: 23
+  machineNetwork:
+    - cidr: 10.0.0.0/16
+  networkType: OVNKubernetes
+platform:
+  aws:
+    region: eu-central-1
+    userTags:
+      'user:tag': <CLUSTER_NAME> <2>
+publish: External
+pullSecret: <PULL_SECRET> <4>
+sshKey: <SSHKEY> <3>
+----
+
+<1> `<BASE_DOMAIN`> — the domain that was created and configured in sections xref:#setup-route-53[] and xref:#setup-external-domain[];
+
+<2> `<CLUSTER_NAME>` — the name of the future OKD cluster;
+
+<3> `<SSHKEY>` — the SSH key or keys for authenticating access to the cluster machines. You can use the same key created during the OKD cluster setup or any other key;
++
+TIP: Detailed description can be found in the official documentation on the OKD website: https://docs.openshift.com/container-platform/4.12/installing/installing_aws/installing-aws-customizations.html#installation-configuration-parameters-optional_installing-aws-customizations[Optional configuration parameters].
+
+<4> <PULL_SECRET> — the secret that was created in section xref:#create-additional-accounts[]. You need to obtain this secret from Red Hat OpenShift Cluster Manager.
++
+TIP: A detailed description is provided in section 5 of the official documentation on the OKD website: https://docs.openshift.com/container-platform/4.12/installing/installing_aws/installing-aws-customizations.html#installation-obtaining-installer_installing-aws-customizations[Obtaining the installation program].
++
+You also need to add the secret for connecting to the Red Hat account and the secret from the Docker Hub account to the obtained secret. The combined secret will look as follows:
++
+._Example of a combined secret (pull secret)_
+[%collapsible]
+=====
+[source,json]
+----
+{
+   "auths":{
+      "cloud.openshift.com":{
+         "auth":"b3Blb=",
+         "email":"test@example.com"
+      },
+      "quay.io":{
+         "auth":"b3Blb=",
+         "email":"test@example.com"
+      },
+      "registry.connect.redhat.com":{
+         "username":"test",
+         "password":"test",
+         "auth":"b3Blb=",
+         "email":"test@example.com"
+      },
+      "registry.redhat.io":{
+         "username":"test",
+         "password":"test",
+         "auth":"b3Blb=",
+         "email":"test@example.com"
+      },
+      "index.docker.io/v2/":{
+         "username":"test",
+         "password":"test",
+         "auth":"b3Blb=",
+         "email":"test@example.com"
+      }
+   }
+}
+----
+=====
++
+For convenience, write this secret in one line in the *_install-config.yaml_* file. The final secret will look as follows:
++
+._Example of a one-line *pull secret*_
+[%collapsible]
+=====
+----
+'{"auths":{"cloud.openshift.com":{"auth":"b3Blb=","email":"test@example.com"},"quay.io":{"auth":"b3Blb=","email":"test@example.com"},"registry.connect.redhat.com":{"username":"test","password":"test","auth":"b3Blb=","email":"test@example.com"},"registry.redhat.io":{"username":"test","password":"test","auth":"b3Blb=","email":"test@example.com"},"index.docker.io/v2/":{"username":"test","password":"test","auth":"b3Blb=","email":"test@example.com"}}}'
+----
+=====
+
+====
++
+WARNING: After starting the cluster deployment process, the Installer deletes *install-config.yaml*, so it is recommended to back up this file if there is a need to deploy multiple clusters.
+
+== Running the OKD4 installer and deploying an empty OKD4 cluster
+
+After creating the *_install-config.yaml_* file, to deploy the OKD cluster, execute the following command:
+
+.*Installing the OKD cluster*
+[source,bash]
+----
+$ ./openshift-install create cluster --dir /tmp/openshift-cluster/cluster-state --log-level=info
+----
+
+NOTE: The cluster deployment process usually takes up to 1 hour.
+
+Upon successful deployment, the following cluster access parameters will be provided as a result of the command execution:
+
+* login;
+* password;
+* link to the cluster web console.
+
+image:installation/aws/installation-aws-2.png[image,width=468,height=198]
+
+In the directory where the command was executed, a number of files will be created that store the cluster status necessary for its uninstallation.
+
+TIP: Detailed information is described in the official documentation on the OKD website, in the *Prerequisites* section: https://docs.openshift.com/container-platform/4.12/installing/installing_aws/uninstalling-cluster-aws.html#installation-uninstall-clouds_uninstall-cluster-aws[Uninstalling a cluster on AWS].
+
+Also, in this directory, a *_/auth_* folder will appear, containing two files for authentication: for working with the cluster through the *web console* and the OKD *command line interface* (OKD CLI).
+
+== Replacing self-signed certificates with trusted certificates
+
+To replace self-signed certificates with trusted ones, you first need to obtain these certificates.
+
+This section discusses obtaining free certificates from https://letsencrypt.org/[Let’s Encrypt] and installing them on the server.
+
+Let’s Encrypt certificates are obtained using the https://github.com/acmesh-official/acme.sh[acme.sh] utility.
+
+TIP: For details on using Let’s Encrypt based on the ACME protocol, refer to the https://letsencrypt.org/docs/client-options/[official source].
+
+To replace the certificates, perform the following steps: ::
++
+. Set an environment variable. The variable should point to the *_kubeconfig_* file.
++
+[source,bash]
+----
+$ export KUBECONFIG=cluster-state/auth/kubeconfig
+----
+
+. Create a *_letsencrypt.sh_* file and insert the script below:
++
+._Script for replacing certificates_
+[%collapsible]
+====
+[source,bash]
+----
+#!/bin/bash
+yum install -y openssl
+mkdir -p certificates
+export CERT_HOME=./certificates
+export CURDIR=$(pwd)
+cd $CERT_HOME
+
+# Clone the acme.sh utility from the GitHub repository
+git clone https://github.com/neilpang/acme.sh
+sed -i "2i AWS_ACCESS_KEY_ID=\"${AWS_ACCESS_KEY_ID}\"" ./acme.sh/dnsapi/dns_aws.sh
+sed -i "3i AWS_SECRET_ACCESS_KEY=\"${AWS_SECRET_ACCESS_KEY}\"" ./acme.sh/dnsapi/dns_aws.sh
+cd $CURDIR
+# Obtain the API Endpoint URL
+export LE_API="$(oc whoami --show-server | cut -f 2 -d ':' | cut -f 3 -d '/' | sed 's/-api././')"
+# Obtain the Wildcard Domain
+export LE_WILDCARD="$(oc get ingresscontroller default -n openshift-ingress-operator -o jsonpath='{.status.domain}')"
+${CERT_HOME}/acme.sh/acme.sh --register-account -m user_${RANDOM}@example.com
+${CERT_HOME}/acme.sh/acme.sh --issue -d ${LE_API} -d *.${LE_WILDCARD} --dns dns_aws
+export CERTDIR=$CERT_HOME/certificates
+mkdir -p ${CERTDIR}
+
+# Move certificates from the default acme.sh path to a more convenient directory using the --install-cert key
+${CERT_HOME}/acme.sh/acme.sh --install-cert -d ${LE_API} -d *.${LE_WILDCARD} --cert-file ${CERTDIR}/cert.pem --key-file ${CERTDIR}/key.pem --fullchain-file ${CERTDIR}/fullchain.pem --ca-file ${CERTDIR}/ca.cer
+# Create a secret
+oc create secret tls router-certs --cert=${CERTDIR}/fullchain.pem --key=${CERTDIR}/key.pem -n openshift-ingress
+# Update the Custom Resource for Router
+oc patch ingresscontroller default -n openshift-ingress-operator --type=merge --patch='{"spec": { "defaultCertificate": { "name": "router-certs" }}}'
+----
+====
+
+. Make this script executable.
++
+[source,bash]
+----
+$ chmod +x ./letsencrypt.sh
+----
+
+. Run this script.
++
+[source,bash]
+----
+$ bash -x ./letsencrypt.sh
+----
+
+. Exit the container after the script is executed. This can be done with the command below. The container will be deleted automatically.
++
+.Exiting the container
+----
+$ exit
+----
+
+== Preparing and running the Installer to deploy and update the Platform in the OKD cluster
+
+To run the _Installer_, several conditions must be met to prepare the workstation from which the Installer will be launched.
+
+=== Deployment from scratch
+
+==== Prerequisites
+
+Before running the platform installation script, perform the following steps:
+
+. Download the appropriate version of the Installer by executing the following commands in sequence.
++
+[source,bash]
+----
+$ mkdir ~/installer
+
+$ cd ~/installer
+
+$ sudo aws s3 cp --profile cross-account-role s3://mdtu-ddm-platform-installer/<VERSION>/mdtu-ddm-platform-<VERSION>.tar.gz mdtu-ddm-platform-<VERSION>.tar.gz
+----
+
+. Unpack the Installer into a separate directory.
++
+[source,bash]
+----
+$ mkdir -p ./installer-<VERSION>
+
+$ tar -xvzf mdtu-ddm-platform-<VERSION>.tar.gz -C ./installer-<VERSION>
+----
+
+. Copy the *_kubeconfig_* from the installed cluster.
++
+[source,bash]
+----
+$ cp ~/openshift-cluster/cluster-state/auth/kubeconfig ./installer-<VERSION>
+----
+
+==== Minio settings
+
+No additional settings for Minio are required during the initial deployment of the Platform.
+
+==== Vault settings
+
+No additional settings for Vault are required during the initial deployment of the Platform.
+
+[#deploy-platform-installer-scratch]
+==== Deploying the Platform from the Installer
+
+. Execute the following commands:
++
+[source,bash]
+----
+$ IMAGE_CHECKSUM=$(sudo docker load -i control-plane-installer.img | sed -r "s#.*sha256:(.*)#\1#" | tr -d '\n')
+----
++
+[source,bash]
+----
+$ echo $IMAGE_CHECKSUM
+----
++
+[source,bash]
+----
+$ sudo docker tag ${IMAGE_CHECKSUM} control-plane-installer:<VERSION>
+----
+
+. Run the process of installing the new Platform with the images:
++
+[source,bash]
+----
+$ sudo docker run --rm \ <1>
+    --name control-plane-installer-<VERSION> \
+    --user root:$(id -g) \
+    --net host \
+    -v $(pwd):/tmp/installer \
+    --env KUBECONFIG=/tmp/installer/kubeconfig \
+    --env PLATFORM_DEPLOYMENT_MODE=development \ <2>
+    --env PLATFORM_LANGUAGE=en \ <3>
+    --env PLATFORM_REGION=global \ <4>
+    --entrypoint "/bin/sh" control-plane-installer:<VERSION> \
+    -c "./install.sh -i" <5>
+----
++
+[TIP]
+====
+<1> *`--rm`* -- this parameter will automatically delete the container after its work is completed. The parameter can be removed if you need to check the status and log of the completed container or if you have an unstable internet connection;
+
+<2> *`PLATFORM_DEPLOYMENT_MODE`*:
+** *`development`* -- for deployment in development mode;
+** *`production`* -- for deployment in production environment;
+
+<3> *`PLATFORM_LANGUAGE`*:
+** *`en`* -- indicates the use of English as the default language for the Platform web portals. After deploying the Platform, the interface language can be changed on the Control Plane and the Administrative Portal services based on the supported localization files.
+
+<4> *`PLATFORM_REGION`* -- to ensure Platform support in different regions or countries, the Platform installer supports selecting region parameters when creating a new Platform. The selected service region value applies both to the Platform and the registries that will be deployed on it. After the pipeline is successfully completed, the Platform instance is created considering the selected region. The region value is not displayed on the Control Plane and cannot be changed when editing the Platform. When creating a new registry, the service region value selected for the entire Platform is applied. Possible values for the parameter:
+
+** *`global`* -- indicates the deployment of the Platform instance according to the specifics and needs of the international service region, implying adaptation and universalization of part of the Platform functionality for global international markets;
+
+<5> *`-i`* -- attribute indicates the installation of the Platform.
+====
+
+==== Deployment status
+
+The final log shown below indicates the successful completion of the Platform update process:
+
+image:admin:installation/aws/installation-aws-3.png[image,width=468,height=178]
+
+If in section xref:#deploy-platform-installer-scratch[] the *`--rm`* option was removed, you need to: ::
++
+. Execute the following command to ensure the container exited with status 0 (a container status indicating it successfully completed its work).
++
+[source,bash]
+----
+$ docker ps --all --latest
+----
++
+image:admin:installation/aws/installation-aws-4.png[image,width=468,height=26]
+
+. Delete the container with the following command:
++
+[source,bash]
+----
+$ docker rm $(docker ps --latest -q)
+----
+
+==== Necessary steps after deployment
+
+. After the Platform is installed, check that the *`cluster-management`* pipeline has started and ensure it has passed successfully (has a green status). [.underline]#_After this, the Platform will be ready for deploying registries. Without this action, registries will not be deployed_#.
++
+The *`cluster-management`* pipeline can be found by the following path:
++
+_menu:OKD Web UI[control-plane NS > Routes > jenkins url > cluster-mgmt > MASTER-Build-cluster-mgmt]_.
+
+. Request access to the IIT widget, specifically https://eu.iit.com.ua/sign-widget/v20200922/.
+
+[NOTE]
+====
+State of additional resources ::
+
+After completing all actions, the bastion and deployer-node can be turned off. They will not be needed until the next Platform update.
+====
+
+[#installer-update]
+=== Update
+
+==== Prerequisites
+
+Before running the platform installation script, perform the following steps:
+
+. Download the appropriate version of the Installer by executing the following commands in sequence.
++
+[source,bash]
+----
+$ mkdir ~/installer
+
+$ cd ~/installer
+
+$ sudo aws s3 cp --profile cross-account-role s3://mdtu-ddm-platform-installer/<VERSION>/mdtu-ddm-platform-<VERSION>.tar.gz mdtu-ddm-platform-<VERSION>.tar.gz
+----
+
+. Unpack the Installer into a separate directory.
++
+[source,bash]
+----
+$ mkdir -p ./installer-<VERSION>
+
+$ tar -xvzf mdtu-ddm-platform-<VERSION>.tar.gz -C ./installer-<VERSION>
+----
+
+. Copy the *_kubeconfig_* from the installed cluster.
++
+----
+$ cp ~/openshift-cluster/cluster-state/auth/kubeconfig ./installer-<VERSION>
+----
+
+==== Minio settings
+
+. Copy the Minio terraform state from the previous release.
++
+[source,bash]
+----
+$ cp ~/installer/installer-<VERSION>/terraform/minio/aws/terraform.tfstate ./terraform/minio/aws/
+----
+
+. Copy the Minio key from the previous release.
++
+[source,bash]
+----
+$ cp ~/installer/installer-<VERSION>/terraform/minio/aws/private_minio.key ./terraform/minio/aws/
+----
+
+[#platform-update-vault]
+==== Vault settings
+
+. Copy the Vault terraform state from the previous release.
++
+[source,bash]
+----
+$ cp ~/installer/installer-<VERSION>/terraform/vault/aws/terraform.tfstate ./terraform/vault/aws/
+----
+
+. Copy the Vault key from the previous release.
++
+[source,bash]
+----
+$ cp ~/installer/installer-<VERSION>/terraform/vault/aws/private.key ./terraform/vault/aws/
+----
+
+[#update-platform-installer]
+==== Updating the platform from the Installer
+
+. Execute the following commands:
++
+[source,bash]
+----
+$ IMAGE_CHECKSUM=$(sudo docker load -i control-plane-installer.img | sed -r "s#.*sha256:(.*)#\1#" | tr -d '\n')
+----
++
+[source,bash]
+----
+$ echo $IMAGE_CHECKSUM
+----
++
+[source,bash]
+----
+$ sudo docker tag ${IMAGE_CHECKSUM} control-plane-installer:<VERSION>
+----
+
+. Update the platform version with the images
++
+[source,bash]
+----
+$ sudo docker run --rm \ <1>
+    --name control-plane-installer-<VERSION> \
+    --user root:$(id -g) \
+    --net host \
+    -v $(pwd):/tmp/installer \
+    --env KUBECONFIG=/tmp/installer/kubeconfig \
+    --env PLATFORM_DEPLOYMENT_MODE=development \ <2>
+    --env PLATFORM_LANGUAGE=en \ <3>
+    --env PLATFORM_REGION=global \ <4>
+    --entrypoint "/bin/sh" control-plane-installer:<VERSION> \
+    -c "./install.sh -u" <5>
+----
++
+[TIP]
+====
+<1> *`--rm`* -- this parameter will automatically delete the container after its work is completed. This parameter can be removed if you need to check the status and log of the completed container or if you have an unstable internet connection;
+
+<2> *`PLATFORM_DEPLOYMENT_MODE`*:
+** *`development`* -- for deployment in development mode;
+** *`production`* -- for deployment in production environment;
+
+<3> *`PLATFORM_LANGUAGE`*:
+** *`en`* -- indicates the use of English as the default language for the Platform web portals. After deploying the Platform, the interface language can be changed in the Control Plane Admin Panel and the Administrative Portal based on the supported localization files.
+
+<4> *`PLATFORM_REGION`* -- to ensure Platform support in different regions or countries, the Platform installer supports selecting region parameters when creating a new Platform. The selected service region value applies both to the Platform and the registries that will be deployed on it. After the pipeline is successfully completed, the Platform instance is created considering the selected region. The region value is not displayed on the Control Plane and cannot be changed when editing the Platform. When creating a new registry, the service region value selected for the entire Platform is applied. Possible values for the parameter:
+
+** *`global`* -- indicates the deployment of the Platform instance according to the specifics and needs of the international service region, implying adaptation and universalization of part of the Platform functionality for global international markets.
+
+<5> *`-u`* -- attribute indicates the updating of the Platform.
+====
++
+[WARNING]
+====
+Run the script twice if the obtained log does _NOT_ match the item xref:#update-status[].
+====
+
+[#update-status]
+==== Update status
+
+The final log shown below indicates the successful completion of the Platform update process.
+
+image:admin:installation/aws/installation-aws-3.png[image,width=468,height=178]
+
+If in section xref:#update-platform-installer[] the *`--rm`* option was removed, you need to: ::
++
+. Execute the following command to ensure the container exited with status 0 (a container status indicating it successfully completed its work).
++
+[source,bash]
+----
+$ docker ps --all --latest
+----
++
+image:admin:installation/aws/installation-aws-4.png[image,width=468,height=26]
+
+. Delete the container with the following command:
++
+[source,bash]
+----
+$ docker rm $(docker ps --latest -q)
+----
+
+==== Necessary steps after the update
+
+After updating the Platform from the Installer: ::
+
+. Go to the section xref:admin:update/overview.adoc[Update].
+. Perform the necessary special steps for updating to your Platform version.
+. As part of the special steps, update the xref:update/update_cluster-mgmt.adoc[Platform infrastructure components] through the Control Plane interface.
+
+[NOTE]
+====
+State of additional resources ::
+
+After completing all actions, the bastion and deployer-node can be turned off. They will not be needed until the next Platform update.
+====
+
+== Common errors during platform deployment
+
+This section provides information on common errors that may occur during platform deployment from scratch and methods for resolving them.
+
+=== Bootstrap machine error during OKD cluster deployment
+
+[bootstrap-machine-issue-description]
+==== Problem description
+
+During the cluster deployment, the following error occurs:
+
+.Bootstrap virtual machine error
+----
+level=error msg=Attempted to gather ClusterOperator status after installation failure: listing ClusterOperator objects: Get "https://api.<CLUSTER_URL>:6443/apis/config.openshift.io/v1/clusteroperators": dial tcp <CLUSTER_IP>:6443: connect: connection refused
+level=error msg=Bootstrap failed to complete: Get "https://api.<CLUSTER_URL>:6443/version": dial tcp <CLUSTER_IP>:6443: connect: connection refused
+level=error msg=Failed waiting for Kubernetes API. This error usually happens when there is a problem on the bootstrap host that prevents creating a temporary control plane.
+----
+
+This error is related to the bootstrap virtual machine and usually occurs when there is a problem on the bootstrap host that prevents creating a temporary Control Plane.
+
+[bootstrap-machine-issue-resolving]
+==== Problem resolution
+
+. Run the command to delete the cluster, keeping the same *`--dir`* parameter.
++
+.Deleting the OKD cluster
+----
+$ ./openshift-install destroy cluster --dir /tmp/openshift-cluster/cluster-state --log-level info
+----
+
+. Wait for the cluster to be deleted and then run the installation command again.
++
+.Reinstalling the cluster
+----
+$ ./openshift-install create cluster --dir /tmp/openshift-cluster/cluster-state --log-level=info
+----
+
+=== Vault token error during Platform deployment
+
+[vault-token-issue-description]
+==== Problem description
+
+During Platform deployment, at the stage of installing Vault, an error may occur where the `vault_root_token` variable returns an empty value:
+
+image:installation/aws/installation-aws-5.png[image,width=468,height=113]
+
+This error is related to Vault not starting successfully or some platform installation steps being skipped.
+
+[vault-token-issue-resolving]
+==== Resolution
+
+. Open your AWS account. Find the virtual machine *`platform-vault-<CLUSTER_NAME>`*.
+. Access the virtual machine using EC2 Instance Connect or SSH.
+. Check the status of Vault. The *`Initialized`* parameter should be `*true*`.
++
+.Check Vault status
+----
+$ vault status
+----
++
+image:installation/aws/installation-aws-6.png[image,width=468,height=182]
+
+. If the status is different, restart Vault.
++
+.Restart Vault
+----
+$ systemctl restart vault
+----
+
+. If this error occurred during a Platform update, check if the Vault key was copied from the previous release, as described in section xref:#platform-update-vault[].
+. Try running the Platform update process again, as described in section xref:#update-platform-installer[].
+
+=== Minio SSL certificate error during Platform deployment
+
+[minio-ssl-certificate-issue-description]
+==== Problem description
+
+During Platform deployment, at the stage of installing Minio, the following error may occur:
+
+image:installation/aws/installation-aws-7.png[image,width=468,height=174]
+
+[minio-ssl-certificate-issue-resolving]
+==== Resolution
+
+. Navigate to the directory with the Installer and run the container to install the Platform with the following command:
++
+.Starting the container
+[source,bash]
+----
+$ cd ~/installer/installer-<VERSION>
+$ sudo docker run -it --rm \
+    --name control-plane-installer-<VERSION> \
+    --user root:$(id -g) \
+    --net host \
+    -v $(pwd):/tmp/installer \
+    --env KUBECONFIG=/tmp/installer/kubeconfig \
+    --env PLATFORM_DEPLOYMENT_MODE=<DEPLOYMENT_MODE> control-plane-installer:<VERSION> bash
+----
+
+. Navigate to the required directory and set environment variables.
++
+.Setting environment variables
+[source,bash]
+----
+$ cd /tmp/installer/terraform/minio/aws
+$ export AWS_ACCESS_KEY_ID=$(oc get secret/aws-creds -n kube-system -o jsonpath='{.data.aws_access_key_id}' | base64 -d)
+$ export AWS_SECRET_ACCESS_KEY=$(oc get secret/aws-creds -n kube-system -o jsonpath='{.data.aws_secret_access_key}' | base64 -d)
+$ export CLUSTER_NAME=$(oc get node -l node-role.kubernetes.io/master -o 'jsonpath={.items[0].metadata.annotations.machine\.openshift\.io/machine}' | sed -r 's#.*/(.*)-master.*#\1#')
+$ export clusterNameShort="${CLUSTER_NAME::-6}"
+$ export baseDomain=$(oc get dns cluster --no-headers -o jsonpath='{.spec.baseDomain}')
+$ export route53HostedZone="${baseDomain/${clusterNameShort}./}"
+----
+
+. Delete Minio using Terraform.
++
+.Deleting Minio
+[source,bash]
+----
+$ terraform init
+$ terraform destroy -var cluster_name="${clusterNameShort}" -var baseDomain="${route53HostedZone}" -auto-approve
+----
+
+. Wait for Minio to be deleted. Exit the container and try running the Platform installation process again, as described in section xref:#deploy-platform-installer-scratch[] if you are deploying the platform from scratch, or section xref:#update-platform-installer[] if you are updating the platform.
+
+=== Error sending images to Nexus during Platform deployment
+
+[send-images-to-nexus-issue-description]
+==== Problem description
+
+During Platform deployment, at the stage of sending images to Nexus, the following error may occur:
+
+image:installation/aws/installation-aws-8.png[image,width=468,height=228]
+
+This error is related to *skopeo*. This tool sends images to Nexus. If an image fails to upload within 10 minutes, skopeo starts returning an error due to timeout.
+
+[send-images-to-nexus-issue-resolving]
+==== Resolution
+
+Perform the Platform installation from the deployer-node, as described in section xref:#deploy-additional-recources-for-okd[].
