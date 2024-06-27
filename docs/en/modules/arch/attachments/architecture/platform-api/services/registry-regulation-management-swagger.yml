@@ -44,6 +44,8 @@ tags:
   description: Registry regulations Master version Groups management Rest API
 - name: master-version-business-processes-api
   description: Registry regulations master Business processes management Rest API
+- name: Redash Admin Reports Downloading
+  description: redash-admin-dashboard-load-api
 paths:
   /versions/master/i18n/{name}:
     get:
@@ -4032,6 +4034,77 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DetailedErrorResponse'
+  /reports:
+    get:
+      tags:
+      - Redash Admin Reports Downloading
+      summary: Get all redash dashboards for registry admin
+      description: '### This endpoint is used as a proxy to Redash API to get all
+        redash dashboards for registry admin.'
+      operationId: getAllDashboards
+      parameters:
+      - name: X-Access-Token
+        in: header
+        description: Token used for endpoint security
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: OK. List of dashboards returned
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Dashboard'
+              example:
+                id: 1
+                name: Dashboard 1
+                slug: dashboard-1
+                createdAt: 2021-08-01T12:00:00
+                updatedAt: 2021-08-01T12:00:00
+                tags:
+                - tag1
+                - tag2
+                widgets:
+                - id: 1
+                  width: 1
+                  options:
+                    text: Widget 1
+                is_draft: false
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailedErrorResponse'
+  /reports/{id}:
+    get:
+      tags:
+      - Redash Admin Reports Downloading
+      summary: Download a single Redash dashboard by id
+      description: '### This endpoint is used to get a single Redash dashboard and
+        load it as an archive'
+      operationId: getDashboardArchive
+      parameters:
+      - name: X-Access-Token
+        in: header
+        description: Token used for endpoint security
+        required: true
+        schema:
+          type: string
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        "200":
+          description: OK. Dashboard is downloaded
+          content:
+            application/octet-stream: {}
   /batch-loads/users/{id}:
     delete:
       tags:
@@ -4082,14 +4155,6 @@ components:
         messageKey:
           type: string
           description: Message key for client localization
-        messageParameters:
-          type: object
-          additionalProperties:
-            type: string
-            description: Message parameters for resolving placeholders during client
-              localization
-          description: Message parameters for resolving placeholders during client
-            localization
     SettingsInfoDto:
       type: object
       properties:
@@ -4322,74 +4387,6 @@ components:
           - DESC
           - NONE
       description: Array of index columns
-    ColumnPair:
-      required:
-      - sourceColumnName
-      - targetColumnName
-      type: object
-      properties:
-        sourceColumnName:
-          type: string
-          description: Name of the column from current table
-        targetColumnName:
-          type: string
-          description: Name of the column from target table
-      description: List of related column pairs
-    ColumnShortInfo:
-      required:
-      - name
-      - notNullFlag
-      - type
-      type: object
-      properties:
-        name:
-          type: string
-          description: Table column name
-        description:
-          type: string
-          description: Table column description
-        type:
-          type: string
-          description: Table column data type
-        defaultValue:
-          type: string
-          description: Table column default value
-        notNullFlag:
-          type: boolean
-          description: Flag that indicates if table column can not be nullable
-      description: Current table column map
-    ForeignKeyShortInfo:
-      required:
-      - name
-      - targetTable
-      type: object
-      properties:
-        name:
-          type: string
-          description: Table foreign key name
-        targetTable:
-          type: string
-          description: Foreign key target table name
-        columnPairs:
-          minItems: 1
-          type: array
-          items:
-            $ref: '#/components/schemas/ColumnPair'
-      description: Current table foreign key map
-    IndexShortInfo:
-      required:
-      - name
-      type: object
-      properties:
-        name:
-          type: string
-          description: Table index name
-        columns:
-          minItems: 1
-          type: array
-          items:
-            $ref: '#/components/schemas/Column'
-      description: Current table index map (unique constraints and primary key excluded)
     PrimaryKeyConstraintShortInfo:
       required:
       - name
@@ -4406,7 +4403,6 @@ components:
       description: Current table primary key index
     TableInfo:
       required:
-      - columns
       - name
       - objectReference
       type: object
@@ -4422,43 +4418,8 @@ components:
           type: string
           description: Table description
           nullable: true
-        columns:
-          type: object
-          additionalProperties:
-            $ref: '#/components/schemas/ColumnShortInfo'
-          description: Current table column map
-        foreignKeys:
-          type: object
-          additionalProperties:
-            $ref: '#/components/schemas/ForeignKeyShortInfo'
-          description: Current table foreign key map
         primaryKey:
           $ref: '#/components/schemas/PrimaryKeyConstraintShortInfo'
-        uniqueConstraints:
-          type: object
-          additionalProperties:
-            $ref: '#/components/schemas/UniqueConstraintShortInfo'
-          description: Current table unique constraint index map (primary key excluded)
-        indices:
-          type: object
-          additionalProperties:
-            $ref: '#/components/schemas/IndexShortInfo'
-          description: Current table index map (unique constraints and primary key
-            excluded)
-    UniqueConstraintShortInfo:
-      required:
-      - name
-      type: object
-      properties:
-        name:
-          type: string
-          description: Table index name
-        columns:
-          minItems: 1
-          type: array
-          items:
-            $ref: '#/components/schemas/Column'
-      description: Current table unique constraint index map (primary key excluded)
     I18nDetailsShort:
       required:
       - eTag
@@ -4603,3 +4564,92 @@ components:
           description: List of changed i18n bundles
           items:
             $ref: '#/components/schemas/EntityChangesInfo'
+    Dashboard:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int32
+        name:
+          type: string
+        slug:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        tags:
+          type: array
+          items:
+            type: string
+        widgets:
+          uniqueItems: true
+          type: array
+          items:
+            $ref: '#/components/schemas/Widget'
+        options:
+          type: object
+        is_draft:
+          type: boolean
+    Query:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int32
+        dataSourceId:
+          type: integer
+          format: int32
+        name:
+          type: string
+        query:
+          type: string
+        description:
+          type: string
+        visualizations:
+          type: array
+          writeOnly: true
+          items:
+            $ref: '#/components/schemas/Visualization'
+        draft:
+          type: boolean
+    Visualization:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int32
+          writeOnly: true
+        queryId:
+          type: integer
+          format: int32
+        name:
+          type: string
+        type:
+          type: string
+        description:
+          type: string
+        options:
+          type: object
+        query:
+          $ref: '#/components/schemas/Query'
+    Widget:
+      type: object
+      properties:
+        text:
+          type: string
+        options:
+          type: object
+        width:
+          type: integer
+          format: int32
+        dashboardId:
+          type: integer
+          format: int32
+        visualizationId:
+          type: integer
+          format: int32
+        visualization:
+          $ref: '#/components/schemas/Visualization'
