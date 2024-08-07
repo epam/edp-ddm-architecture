@@ -1,0 +1,154 @@
+= Отримання сутності із фабрики даних: _Read entity from data factory_
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+== Загальна інформація
+
+Інтеграційне розширення *Read entity from data factory* дозволяє налаштовувати завдання для читання даних із таблиці (сутності) за конкретним ідентифікатором в рамках бізнес-процесу. Це розширення допомагає автоматизувати процеси отримання окремих сутностей, забезпечуючи належне оброблення даних та передачу їх до наступних етапів бізнес-процесу. Розширення додає різні властивості до сервісного завдання (Service Task).
+
+.Короткі відомості про делегат
+|===
+|Назва |Пояснення
+
+|Бізнес-назва інтеграційного розширення
+|*Read entity from data factory*
+
+|Службова назва інтеграційного розширення
+|*`${dataFactoryConnectorReadDelegate}`*
+
+|Назва файлу у бібліотеці розширень
+|*_dataFactoryConnectorReadDelegate.json_*
+|===
+
+== Перед початком
+
+include::partial$admonitions/install-element-templates.adoc[]
+
+== Налаштування
+
+Делегат *Read entity from data factory* призначений для використання у сервісних завданнях (Service Task) бізнес-процесу. Він дозволяє налаштувати автоматичне отримання даних із таблиці (сутності) за конкретним ідентифікатором.
+
+=== Налаштування завдання
+
+. Створіть завдання типу *Service Task* у вашому бізнес-процесі.
+. Назвіть завдання, наприклад, `Пошук даних за ID в дата-фабриці`.
+. Застосуйте шаблон делегата, обравши *Read entity from data factory* зі списку в налаштуваннях завдання.
++
+image:registry-develop:bp-modeling/bp/element-temp/service-task/entity-management/read-entity/read-entity-1.png[]
+
+=== Налаштування делегата
+
+Виконайте наступні налаштування:
+
+Resource ::
+У полі *Resource* вкажіть назву ендпоінту / таблиці, з якої потрібно отримати дані. Наприклад, `imagesnew`.
+
+Resource id ::
+У полі *Resource id* вкажіть ідентифікатор ресурсу. Наприклад, `${imageId}`.
++
+[NOTE]
+====
+`imageId` можна отримати зі скрипту, наприклад, наступним чином:
+
+[source,groovy]
+----
+set_variable('imageId', response.responseBody.prop('id').value())
+----
+Цей скрипт обробляє відповідь від попереднього запита на створення сутності та зберігає ідентифікатор сутності у змінну `imageId`.
+
+Запит на створення сутності можна виконати за допомогою делегата xref:bp-modeling/bp/element-templates/service-task-templates/entity-management/create-entity.adoc[]. В результаті виконання делегата, у відповідь ви отримаєте таку JSON-структуру:
+
+[source,json]
+----
+{
+  "name": "string",
+  "imagesnewId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "image": [
+    {
+      "id": "string",
+      "checksum": "string"
+    }
+  ]
+}
+----
+
+З цього JSON-об'єкта скрипт витягне ID сутності.
+
+====
+
+X-Access-Token ::
+У полі *X-Access-Token* вкажіть токен доступу користувача, під яким виконується операція. Наприклад:
++
+[source,groovy]
+----
+${initiator().accessToken}
+----
+Або використайте токен виконавця останнього користувацького завдання, _якщо таке присутнє у бізнес-процесі_:
++
+[source,groovy]
+----
+${completer('previous user task ID').accessToken}
+----
+* `completer()` — назва JUEL-функції.
+* `'previous user task ID'` — ID попередньої задачі користувача.
+* `accessToken` — метод, який передає JWT-токен користувача.
+
+Result variable ::
+У полі *Result variable* вкажіть назву змінної, в яку необхідно записати результат. Наприклад, `response`.
+
+[NOTE]
+====
+Після успішного завершення операції, делегат отримує відповідь у такому форматі:
+
+.HTTP status code
+[source,bash]
+----
+204 OK
+----
+
+.Тіло відповіді
+[source,json]
+----
+{
+  "name": "string",
+  "imagesnewId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "image": [
+    {
+      "id": "string",
+      "checksum": "string"
+    }
+  ]
+}
+----
+====
+
+== Приклад
+
+Ось приклад, який показує, як відповідний делегат використовується у бізнес-процесі:
+
+.Приклад. Налаштування делегата Read entity from data factory
+image::registry-develop:bp-modeling/bp/element-temp/service-task/entity-management/read-entity/read-entity-2.png[]
+
+[TIP]
+====
+[%collapsible]
+.Де можна знайти приклад бізнес-процесу?
+=====
+include::partial$snippets/demo-reg-reference-examples-ua.adoc[]
+
+*Read entity from data factory* -- делегат, який використовується у бізнес-процесах, що потребують отримання окремих записів з БД.
+
+Ви можете використати один із прикладів процесів за пошуком по ключовим словам — *_feature-external-system-file-saving_*.
+
+У Кабінеті користувача бізнес-процес буде доступний у розділі *Доступні послуги*.
+=====
+====
+
+[TIP]
+====
+Більш детально про бізнес-процес читайте на сторінці xref:bp-modeling/bp/save-digital-doc-remote-url.adoc[].
+====
+
+== Пов'язані сторінки
+
+* xref:bp-modeling/bp/element-templates/service-task-templates/entity-management/batch-read-entities-from-data-factory.adoc[]
+* xref:bp-modeling/bp/element-templates/service-task-templates/entity-management/create-entity.adoc[]
