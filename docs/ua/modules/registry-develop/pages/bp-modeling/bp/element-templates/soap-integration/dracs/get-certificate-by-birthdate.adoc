@@ -1,0 +1,133 @@
+= Отримання даних за свідоцтвом про народження (дата): _Get Certificate By Birthdate_
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+== Загальна інформація
+
+Для спрощення моделювання бізнес-процесів розроблено типові інтеграційні конектори для отримання інформації із ДРАЦСfootnote:[*ДРАЦС* -- Державна реєстрація актів цивільного стану.], налаштування яких відбувається на схемах бізнес-процесів у додатку **Camunda Modeler**.
+
+Наразі імплементовано 2 типи конекторів для отримання даних із ДРАЦС: ::
+
+. Типове інтеграційне розширення-конектор до SOAP-сервісу ДРАЦС для отримання даних Свідоцтва про народження за вказаними серією і номером Свідоцтва, та датою народження -- `GetCertByNumRoleBirthDate`.
+
+. Типове інтеграційне розширення-конектор до SOAP-сервісу ДРАЦС для отримання даних Свідоцтва про народження за вказаними серією і номером Свідоцтва, та ПІБ -- `GetCertByNumRoleNames`.
+
+== Налаштування делегата
+
+Розширення *Get Certificate By Birthdate* -- делегат для виклику зовнішнього SOAP-сервісу для отримання даних Свідоцтва про народження за вказаними серією і номером Свідоцтва, та датою народження, який налаштовується за допомогою шаблону *Get Certificate By Birthdate* (_getCertificateByBirthdateDracsRegistryDelegate.json_).
+
+[WARNING]
+====
+Передумови ::
+
+За умови налаштування шаблону у *Camunda Modeler* переконайтеся, що папка із застосунком *_resources/element-templates_* містить файл _getCertificateByBirthdateDracsRegistryDelegate.json_.
+====
+
+. Відкрийте **Service Task**.
+. На панелі налаштувань справа натисніть `Open Catalog` та оберіть шаблон *Get Certificate By Birthdate* зі списку.
++
+image:bp-modeling/ext-integration/connectors/dracs/get-certificate-dracs-1.png[]
+. Налаштуйте обраний шаблон:
+* У полі `Name` вкажіть назву задачі. Це може бути призначення сервісної задачі. Наприклад, `Отримати дані зі Свідоцтва про народження`.
+* У полі `Certificate Number` вкажіть номер сертифіката. Наприклад, `218727`.
+* У полі `Certificate Serial` вкажіть серію сертифіката. Наприклад, `IV-AM`.
++
+TIP: Актуальний формат номера свідоцтва та серію можна перевірити за https://minjust.gov.ua/dep/ddr/svidotstva-pro-narodjennya[посиланням].
+* У полі `Role` вкажіть роль `CHILD`.
++
+NOTE: Наразі Платформа реєстрів підтримує отримання даних виключно для ролі `CHILD`. Тобто із сервісу ДРАЦС можна отримати виключно дані дитини із сертифіката Свідоцтва про народження. Всі інші передбачені ДРАЦС ролі не підтримуються.
+* У полі `Birth Year` введіть рік народження дитини. Наприклад, `2021`.
+* У полі `Birth Month` вкажіть місяць народження дитини. Наприклад, `10`.
+* У полі `Birth Day` вкажіть день народження дитини. Наприклад, `21`.
+* У полі `Result variable` вкажіть результівну змінну, до якої необхідно записати відповідь від сервісу -- `response`.
++
+TIP: Приклад відповіді можна подивитися у розділі xref:#dracs-api-implementation[]
++
+
+image:bp-modeling/ext-integration/connectors/dracs/get-certificate-dracs-3.png[]
+
+[#dracs-api-implementation]
+== Імплементація на рівні API
+
+При налаштуванні шаблонів делегата у бізнес-процесі, делегати формують запити у форматі XML і за протоколом SOAP надсилають їх відповідним сервісам ДРАЦС.
+
+.Приклад SOAP-запита до API-сервісу GetCertByNumRoleBirthDate згідно з контрактом
+[source,xml]
+----
+<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">
+  <s:Header>
+    ...
+  </s:Header>
+  <s:Body xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+    <CeServiceRequest xmlns="http://tempuri.org/">
+      <ByParam>3</ByParam>
+      <CertNumber>218727</CertNumber>
+      <CertSerial>IV-AM</CertSerial>
+      <DateBirth>2021-21-10T00:00:00</DateBirth>
+      <Name xsi:nil="true" />
+      <Patronymic xsi:nil="true" />
+      <Role>1</Role>
+      <Surname xsi:nil="true" />
+    </CeServiceRequest>
+  </s:Body>
+</s:Envelope>
+
+----
+
+.Приклад відповіді від API згідно з контрактом
+[source,json]
+----
+{
+   "certificate":[
+      {
+         "certStatus":1,
+         "certRepeat":0,
+         "certSerial":"IV-AM",
+         "certNumber":"218727",
+         "certSerialNumber":null,
+         "certOrg":null,
+         "certDate":null,
+         "arOrg":null,
+         "arNumb":null,
+         "arComposeDate":null,
+         "childSurname":"Сидоренко",
+         "childName":"Павло",
+         "childPatronymic":"Іванович",
+         "childBirthdate":null,
+         "fatherSurname":null,
+         "fatherName":null,
+         "fatherPatronymic":null,
+         "fatherCitizenship":null,
+         "fatherCitizenshipAnother":null,
+         "motherSurname":null,
+         "motherName":null,
+         "motherPatronymic":null,
+         "motherCitizenship":null,
+         "motherCitizenshipAnother":null,
+         "oldSurname":null,
+         "oldName":null,
+         "oldPatronymic":null,
+         "newSurname":null,
+         "newName":null,
+         "newPatronymic":null,
+         "dateOfBirth":null,
+         "placeofBirth":null,
+         "husbandOldSurname":null,
+         "husbandSurname":null,
+         "husbandName":null,
+         "husbandPatronymic":null,
+         "husbandCitizenship":null,
+         "husbandBirthdate":null,
+         "husbandPlaceofBirth":null,
+         "wifeOldSurname":null,
+         "wifeSurname":null,
+         "wifeName":null,
+         "wifePatronymic":null,
+         "wifeCitizenship":null,
+         "wifeBirthdate":null,
+         "wifePlaceOfBirth":null
+      }
+   ]
+}
+----
+
+NOTE: Параметри зі значенням `null` не використовуються.
