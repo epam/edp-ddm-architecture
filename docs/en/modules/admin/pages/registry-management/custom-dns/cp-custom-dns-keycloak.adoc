@@ -1,225 +1,187 @@
-:toc-title: On this page:
-:toc: auto
-:toclevels: 5
-:experimental:
-:sectnums:
-:sectnumlevels: 5
-:sectanchors:
-:sectlinks:
-:partnums:
-
-//= Налаштування власного DNS-імені для Keycloak
 = Configuring custom DNS for Keycloak
+include::platform:ROOT:partial$templates/document-attributes/default-set-en.adoc[]
 
-//== Загальний опис
+include::platform:ROOT:partial$admonitions/language-en.adoc[]
+
 == Introduction
 
-//Адміністратори платформи мають змогу налаштовувати власні DNS-імена для сервісу управління користувачами та ролями Keycloak за допомогою адміністративної панелі Control Plane. Це дозволяє створити зручні URL-адреси для входу користувачів та забезпечує правильну роботу аутентифікації та міжсервісної взаємодії у приватних мережах.
-
 Platform administrators can configure custom DNS names for the Keycloak user and role management service using the Control Plane admin console.
-//TODO: The last sentence of first paragraph repeats what's given below as a list, so I think it's OK to remove it.
-//This enables you to create convenient URLs for users and ensure proper authentication and service-to-service interaction on private networks.
 
-//Переваги використання функціональності: ::
 Why you should use this feature: ::
 
-//* Власні DNS-імена: надає можливість створювати зручні та легко запам'ятовувані URL-адреси для входу користувачів у їхні особисті кабінети.
 * Custom DNS names enable you to create convenient and easy-to-remember URLs for users to sign in to the user portals.
-//* Коректна робота в приватних мережах: добре працює у приватних мережах, забезпечуючи правильну перевірку сертифікатів та аутентифікацію за допомогою Keycloak для міжсервісної взаємодії.
+
 * This setup ensures proper certificate validation and authentication via Keycloak for correct service-to-service interactions on private networks.
 
-//Завдяки цьому адміністратори можуть легко та ефективно керувати налаштуваннями Keycloak, що сприяє полегшенню роботи користувачів із системою.
 
 This provides administrators with a simple and efficient way to manage Keycloak settings, making it easier to work with the system.
 
-//Функціональні сценарії: ::
 Functional scenarios: ::
 
-//* Конфігурація DNS-імен компонента Keycloak через адмін-консоль на рівні Платформи
 * Configuring DNS names for Keycloak via the admin console at the Platform level.
-//* Вибір DNS-імені для логіна в кабінети користувачів через адмін-консоль на рівні реєстру
+
 * Setting a DNS name for the user portal sign-in pages via the admin console at the registry level.
-//* Видалення доданих DNS-імен до Keycloak
+
 * Removing DNS names added to Keycloak.
 
-//Загальні принципи та положення: ::
 General principles and provisions: ::
 
-//* Технічний адміністратор Платформи відповідає за конфігурацію наявних Keycloak DNS-імен.
-//TODO: "наявний" - мається на увазі початкове додавання днс, з яких потім може обирати адмін реєстру, так?
+
 * The Platform administrator configures available DNS names for Keycloak.
-//* Адміністратор завантажує SSL-сертифікат у форматі *_.pem_* для домену разом із DNS-іменем.
-//TODO: мається ж на увазі адмін платформи?
+
+
 * The Platform administrator uploads the SSL certificate file in the *_.pem_* format for the domain along with the DNS name.
-//* Технічний адміністратор реєстру налаштовує DNS-імена для реєстрових кабінетів користувачів.
+
 * The registry administrator configures DNS names for the registry user portals.
-//* Адміністратор реєстру обирає домен для Keycloak зі списку доступних.
+
 * The registry administrator selects a domain for Keycloak from a list.
-//* Список доступних доменів у системі формується з DNS-імен платформного Keycloak.
+
 * The list of domains available in the system comes from the Platform's Keycloak DNS names.
-//* У налаштуваннях кабінетів можна завантажити окремі SSL-сертифікати у форматі *_.pem_* для кожного користувацького кабінету.
+
 * Individual SSL certificates in the *_.pem_* format can be downloaded for each user portal in portal settings.
-//* Адміністратор Платформи забезпечує ротацію сертифікатів Keycloak та кабінетів користувачів.
+
 * The Platform administrator ensures certificate rotation for Keycloak and user portals.
-//* Система дозволяє редагувати встановлені раніше SSL-сертифікати та DNS-імена.
+
 * The system allows editing previously installed SSL certificates and DNS names.
-//* Адмін-консоль перевіряє, чи завантажений SSL-сертифікат відповідає введеному домену, чи не є самопідписаним, та чи строк його дії ще не сплив.
+
 * The admin console checks whether the provided SSL certificate matches the domain, is not self-signed, and has not expired.
-//* З міркувань безпеки, доступ до _HashiCorp Vault_ для читання сертифікатів здійснюється ЛИШЕ через окремого сервісного (системного) користувача.
+
 * For security reasons, access to the _HashiCorp Vault_ to read certificates works ONLY through a separate service (system) account.
-//* Якщо реєстр розгортається без порталу (надавача або отримувача послуг), відповідні UI-елементи для налаштування DNS-імен не відображаються.
+
 * If the registry is deployed without user portals (officer portal or citizen portal), the corresponding UI elements for configuring DNS names are hidden.
-//* Заданий URL для Keycloak та кабінетів обмежений 63 символами та проходить системну валідацію на правильність.
+
 * The URL for Keycloak and user portals is limited to 63 characters and must be validated by the system.
 
 [#configure-dns-platform]
-//== Конфігурація DNS-імен компонента Keycloak для Платформи
+
 == Configuring DNS names for the Platform's Keycloak component
 
-//Щоб налаштувати власні DNS-імена, а також завантажити SSL-сертифікати для Keycloak, виконайте наступні дії:
 
 To configure custom DNS names and upload SSL certificates for Keycloak, follow these steps:
 
-//. Увійдіть до адміністративної панелі *Control Plane*.
 . Sign in to the *Control Plane* admin console.
-//. Відкрийте розділ Керування Платформою та перейдіть до пункту *Keycloak DNS*.
+
 . Go to *Platform management* and open the *Keycloak DNS* section.
 +
-//У цьому розділі ви побачите системне значення DNS за замовчуванням, яке вже заповнене й недоступне для редагування.
+
 This section displays the system's default DNS value that cannot be edited.
 +
-//NOTE: Для додаткових DNS виконайте зовнішню конфігурацію записів у реєстратора доменних імен. Для цього скористайтеся інструкцією xref:#external-configuration[], яка також доступна за посиланням на інтерфейсі Control Plane.
+
 NOTE: For additional DNS names, configure your DNS records on your DNS provider side. For details, jump to xref:#external-configuration[].
 +
 image:registry-management/custom-dns/keycloak/custom-dns-keycloak-platform-1.png[]
-//. Натисніть кнопку kbd:[Додати DNS], щоб відкрити вікно налаштувань. Введіть доменне ім'я для Keycloak, відповідно до підказок під полем, і завантажте SSL-сертифікат для Keycloak.
+
 . Click the *Add DNS* button.
 . In the *Add DNS* window, enter the domain name for Keycloak into the *Keycloak domain name* field and upload Keycloak certificate using the *Upload SSL certificate* button.
 +
-//NOTE: Конфігурація DNS за замовчуванням вичитується адмін-консоллю зі специфікації Keycloak CR у компоненті *`user-management`*.
+
 NOTE: The admin console gets the default DNS configuration from the Keycloak CR (Custom Resource) specification in the *`user-management`* component.
-//. У вікні налаштувань натисніть кнопку kbd:[Підтвердити], щоб зберегти дані та запустити валідаційні перевірки.
+
 . In the *Add DNS* window, click the *Confirm* button to save your settings and start the validation checks.
 +
-//TIP: Ви можете також натиснути кнопку kbd:[Відмінити], щоб закрити вікно без збереження внесених даних.
+
 TIP: To close the window without saving your changes, click *Cancel*.
 +
 image:registry-management/custom-dns/keycloak/custom-dns-keycloak-platform-2.png[]
 +
-//Всі додані DNS-імена будуть відображатися списком на сторінці *Keycloak DNS*.
+
 The *Keycloak DNS* page lists all the DNS records you added.
-//. Ви можете відредагувати будь-яке з доданих DNS-імен, натиснувши на іконку олівця поряд з обраним додатковим DNS. У вікні редагування змініть доменне ім'я та сертифікат.
+
 . To edit additional DNS records, click the pencil icon next to one of the additional DNS records. Change the domain name and certificate in the editing window.
 +
-//NOTE: Дія кнопок "Відмінити" та "Підтвердити" така сама, як і при додаванні нового DNS, і вони виконують ті ж самі валідації при збереженні даних.
+
 NOTE: *Cancel* and *Confirm* buttons work the same as when adding a new DNS record. The same validation happens when you save the settings.
-//. Також, ви можете видалити додатковий DNS, якщо він не використовується жодним із реєстрів. Якщо він використовується, спочатку змініть домен в відповідному реєстрі на інший. Для видалення потрібно натиснути на іконку корзини, що розташована навпроти обраного доданого DNS, і у вікні, що з'явиться, підтвердити дію.
+
 . You can remove an additional DNS record if it is not used by any of the registries. To delete a DNS record, click the recycle bin icon next to it and confirm your action in a window that opens.
 +
 NOTE: If an additional DNS name is used by any registry, you need to first change this domain in the corresponding registry settings to something else.
-//. Після завершення всіх дій із додатковими DNS, натисніть кнопку kbd:[Підтвердити] для збереження змін. Після виконання валідаційних перевірок, якщо всі дані введені коректно, вони збережуться.
+
 . When you are finished working with additional DNS, click *Confirm* to save your changes. The changes are saved once the system validates them.
 
 +
-//В результаті сформується запит на оновлення конфігурації реєстру, який можна переглянути у розділі +++<b style="font-weight: 600"> Керування Платформою > Запити на оновлення </b>+++.
+
 As a result, the system generates a registry configuration update request. You can view request details in the *Platform management* > *Update requests* section.
-//. Підтвердьте внесення змін та дочекайтеся виконання Jenkins-процесу *MASTER-Build-cluster-mgmt*, який і застосує конфігурацію.
+
 . Confirm the changes and wait until the *MASTER-Build-cluster-mgmt* Jenkins process completes and applies the new configuration.
 
 [#configure-dns-registry]
-//== Конфігурація DNS-імен компонента Keycloak для реєстру
+
 == Configuring DNS names for the registry’s Keycloak component
 
-//Налаштовані у розділі xref:#configure-dns-platform[] DNS-імена можуть використовуватися при створенні або редагуванні реєстру. Для цього:
 
 DNS names configured as described in xref:#configure-dns-platform[] can be used when creating or editing a registry.
 
-//. Увійдіть до інтерфейсу адмін-панелі *Control Plane*.
 . Sign in to the *Control Plane* admin console.
-//. Відкрийте розділ +++<b style="font-weight: 600"> Реєстри </b>+++ та оберіть один із реєстрів зі списку для редагування.
+
 . Open the `Registries` section and select the registry you wish to edit.
-//. Натисніть `Редагувати` > `+++<b style="font-weight: 600">Налаштування DNS </b>+++`.
+
 . On the registry information page, click the `Edit` button in the upper-right corner.
 . On the registry edit page, open the *DNS* section.
-//. Знайдіть секцію +++<b style="font-weight: 600"> Сервіс управління користувачами та ролями (Keycloak) </b>+++ та оберіть DNS-ім'я зі списку доступних.
+
 . Under *User and role management service (Keycloak)*, select the DNS name from the *Keycloak domain name* list.
-//. Натисніть kbd:[Підтвердити], що зберегти зміни. Після виконання валідаційних перевірок, якщо всі дані введені коректно, вони збережуться.
+
 . Click *Confirm* to save your changes. The changes are saved once the system validates them.
 
 +
-//В результаті сформується запит на оновлення конфігурації реєстру, який можна переглянути у розділі +++<b style="font-weight: 600"> Реєстри > Запити на оновлення </b>+++.
 As a result, the system generates a registry configuration update request. You can view request details in the *Registries* > *Update requests* section.
-//. Підтвердьте внесення змін та дочекайтеся виконання Jenkins-процесу *MASTER-Build-<registry-name>*, який і застосує конфігурацію.
+
 . Confirm the changes and wait until the *MASTER-Build-<registry-name>* Jenkins process completes and applies the new configuration.
 
 image:registry-management/custom-dns/keycloak/custom-dns-keycloak-registry.png[]
 
 [#external-configuration]
-//== Додаткова конфігурація за межами OpenShift-кластера та реєстру
 == Additional configuration outside the OpenShift cluster and registry
 
-//Виконайте зовнішню конфігурацію за межами OpenShift-кластера та реєстру.
 
 Perform additional configuration outside the OpenShift cluster and registry.
 
-//. Створіть `CNAME`-запис у свого постачальника DNS.
 . Create a `CNAME` record with your DNS provider.
 +
-//Він має вказувати на _Load Balancer_ прив'язаного до OpenShift роутера (_HAProxy_). Домен роутера OpenShift відрізняється для кожного кластера. Записи `CNAME` завжди повинні вказуватися на інше доменне ім’я, а не на IP-адресу.
-//TODO: Можна "інше доменне ім'я" замінити на "канонічне ім'я"?
 This record should point to the _Load Balancer_ bound to the OpenShift router (_HAProxy_). An OpenShift router domain is different for each cluster. `CNAME` records must always point to another domain name, not an IP address.
 +
 [TIP]
 ====
-//`CNAME` (Запис канонічного імені) -- це тип запису ресурсу в системі доменних імен (DNS), який порівнює одне доменне ім’я (псевдонім) з іншим (канонічне ім’я).
+
 A `CNAME` (Canonical Name) record is a type of DNS record that maps a domain name (alias) to a true or canonical domain name.
 ====
 +
-//`CNAME` запис може виглядати так:
 Here is an example of a `CNAME` record:
 +
 ----
 www.example.net. CNAME www.example.com.
 ----
 +
-//Подивитись на поточні встановлені CNAME записи можна за допомогою сервісу link:https://dns.google[dns.google].
 You can view the current CNAME records using the link:https://dns.google[Google Public DNS] service.
 +
 [WARNING]
 ====
-//`CNAME` не може бути встановлений для *apex*-доменів (example.com), а піддомен повинен бути вказаний (www.example.com).
+
 A `CNAME` record cannot be set for *apex* domains (such as example.com); a subdomain must be specified (such as www.example.com).
 ====
-//. Напишіть у Telegram-каналі `[EPAM] IIT Digital Signature Library Questions`, щоб додати нову адресу до тестового віджету link:https://eu.iit.com.ua/[eu.iit.com.ua].
-//TODO: probably ua-specific
-. To request adding a new address to the link:https://eu.iit.com.ua/[eu.iit.com.ua] test widget, use the `[EPAM] IIT Digital Signature Library Questions` Telegram channel.
+
+. Please contact the _technical administrator's support service of the Platform instance_ through your channel and submit a request to add a new address to the test https://eu.iit.com.ua/[eu.iit.com.ua] widget.
 +
+include::ROOT:partial$admonitions/ua-specific.adoc[]
 
 +
 --
-//Кабінет посадової особи та отримувача послуг стає доступний за налаштованими DNS-іменами після додаткової (ручної) зовнішньої конфігурації адміністратором.
-
-The user portals become available using the configured DNS names after the external configuration takes effect.
+The Keycloak's new DNS name becomes available after the external configuration takes effect.
 
 [CAUTION]
-//Зазвичай оновлення DNS-імен відбувається впродовж однієї години, хоча глобальне оновлення може тривати до 48 годин.
-Typically, DNS names are updated within one hour, although a global update can take up to 48 hours.
+
+Typically, DNS names are updated within one hour, although a global update can take up to 48 hours but in exceptional cases can last up to 72 hours.
 --
 
-//== Застосування змін до конфігурації
 == Applying configuration changes
 
-//Коли ви підтверджуєте зміни після налаштувань в адмін-панелі, на рівні Платформи та реєстру відбувається наступне:
 
 When you confirm the changes in the admin console, the following happens at the Platform and registry levels.
 
-//Для налаштувань платформи: ::
 
 Platform settings: ::
 
-//. SSL-сертифікати, які ви завантажили для власних доменів Keycloak, зберігаються у _Підсистемі управління секретами та шифруванням_, *HashiCorp Vault*.
 . The SSL certificates you uploaded for custom Keycloak domains are saved to the *HashiCorp Vault* secrets and encryption management subsystem.
-//. У файлі *_deploy-templates/values.yaml_* компонента `*cluster-mgmt*` додаються записи із доменами та шляхами до SSL-сертифікатів, що відповідають прикладу:
+
 . Domain records and SSL certificate paths are added to the *_deploy-templates/values.yaml_* file of the `*cluster-mgmt*` component. For example:
 +
 [source,yaml]
@@ -232,13 +194,11 @@ keycloak:
       certificatePath: registry-kv/....
 ----
 
-//Для налаштувань реєстру: ::
 
 Registry settings: ::
 
-//. SSL-сертифікати, які ви завантажили для кастомних доменів Кабінетів надавача та отримувача послуг, також зберігаються до *HashiCorp Vault*.
 . The SSL certificates you uploaded for custom user portal domains are saved to *HashiCorp Vault*.
-//. У файлі *_deploy-templates/values.yaml_* відповідного реєстрового репозиторію додаються записи із доменами та шляхами до SSL-сертифікатів, що відповідають прикладу:
+
 . Domain records and SSL certificate paths are added to the *_deploy-templates/values.yaml_* file in the corresponding registry repository. For example:
 +
 [source,yaml]
@@ -252,14 +212,10 @@ portals:
 ----
 
 [ssl-certificates-saving-convention]
-//=== Конвенція зберігання SSL-сертифікатів
+
 === SSL certificate storage convention
 
-//Конвенція зберігання SSL-сертифікатів у HashiCorp Vault визначає шляхи для платформних та реєстрових сертифікатів.
-
 HashiCorp Vault's SSL certificate storage convention defines the paths for Platform and registry certificates.
-
-//Платформні сертифікати зберігаються за шляхом:
 
 Platform certificates are saved to:
 
@@ -271,7 +227,6 @@ key:certificate value:<certificateValue>
 key:key value:<keyValue>
 ----
 
-//Реєстрові сертифікати зберігаються за шляхом:
 
 Registry certificates are saved to:
 

@@ -1,0 +1,488 @@
+openapi: 3.0.1
+info:
+  title: 'v1-alpha: User task management API'
+  version: 'v1-alpha'
+  description: All user task management operations
+paths:
+  /api/task/{id}/save:
+    post:
+      tags:
+        - user-task-controller
+      summary: Save form data
+      operationId: saveFormData
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FormDataDto'
+        required: true
+      responses:
+        '200':
+          description: Form data successfully saved
+        '404':
+          description: Task hasn't found
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/SystemErrorDto'
+        '422':
+          description: Form data validation error
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ValidationErrorDto'
+        '500':
+          description: Internal server error
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/SystemErrorDto'
+  /api/task/{id}/complete:
+    post:
+      tags:
+        - user-task-controller
+      summary: Complete task by id
+      operationId: completeTaskById
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FormDataDto'
+        required: true
+      responses:
+        '200':
+          description: Task successfully completed
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/CompletedTaskResponse'
+        '404':
+          description: Task hasn't found
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/SystemErrorDto'
+        '500':
+          description: Internal server error
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/SystemErrorDto'
+  /api/task/{id}/claim:
+    post:
+      tags:
+        - user-task-controller
+      summary: Claim task by id
+      operationId: claimTaskById
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Task successfully claimed
+        '404':
+          description: Task hasn't found or already completed
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/SystemErrorDto'
+        '409':
+          description: Task already assigned on another person
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/SystemErrorDto'
+        '500':
+          description: Internal server error
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/SystemErrorDto'
+  /api/officer/task/{id}/sign-form:
+    post:
+      tags:
+        - user-task-controller
+      summary: Sign and complete officer task by id
+      operationId: singOfficerForm
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FormDataDto'
+        required: true
+      responses:
+        '200':
+          description: Task successfully signed and completed
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/CompletedTaskResponse'
+        '404':
+          description: Task hasn't found
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/SystemErrorDto'
+        '422':
+          description: Task hasn't verified
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ValidationErrorDto'
+        '500':
+          description: Internal server error
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/SystemErrorDto'
+  /api/citizen/task/{id}/sign-form:
+    post:
+      tags:
+        - user-task-controller
+      summary: Sign and complete citizen task by id
+      operationId: signCitizenForm
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FormDataDto'
+        required: true
+      responses:
+        '200':
+          description: Task successfully signed and completed
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/CompletedTaskResponse'
+        '404':
+          description: Task hasn't found
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/SystemErrorDto'
+        '422':
+          description: Task hasn't verified
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ValidationErrorDto'
+        '500':
+          description: Internal server error
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/SystemErrorDto'
+  /api/task:
+    get:
+      tags:
+        - user-task-controller
+      summary: Retrieve all tasks
+      description: Returns task list
+      operationId: getTasks
+      parameters:
+        - name: processInstanceId
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: firstResult
+          in: query
+          description: Pagination of results. Specifies the index of the first result to return.
+          schema:
+            type: integer
+        - name: maxResult
+          in: query
+          description: Pagination of results. Specifies the maximum number of results to return. Will return less results if there are no more results left.
+          schema:
+            type: integer
+        - name: sortBy
+          in: query
+          description: Sort the results lexicographically by a given criterion. Valid values are instanceId, caseInstanceId, dueDate, executionId, caseExecutionId,assignee, created, description, id, name, nameCaseInsensitive and priority. Must be used in conjunction with the sortOrder parameter.
+          schema:
+            type: string
+        - name: sortOrder
+          in: query
+          description: Sort the results in a given order. Values may be asc for ascending order or desc for descending order. Must be used in conjunction with the sortBy parameter.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserTaskResponse'
+  /api/task/{id}:
+    get:
+      tags:
+        - user-task-controller
+      summary: Get task by id
+      description: Returns task by id
+      operationId: getTaskById
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Returns task by id
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/SignableDataUserTaskResponse'
+        '404':
+          description: Task hasn't found
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/SystemErrorDto'
+  /api/task/lightweight:
+    get:
+      tags:
+        - user-task-controller
+      summary: Retrieve all tasks
+      description: Returns lightweight task list
+      operationId: getLightweightTasks
+      parameters:
+        - name: rootProcessInstanceId
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: firstResult
+          in: query
+          description: Pagination of results. Specifies the index of the first result to return.
+          schema:
+            type: integer
+        - name: maxResult
+          in: query
+          description: Pagination of results. Specifies the maximum number of results to return. Will return less results if there are no more results left.
+          schema:
+            type: integer
+        - name: sortBy
+          in: query
+          description: Sort the results lexicographically by a given criterion. Valid values are instanceId, caseInstanceId, dueDate, executionId, caseExecutionId,assignee, created, description, id, name, nameCaseInsensitive and priority. Must be used in conjunction with the sortOrder parameter.
+          schema:
+            type: string
+        - name: sortOrder
+          in: query
+          description: Sort the results in a given order. Values may be asc for ascending order or desc for descending order. Must be used in conjunction with the sortBy parameter.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserTaskLightweightResponse'
+  /api/task/count:
+    get:
+      tags:
+        - user-task-controller
+      summary: Retrieve count of all tasks
+      description: Returns tasks count
+      operationId: countTasks
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/CountResponse'
+components:
+  schemas:
+    FormDataDto:
+      type: object
+      properties:
+        data:
+          type: object
+          additionalProperties:
+            type: object
+        signature:
+          type: string
+        x-access-token:
+          type: string
+    ErrorDetailDto:
+      type: object
+      properties:
+        message:
+          type: string
+        field:
+          type: string
+        value:
+          type: string
+    ErrorsListDto:
+      type: object
+      properties:
+        errors:
+          type: array
+          items:
+            $ref: '#/components/schemas/ErrorDetailDto'
+    ValidationErrorDto:
+      type: object
+      properties:
+        traceId:
+          type: string
+        code:
+          type: string
+        message:
+          type: string
+        details:
+          $ref: '#/components/schemas/ErrorsListDto'
+    SystemErrorDto:
+      type: object
+      properties:
+        traceId:
+          type: string
+        code:
+          type: string
+        message:
+          type: string
+        localizedMessage:
+          type: string
+    CompletedTaskResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        processInstanceId:
+          type: string
+        rootProcessInstanceId:
+          type: string
+        rootProcessInstanceEnded:
+          type: boolean
+        variables:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/VariableValueResponse'
+    VariableValueResponse:
+      type: object
+      properties:
+        type:
+          type: string
+        value:
+          type: object
+        valueInfo:
+          type: object
+          additionalProperties:
+            type: object
+    UserTaskResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        taskDefinitionKey:
+          type: string
+        name:
+          type: string
+        assignee:
+          type: string
+        created:
+          type: string
+          format: date-time
+        description:
+          type: string
+        processDefinitionName:
+          type: string
+        processInstanceId:
+          type: string
+        processDefinitionId:
+          type: string
+        formKey:
+          type: string
+        suspended:
+          type: boolean
+        businessKey:
+          type: string
+    SignableDataUserTaskResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        taskDefinitionKey:
+          type: string
+        name:
+          type: string
+        assignee:
+          type: string
+        created:
+          type: string
+          format: date-time
+        description:
+          type: string
+        processInstanceId:
+          type: string
+        processDefinitionId:
+          type: string
+        processDefinitionName:
+          type: string
+        formKey:
+          type: string
+        suspended:
+          type: boolean
+        formVariables:
+          type: object
+          additionalProperties:
+            type: object
+        signatureValidationPack:
+          uniqueItems: true
+          type: array
+          items:
+            type: string
+            enum:
+              - INDIVIDUAL
+              - ENTREPRENEUR
+              - LEGAL
+        data:
+          type: object
+          additionalProperties:
+            type: object
+        esign:
+          type: boolean
+    UserTaskLightweightResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        assignee:
+          type: string
+    CountResponse:
+      type: object
+      properties:
+        count:
+          type: integer
+          format: int64

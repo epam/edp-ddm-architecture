@@ -1,523 +1,65 @@
-:toc-title: On this page:
-:toc: auto
-:toclevels: 5
-:experimental:
-:sectnums:
-:sectnumlevels: 5
-:sectanchors:
-:sectlinks:
-:partnums:
+= SOAP integration connectors with other registries
+include::platform:ROOT:partial$templates/document-attributes/default-set-en.adoc[]
 
-//= Типові інтеграційні SOAP-конектори до інших реєстрів
-= SOAP-based integration connectors with other registries
-//TODO: This topic omits a lot of ua-specific content and reframes it as more general "SOAP integration" without mentioning Trembita or connectors other than SOAP HTTP.
+include::platform:ROOT:partial$admonitions/language-en.adoc[]
 
 == Overview
 
-//Взаємодія з реєстрами, що знаходяться поза межами Платформи, можлива завдяки шлюзу безпечного обміну даними (ШБО) "Трембіта".
-//TODO: Using the indefinite article here to not imply any specific SEG implementation =)
-Integration with registries outside the Platform is possible through a secure exchange gateway (SEG).
+SOAP integration with external registries primarily occurs via the "Trembita" Secure Exchange Gateway (SEG) and corresponding SOAP connectors.
 
-//ШБО "Трембіта" є захищеним інтерфейсом для електронної взаємодії між державними системами, який розгортається в межах Платформи реєстрів як сервіс і дозволяє використовувати власні ресурси для отримання інформації із зовнішніх систем.
-The goal of using SEG is to provide a secure interface for electronic interactions between various state systems. Once SEG is deployed within the Platform as a service, it enables receiving information from external systems using its own resources.
+SOAP connectors ::
+These are specialized connectors employed within business processes. They're designed to retrieve data from registries outside the Platform using the SOAP protocol, which uses XML format for data representation.
 
-//Для виклику зовнішніх сервісів через ШБО "Трембіта", на Платформі реєстрів розроблено типові інтеграційні розширення-конектори, що дозволяють комунікувати через інтерфейс ШБО із зовнішніми сервісами за протоколом SOAP.
-To call external services, you can use the Platform's standard integration connector that enables communication with external services via the SOAP protocol over the SEG interface.
+Purpose of the "Trembita" SEG ::
+SEG's primary function is to offer a secure interface for electronic interactions across various state systems. When integrated within the Platform, SEG harnesses its inherent resources to access data from external systems.
 
-//Кожний конектор використовується у бізнес-процесах для отримання даних із реєстрів поза межами Платформи.
-The SOAP connector is used in business processes to receive data from registries outside the Platform.
+Platform's standard integration ::
+For interacting with external services, the Platform boasts standard integration connectors. These are tailored for communication with external entities using the SOAP protocol, all transpiring over the SEG interface.
 
-//WARNING: Наразі функціонування розроблених конекторів можливе лише з використанням серверів-заглушок, що імітують живе з'єднання.
-WARNING: The SOAP connector can only be used with mock servers that simulate a live connection.
+Region-specific application ::
+It's crucial to note that using the "Trembita" SEG is particularly tuned for the Ukrainian setting. Hence, it and _may not apply or function as described in other contexts or regions_.
 
-////
-//TODO: Commenting this CAUTION out because it links to a topic out of translation scope
-[CAUTION]
-====
-Щоб мати змогу використовувати розроблені на Платформі SOAP-інтеграційні конектори до зовнішніх сервісів та отримувати інформацію від інших реєстрів через ШБО "Трембіта", необхідно попередньо виконати конфігурації на рівні реєстру в адміністративній панелі Control Plane.
+Universal SOAP HTTP connector ::
+We've implemented a universal SOAP HTTP connector to augment the Platform's SOAP interoperability and amplify its integration potential.
 
-_Детальніше про налаштування інтеграцій через ШБО "Трембіта" ви можете переглянути у статті xref:registry-develop:registry-admin/external-integration/cp-integrate-trembita.adoc[]_.
-====
-////
+WARNING: Always use SOAP connectors in conjunction with mock servers that replicate the behavior of live connections for development purposes.
 
-//== Встановлення типових розширень-конекторів
 == Installing standard integration connectors
 
-//Налаштування розширень-конекторів відбувається у застосунку **Camunda Modeler**. Перед початком роботи переконайтеся, що виконано всі передумови, описані у розділі xref:bp-modeling/bp/element-templates/bp-element-templates-installation-configuration.adoc#business-process-modeler-extensions-installation[Встановлення каталогу типових розширень до бізнес-процесів].
-Connectors are configured in the *Camunda Modeler* application. Before you start, ensure all prerequisites described in the xref:bp-modeling/bp/element-templates/bp-element-templates-installation-configuration.adoc#business-process-modeler-extensions-installation[Installing a catalog of standard extensions to business processes] section are fulfilled.
+Connectors are configured in the *Camunda Modeler* application. Before you start, ensure all prerequisites described in the xref:bp-modeling/bp/element-templates/element-templates-install.adoc[] section are fulfilled.
 
-////
-[#edr]
-== Розширення-конектори для отримання даних з ЄДР
-
-Для спрощення моделювання бізнес-процесів розроблені типові інтеграційні конектори для отримання інформації з ЄДРfootnote:[**ЄДР** -- Єдиний державний реєстр юридичних осіб, фізичних осіб-підприємців та громадських формувань.], налаштування яких відбувається на схемах бізнес-процесів у додатку **Camunda Modeler**.
-
-Наразі імплементовано 2 типи конекторів для отримання даних із ЄДР: ::
-
-. Інтеграційний конектор `searchSubject` -- призначений для отримання інформації про суб'єкт за кодом ЄДРПОУ або РНОКПП (раніше -- ІПН).
-. Інтеграційний конектор `subjectDetails` -- призначений для отримання деталізованої інформації про суб'єкт за ID.
-
-=== Отримання інформації за суб'єктом в ЄДР
-
-Розширення *Search Subjects Edr Registry* -- делегат для виклику зовнішнього SOAP-сервісу, призначений для отримання інформації про суб'єкт за кодом ЄДРПОУ або РНОКПП (раніше -- ІПН), який налаштовується за допомогою шаблону *Search Subjects Edr Registry* (_searchSubjectsEdrRegistryConnectorDelegate.json_).
-
-[WARNING]
-====
-Передумови ::
-
-За умови налаштування шаблону у *Camunda Modeler* переконайтеся, що папка із застосунком *_resources/element-templates_* містить файл _searchSubjectsEdrRegistryConnectorDelegate.json_.
-====
-
-. Відкрийте **Service Task**.
-. На панелі налаштувань справа натисніть `Open Catalog` та оберіть шаблон *Search Subjects Edr Registry* зі списку.
-+
-image:registry-develop:bp-modeling/ext-integration/connectors/edr/element-template-settings-01.png[]
-. Налаштуйте обраний шаблон:
-
-* У полі `Name` вкажіть назву задачі. Наприклад, `Пошук інформації за суб'єктом в ЄДР`
-* У полі `Authorization token` зазначте токен для доступу до СЕВ ДЕІР "Трембіта". Наприклад, `{token}`.
-+
-NOTE: `Authorization token` надається постачальником сервісу (в нашому випадку -- ЄДР), який є іншим учасником СЕВ ДЕІР "Трембіта".
-
-* У полі `Code` введіть код (ЄДРПОУ або РНОКПП) для пошуку в ЄДР. Наприклад, `88888888`.
-* У полі `Result variable` зазначте назву вихідного параметру, до якого буде записано відповідь від сервісу. Наприклад, `response`.
-
-+
-image:registry-develop:bp-modeling/ext-integration/connectors/edr/element-template-settings-1.png[]
-
-=== Отримання деталізованої інформації за суб'єктом в ЄДР
-
-Розширення *Get Subject Detail Edr Registry* -- делегат для виклику зовнішнього SOAP-сервісу, призначений для отримання деталізованої інформації про суб'єкт за ID, який налаштовується за допомогою шаблону *Get Subject Detail Edr Registry* (_subjectDetailEdrRegistryConnectorDelegate.json_).
-
-[WARNING]
-====
-Передумови ::
-За умови налаштування шаблону у *Camunda Modeler* переконайтеся, що папка із застосунком *_resources/element-templates_* містить файл _subjectDetailEdrRegistryConnectorDelegate.json_.
-====
-
-. Відкрийте **Service Task**.
-. На панелі налаштувань справа натисніть `Open Catalog` та оберіть шаблон *Get Subject Detail Edr Registry* зі списку.
-+
-image:registry-develop:bp-modeling/ext-integration/connectors/edr/element-template-settings-02.png[]
-
-. Налаштуйте обраний шаблон:
-
-* У полі `Name` вкажіть назву задачі. Наприклад, `Пошук деталізованої інформації за суб'єктом в ЄДР`.
-* У полі `Authorization token` зазначте токен для доступу до СЕВ ДЕІР "Трембіта". Наприклад, `{token}`.
-+
-NOTE: `Authorization token` надається постачальником сервісу (в нашому випадку -- ЄДР), який є іншим учасником СЕВ ДЕІР "Трембіта".
-
-* У полі `Id` зазначте унікальний ідентифікатор суб'єкта для пошуку в ЄДР. Наприклад, `{subject_id}`.
-* У полі `Result variable` зазначте назву вихідного параметру, до якого буде записано відповідь від сервісу. Наприклад, `response`.
-
-+
-image:registry-develop:bp-modeling/ext-integration/connectors/edr/element-template-settings-2.png[]
-
-=== Приклади використання у бізнес-процесі
-
-Розглянемо ситуацію, коли у бізнес-процесі необхідно перевірити статус суб'єкта в ЄДР.
-
-Для цього у процесі необхідно налаштувати інтеграційний конектор для пошуку суб'єкта з ЄДР (в нашому випадку відповідь буде записано до змінної `responseEDR`).
-
-image:registry-develop:bp-modeling/ext-integration/connectors/edr/element-template-settings-3.png[]
-
-.Приклад відповіді від сервісу
-====
-[source,json]
-----
-    {
-    "name": "active user",
-    "code": "77777777",
-    "id": 213123,
-    "state": "ACTIVE"
-    }
-----
-
-Відповідь містить параметр `state`, що має значення `"ACTIVE"`.
-Далі на шлюзі відбувається перевірка:
-
-NOTE: Якщо `state` має значення `SUSPENDED` або `CANCELLED`, то бізнес-процес видає валідаційну помилку.
-====
-
-.Приклад налаштування гілки
-====
-----
-${responseEdr.value.responseBody.elements().get(0).prop('state').value().equals('SUSPENDED') || responseEdr.responseBody.elements().get(0).prop('state').value().equals('CANCELED')}
-----
-
-image:registry-develop:bp-modeling/ext-integration/connectors/edr/element-template-settings-4.png[]
-
-NOTE: Якщо `state` не дорівнює `SUSPENDED` або `CANCELLED`, то відбудеться подальше виконання процесу.
-====
-
-.Приклад налаштування гілки
-====
-----
-${!responseEdr.value.responseBody.elements().get(0).prop('state').value().equals('SUSPENDED') && !responseEdr.value.responseBody.elements().get(0).prop('state').value().equals('CANCELED')}
-----
-
-image:registry-develop:bp-modeling/ext-integration/connectors/edr/element-template-settings-5.png[]
-====
-
-[#extension-conectory_for_retrieving_data_from_DRACS]
-== Розширення-конектори для отримання даних із ДРАЦС
-
-Для спрощення моделювання бізнес-процесів розроблено типові інтеграційні конектори для отримання інформації із ДРАЦСfootnote:[*ДРАЦС* -- Державна реєстрація актів цивільного стану.], налаштування яких відбувається на схемах бізнес-процесів у додатку **Camunda Modeler**.
-
-Наразі імплементовано 2 типи конекторів для отримання даних із ДРАЦС: ::
-
-. Типове інтеграційне розширення-конектор до SOAP-сервісу ДРАЦС для отримання даних Свідоцтва про народження за вказаними серією і номером Свідоцтва, та датою народження -- `GetCertByNumRoleBirthDate`.
-
-. Типове інтеграційне розширення-конектор до SOAP-сервісу ДРАЦС для отримання даних Свідоцтва про народження за вказаними серією і номером Свідоцтва, та ПІБ -- `GetCertByNumRoleNames`.
-
-=== Отримання даних Свідоцтва про народження за вказаними серією і номером Свідоцтва, та датою народження
-
-Розширення *Get Certificate By Birthdate* -- делегат для виклику зовнішнього SOAP-сервісу для отримання даних Свідоцтва про народження за вказаними серією і номером Свідоцтва, та датою народження, який налаштовується за допомогою шаблону *Get Certificate By Birthdate* (_getCertificateByBirthdateDracsRegistryDelegate.json_).
-
-[WARNING]
-====
-Передумови ::
-
-За умови налаштування шаблону у *Camunda Modeler* переконайтеся, що папка із застосунком *_resources/element-templates_* містить файл _getCertificateByBirthdateDracsRegistryDelegate.json_.
-====
-
-. Відкрийте **Service Task**.
-. На панелі налаштувань справа натисніть `Open Catalog` та оберіть шаблон *Get Certificate By Birthdate* зі списку.
-+
-image:bp-modeling/ext-integration/connectors/dracs/get-certificate-dracs-1.png[]
-. Налаштуйте обраний шаблон:
-* У полі `Name` вкажіть назву задачі. Це може бути призначення сервісної задачі. Наприклад, `Отримати дані зі Свідоцтва про народження`.
-* У полі `Certificate Number` вкажіть номер сертифіката. Наприклад, `218727`.
-* У полі `Certificate Serial` вкажіть серію сертифіката. Наприклад, `IV-AM`.
-+
-TIP: Актуальний формат номера свідоцтва та серію можна перевірити за https://minjust.gov.ua/dep/ddr/svidotstva-pro-narodjennya[посиланням].
-* У полі `Role` вкажіть роль `CHILD`.
-+
-NOTE: Наразі Платформа реєстрів підтримує отримання даних виключно для ролі `CHILD`. Тобто із сервісу ДРАЦС можна отримати виключно дані дитини із сертифіката Свідоцтва про народження. Всі інші передбачені ДРАЦС ролі не підтримуються.
-* У полі `Birth Year` введіть рік народження дитини. Наприклад, `2021`.
-* У полі `Birth Month` вкажіть місяць народження дитини. Наприклад, `10`.
-* У полі `Birth Day` вкажіть день народження дитини. Наприклад, `21`.
-* У полі `Result variable` вкажіть результівну змінну, до якої необхідно записати відповідь від сервісу -- `response`.
-+
-TIP: Приклад відповіді можна подивитися у розділі xref:#dracs-api-implementation[]
-+
-
-image:bp-modeling/ext-integration/connectors/dracs/get-certificate-dracs-3.png[]
-
-=== Отримання даних Свідоцтва про народження за вказаними серією і номером Свідоцтва, та ПІБ
-
-Розширення *Get Certificate By Name* -- делегат для виклику зовнішнього SOAP-сервісу для отримання даних за вказаними серією і номером Свідоцтва, та ПІБ, який налаштовується за допомогою шаблону *Get Certificate By Name* (_getCertificateByNameDracsRegistryDelegate.json_).
-
-[WARNING]
-====
-Передумови ::
-
-За умови налаштування шаблону у *Camunda Modeler* переконайтеся, що папка із застосунком *_resources/element-templates_* містить файл _getCertificateByNameDracsRegistryDelegate.json_.
-====
-
-. Відкрийте **Service Task**.
-. На панелі налаштувань справа натисніть `Open Catalog` та оберіть шаблон *Get Certificate By Name* зі списку.
-+
-image:bp-modeling/ext-integration/connectors/dracs/get-certificate-dracs-2.png[]
-. Налаштуйте обраний шаблон:
-* У полі `Name` вкажіть назву задачі. Це може бути призначення сервісної задачі. Наприклад, `Отримати дані зі Свідоцтва про народження`.
-* У полі `Certificate Number` вкажіть номер сертифіката. Наприклад, `218727`.
-* У полі `Certificate Serial` вкажіть серію сертифіката. Наприклад, `IV-AM`.
-+
-TIP: Актуальний формат номера свідоцтва та серію можна перевірити за https://minjust.gov.ua/dep/ddr/svidotstva-pro-narodjennya[посиланням].
-* У полі `Role` вкажіть роль `CHILD`.
-+
-NOTE: Наразі Платформа реєстрів підтримує отримання даних виключно для ролі `CHILD`. Тобто із сервісу ДРАЦС можна отримати виключно дані дитини із сертифіката Свідоцтва про народження. Всі інші передбачені ДРАЦС ролі не підтримуються.
-* У полі `Name` введіть ім'я дитини. Наприклад, `Павло`.
-* У полі `Surname` прізвище дитини. Наприклад, `Сидоренко`.
-* У полі `Patronymic` по батькові дитини. Наприклад, `Іванович`.
-* У полі `Result variable` вкажіть результівну змінну, до якої необхідно записати відповідь від сервісу -- `response`.
-+
-TIP: Приклад відповіді можна подивитися у розділі xref:#dracs-api-implementation[]
-+
-image:bp-modeling/ext-integration/connectors/dracs/get-certificate-dracs-4.png[]
-
-[#dracs-api-implementation]
-=== Імплементація на рівні API
-
-При налаштуванні шаблонів делегата у бізнес-процесі, делегати формують запити у форматі XML і за протоколом SOAP надсилають їх відповідним сервісам ДРАЦС.
-
-.Приклад SOAP-запита до API-сервісу GetCertByNumRoleBirthDate згідно з контрактом
-[%collapsible]
-====
-[source,xml]
-----
-<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">
-  <s:Header>
-    ...
-  </s:Header>
-  <s:Body xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
-    <CeServiceRequest xmlns="http://tempuri.org/">
-      <ByParam>3</ByParam>
-      <CertNumber>218727</CertNumber>
-      <CertSerial>IV-AM</CertSerial>
-      <DateBirth>2021-21-10T00:00:00</DateBirth>
-      <Name xsi:nil="true" />
-      <Patronymic xsi:nil="true" />
-      <Role>1</Role>
-      <Surname xsi:nil="true" />
-    </CeServiceRequest>
-  </s:Body>
-</s:Envelope>
-
-----
-====
-
-.Приклад SOAP-запита до API-сервісу GetCertByNumRoleNames згідно з контрактом
-[%collapsible]
-====
-[source,xml]
-----
-<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">
-  <s:Header>
-    ...
-  </s:Header>
-  <s:Body xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
-    <CeServiceRequest xmlns="http://tempuri.org/">
-      <ByParam>4</ByParam>
-      <CertNumber>218727</CertNumber>
-      <CertSerial>IV-AM</CertSerial>
-      <DateBirth xsi:nil="true" />
-      <Name>Павло</Name>
-      <Patronymic>Іванович</Patronymic>
-      <Role>1</Role>
-      <Surname>Сидоренко</Surname>
-    </CeServiceRequest>
-  </s:Body>
-</s:Envelope>
-
-----
-====
-
-.Приклад відповіді від API згідно з контрактом для обох сервісів ДРАЦС
-[%collapsible]
-====
-[source,json]
-----
-{
-   "certificate":[
-      {
-         "certStatus":1,
-         "certRepeat":0,
-         "certSerial":"IV-AM",
-         "certNumber":"218727",
-         "certSerialNumber":null,
-         "certOrg":null,
-         "certDate":null,
-         "arOrg":null,
-         "arNumb":null,
-         "arComposeDate":null,
-         "childSurname":"Сидоренко",
-         "childName":"Павло",
-         "childPatronymic":"Іванович",
-         "childBirthdate":null,
-         "fatherSurname":null,
-         "fatherName":null,
-         "fatherPatronymic":null,
-         "fatherCitizenship":null,
-         "fatherCitizenshipAnother":null,
-         "motherSurname":null,
-         "motherName":null,
-         "motherPatronymic":null,
-         "motherCitizenship":null,
-         "motherCitizenshipAnother":null,
-         "oldSurname":null,
-         "oldName":null,
-         "oldPatronymic":null,
-         "newSurname":null,
-         "newName":null,
-         "newPatronymic":null,
-         "dateOfBirth":null,
-         "placeofBirth":null,
-         "husbandOldSurname":null,
-         "husbandSurname":null,
-         "husbandName":null,
-         "husbandPatronymic":null,
-         "husbandCitizenship":null,
-         "husbandBirthdate":null,
-         "husbandPlaceofBirth":null,
-         "wifeOldSurname":null,
-         "wifeSurname":null,
-         "wifeName":null,
-         "wifePatronymic":null,
-         "wifeCitizenship":null,
-         "wifeBirthdate":null,
-         "wifePlaceOfBirth":null
-      }
-   ]
-}
-----
-NOTE: Параметри зі значенням `null` не використовуються.
-====
-
-[#eibdvpo]
-== Розширення-конектор для отримання даних з ЄІБДВПО
-
-Для спрощення моделювання бізнес-процесів розроблено типовий інтеграційний конектор для обміну інформацією з ЄІБДВПОfootnote:[**ЄІБДВПО** -- Єдина інформаційна база даних внутрішньо переміщених осіб.], налаштування якого відбувається на схемах бізнес-процесів у додатку *Camunda Modeler*.
-
-_Наразі імплементовано 1 тип конектора для обміну даними з ЄІБДВПО:_
-
-* Типове інтеграційне розширення-конектор до SOAP-сервісу ЄІБДВПО для отримання інформації за довідкою внутрішньо переміщеної особи -- `idpExchangeServiceRegistryConnector`.
-
-=== Отримання інформації за довідкою внутрішньо переміщеної особи (ВПО)
-
-Розширення *Idp Exchange Service Registry Connector* -- інтеграційний конектор для виклику зовнішнього SOAP-сервісу для отримання даних за довідкою внутрішньо переміщеної особи (ВПО), який налаштовується за допомогою шаблону *Idp Exchange Service Registry Connector* (_idpExchangeServiceRegistryConnector.json_).
-
-[WARNING]
-====
-Передумови ::
-
-За умови налаштування шаблону у *Camunda Modeler* переконайтеся, що папка із застосунком *_resources/element-templates_* містить файл _idpExchangeServiceRegistryConnector.json_.
-====
-
-. Відкрийте Service Task.
-
-. На панелі налаштувань справа натисніть Open Catalog та оберіть шаблон *Idp Exchange Service Registry Connector* зі списку.
-
-+
-image:registry-develop:bp-modeling/ext-integration/connectors/eibdvpo/get-vpo-eibdvpo-01.png[]
-
-. Налаштуйте обраний шаблон:
-
-* У полі `Name` вкажіть назву задачі. Це може бути призначення сервісної задачі. Наприклад, `Idp Exchange Service Registry`.
-* У полі `Url` вкажіть шлях до сервісу. Наприклад, `/idp/getCertificateByGUID/${submission('FORM_IDP_INPUT').formData.prop('uid').value()}`.
-* У полі `Metgod` вкажіть HTTP-спосіб взаємодії з сервісом `GET` або `POST`.
-* У полі `Body`, у разі використання методу `POST`, вкажіть тіло запиту. Наприклад, `${submission('FORM_IDP_INPUT').formData}`.
-* У полі `Result variable` вкажіть результівну змінну, до якої необхідно записати відповідь від сервісу -- `response`.
-
-+
-image:registry-develop:bp-modeling/ext-integration/connectors/eibdvpo/get-vpo-eibdvpo-02.png[]
-
-=== Імплементація на рівні API
-
-При налаштуванні шаблонів делегата у бізнес-процесі, делегати формують запити у форматі XML і за протоколом SOAP надсилають їх відповідним сервісам ЄІБДВПО.
-
-.Приклад SOAP-запита до API-сервісу IDPexchangeService згідно з контрактом:
-[%collapsible]
-====
-* запит за РНОКПП:
-+
-[source, json]
-----
-{
-"method": "GET",
-"url": "/idp/getCertificateByRNOKPP/3333333333",
-"body": null
-}
-----
-* запит за UID (унікальний ідентифікатор довідки в реєстрі ВПО):
-+
-[source, json]
-----
-{
-"method": "GET",
-"url": "/idp/getCertificateByGUID/79cefcce20028d82fc1d6dda6a498da2",
-"body": null
-}
-----
-====
-
-.Приклад відповіді від API-сервісу IDPexchangeService згідно з контрактом:
-[%collapsible]
-====
-[source, json]
-----
-{
-  "person": {
-    "idpSurname": "ІВАНОВ",
-    "idpName": "ІВАН",
-    "idpPatronymic": "ІВАНОВИЧ",
-    "birthDate": "01.01.1979 00.00.00.000",
-    "birthPlace": "хутір Ізбушенка, Луганської області",
-    "RNOKPP": "3333333333",
-    "gender": "Жінка",
-    "documentType": "1",
-    "documentSerie": "ЕК",
-    "documentNumber": "633666",
-    "documentDate": "13.11.1997 00.00.00.000",
-    "documentIssuer": "Артемівським РВЛМУУМВС укр. в Луг. обл.",
-    "regAddress": "ЛУГАНСЬКА ОБЛАСТЬ/М.ЛУГАНСЬК ЛУГАНСЬК ВУЛ.ПОГРАНИЧНА буд.0",
-    "factAddress": "М.БАХМУТ ДОНЕЦЬКА ОБЛ. ВУЛ. МИРУ буд. 00 кв. 00",
-    "certificateNumber": "1419-69164",
-    "certificateDate": "02.09.2015 00.00.00.000",
-    "certificateIssuer": "М.БАХМУТ ДОНЕЦЬКА ОБЛ.",
-    "certificateState": "знята з обліку",
-    "UID": "f895ad5fbbe66605979afb7e18847c1b"
-  },
-  "accompanied": []
-}
-----
-====
-
-[TIP]
-====
-У разі необхідності використання окремого параметру(наприклад, `idpSurname`) при моделюванні бізнес-процесу, можливе використання наступного скрипту:
-
-[source, groovy]
-----
-def serviceResponse = response.responseBody.elements().get(0)
-serviceResponse.prop('person').prop('idpSurname')
-
-
-accompanied.each{
-    it ...
-}
-----
-====
-////
-
-//== Загальний SOAP http-конектор
 == General integration SOAP HTTP connector
 
-//CAUTION: Конектор можна використати для інтеграції з будь-яким SOAP-сервісом.
-
-//Розширення *SOAP http connector* -- інтеграційний конектор  для виклику зовнішнього SOAP-сервісу, який налаштовується за допомогою шаблону *SOAP http connector* (_soapHttpConnector.json_).
 You can use the *SOAP http connector* extension to call any external SOAP service. This connector is configured using the *SOAP http connector* template (_soapHttpConnector.json_).
 
 [WARNING]
 ====
 Prerequisites ::
-
-//За умови налаштування шаблону у *Camunda Modeler* переконайтеся, що папка із застосунком *_resources/element-templates_* містить файл _soapHttpConnector.json_.
 When configuring the template in Camunda Modeler, ensure the _resources/element-templates_ folder of the application contains the _soapHttpConnector.json_ file.
 ====
 
 [#configure-soap-http-delegate]
-//=== Налаштування конектора
 === Configuring the connector
 
-//Конектор конфігурується за допомогою спеціального шаблону-розширення для сервісної (системної) задачі бізнес-процесу.
 The connector is configured via an extension template for the service task of the business process.
 
-//. Створіть *Service Task* (Сервісну задачу).
 . Open the business process modeling interface.
 . Create a *Service Task*.
-//. На панелі справа натисніть `*Select*`, оберіть та налаштуйте шаблон *SOAP http connector* зі списку:
 . In the panel on the right, click *`Select`*, then select the *SOAP http connector* from the list. Configure the template:
-+
-//* У полі `*Name*` вкажіть назву задачі. `Наприклад, Пошук інформації за суб'єктом в ЄДР`.
+
 * *Name*: Specify the task name -- for example, `Search by registry subject`.
-+
-//* У полі `*Url*` вкажіть адресу ресурсу (повний шлях до ендпоінту). Наприклад, `https://trembita-edr-registry-mock.apps.envone.dev.registry.eua.gov.ua/mockEDRService`.
+
 * *Url*: Specify the resource address -- for example, `https://trembita-edr-registry-mock.apps.envone.dev.registry.eua.gov.ua/mockEDRService`.
-+
-//* У полі `*Headers*` вкажіть заголовки запита. Наприклад, *${requestHeaders}*.
+
 * *Headers*: Specify the request headers -- for example, `${requestHeaders}`.
-+
-//* У полі `*Payload*` вкажіть тіло запита. Наприклад, *`${requestPayload}`*.
+
+
 * `*Payload*: Provide the request body -- for example, `${requestPayload}`.
 +
-//* У полі `*Result variable*` вкажіть змінну, до якої необхідно записати відповідь від сервісу. Наприклад, `*edrResponseBody*`.
 * *Result variable*: Specify the variable to store the service response -- for example, `edrResponseBody`.
 +
 image:registry-develop:bp-modeling/ext-integration/connectors/soap-http/soap-http-1.png[]
 
-//.Відповідь від API згідно з контрактом для сервісу ЄДР
 .API response from EDR service
 ====
 [source,xml]
@@ -545,23 +87,20 @@ image:registry-develop:bp-modeling/ext-integration/connectors/soap-http/soap-htt
 ----
 
 [NOTE]
-//Сервіс повертає відповідь у вигляді рядка, тобто об'єкта типу `*String*` у форматі XML.
 The response from a service returns in the form of a string -- that is, a *String* type object in XML format.
 
-//Надалі ви можете використати цю відповідь у xref:#soap-http-script-form-output[скрипті для виводу даних на UI-форму].
 You can further use the response in the xref:#soap-http-script-form-output[script for outputting data to the UI form].
 ====
 
-//=== Використання у бізнес-процесі на прикладі надсилання запита до сервісу ЄДР
-=== An example of querying the EDR service as part of the business process
+=== An example of querying the SOAP service as part of the business process
 
-//Розглянемо приклад використання розробленого інтеграційного конектора у бізнес-процесі, який має взаємодію із SOAP-сервісом ЄДР (_тут -- виконує пошук інформації про посадову особу за кодом ЄДРПОУ (атрибутом `edrpou`)_).
-//TODO: ua-specific example
+[NOTE,caption=UA-specific]
+This example presents the universal SOAP connector with the Ukrainian-specific system -- Unified State Register or EDR (as it sounds in Ukraine).
+
 Let's consider an example of using the integration connector in a business process that interacts with the EDR SOAP service. In our case, it searches for information about officers by their EDRPOU code (the `edrpou` attribute).
 
 [TIP]
 ====
-//Скористайтеся референтними прикладами бізнес-процесу та UI-форм для кращого розуміння деталей моделювання:
 Download the following business process and UI form examples for reference:
 
 * [*] Business process: _link:{attachmentsdir}/bp-modeling/soap-connectors/soap-http-connector-edr.bpmn[soap-http-connector-edr.bpmn]_
@@ -569,75 +108,57 @@ Download the following business process and UI form examples for reference:
 * [*] Result view form: _link:{attachmentsdir}/bp-modeling/soap-connectors/soap-http-connector-edrpou-edr-result-view.json[soap-http-connector-edrpou-edr-result-view.json]_
 ====
 
-//. Створіть бізнес-процес і додайте пул до панелі моделювання.
 . Create a business process and add a pool to the modeling canvas.
 +
 image:registry-develop:bp-modeling/ext-integration/connectors/soap-http/soap-http-2.png[]
-+
-//. Створіть стартову задачу для ініціювання процесу.
+
 . Create a start task to initiate the process.
 +
 [WARNING]
 ====
-//Для того, щоб використовувати змінну `*initiator*` у бізнес-процесі, необхідно визначити її на стартовій події як `*initiator*` у полі `*Start initiator*`.
 To use the `*initiator*` variable in the business process, you need to define it in the *Start initiator* field of the start event.
 
 image:registry-develop:bp-modeling/ext-integration/connectors/soap-http/soap-http-2-1.png[]
 ====
 
-//==== Користувацька задача введення даних для пошуку в іншому реєстрі
 ==== A user task for entering data to search another registry
 
-//Далі змоделюйте користувацьку задачу (*User Task*), оберіть шаблон *User Form* (користувацька UI-форма) та виконайте налаштування.
 Next, model the *User Task*, select the *User Form* template, and configure it.
 
-//. Введіть назву задачі. Наприклад, `Ввести ЄДРПОУ для пошуку`.
 . Specify the task name -- for example, `Enter EDRPOU to search by`.
-//. У полі `*ID*` введіть ідентифікатор задачі (`activity_id`). Його ви можете використовувати надалі у бізнес-процесі відповідно до вашої логіки. Наприклад, `*searchEdrpouCodeOfficer*`.
 . In the *ID* field, enter the task ID (`activity_id`). You can use it in the business process according to your business logic -- for example, `*searchEdrpouCodeOfficer*`.
-//. У полі `*Form key*` введіть службову назву UI-форми вводу даних. Наприклад, `*soap-http-connector-edrpou-search-in-edr*`.
 . In the *Form key* field, enter the service name of the data entry UI form -- for example, `*soap-http-connector-edrpou-search-in-edr*`.
-//. У полі `Assignee` введіть токен ініціатора процесу -- `${initiator}`.
 . In the *Assignee* field, specify the process initiator token -- for example, `${initiator}`.
 
 image:registry-develop:bp-modeling/ext-integration/connectors/soap-http/soap-http-3.png[]
 
-//Приклад UI-форми на інтерфейсі користувача може виглядати так: ::
 Here is an example of a UI form as it appears to the users: ::
 +
 image:registry-develop:bp-modeling/ext-integration/connectors/soap-http/soap-http-5.png[]
 
 [#request-soap-http-connector]
-//==== Скрипт для виконання запита через SOAP-конектор
 ==== A script for making requests through the SOAP connector
 
-//Далі сформуйте Groovy-скрипт, в якому необхідно визначити параметри, а саме _заголовки_ та _тіло_ запита, які будуть використані SOAP-конектором для отримання даних в іншому реєстрі.
 Next, create a Groovy script defining the parameters to be used by the SOAP connector to get data from another registry -- namely, the request _headers_ and _body_.
 
-//. Створіть скрипт-задачу (*Script Task*).
 . Create a *Script Task*.
-//. Введіть назву. Наприклад, `Підготувати дані для запита`.
 . Specify the task name -- for example, `Preparing request data`.
-//. Відкрийте візуальний редактор скриптів та напишіть необхідний скрипт.
 . Open the script visual editor and create your script.
 +
 image:registry-develop:bp-modeling/ext-integration/connectors/soap-http/soap-http-4.png[]
 
-//Загалом скрипт може виглядати так: ::
 Here is an example of a script: ::
 +
 image:registry-develop:bp-modeling/ext-integration/connectors/soap-http/soap-http-4-1.png[]
-+
-//* 3.1. Отримуємо код ЄДРПОУ, який ввели на першій формі:
-* 3.1. Get the EDRPOU code from the first form:
+
+.. Get the EDRPOU code from the first form:
 +
 [source,groovy]
 ----
 def edrpou = submission('searchEdrpouCodeOfficer').formData.prop('edrpou').value()
 ----
-+
-//* 3.2. Готуємо заголовки запита:
-* 3.2. Prepare the request headers:
+
+.. Prepare the request headers:
 +
 [source,groovy]
 ----
@@ -646,22 +167,18 @@ requestHeaders['SOAPAction'] = 'SearchSubjects'
 requestHeaders['Content-Type'] = 'text/xml;charset=UTF-8;'
 ----
 +
-//NOTE: Підставте відповідне значення для свого запита замість `'SearchSubjects'`.
 NOTE: Replace `'SearchSubjects'` with your own request.
-+
-//* 3.3. Зберігаємо заголовки до транзитної змінної процесу `*requestHeaders*`. Значення цієї змінної ми використаємо як вхідний параметр запита у налаштуваннях SOAP-конектора.
-* 3.3. Save headers to the `*requestHeaders*` transient variable. We will use the value of this variable as an input parameter of the request in the SOAP connector settings.
+
+.. Save headers to the `*requestHeaders*` transient variable. We will use the value of this variable as an input parameter of the request in the SOAP connector settings.
 +
 [source,groovy]
 ----
 set_transient_variable('requestHeaders', requestHeaders)
 ----
+
+.. Form the body of the SOAP request to the EDR API according to the API contract:
 +
-//* 3.4. Формуємо тіло SOAP-запита до API-сервісу ЄДР згідно з контрактом:
-//TODO: What is the contract in this context?
-* 3.4. Form the body of the SOAP request to the EDR API according to the contract:
-+
-.SOAP request body
+._SOAP request body_
 [%collapsible]
 ====
 [source,groovy]
@@ -715,7 +232,6 @@ def requestPayload = """
 +
 [TIP]
 ====
-//Підставляємо змінну *`${edrpou}`* у тіло запита:
 Put the *`${edrpou}`* variable into the request body:
 
 [source,xml]
@@ -729,40 +245,31 @@ Put the *`${edrpou}`* variable into the request body:
 
 ----
 ====
-//* 3.5. Зберігаємо тіло запита до транзитної змінної процесу `*requestPayload*`. Значення цієї змінної ми використаємо як вхідний параметр запита у налаштуваннях SOAP-конектора.
-* 3.5. Save the request body to the `*requestPayload*` transient variable. We will use the value of this variable as an input parameter of the request in the SOAP connector settings.
+
+.. Save the request body to the `*requestPayload*` transient variable. We will use the value of this variable as an input parameter of the request in the SOAP connector settings.
 +
 [source,groovy]
 ----
 set_transient_variable('requestPayload', requestPayload as String)
 ----
 +
-//NOTE: `*requestPayload*` необхідно передати як рядок (*`as String`*).
 NOTE: The `*requestPayload*` variable must be passed as a string.
 
-//Використовуйте параметри, збережені до змінних у скрипті, в рамках сервісної задачі та налаштуванні SOAP-конектора.
 Use the parameters from the script's variables for the service task and to configure the SOAP connector.
 
-//==== Сервісна задача для відправлення пошукового запита до іншого реєстру
 ==== A service task for sending a search query to another registry
 
-//Далі необхідно створити сервісну задачу, застосувати та налаштувати шаблон для *SOAP-http-конектора*.
 Next, you need to create a service task and apply and configure the *SOAP-http-connector* template.
 
 TIP: For details, jump to xref:#configure-soap-http-delegate[].
 
 [#soap-http-script-form-output]
-//==== Скрипт для виводу даних на UI-форму користувача
 ==== A script for outputting data to the user's UI form
 
-//Далі необхідно передати дані на UI-форму, отримані в іншому реєстрі за допомогою SOAP-http-конектора. Для цього спочатку сформуйте відповідний скрипт, який зможе це зробити.
 Next, you need to pass the data obtained from another registry using the SOAP HTTP connector to the UI form. For this, you need to create a corresponding script.
 
-//. Створіть скрипт-задачу (*Script Task*).
 . Create a *Script Task*.
-//. Введіть назву. Наприклад, `Підготовка отриманих даних для виведення на форму`.
-. Specify the task name -- for example, `Preparing the obtained data for the form`.
-//. Відкрийте візуальний редактор скриптів та напишіть необхідний скрипт.
+. Specify the task name—for example, `Preparing the obtained data for the form`.
 . Open the script visual editor and create your script.
 +
 image:registry-develop:bp-modeling/ext-integration/connectors/soap-http/soap-http-6.png[]
@@ -770,13 +277,10 @@ image:registry-develop:bp-modeling/ext-integration/connectors/soap-http/soap-htt
 Here is an example of a script: ::
 +
 image:registry-develop:bp-modeling/ext-integration/connectors/soap-http/soap-http-6-1.png[]
-+
-//* 3.1. Формуємо JSON-об'єкт з параметрами *`state`*, `*name*`, `*code*`, `*id*`, щоб передати їх на форму.
-* 3.1. Form a JSON object with the *`state`*, `*name*`, `*code*`, and `*id*` parameters to pass to the form.
-+
-//* 3.2. Зберігаємо об'єкт до змінної *`payload`*, яку ми й використаємо як вхідний параметр для передачі даних на форму.
-* 3.2. Save the object to the *`payload`* variable, which we will use as an input parameter for passing data to the form.
-//._Скрипт для виводу даних на UI-форму користувача_
+
+.. Form a JSON object with the *`state`*, `*name*`, `*code*`, and `*id*` parameters to pass to the form.
+
+.. Save the object to the *`payload`* variable, which we will use as an input parameter for passing data to the form.
 +
 ._A script for outputting data to the user's UI form_
 [%collapsible]
@@ -801,386 +305,26 @@ def getValueByPropertyName(String propName) {
 ----
 ====
 +
-//NOTE: Функція *`S(edrResponseBody, 'application/xml')`* повертає об'єкт відповідно до специфікації https://javadoc.io/static/org.camunda.spin/camunda-spin-core/1.6.3/org/camunda/spin/xml/SpinXmlElement.html[SpinXmlElement].
 NOTE: The *`S(edrResponseBody, 'application/xml')`* function returns the object using the https://javadoc.io/static/org.camunda.spin/camunda-spin-core/1.6.3/org/camunda/spin/xml/SpinXmlElement.html[SpinXmlElement] specification.
 
-//==== Користувацька задача передачі даних на UI-форму
 ==== A user task for passing data to the UI form
 
-//Насамкінець необхідно вивести отримані в іншому реєстрі та опрацьовані скриптом дані на UI-форму користувача.
 Finally, you need to output the data obtained from another registry and processed by the script to the user's UI form.
 
-//Змоделюйте користувацьку задачу (*User Task*), оберіть шаблон *User Form* (користувацька UI-форма) та виконайте налаштування.
 Model the *User Task*, select the *User Form* template, and configure it.
 
-//. Введіть назву задачі. Наприклад, `Переглянути дані з ЄДР`.
 . Specify the task name -- for example, `View EDR data`.
-//. У полі `*ID*` введіть ідентифікатор задачі (`activity_id`). Наприклад, `*writeResultForm*`.
 . In the *ID* field, enter the task ID (`activity_id`) -- for example, `*writeResultForm*`.
-. У полі `*Form key*` введіть службову назву UI-форми вводу даних. Наприклад, `*soap-http-connector-edrpou-edr-result-view*`.
-//TODO: Скоріш за все, тут має бути "UI-форми перегляду результату"
 . In the *Form key* field, enter the service name of the result view UI form -- for example, `*soap-http-connector-edrpou-edr-result-view*`.
-//. У полі `Assignee` введіть токен ініціатора процесу -- `${initiator}`.
 . In the *Assignee* field, specify the process initiator token -- for example, `${initiator}`.
-//. У полі `*Form data pre-population*` вкажіть як змінну об'єкт із параметрами, які необхідно передати на форму, -- `*${payload}*`.
 . In the *Form data pre-population* field, specify the variable for the object with parameters to pass to the form: `*${payload}*`.
 +
-//TIP: Змінна формується у задачі xref:#soap-http-script-form-output[].
 TIP: The variable is formed in the following task: xref:#soap-http-script-form-output[].
 
 image:registry-develop:bp-modeling/ext-integration/connectors/soap-http/soap-http-7.png[]
 
-//Приклад UI-форми на інтерфейсі користувача може виглядати так: ::
 Here is an example of a UI form as it appears to the users: ::
 +
 image:registry-develop:bp-modeling/ext-integration/connectors/soap-http/soap-http-8.png[]
 
-//Змоделюйте задачу завершення процесу та збережіть зміни.
 Model the process end task and save your changes.
-
-////
-[#trembita-connector]
-== Загальний Trembita SOAP-конектор
-[CAUTION]
-====
-Конектор можна використати для інтеграції з будь-яким SOAP-сервісом, зареєстрованим у СЕВ ДЕІР "Трембіта".
-
-Детальніше про налаштування взаємодії з "Трембітою" див. на сторінці xref:registry-admin/external-integration/cp-integrate-trembita.adoc[].
-====
-
-*Trembita SOAP connector* -- інтеграційне розширення-делегат *`${trembitaSoapConnectorDelegate}`*, призначене для виклику зовнішнього SOAP-сервісу через ШБО "Трембіта". Воно налаштовується у бізнес-процесі за допомогою шаблону *Trembita SOAP connector* (*_trembitaSoapConnectorDelegate.json_*).
-
-[WARNING]
-====
-Передумови ::
-
-За умови налаштування делегата в Camunda Modeler переконайтеся, що папка застосунку *_resources/element-templates_* містить файл шаблону *_trembitaSoapConnectorDelegate.json_*.
-====
-
-[#configure-trembita-soap-delegate]
-=== Налаштування делегата
-
-Делегат конфігурується за допомогою спеціального шаблону-розширення для сервісної (системної) задачі бізнес-процесу.
-
-. Створіть *Service Task* (Сервісну задачу).
-
-. На панелі справа натисніть `*Select*`, оберіть та налаштуйте шаблон *Trembita SOAP connector* зі списку:
-
-. У полі `*Name*` секції *General* вкажіть назву задачі. Наприклад, `Відправлення запита до ЄДР`.
-
-. Розділ *Custom properties*:
-
-* У полі `*Trembita system name*` вкажіть назву зовнішньої системи-учасника СЕВ ДЕІР "Трембіта", з якою встановлено підключення через адміністративну панель *Control Plane*. Наприклад, *`trembita-registry-test`*.
-
-* У полі `*Trembita service name*` вкажіть назву сервісу зовнішньої системи "Трембіта", куди необхідно виконати запит. Наприклад, *`testAction`*.
-+
-NOTE: [.underline]#Назва сервісу = SOAP Action#. Вона визначає, який процес або програму необхідно викликати, коли запит надсилається клієнтом сервісу.
-
-* У полі `*Content type*` визначається формат представлення даних та кодування. За замовчуванням -- *`text/xml;charset=UTF-8;`*.
-
-* У полі *`Request payload`* вкажіть змінну, яка містить дані запита. Наприклад, *`${requestPayload}`*.
-+
-NOTE: *`${requestPayload}`* формується попередньо у скрипті (_див. детальніше -- xref:#request-trembita-soap-connector[]_).
-+
-Тіло запита може виглядати так:
-+
-.Тіло запита згідно з контрактом для сервісу ЄДР
-====
-[source,xml]
-----
-<ns2:SearchSubjects xmlns:ns2="http://nais.gov.ua/api/sevdeir/EDR" xmlns:ns3="http://x-road.eu/xsd/xroad.xsd" xmlns:ns4="http://x-road.eu/xsd/identifiers">
-	<ns2:code>$edrpou</ns2:code>
-</ns2:SearchSubjects>
-----
-====
-
-* У полі `*Result variable*` вкажіть змінну, до якої необхідно записати відповідь від сервісу. Наприклад, `*edrResponseBody*`.
-
-+
-image:registry-develop:bp-modeling/ext-integration/connectors/trembita-connector/trembita-connector-1.png[]
-
-+
-.Відповідь від API згідно з контрактом для сервісу ЄДР
-====
-[source,xml]
-----
-<soap11env:Envelope xmlns:soap11env="http://schemas.xmlsoap.org/soap/envelope/" xmlns:tns="http://nais.gov.ua/api/sevdeir/EDR" xmlns:xroad="http://x-road.eu/xsd/xroad.xsd" xmlns:id="http://x-road.eu/xsd/identifiers">
-   <soap11env:Header>
-        ...
-   </soap11env:Header>
-   <soap11env:Body>
-      <tns:SearchSubjectsResponse>
-         <tns:SubjectList>
-            <tns:SubjectInfo>
-               <tns:state>1</tns:state>
-               <tns:state_text>зареєстровано</tns:state_text>
-               <tns:name>Сидоренко Василь Леонідович</tns:name>
-               <tns:url>http://zqedr-api.nais.gov.ua/1.0/subjects/2222</tns:url>
-               <tns:code>2222</tns:code>
-               <tns:id>2222</tns:id>
-            </tns:SubjectInfo>
-         </tns:SubjectList>
-      </tns:SearchSubjectsResponse>
-   </soap11env:Body>
-</soap11env:Envelope>
-----
-
-[NOTE]
-Делегат повертає відповідь у вигляді об'єкта типу https://javadoc.io/static/org.camunda.spin/camunda-spin-core/1.6.3/org/camunda/spin/xml/SpinXmlElement.html[SpinXmlElement].
-====
-
-=== Використання у бізнес-процесі на прикладі надсилання запита до сервісу ЄДР
-
-Розглянемо приклад використання розробленого інтеграційного конектора у бізнес-процесі, який має взаємодію із SOAP-сервісом ЄДР (_тут -- виконує пошук інформації про посадову особу за кодом ЄДРПОУ (атрибутом `edrpou`)_).
-
-[TIP]
-====
-Скористайтеся референтними прикладами бізнес-процесу та UI-форм для кращого розуміння деталей моделювання:
-
-* [*] Бізнес-процес: _link:{attachmentsdir}/bp-modeling/soap-connectors/trembita-connector.bpmn[trembita-connector.bpmn]_
-* [*] Форма введення даних: _link:{attachmentsdir}/bp-modeling/soap-connectors/soap-http-connector-edrpou-search-in-edr.json[soap-http-connector-edrpou-search-in-edr.json]_
-* [*] Форма перегляду результату: _link:{attachmentsdir}/bp-modeling/soap-connectors/soap-http-connector-edrpou-edr-result-view.json[soap-http-connector-edrpou-edr-result-view.json]_
-====
-
-[NOTE]
-====
-Конектор можна використати для інтеграції з будь-яким SOAP-сервісом, зареєстрованому у СЕВ ДЕІР "Трембіта".
-====
-
-. Створіть бізнес-процес і додайте пул до панелі моделювання.
-+
-image:registry-develop:bp-modeling/ext-integration/connectors/trembita-connector/trembita-connector-2.png[]
-
-. Створіть стартову задачу для ініціювання процесу.
-+
-[WARNING]
-====
-Для того, щоб використовувати змінну `*initiator*` у бізнес-процесі, необхідно визначити її на стартовій події як `*initiator*` у полі `*Start initiator*`.
-
-image:registry-develop:bp-modeling/ext-integration/connectors/soap-http/soap-http-2-1.png[]
-
-====
-
-==== Користувацька задача введення даних для пошуку в іншому реєстрі
-
-Далі змоделюйте користувацьку задачу (*User Task*), оберіть шаблон *User Form* (користувацька UI-форма) та виконайте налаштування.
-
-. Введіть назву задачі. Наприклад, `Ввести ЄДРПОУ для пошуку`.
-. У полі `*ID*` введіть ідентифікатор задачі (`activity_id`). Його ви можете використовувати надалі у бізнес-процесі відповідно до вашої логіки. Наприклад, `*searchEdrpouCodeOfficer*`.
-. У полі `*Form key*` введіть службову назву UI-форми вводу даних. Наприклад, `*soap-http-connector-edrpou-search-in-edr*`.
-. У полі `Assignee` введіть токен ініціатора процесу -- `${initiator}`.
-
-image:registry-develop:bp-modeling/ext-integration/connectors/soap-http/soap-http-3.png[]
-
-Приклад UI-форми на інтерфейсі користувача може виглядати так: ::
-+
-image:registry-develop:bp-modeling/ext-integration/connectors/soap-http/soap-http-5.png[]
-
-[#request-trembita-soap-connector]
-==== Скрипт для виконання запита через Trembita SOAP-конектор
-
-Далі сформуйте Groovy-скрипт, в якому необхідно визначити параметри, а саме _тіло_ запита й опціонально -- _заголовки_, які будуть використані SOAP-конектором для отримання даних в іншому реєстрі.
-
-[WARNING]
-====
-Делегат _автоматично додасть наступні системні заголовки_ при виконанні запита до SOAP-сервісу.
-
-.Перелік і структура заголовків
-[%collapsible]
-=====
-[source,xml]
-----
-<xro:client iden:objectType="?" xmlns:xro="http://x-road.eu/xsd/xroad.xsd" xmlns:iden="http://x-road.eu/xsd/identifiers">
-    <iden:xRoadInstance>?</iden:xRoadInstance>
-    <iden:memberClass>?</iden:memberClass>
-    <iden:memberCode>?</iden:memberCode>
-    <iden:subsystemCode>?</iden:subsystemCode>
-</xro:client>
-<xro:service iden:objectType="SERVICE" xmlns:xro="http://x-road.eu/xsd/xroad.xsd" xmlns:iden="http://x-road.eu/xsd/identifiers">
-    <iden:xRoadInstance>?</iden:xRoadInstance>
-    <iden:memberClass>?</iden:memberClass>
-    <iden:memberCode>?</iden:memberCode>
-    <iden:subsystemCode>?</iden:subsystemCode>
-    <iden:serviceCode>?</iden:serviceCode>
-    <iden:serviceVersion>?</iden:serviceVersion>
-</xro:service>
-<xro:userId xmlns:xro="http://x-road.eu/xsd/xroad.xsd">?</xro:userId>
-<xro:id xmlns:xro="http://x-road.eu/xsd/xroad.xsd">?</xro:id>
-<xro:protocolVersion xmlns:xro="http://x-road.eu/xsd/xroad.xsd">?</xro:protocolVersion>
-----
-=====
-====
-
-. Створіть скрипт-задачу (*Script Task*).
-. Введіть назву. Наприклад, `Підготувати дані для запита`.
-. Відкрийте візуальний редактор скриптів та напишіть необхідний скрипт.
-+
-image:registry-develop:bp-modeling/ext-integration/connectors/soap-http/soap-http-4.png[]
-
-Загалом скрипт може виглядати так: ::
-+
-image:registry-develop:bp-modeling/ext-integration/connectors/trembita-connector/trembita-connector-3.png[]
-
-* 3.1. Отримуємо значення коду `*edrpou*`, який ввели на першій формі вводу даних (`*formData*`):
-+
-[source,groovy]
-----
-def edrpou = submission('searchEdrpouCodeOfficer').formData.prop('edrpou').value()
-----
-
-* 3.2. Отримуємо токен авторизації для доступу до сервісу за допомогою JUEL-функції *`get_trembita_auth_token()`*.
-+
-[source,groovy]
-----
-def registryAuthSecretValue = get_trembita_auth_token('trembita-registry-test')
-----
-+
-[NOTE]
-====
-Функція *`get_trembita_auth_token()`* дозволяє отримати токен авторизації для доступу до сервісів СЕВ ДЕІР "Трембіта", з якими попередньо налаштовано взаємодію у Control Plane (_див. детальніше -- xref:bp-modeling/bp/modeling-facilitation/modelling-with-juel-functions.adoc[]_).
-====
-
-* 3.3. Створюємо шаблон заголовка SOAP-запита із токеном авторизації.
-+
-[source,groovy]
-----
-def authHeaderTagTemplate = """
-        <ns2:AuthorizationToken xmlns:ns2="http://nais.gov.ua/api/sevdeir/EDR" xmlns:ns3="http://x-road.eu/xsd/xroad.xsd" xmlns:ns4="http://x-road.eu/xsd/identifiers">
-            $registryAuthSecretValue
-        </ns2:AuthorizationToken>
-"""
-----
-
-* 3.4. Заповнюємо шаблон заголовка із токеном авторизації.
-+
-[source,groovy]
-----
-def headerString = sprintf(authHeaderTagTemplate, registryAuthSecretValue)
-----
-
-* 3.5. Створюємо шаблон тіла SOAP-запита для пошуку суб'єкта за кодом ЄДРПОУ.
-+
-[source,groovy]
-----
-def bodyTemplate = """
- <ns2:SearchSubjects xmlns:ns2="http://nais.gov.ua/api/sevdeir/EDR" xmlns:ns3="http://x-road.eu/xsd/xroad.xsd" xmlns:ns4="http://x-road.eu/xsd/identifiers">
-            <ns2:code>$edrpou</ns2:code>
-        </ns2:SearchSubjects>
-"""
-----
-
-* 3.6. Заповнюємо шаблон тіла SOAP-запита зі значенням `*edrpou*`.
-+
-[source,groovy]
-----
-def bodyString = sprintf(bodyTemplate, edrpou)
-----
-
-* 3.7. Створюємо шаблон SOAP-запита зі згенерованим заголовком та тілом.
-+
-[source,groovy]
-----
-String requestTemplate = """
-<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/">
-    <SOAP-ENV:Header>
-        $headerString
-    </SOAP-ENV:Header>
-    <SOAP-ENV:Body>
-        $bodyString
-    </SOAP-ENV:Body>
-</SOAP-ENV:Envelope>
-"""
-----
-+
-Змінні `*headerString*` та `*bodyString*` формуються з шаблонів `*authHeaderTagTemplate*` та `*bodyTemplate*` відповідно, де змінні `*$registryAuthSecretValue*` і `*$edrpou*` замінюються на значення змінних `*registryAuthSecretValue*` та *`edrpou`*, що були отримані на попередніх етапах у скрипті.
-
-* 3.8. Далі формуємо запит на отримання інформації про суб'єкт за його ЄДРПОУ.
-+
-[source,groovy]
-----
-def requestPayload = sprintf(requestTemplate, headerString, bodyString)
-----
-+
-Запит формується за допомогою змінної *`requestTemplate`*, в якій змінні *$headerString* і *$bodyString* замінюються на їх відповідні значення.
-
-* 3.9. Кінцевий запит зберігаємо у змінній `*requestPayload*` і додаємо до тимчасових змінних за допомогою функції *`set_transient_variable()`*. Значення цієї змінної ми використаємо як вхідний параметр запита у налаштуваннях Trembita SOAP-конектора (_див. детальніше -- xref:#configure-trembita-soap-delegate[]_).
-+
-[source,groovy]
-----
-set_transient_variable('requestPayload', requestPayload)
-----
-+
-TIP: Тимчасові змінні дозволяють зберігати дані на певний час, щоб вони були доступні наступним етапам скрипту (до наступної користувацької задачі), але не були збережені назавжди.
-
-
-==== Сервісна задача для відправлення пошукового запита до іншого реєстру
-
-Далі необхідно створити сервісну задачу, застосувати та налаштувати делегат для *Trembita SOAP*-конектора.
-
-TIP: Див. детальніше у розділі xref:#configure-trembita-soap-delegate[].
-
-[#trembita-soap-script-form-output]
-==== Скрипт для виводу даних на UI-форму користувача
-
-Далі необхідно передати дані на UI-форму, отримані в іншому реєстрі за допомогою SOAP-http-конектора. Для цього спочатку сформуйте відповідний скрипт, який зможе це зробити.
-
-. Створіть скрипт-задачу (*Script Task*).
-. Введіть назву. Наприклад, `Підготовка отриманих даних для виведення на форму`.
-. Відкрийте візуальний редактор скриптів та напишіть необхідний скрипт.
-+
-image:registry-develop:bp-modeling/ext-integration/connectors/soap-http/soap-http-6.png[]
-
-Загалом скрипт може виглядати так: ::
-+
-image:registry-develop:bp-modeling/ext-integration/connectors/trembita-connector/trembita-connector-4.png[]
-
-* 3.1. Формуємо JSON-об'єкт із параметрами *`state`*, `*name*`, `*code*`, `*id*`, щоб передати їх на форму.
-
-* 3.2. Зберігаємо об'єкт до змінної *`payload`*, яку ми й використаємо як вхідний параметр для передачі даних на форму.
-+
-._Скрипт для виводу даних на UI-форму користувача_
-[%collapsible]
-====
-[source,groovy]
-----
-def payload = [:]
-
-        payload['state'] = getValueByPropertyName("state_text")
-        payload['name'] = getValueByPropertyName("name")
-        payload['code'] = getValueByPropertyName("code")
-        payload['id'] = getValueByPropertyName("id")
-
-        set_transient_variable('payload', S(payload, 'application/json'))
-
-        def getValueByPropertyName(String propName) {
-            return edrResponseBody.childElement("Body")
-            .childElement("http://nais.gov.ua/api/sevdeir/EDR", "SearchSubjectsResponse")
-            .childElement("SubjectList")
-            .childElement("SubjectInfo")
-            .childElement(propName)
-            .textContent()
-}
-----
-====
-
-==== Користувацька задача передачі даних на UI-форму
-
-Насамкінець необхідно вивести отримані в іншому реєстрі та опрацьовані скриптом дані на UI-форму користувача.
-
-Змоделюйте користувацьку задачу (*User Task*), оберіть шаблон *User Form* (користувацька UI-форма) та виконайте налаштування.
-
-. Введіть назву задачі. Наприклад, `Переглянути дані з ЄДР`.
-. У полі `*ID*` введіть ідентифікатор задачі (`activity_id`). Наприклад, `*writeResultForm*`.
-. У полі `*Form key*` введіть службову назву UI-форми вводу даних. Наприклад, `*soap-http-connector-edrpou-edr-result-view*`.
-. У полі `Assignee` введіть токен ініціатора процесу -- `${initiator}`.
-. У полі `*Form data pre-population*` вкажіть як змінну об'єкт із параметрами, які необхідно передати на форму, -- `*${payload}*`.
-+
-TIP: Змінна формується у задачі xref:#trembita-soap-script-form-output[].
-
-image:registry-develop:bp-modeling/ext-integration/connectors/soap-http/soap-http-7.png[]
-
-Приклад UI-форми на інтерфейсі користувача може виглядати так: ::
-+
-image:registry-develop:bp-modeling/ext-integration/connectors/soap-http/soap-http-8.png[]
-
-Змоделюйте задачу завершення процесу та збережіть зміни.
