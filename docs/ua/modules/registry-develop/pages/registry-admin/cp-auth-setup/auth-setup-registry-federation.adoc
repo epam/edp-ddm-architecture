@@ -1,0 +1,188 @@
+= Налаштування автентифікації для групи реєстрів
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+include::platform:ROOT:partial$admonitions/language-ua.adoc[]
+
+== Загальний опис
+
+Адміністратори реєстру можуть налаштувати автентифікацію для групи реєстрів, об’єднаних за визначеною ознакою. Доступ до реєстрів надається зі спрощеним механізмом автентифікації через SSO та авторизацією, яка налаштовується на рівні окремих реєстрів.
+
+Функціональність включає такі можливості та переваги:
+* використання master-ріалму;
+* налаштуванню автентифікаторів для групи реєстрів;
+* налаштуванню Identity Brokering для ріалмів реєстрів та master-ріалму, яка покриває наступні сценарії.
+
+== Налаштування автентифікації для групи реєстрів
+
+Щоб налаштувати автентифікацію для групи реєстрів, необхідно виконати наступні кроки:
+
+. Визначте реєстри, які повинні бути в рамках однієї групи. Наприклад: `student-reg` та `school-reg`.
++
+NOTE: В рамках однієї групи можливо налаштувати автентифікацію для двох і більше реєстрів.
++
+image:registry-develop:registry-admin/auth-setup/registry-federation/01-registry-federation.png[]
+
+. Увійдіть до *Control-Plane*, відкрийте Керування Платформою та перейдіть в *Gerrit*.
+. Визначте з якої гілки розгортається `user-management`. Для цього:
+
+..  Перейдіть за шляхом *Browse* (1) > *Repositories* (2). Введіть `cluster-mgmt` у полі пошуку (3) та натисніть на репозиторій з ім’ям *_cluster-mgmt_* (4).
++
+image:registry-develop:registry-admin/auth-setup/registry-federation/02-registry-federation.png[]
+
+.. 	У новому вікні перейдіть до *Branches* (1) > `master` (2).
++
+image:registry-develop:registry-admin/auth-setup/registry-federation/03-registry-federation.png[]
+
+.. Перейдіть у папку *_tree_* (1) > *_properties_* (2).
++
+image:registry-develop:registry-admin/auth-setup/registry-federation/04-registry-federation.png[]
+
+.. Знайдіть та відкрийте файл _cluster-mgmt.yaml_.
+
+.. У цьому файлі знайдіть блок `user-management` та його гілку (`branch`) через пошук по сторінці kbd:[Ctrl+F].
++
+image:registry-develop:registry-admin/auth-setup/registry-federation/05-registry-federation.png[]
+
+. Внесіть необхідні зміни в репозиторій *_user-management_*:
+
+.. Перейдіть за шляхом *Browse* (1) > *Repositories* (2). Впишіть *user-management* в полі пошуку (3) та натисніть на репозиторій з ім’ям *components/infra/user-management* (4).
++
+image:registry-develop:registry-admin/auth-setup/registry-federation/06-registry-federation.png[]
+
+.. Перейдіть на *Commands* (1) > *`CREATE CHANGE`* (2) у новому вікні.
++
+image:registry-develop:registry-admin/auth-setup/registry-federation/07-registry-federation.png[]
+
+.. У спливному вікні у полі *Select branch for new change* (1) оберіть гілку, яку визначили у пункті 2 та зазначте *Description* (2). Натисніть *`CREATE`* (3).
++
+image:registry-develop:registry-admin/auth-setup/registry-federation/08-registry-federation.png[]
+
+.. У новому вікні натисніть *`EDIT`*.
++
+image:registry-develop:registry-admin/auth-setup/registry-federation/09-registry-federation.png[]
+
+.. Створіть файл за шляхом _deploy-templates/keycloak-idps/templates/FederationRealm.yaml_.
+
+... Натисніть *`ADD/OPEN/UPLOAD`*.
++
+image:registry-develop:registry-admin/auth-setup/registry-federation/10-registry-federation.png[]
+
+... У спливному вікні впишіть шлях до файлу.
++
+image:registry-develop:registry-admin/auth-setup/registry-federation/11-registry-federation.png[]
+
+... Впишіть контент файлу (1) та натисніть *`SAVE`* (2).
++
+TIP: Контент файлу можна знайти у вкладенні
+xref:attachment$/registry-admin/auth-setup/registry-federation/FederationRealm.yaml[_FederationRealm.yaml_].
++
+image:registry-develop:registry-admin/auth-setup/registry-federation/12-registry-federation.png[]
+
+.. За аналогією створіть файл за шляхом _deploy-templates/keycloak-idps/templates/ DsoOfficerAuthFlow.yaml_.
++
+TIP: Контент файлу можна знайти у вкладенні
+xref:attachment$/registry-admin/auth-setup/registry-federation/DsoOfficerAuthFlow.yaml[_DsoOfficerAuthFlow.yaml_].
+
+.. За аналогією створіть файл за шляхом _deploy-templates/keycloak-idps/templates/ FederationClient.yaml_.
++
+TIP: Контент файлу можна знайти у вкладенні
+xref:attachment$/registry-admin/auth-setup/registry-federation/FederationClient.yaml[_FederationClient.yaml_].
+
+.. За аналогією створіть файл за шляхом _deploy-templates/keycloak-idps/templates/ RegistryFederationAuthFlow.yaml_.
++
+TIP: Контент файлу можна знайти у вкладенні
+xref:attachment$/registry-admin/auth-setup/registry-federation/RegistryFederationAuthFlow.yaml[_RegistryFederationAuthFlow.yaml_].
+
+.. Відредагуйте файл _deploy-templates/values.yaml_:
+
+... Натисніть *`ADD/OPEN/UPLOAD`*;
+... У спливаючому вікні впишіть шлях _deploy-templates/values.yaml_;
+... В кінці файлу додайте такі значення зі збереженням відступів, як зазначено нижче.
++
+[source,yaml]
+----
+registryFederation:
+  name: "school-federation"
+  widgetUrl: 'https://eu.iit.com.ua/sign-widget/v20200922/'
+  widgetHeight: '720'
+  selfRegistrationEnabled: 'false'
+  registries:
+    - name: "school-reg"
+      selfRegistrationEnabled: false
+    - name: "student-reg"
+      selfRegistrationEnabled: false
+----
++
+[NOTE]
+Змініть наступні значення:
+
+* У значенні *name* впишіть назву групи реєстрів (дозволена тільки латиниця через дефіс);
+* У значенні *widgetUrl* впишіть повну URL-адресу віджету, який буде використовуватись усіма реєстрами із групи.
+//TODO:  url ??Віджет
+* У значенні *selfRegistrationEnabled* -- впишіть `true`, якщо для групи реєстрів потрібна автореєстрація користувачів.
+* У значенні *registries* -- впишіть список всіх реєстрів групи де `name` -- це назва реєстру як в `Control-Plane` та `selfRegistrationEnabled` – `true`, якщо для саме цього реєстру необхідна автореєстрація користувачів.
++
+image:registry-develop:registry-admin/auth-setup/registry-federation/13-registry-federation.png[]
+
+... Натисніть *`SAVE & PUBLISH`*.
+
+..  Після чого натисніть *START REVIEW* (1) > *Code-Review* +2 та *Verified* +1 > *`SEND AND START REVIEW`*(3).
++
+image:registry-develop:registry-admin/auth-setup/registry-federation/14-registry-federation.png[]
+
+.. Натисніть *`Submit`*.
++
+image:registry-develop:registry-admin/auth-setup/registry-federation/15-registry-federation.png[]
+
+. Перейдіть у Jenkins (з вкладки Керування платформою на Control-Plane) та запустіть збірку `cluster-mgmt`. У полі пошуку впишіть *cluster-mgmt MASTER-Build-cluster-mgmt* та натисніть *Enter* (1) > *Build with Parameters* (2) > *Build* (3).
+//TODO: Build=збірка???
++
+image:registry-develop:registry-admin/auth-setup/registry-federation/16-registry-federation.png[]
+
+. Перейдіть до *Gerrit* та виконайте наступні налаштування для кожного реєстру з групи.
+
+.. Перейдіть за шляхом *Browse* > *Repositories*. Впишіть назву реєстру в полі пошуку  (так як в Control Plane). Натисніть на репозиторій з назвою реєстру (по аналогії з кроком 3.a).
+//TODO: так як = за аналогією?
+
+.. Перейдіть на *Commands* > *`CREATE CHANGE`* (по аналогії з кроком 3.b) у новому вікні .
+
+.. У спливаючому вікні у полі *Select branch for new change* (1) оберіть гілку *master* та зазначте *Description* (2). Натисніть *`CREATE`* (3) (по аналогії з кроком 3.c).
+
+.. У новому вікні натисніть *`EDIT`* (по аналогії з кроком 3.d).
+
+.. Натисніть *`ADD/OPEN/UPLOAD`*.
+
+.. У спливаючому вікні впишіть шлях _deploy-templates/values.yaml_.
+
+.. У відкритому файлі знайдіть `officerAuthFlow` та під ним додайте наступне, згідно з наведеним нижче прикладом.
++
+[source,yaml]
+----
+authenticators:
+                dsOfficerAuthenticator:
+                    priority: 2
+                federationIdpAuth:
+                    name: identity-provider-redirector
+                    requirement: ALTERNATIVE
+                    priority: 1
+                    authenticatorConfig:
+                        defaultProvider: "federation-idp"
+----
++
+image:registry-develop:registry-admin/auth-setup/registry-federation/17-registry-federation.png[]
+
+.. Натисніть *`SAVE & PUBLISH`*.
+
+.. Після чого натисніть *START REVIEW* > *Code-Review* +2 та *Verified* +1 > *`SEND AND START REVIEW`*.
+
+.. Натисніть *`Submit`*.
+
+. Зачекайте 10-20 хвилин поки у Jenkins не відбудеться збірка реєстрів.
+
+. Якщо в групі реєстрів вимкнена автореєстрація користувачів, то кожного користувача реєстру треба додати в Keycloak в реалмі `registry-federation-<federation-name>`, де `<federation-name>`  -- це назва групи реєстру.
+
+[NOTE]
+Зверніть увагу, що кнопка `+++<b style="font-weight: 600">На стартову</b>+++` (1) на сторінці автентифікації у групі реєстрів буде повертати на головну сторінку Keycloak замість _Кабінету користувача_. Замість неї треба користуватись кнопкою `+++<b style="font-weight: 600">назад</b>+++`, яка передбачена у браузері (2).
++
+image:registry-develop:registry-admin/auth-setup/registry-federation/18-registry-federation.png[]
+

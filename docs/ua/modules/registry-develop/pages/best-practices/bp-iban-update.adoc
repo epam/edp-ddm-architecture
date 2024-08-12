@@ -1,0 +1,103 @@
+= Оновлення сутностей в асинхронному режимі (оновлення IBAN)
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+== Загальний опис
+
+На цій сторінці представлено приклад асинхронного бізнес-процесу з оновленням сутностей. 
+Ми розробили референтний процес, щоб допомогти розробникам та моделювальникам регламентів оптимізувати використання асинхронних процесів у Camunda BPM.
+
+== Моделювання структур даних
+
+Створіть модель даних реєстру за прикладом нижче.
+
+. Створіть таблицю та критерій пошуку.
++
+Ця модель даних створює таблицю, а також визначає критерій пошуку.
++
+._Базова модель даних для нашого прикладу_
+[%collapsible]
+====
+[source,xml]
+----
+    <changeSet id="23733-1" author="registry owner">
+        <createTable tableName="account" ext:historyFlag="true">
+            <column name="id" type="UUID" defaultValueComputed="uuid_generate_v4()">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="user_account_id"/>
+            </column>
+            <column name="username" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="bank_number" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="23733-2" author="registry owner">
+        <ext:createSearchCondition name="search_account_bank_number">
+            <ext:table name="account">
+                <ext:column name="id" sorting="asc"/>
+                <ext:column name="bank_number"/>
+            </ext:table>
+        </ext:createSearchCondition>
+    </changeSet>
+
+    <changeSet id="23733-3" author="registry owner">
+        <ext:partialUpdate name="update_account_bank_number">
+            <ext:table name = "account">
+                <ext:column name="bank_number"/>
+            </ext:table>
+        </ext:partialUpdate>
+    </changeSet>
+----
+====
+
+== Моделювання бізнес процесу
+
+.Загальний вигляд бізнес-процесу, який працює в асинхронному режимі
+image::best-practices/bp-iban-update/bp-iban-update-1.png[]
+
+. Створіть стартову подію (*Start event*) та виконайте наступні налаштування для секції *Execution listeners*:
++
+image::best-practices/bp-iban-update/bp-iban-update-2.png[]
++
+[TIP]
+====
+Опція *`Script`* дозволяє використати функцію `set_variable()` для збереження змінної `limit`, яка буде використана для обмеження кількості сутностей під часу пошуку у Фабриці даних.
+====
+
+. Додайте послідовний цикл, всередині якого буде виконуватись асинхронний пошук та обробка партій акаунтів. Використайте *Expanded subprocess* із наступними налаштуваннями у секції *Multi-instance*:
++
+image::best-practices/bp-iban-update/bp-iban-update-3.png[]
++
+Цей приклад використовує максимальне значення *Integer* для налаштування *Loop cardinality*. Цикл завершиться, коли кількість акаунтів, яку буде знайдено у Фабриці даних, стане меншою за встановлений ліміт:
++
+----
+${accountSCResponse.value.responseBody.elements().size() < limit}
+----
+
+. Створіть стартову подію (*Start event*), яка буде запускатися в асинхронному режимі. Для цього виконайте наступні налаштування у секції *Asynchronous continuations*:
++
+image::best-practices/bp-iban-update/bp-iban-update-4.png[]
++
+Це означає, що після запуску цієї події процес продовжує виконуватися, не очікуючи завершення всіх ітерацій циклу у підпроцесі.
+
+. Після стартової події додайте сервісну задачу пошуку партії аккаунтів:
++
+image::best-practices/bp-iban-update/bp-iban-update-5.png[]
++
+[TIP]
+====
+У цьому процесі для поля *X-Access-Token* використовується токен системного користувача в усіх сервісних задачах, де це необхідно:
+----
+${system_user().accessToken}
+----
+====
+
+. Наступним кроком йде оновлення кожного акаунту з отриманої партії за рахунок послідовного циклу. Дані для циклу передаються у секції *Multi-instance*-підпроцесу у полі *Collection*:
++
+----
+${accountSCResponse.value.responseBody.elements()}
+----
+image::best-practices/bp-iban-update/bp-iban-update-6.png[]
+
