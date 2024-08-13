@@ -1,0 +1,293 @@
+openapi: 3.0.3
+info:
+  title: Keycloak rest api extension API
+  description: This document describes Rest API of 'Keycloak rest api extension'
+  version: "1.0"
+tags:
+  - name: keycloak-rest-api-extension-api
+    description: Keycloak rest api extension API
+  - name: keycloak-rest-api-extension-api-v2
+    description: Keycloak rest api extension API v2
+paths:
+  /admin/search/{realm}:
+    post:
+      tags:
+        - keycloak-rest-api-extension-api
+      summary: Search users by attributes
+      operationId: searchUsersByAttribute
+      parameters:
+        - in: path
+          name: realm
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SearchUserRequestDto'
+      deprecated: true
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserRepresentation'
+
+  /admin/search-by-attributes/{realm}:
+    post:
+      tags:
+        - keycloak-rest-api-extension-api
+      summary: Search users by attributes
+      operationId: searchUsersByAttributesDeprecated
+      parameters:
+        - in: path
+          name: realm
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SearchUsersByEqualsAndStartsWithAttributesRequestDto'
+      deprecated: true
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserRepresentation'
+
+  /admin/v2/search-by-attributes/{realm}:
+    post:
+      tags:
+        - keycloak-rest-api-extension-api-v2
+      summary: Search users by attributes (v2)
+      description: |-
+        ### Endpoint purpose:
+          This endpoint allows to search users by attributes. Pagination implemented with using of _imit_ as a page size and _continueToken_. Any response will provide a continue token that must be used for the next page. Returns -1 on the last page. If -1 was passed to a request as continue token it will return empty list of users with _continueToken=-1_. If 0 or _null_ was passed as continue token it will return first page. If 0 or _null_ was passed as _limit_ then pagination is disabled and request will return all found users.
+      operationId: searchUsersByAttributesV2
+      parameters:
+        - name: X-Access-Token
+          required: true
+          in: header
+          description: Token used for endpoint security
+          schema:
+            type: string
+        - in: path
+          name: realm
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        description: <b>attributesEquals</b> - contains a map of attributes that user must have with <b>exact match</b> to be returned, <b>attributesStartsWith</b> - contains a map of attributes that user must have with <b>starts with match</b> to be returned, <b>attributesThatAreStartFor</b> - contains a map of attributes that user must have <b>a start for</b> to be returned.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SearchUsersByAttributesRequestDto'
+            example:
+              attributesEquals:
+                attribute1:
+                  - value1
+                  - value2
+              attributesStartsWith:
+                hierarchyCode:
+                  - "100"
+                  - "101.201"
+              attributesThatAreStartFor:
+                hierarchyCode:
+                  - "100.200.300"
+                  - "101"
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchUsersByAttributesResponseDto'
+              example:
+                users:
+                  - attributes:
+                      attribute1: value1
+                      hierarchyCode: "100"
+                    email: user@email.com
+                    firstName: John
+                    lastName: Doe
+                  - attributes:
+                      attribute1: value2
+                      hierarchyCode: "101.200"
+                    email: user2@email.com
+                    firstName: Steve
+                    lastName: Doe
+        '401':
+          description: Unauthorized. Missing auth token or wrong _realm_ in token
+          content:
+            application/json: {}
+        '403':
+          description: Forbidden users search request for specified realm
+          content:
+            application/json: {}
+        '404':
+          description: Can happen when could not find client for authorization
+          content:
+            application/json: {}
+
+components:
+  schemas:
+    SearchUserRequestDto:
+      type: object
+      properties:
+        attributes:
+          type: object
+          additionalProperties:
+            type: string
+
+    SearchUsersByEqualsAndStartsWithAttributesRequestDto:
+      type: object
+      properties:
+        attributesEquals:
+          type: object
+          additionalProperties:
+            type: string
+        attributesStartsWith:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+
+    SearchUsersByAttributesRequestDto:
+      type: object
+      properties:
+        attributesEquals:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+        attributesStartsWith:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+        attributesThatAreStartFor:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+        pagination:
+          type: object
+          properties:
+            limit:
+              type: integer
+            continueToken:
+              type: integer
+
+    SearchUsersByAttributesResponseDto:
+      type: object
+      properties:
+        users:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserRepresentation'
+        pagination:
+          type: object
+          properties:
+            limit:
+              type: integer
+            continueToken:
+              type: integer
+
+    UserRepresentation:
+      type: object
+      properties:
+        self:
+          type: string
+        id:
+          type: string
+        createdTimestamp:
+          type: integer
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+        username:
+          type: string
+        enabled:
+          type: boolean
+        totp:
+          type: boolean
+        emailVerified:
+          type: boolean
+        attributes:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+        credentials:
+          type: array
+          items:
+            type: object
+        requiredActions:
+          type: array
+          items:
+            type: string
+        federatedIdentities:
+          type: array
+          items:
+            type: object
+        socialLinks:
+          type: array
+          items:
+            type: object
+        realmRoles:
+          type: array
+          items:
+            type: string
+        clientRoles:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+        clientConsents:
+          type: array
+          items:
+            type: object
+        notBefore:
+          type: integer
+        applicationRoles:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+        federationLink:
+          type: string
+        serviceAccountClientId:
+          type: string
+        groups:
+          type: array
+          items:
+            type: string
+        origin:
+          type: string
+        disableableCredentialTypes:
+          type: array
+          items:
+            type: string
+        access:
+          type: object
+          additionalProperties:
+            type: boolean
