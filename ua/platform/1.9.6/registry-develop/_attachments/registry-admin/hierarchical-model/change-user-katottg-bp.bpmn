@@ -1,0 +1,651 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:camunda="http://camunda.org/schema/1.0/bpmn" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:bioc="http://bpmn.io/schema/bpmn/biocolor/1.0" xmlns:color="http://www.omg.org/spec/BPMN/non-normative/color/1.0" xmlns:modeler="http://camunda.org/schema/modeler/1.0" id="Definitions_1pa6jjw" targetNamespace="http://bpmn.io/schema/bpmn" exporter="Camunda Modeler" exporterVersion="4.11.1" modeler:executionPlatform="Camunda Platform" modeler:executionPlatformVersion="7.15.0">
+    <bpmn:collaboration id="Collaboration_1s4tnpc">
+        <bpmn:participant id="Participant_1xlhbxa" name="Додавання/видалення КАТОТТГ посадовій особі" processRef="change-user-katottg-bp" />
+    </bpmn:collaboration>
+    <bpmn:process id="change-user-katottg-bp" name="Розширення/зменшення прав доступу користувача" isExecutable="true">
+        <bpmn:exclusiveGateway id="Gateway_037cde9">
+            <bpmn:incoming>Flow_0mynl1h</bpmn:incoming>
+            <bpmn:incoming>Flow_0yb52e2</bpmn:incoming>
+            <bpmn:outgoing>Flow_1xwi5z1</bpmn:outgoing>
+        </bpmn:exclusiveGateway>
+        <bpmn:startEvent id="StartEvent_1" name="Початок" camunda:initiator="initiator">
+            <bpmn:outgoing>Flow_0mynl1h</bpmn:outgoing>
+        </bpmn:startEvent>
+        <bpmn:userTask id="addUserDataActivity" name="Внести дані про посадову особу" camunda:modelerTemplate="formUserTaskTemplate" camunda:formKey="search-for-user-by-edrpou-and-drfo" camunda:assignee="${initiator}">
+            <bpmn:extensionElements>
+                <camunda:inputOutput>
+                    <camunda:inputParameter name="userTaskInputFormDataPrepopulate" />
+                </camunda:inputOutput>
+                <camunda:properties>
+                    <camunda:property name="formVariables" value="" />
+                </camunda:properties>
+            </bpmn:extensionElements>
+            <bpmn:incoming>Flow_1xwi5z1</bpmn:incoming>
+            <bpmn:outgoing>Flow_16p9k43</bpmn:outgoing>
+        </bpmn:userTask>
+        <bpmn:sequenceFlow id="Flow_0e3hzno" sourceRef="Activity_1o2mg5f" targetRef="Event_197o3w9" />
+        <bpmn:sequenceFlow id="Flow_0xyvr9r" sourceRef="Activity_1dxode9" targetRef="Activity_1o2mg5f" />
+        <bpmn:sequenceFlow id="Flow_0a7auw5" sourceRef="Activity_0kd0lic" targetRef="selectUserActivity" />
+        <bpmn:sequenceFlow id="Flow_12624os" sourceRef="selectUserActivity" targetRef="Activity_03fzwlr" />
+        <bpmn:sequenceFlow id="Flow_07umobo" sourceRef="Gateway_13366y3" targetRef="Activity_1ge89sa" />
+        <bpmn:sequenceFlow id="Flow_15bkm5p" name="Ні" sourceRef="Gateway_0pc6mol" targetRef="Activity_0kd0lic">
+            <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${officers.size() &gt; 1}</bpmn:conditionExpression>
+        </bpmn:sequenceFlow>
+        <bpmn:sequenceFlow id="Flow_1ygpy92" name="Так" sourceRef="Gateway_0pc6mol" targetRef="Gateway_13366y3">
+            <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${officers.size() == 1}</bpmn:conditionExpression>
+        </bpmn:sequenceFlow>
+        <bpmn:sequenceFlow id="Flow_0qcmz03" name="Ні" sourceRef="Gateway_1qud4vj" targetRef="throwNonExistingUserError">
+            <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${officers.isEmpty()}</bpmn:conditionExpression>
+        </bpmn:sequenceFlow>
+        <bpmn:sequenceFlow id="Flow_0d6eroc" name="Так" sourceRef="Gateway_1qud4vj" targetRef="Gateway_0pc6mol">
+            <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${!officers.isEmpty()}</bpmn:conditionExpression>
+        </bpmn:sequenceFlow>
+        <bpmn:sequenceFlow id="Flow_0mynl1h" sourceRef="StartEvent_1" targetRef="Gateway_037cde9" />
+        <bpmn:sequenceFlow id="Flow_0esyk9j" sourceRef="changeCodesActivity" targetRef="Activity_1l4fr6s" />
+        <bpmn:sequenceFlow id="Flow_1xwi5z1" sourceRef="Gateway_037cde9" targetRef="addUserDataActivity" />
+        <bpmn:sequenceFlow id="Flow_03x65vx" sourceRef="defineStatusBpActivity" targetRef="Event_1hwiwxu" />
+        <bpmn:sequenceFlow id="Flow_0yb52e2" sourceRef="throwNonExistingUserError" targetRef="Gateway_037cde9" />
+        <bpmn:sequenceFlow id="Flow_1sa869a" sourceRef="Activity_03fzwlr" targetRef="Gateway_13366y3" />
+        <bpmn:serviceTask id="throwNonExistingUserError" name="Повідомлення, що користувача не знайдено" camunda:modelerTemplate="userDataValidationErrorDelegate" camunda:delegateExpression="${userDataValidationErrorDelegate}">
+            <bpmn:extensionElements>
+                <camunda:inputOutput>
+                    <camunda:inputParameter name="validationErrors">
+                        <camunda:list>
+                            <camunda:value>{"field": "name", "value": "", "message": "Не знайдено користувача з вказаними атрибутами"}</camunda:value>
+                        </camunda:list>
+                    </camunda:inputParameter>
+                </camunda:inputOutput>
+            </bpmn:extensionElements>
+            <bpmn:incoming>Flow_0qcmz03</bpmn:incoming>
+            <bpmn:outgoing>Flow_0yb52e2</bpmn:outgoing>
+        </bpmn:serviceTask>
+        <bpmn:sequenceFlow id="Flow_16p9k43" sourceRef="addUserDataActivity" targetRef="Activity_0gmqfkp" />
+        <bpmn:sequenceFlow id="Flow_0iww2ia" sourceRef="Activity_183pzam" targetRef="Gateway_1qud4vj" />
+        <bpmn:sequenceFlow id="Flow_013d7o0" sourceRef="Activity_0gmqfkp" targetRef="Activity_183pzam" />
+        <bpmn:scriptTask id="Activity_0gmqfkp" name="Підготовка атрибутів для пошуку" scriptFormat="groovy">
+            <bpmn:incoming>Flow_16p9k43</bpmn:incoming>
+            <bpmn:outgoing>Flow_013d7o0</bpmn:outgoing>
+            <bpmn:script>def attributes = [
+                'edrpou': submission('addUserDataActivity').formData.prop('edrpou').value(),
+                'drfo': submission('addUserDataActivity').formData.prop('drfo').value()
+                ]
+
+                set_transient_variable('attributes', attributes)</bpmn:script>
+        </bpmn:scriptTask>
+        <bpmn:sequenceFlow id="Flow_0dk0yv3" sourceRef="Gateway_16vs666" targetRef="Activity_0nodw0c">
+            <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${codesToDelete.getValue().isEmpty()}</bpmn:conditionExpression>
+        </bpmn:sequenceFlow>
+        <bpmn:sequenceFlow id="Flow_1lpnj83" name="Посадова особа має коди, що входять до складу кодів ініціатора" sourceRef="Gateway_16vs666" targetRef="Activity_0hf61w8">
+            <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${!codesToDelete.getValue().isEmpty()}</bpmn:conditionExpression>
+        </bpmn:sequenceFlow>
+        <bpmn:sequenceFlow id="Flow_16lbxpg" sourceRef="Activity_084hjku" targetRef="changeCodesActivity" />
+        <bpmn:sequenceFlow id="Flow_0hql8oh" sourceRef="Activity_1ge89sa" targetRef="Gateway_16vs666" />
+        <bpmn:sequenceFlow id="Flow_12frpow" sourceRef="Activity_1l4fr6s" targetRef="Activity_0b6kc1g" />
+        <bpmn:sequenceFlow id="Flow_0maxzvw" sourceRef="Activity_0b6kc1g" targetRef="defineStatusBpActivity" />
+        <bpmn:sequenceFlow id="Flow_1h0o8e1" sourceRef="Activity_0hf61w8" targetRef="Activity_084hjku" />
+        <bpmn:dataStoreReference id="DataStoreReference_01mmkfy" name="Кейклок" />
+        <bpmn:exclusiveGateway id="Gateway_1qud4vj" name="Користувача знайдено?">
+            <bpmn:incoming>Flow_0iww2ia</bpmn:incoming>
+            <bpmn:outgoing>Flow_0d6eroc</bpmn:outgoing>
+            <bpmn:outgoing>Flow_0qcmz03</bpmn:outgoing>
+        </bpmn:exclusiveGateway>
+        <bpmn:exclusiveGateway id="Gateway_0pc6mol" name="Користувач унікальний?">
+            <bpmn:incoming>Flow_0d6eroc</bpmn:incoming>
+            <bpmn:outgoing>Flow_1ygpy92</bpmn:outgoing>
+            <bpmn:outgoing>Flow_15bkm5p</bpmn:outgoing>
+        </bpmn:exclusiveGateway>
+        <bpmn:exclusiveGateway id="Gateway_13366y3">
+            <bpmn:incoming>Flow_1ygpy92</bpmn:incoming>
+            <bpmn:incoming>Flow_1sa869a</bpmn:incoming>
+            <bpmn:outgoing>Flow_07umobo</bpmn:outgoing>
+        </bpmn:exclusiveGateway>
+        <bpmn:scriptTask id="Activity_0kd0lic" name="Підготовка даних для відображення" scriptFormat="groovy">
+            <bpmn:incoming>Flow_15bkm5p</bpmn:incoming>
+            <bpmn:outgoing>Flow_0a7auw5</bpmn:outgoing>
+            <bpmn:script>def users = officers.stream().map(o -&gt; ['username': o.userName, 'fullName': o.fullName]).collect()
+
+                def formData = [
+                'edrpou': submission('addUserDataActivity').formData.prop('edrpou').value(),
+                'drfo': submission('addUserDataActivity').formData.prop('drfo').value(),
+                'users': users
+                ]
+
+                set_transient_variable('formData', S(formData, 'application/json'))</bpmn:script>
+        </bpmn:scriptTask>
+        <bpmn:serviceTask id="Activity_183pzam" name="Пошук посадової особи за внесеними даними" camunda:modelerTemplate="keycloakGetExtendedOfficerUsersByAttributesConnectorDelegate" camunda:delegateExpression="${keycloakGetExtendedOfficerUsersByAttributesConnectorDelegate}">
+            <bpmn:extensionElements>
+                <camunda:inputOutput>
+                    <camunda:inputParameter name="edrpou">${attributes}</camunda:inputParameter>
+                    <camunda:inputParameter name="attributes">${attributes.value}</camunda:inputParameter>
+                    <camunda:outputParameter name="officers">${ usersByAttribute }</camunda:outputParameter>
+                </camunda:inputOutput>
+            </bpmn:extensionElements>
+            <bpmn:incoming>Flow_013d7o0</bpmn:incoming>
+            <bpmn:outgoing>Flow_0iww2ia</bpmn:outgoing>
+            <bpmn:dataOutputAssociation id="DataOutputAssociation_17ds5h9">
+                <bpmn:targetRef>DataStoreReference_01mmkfy</bpmn:targetRef>
+            </bpmn:dataOutputAssociation>
+        </bpmn:serviceTask>
+        <bpmn:exclusiveGateway id="Gateway_16vs666">
+            <bpmn:incoming>Flow_0hql8oh</bpmn:incoming>
+            <bpmn:outgoing>Flow_0dk0yv3</bpmn:outgoing>
+            <bpmn:outgoing>Flow_1lpnj83</bpmn:outgoing>
+        </bpmn:exclusiveGateway>
+        <bpmn:scriptTask id="Activity_1ge89sa" name="Визначення КАТОТТГ, доступних для видалення" scriptFormat="groovy">
+            <bpmn:incoming>Flow_07umobo</bpmn:incoming>
+            <bpmn:outgoing>Flow_0hql8oh</bpmn:outgoing>
+            <bpmn:script>def user = officers.size() &gt; 1 ? userByUsername : officers.get(0)
+                def codes = user.attributes.get('KATOTTG')
+
+                def initiatorCodes = completer('addUserDataActivity').jwtClaimsDto.katottg
+
+                def codesToDelete = codes.stream()
+                .filter(c -&gt; initiatorCodes.stream().anyMatch(ic -&gt; !ic.equals(c) &amp;&amp; c.startsWith(ic))).distinct().collect()
+
+                set_transient_variable('initiatorCodes', initiatorCodes)
+                set_transient_variable('user', user)
+                execution.setVariable('codes', codes)
+                execution.setVariable('usernameAttrToAdd', user.userName)
+                set_transient_variable('codesToDelete', codesToDelete)</bpmn:script>
+        </bpmn:scriptTask>
+        <bpmn:scriptTask id="Activity_084hjku" name="Підготовка даних для відображення" scriptFormat="groovy">
+            <bpmn:incoming>Flow_1h0o8e1</bpmn:incoming>
+            <bpmn:outgoing>Flow_16lbxpg</bpmn:outgoing>
+            <bpmn:script>def uniqueCodeLabels = codeLabels.stream().distinct().collect()
+
+                def changeCodesActivityFormData = [
+                'fullName': user.fullName,
+                'codeLabels': uniqueCodeLabels
+                ]
+
+                def codesToDeleteLables = []
+                codesToDelete.forEach(cd -&gt; {
+                codesToDeleteLables.addAll(uniqueCodeLabels.stream().filter(cl -&gt; cl.label.startsWith(cd)).collect())
+                })
+                changeCodesActivityFormData['codesToDeleteAvailable'] = codesToDeleteLables
+
+                def regions = []
+                def areas = []
+                def communities = []
+                def cities = []
+                def cityRegions = []
+                initiatorCodes.forEach(ic -&gt; {
+                def codeLength = ic.length()
+                Optional.ofNullable(codeLength &gt;= 4 ? ic.substring(0, 4) : null).map(c -&gt; regions.add(c))
+                Optional.ofNullable(codeLength &gt;= 6 ?  ic.substring(0, 6) : null).map(c -&gt; areas.add(c))
+                Optional.ofNullable(codeLength &gt;= 9 ? ic.substring(0, 9) : null).map(c -&gt; communities.add(c))
+                Optional.ofNullable(codeLength &gt;= 12 ? ic.substring(0, 12) : null).map(c -&gt; cities.add(c))
+                Optional.ofNullable(codeLength &gt;= 14 ? ic.substring(0, 14) : null).map(c -&gt; cityRegions.add(c))
+                })
+                changeCodesActivityFormData['initiatorCodes'] = [
+                'regions': regions.stream().distinct().collect(),
+                'areas': areas.stream().distinct().collect(),
+                'communities': communities.stream().distinct().collect(),
+                'cities': cities.stream().distinct().collect(),
+                'cityRegions': cityRegions.stream().distinct().collect()
+                ]
+
+                set_transient_variable('changeCodesActivityFormData', S(changeCodesActivityFormData, 'application/json'))</bpmn:script>
+        </bpmn:scriptTask>
+        <bpmn:endEvent id="Event_1hwiwxu">
+            <bpmn:incoming>Flow_03x65vx</bpmn:incoming>
+        </bpmn:endEvent>
+        <bpmn:serviceTask id="defineStatusBpActivity" name="Встановлення результату бізнес-процеса" camunda:modelerTemplate="defineBusinessProcessStatusDelegate" camunda:delegateExpression="${defineBusinessProcessStatusDelegate}">
+            <bpmn:extensionElements>
+                <camunda:inputOutput>
+                    <camunda:inputParameter name="status">Атрибут КАТОТТГ користувачу змінено</camunda:inputParameter>
+                </camunda:inputOutput>
+            </bpmn:extensionElements>
+            <bpmn:incoming>Flow_0maxzvw</bpmn:incoming>
+            <bpmn:outgoing>Flow_03x65vx</bpmn:outgoing>
+        </bpmn:serviceTask>
+        <bpmn:userTask id="changeCodesActivity" name="Додати/видалити КАТОТТГ посадової особи" camunda:modelerTemplate="formUserTaskTemplate" camunda:formKey="add-del-user-attribute-katottg" camunda:assignee="${initiator}">
+            <bpmn:extensionElements>
+                <camunda:inputOutput>
+                    <camunda:inputParameter name="userTaskInputFormDataPrepopulate">${changeCodesActivityFormData}</camunda:inputParameter>
+                </camunda:inputOutput>
+                <camunda:properties>
+                    <camunda:property name="formVariables" value="" />
+                </camunda:properties>
+            </bpmn:extensionElements>
+            <bpmn:incoming>Flow_16lbxpg</bpmn:incoming>
+            <bpmn:outgoing>Flow_0esyk9j</bpmn:outgoing>
+        </bpmn:userTask>
+        <bpmn:endEvent id="Event_197o3w9">
+            <bpmn:incoming>Flow_0e3hzno</bpmn:incoming>
+        </bpmn:endEvent>
+        <bpmn:userTask id="Activity_1dxode9" name="Повідомити про неможливість змінювати КАТОТТГ" camunda:modelerTemplate="formUserTaskTemplate" camunda:formKey="error-add-del-user-attribute-katottg" camunda:assignee="${initiator}">
+            <bpmn:extensionElements>
+                <camunda:inputOutput>
+                    <camunda:inputParameter name="userTaskInputFormDataPrepopulate">${formData}</camunda:inputParameter>
+                </camunda:inputOutput>
+                <camunda:properties>
+                    <camunda:property name="formVariables" value="" />
+                </camunda:properties>
+            </bpmn:extensionElements>
+            <bpmn:incoming>Flow_069foj8</bpmn:incoming>
+            <bpmn:outgoing>Flow_0xyvr9r</bpmn:outgoing>
+        </bpmn:userTask>
+        <bpmn:serviceTask id="Activity_1o2mg5f" name="Встановлення результату бізнес-процеса" camunda:modelerTemplate="defineBusinessProcessStatusDelegate" camunda:delegateExpression="${defineBusinessProcessStatusDelegate}">
+            <bpmn:extensionElements>
+                <camunda:inputOutput>
+                    <camunda:inputParameter name="status">Атрибут КАТОТТГ користувачу не змінено</camunda:inputParameter>
+                </camunda:inputOutput>
+            </bpmn:extensionElements>
+            <bpmn:incoming>Flow_0xyvr9r</bpmn:incoming>
+            <bpmn:outgoing>Flow_0e3hzno</bpmn:outgoing>
+        </bpmn:serviceTask>
+        <bpmn:scriptTask id="Activity_1l4fr6s" name="Підготовка доданих та видалених КАТОТТГ до запиту в Кейклок" scriptFormat="groovy">
+            <bpmn:incoming>Flow_0esyk9j</bpmn:incoming>
+            <bpmn:outgoing>Flow_12frpow</bpmn:outgoing>
+            <bpmn:script>def formData = submission('changeCodesActivity').formData
+
+                def attributeValues = []
+
+                if (formData.hasProp('editgridLatest')) {
+
+                def editGrid = formData.prop('editgridLatest').elements()
+
+                editGrid.forEach(grid -&gt; {
+                def isRegionSet = grid.hasProp('region') &amp;&amp; grid.prop('region').hasProp('code') &amp;&amp; grid.prop('region').prop('code').value() != null
+                def isAreaSet = grid.hasProp('area') &amp;&amp; grid.prop('area').hasProp('childCode') &amp;&amp; grid.prop('area').prop('childCode').value() != null
+                def isCommunitySet = grid.hasProp('community') &amp;&amp; grid.prop('community').hasProp('childCode') &amp;&amp; grid.prop('community').prop('childCode').value() != null
+                def IsCitySet = grid.hasProp('city') &amp;&amp; grid.prop('city').hasProp('childCode') &amp;&amp; grid.prop('city').prop('childCode').value() != null
+                def isCityRegionSet = grid.hasProp('cityRegion') &amp;&amp; grid.prop('cityRegion').hasProp('childCode') &amp;&amp; grid.prop('cityRegion').prop('childCode').value() != null
+
+                if (isCityRegionSet) {
+                attributeValues.add(grid.prop('cityRegion').prop('childCode').value().substring(0, 14))
+                } else if (IsCitySet) {
+                attributeValues.add(grid.prop('city').prop('childCode').value().substring(0, 12))
+                } else if (isCommunitySet) {
+                attributeValues.add(grid.prop('community').prop('childCode').value().substring(0, 9))
+                } else if (isAreaSet) {
+                def area = grid.prop('area').prop('categoryChildCode').value().equals('M') ?
+                grid.prop('area').prop('childCode').value().substring(0, 12) :
+                grid.prop('area').prop('childCode').value().substring(0, 6)
+                attributeValues.add(area)
+                } else if (isRegionSet) {
+                attributeValues.add(grid.prop('region').prop('code').value().substring(0, 4))
+                }
+                })
+                }
+
+                def codesToDeleteSelected = formData.prop('codesToDeleteSelected').elements()
+                def remainedCodesAfterDeletion = codes.stream().filter(userCode -&gt; !codesToDeleteSelected.stream().anyMatch(codeToDelete -&gt; codeToDelete.prop('label').value().startsWith(userCode))).collect()
+                attributeValues.addAll(remainedCodesAfterDeletion)
+
+                set_transient_variable('attributeValues', attributeValues.stream().distinct().collect())</bpmn:script>
+        </bpmn:scriptTask>
+        <bpmn:serviceTask id="Activity_0b6kc1g" name="Збереження змін до Keycloak" camunda:modelerTemplate="keycloakSaveOfficerAttributeDelegate" camunda:delegateExpression="${keycloakSaveOfficerAttributeDelegate}">
+            <bpmn:extensionElements>
+                <camunda:inputOutput>
+                    <camunda:inputParameter name="attributeName">KATOTTG</camunda:inputParameter>
+                    <camunda:inputParameter name="attributeValue">${attributeValues.value}</camunda:inputParameter>
+                    <camunda:inputParameter name="username">${usernameAttrToAdd}</camunda:inputParameter>
+                </camunda:inputOutput>
+            </bpmn:extensionElements>
+            <bpmn:incoming>Flow_12frpow</bpmn:incoming>
+            <bpmn:outgoing>Flow_0maxzvw</bpmn:outgoing>
+        </bpmn:serviceTask>
+        <bpmn:subProcess id="Activity_0hf61w8" name="Створення view lable для кожного кода юзера на фомі">
+            <bpmn:incoming>Flow_1lpnj83</bpmn:incoming>
+            <bpmn:outgoing>Flow_1h0o8e1</bpmn:outgoing>
+            <bpmn:multiInstanceLoopCharacteristics camunda:collection="${codes}" camunda:elementVariable="code" />
+            <bpmn:serviceTask id="Activity_0qk0ogf" name="Надсилання запиту в дата-фабрику" camunda:modelerTemplate="dataFactoryConnectorSearchDelegate" camunda:delegateExpression="${dataFactoryConnectorSearchDelegate}">
+                <bpmn:extensionElements>
+                    <camunda:inputOutput>
+                        <camunda:inputParameter name="resource">katottg-loookup</camunda:inputParameter>
+                        <camunda:inputParameter name="searchConditions">
+                            <camunda:map>
+                                <camunda:entry key="level">${level.value}</camunda:entry>
+                                <camunda:entry key="code">${code}</camunda:entry>
+                            </camunda:map>
+                        </camunda:inputParameter>
+                        <camunda:inputParameter name="x_access_token">${completer('addUserDataActivity').accessToken}</camunda:inputParameter>
+                        <camunda:outputParameter name="response">${ response }</camunda:outputParameter>
+                    </camunda:inputOutput>
+                </bpmn:extensionElements>
+                <bpmn:incoming>Flow_0metyyy</bpmn:incoming>
+                <bpmn:outgoing>Flow_1l5zefe</bpmn:outgoing>
+            </bpmn:serviceTask>
+            <bpmn:scriptTask id="Activity_1ej1ms2" name="Створення code view для відображення на формі" scriptFormat="groovy">
+                <bpmn:incoming>Flow_1l5zefe</bpmn:incoming>
+                <bpmn:outgoing>Flow_1piz6bs</bpmn:outgoing>
+                <bpmn:script>def codeLabels = execution.getVariable('codeLabels')
+                    if (codeLabels == null) {
+                    codeLabels = []
+                    }
+
+                    def responseCodes = response.responseBody.elements()
+
+                    if (code.equals('UA')) {
+                    codeLabels.add(['label': 'Вся Україна'])
+                    } else if (responseCodes.isEmpty()) {
+                    codeLabels.add(['label': 'Помилковий код'])
+                    } else {
+                    def code = response.responseBody.elements().get(0)
+
+                    codeLabels.add(['label': String.format('%s(%s %s)', code.prop('code').value(), code.prop('categoryName').value(), code.prop('name').value())])
+                    }
+                    set_transient_variable('codeLabels', codeLabels)</bpmn:script>
+            </bpmn:scriptTask>
+            <bpmn:scriptTask id="Activity_014tldg" name="Визначення левелу отриманих КАТОТТГ" scriptFormat="groovy">
+                <bpmn:incoming>Flow_004eg66</bpmn:incoming>
+                <bpmn:outgoing>Flow_0metyyy</bpmn:outgoing>
+                <bpmn:script>def levelsMap = [
+                    '4': '1',
+                    '6': '2',
+                    '9': '3',
+                    '12': '4',
+                    '14': '5'
+                    ]
+                    def level = levelsMap.get(String.valueOf(code.length()))
+
+                    set_transient_variable('level', level)
+                    set_transient_variable('levelMap', levelsMap)</bpmn:script>
+            </bpmn:scriptTask>
+            <bpmn:endEvent id="Event_1mxcr3u">
+                <bpmn:incoming>Flow_1piz6bs</bpmn:incoming>
+            </bpmn:endEvent>
+            <bpmn:startEvent id="Event_0ek3iep">
+                <bpmn:outgoing>Flow_004eg66</bpmn:outgoing>
+            </bpmn:startEvent>
+            <bpmn:sequenceFlow id="Flow_004eg66" sourceRef="Event_0ek3iep" targetRef="Activity_014tldg" />
+            <bpmn:sequenceFlow id="Flow_0metyyy" sourceRef="Activity_014tldg" targetRef="Activity_0qk0ogf" />
+            <bpmn:sequenceFlow id="Flow_1piz6bs" sourceRef="Activity_1ej1ms2" targetRef="Event_1mxcr3u" />
+            <bpmn:sequenceFlow id="Flow_1l5zefe" sourceRef="Activity_0qk0ogf" targetRef="Activity_1ej1ms2" />
+        </bpmn:subProcess>
+        <bpmn:serviceTask id="Activity_03fzwlr" name="Пошук KATOTTG  посадової особи" camunda:modelerTemplate="keycloakGetOfficerUserByUsernameDelegate" camunda:delegateExpression="${keycloakGetOfficerUserByUsernameDelegate}">
+            <bpmn:extensionElements>
+                <camunda:inputOutput>
+                    <camunda:inputParameter name="username">${submission('selectUserActivity').formData.prop('userSelected').prop('username').value()}</camunda:inputParameter>
+                    <camunda:outputParameter name="userByUsername">${ userByUsername }</camunda:outputParameter>
+                </camunda:inputOutput>
+            </bpmn:extensionElements>
+            <bpmn:incoming>Flow_12624os</bpmn:incoming>
+            <bpmn:outgoing>Flow_1sa869a</bpmn:outgoing>
+        </bpmn:serviceTask>
+        <bpmn:userTask id="selectUserActivity" name="Обрати зі списку посадову особу з потрібним ПІБ" camunda:modelerTemplate="formUserTaskTemplate" camunda:formKey="choose-officer-from-list" camunda:assignee="${initiator}">
+            <bpmn:extensionElements>
+                <camunda:inputOutput>
+                    <camunda:inputParameter name="userTaskInputFormDataPrepopulate">${formData}</camunda:inputParameter>
+                </camunda:inputOutput>
+                <camunda:properties>
+                    <camunda:property name="formVariables" value="" />
+                </camunda:properties>
+            </bpmn:extensionElements>
+            <bpmn:incoming>Flow_0a7auw5</bpmn:incoming>
+            <bpmn:outgoing>Flow_12624os</bpmn:outgoing>
+        </bpmn:userTask>
+        <bpmn:sequenceFlow id="Flow_069foj8" sourceRef="Activity_0nodw0c" targetRef="Activity_1dxode9" />
+        <bpmn:scriptTask id="Activity_0nodw0c" name="Підготовка даних для відображення" scriptFormat="groovy">
+            <bpmn:incoming>Flow_0dk0yv3</bpmn:incoming>
+            <bpmn:outgoing>Flow_069foj8</bpmn:outgoing>
+            <bpmn:script>def formData = [
+                'fullName': user.fullName
+                ]
+
+                set_transient_variable('formData', S(formData, 'application/json'))</bpmn:script>
+        </bpmn:scriptTask>
+    </bpmn:process>
+    <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+        <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="Collaboration_1s4tnpc">
+            <bpmndi:BPMNShape id="Participant_1xlhbxa_di" bpmnElement="Participant_1xlhbxa" isHorizontal="true">
+                <dc:Bounds x="170" y="80" width="3470" height="490" />
+            </bpmndi:BPMNShape>
+            <bpmndi:BPMNEdge id="Flow_069foj8_di" bpmnElement="Flow_069foj8">
+                <di:waypoint x="2820" y="240" />
+                <di:waypoint x="2910" y="240" />
+            </bpmndi:BPMNEdge>
+            <bpmndi:BPMNEdge id="Flow_1h0o8e1_di" bpmnElement="Flow_1h0o8e1">
+                <di:waypoint x="2610" y="350" />
+                <di:waypoint x="2720" y="350" />
+            </bpmndi:BPMNEdge>
+            <bpmndi:BPMNEdge id="Flow_0maxzvw_di" bpmnElement="Flow_0maxzvw">
+                <di:waypoint x="3350" y="350" />
+                <di:waypoint x="3420" y="350" />
+            </bpmndi:BPMNEdge>
+            <bpmndi:BPMNEdge id="Flow_12frpow_di" bpmnElement="Flow_12frpow">
+                <di:waypoint x="3180" y="350" />
+                <di:waypoint x="3250" y="350" />
+            </bpmndi:BPMNEdge>
+            <bpmndi:BPMNEdge id="Flow_0hql8oh_di" bpmnElement="Flow_0hql8oh">
+                <di:waypoint x="1720" y="350" />
+                <di:waypoint x="1805" y="350" />
+            </bpmndi:BPMNEdge>
+            <bpmndi:BPMNEdge id="Flow_16lbxpg_di" bpmnElement="Flow_16lbxpg">
+                <di:waypoint x="2820" y="350" />
+                <di:waypoint x="2910" y="350" />
+            </bpmndi:BPMNEdge>
+            <bpmndi:BPMNEdge id="Flow_1lpnj83_di" bpmnElement="Flow_1lpnj83">
+                <di:waypoint x="1855" y="350" />
+                <di:waypoint x="1970" y="350" />
+                <bpmndi:BPMNLabel>
+                    <dc:Bounds x="1853" y="363" width="84" height="66" />
+                </bpmndi:BPMNLabel>
+            </bpmndi:BPMNEdge>
+            <bpmndi:BPMNEdge id="Flow_0dk0yv3_di" bpmnElement="Flow_0dk0yv3">
+                <di:waypoint x="1830" y="325" />
+                <di:waypoint x="1830" y="240" />
+                <di:waypoint x="2720" y="240" />
+                <bpmndi:BPMNLabel>
+                    <dc:Bounds x="2368" y="267" width="84" height="53" />
+                </bpmndi:BPMNLabel>
+            </bpmndi:BPMNEdge>
+            <bpmndi:BPMNEdge id="Flow_013d7o0_di" bpmnElement="Flow_013d7o0">
+                <di:waypoint x="690" y="350" />
+                <di:waypoint x="760" y="350" />
+            </bpmndi:BPMNEdge>
+            <bpmndi:BPMNEdge id="Flow_0iww2ia_di" bpmnElement="Flow_0iww2ia">
+                <di:waypoint x="860" y="350" />
+                <di:waypoint x="935" y="350" />
+            </bpmndi:BPMNEdge>
+            <bpmndi:BPMNEdge id="Flow_16p9k43_di" bpmnElement="Flow_16p9k43">
+                <di:waypoint x="530" y="350" />
+                <di:waypoint x="590" y="350" />
+            </bpmndi:BPMNEdge>
+            <bpmndi:BPMNEdge id="Flow_1sa869a_di" bpmnElement="Flow_1sa869a">
+                <di:waypoint x="1500" y="240" />
+                <di:waypoint x="1540" y="240" />
+                <di:waypoint x="1540" y="325" />
+            </bpmndi:BPMNEdge>
+            <bpmndi:BPMNEdge id="Flow_0yb52e2_di" bpmnElement="Flow_0yb52e2">
+                <di:waypoint x="430" y="240" />
+                <di:waypoint x="340" y="240" />
+                <di:waypoint x="340" y="325" />
+            </bpmndi:BPMNEdge>
+            <bpmndi:BPMNEdge id="Flow_03x65vx_di" bpmnElement="Flow_03x65vx">
+                <di:waypoint x="3520" y="350" />
+                <di:waypoint x="3562" y="350" />
+            </bpmndi:BPMNEdge>
+            <bpmndi:BPMNEdge id="Flow_1xwi5z1_di" bpmnElement="Flow_1xwi5z1">
+                <di:waypoint x="365" y="350" />
+                <di:waypoint x="430" y="350" />
+            </bpmndi:BPMNEdge>
+            <bpmndi:BPMNEdge id="Flow_0esyk9j_di" bpmnElement="Flow_0esyk9j">
+                <di:waypoint x="3010" y="350" />
+                <di:waypoint x="3080" y="350" />
+            </bpmndi:BPMNEdge>
+            <bpmndi:BPMNEdge id="Flow_0mynl1h_di" bpmnElement="Flow_0mynl1h">
+                <di:waypoint x="278" y="350" />
+                <di:waypoint x="315" y="350" />
+            </bpmndi:BPMNEdge>
+            <bpmndi:BPMNEdge id="Flow_0d6eroc_di" bpmnElement="Flow_0d6eroc">
+                <di:waypoint x="985" y="350" />
+                <di:waypoint x="1025" y="350" />
+                <bpmndi:BPMNLabel>
+                    <dc:Bounds x="994" y="332" width="18" height="14" />
+                </bpmndi:BPMNLabel>
+            </bpmndi:BPMNEdge>
+            <bpmndi:BPMNEdge id="Flow_0qcmz03_di" bpmnElement="Flow_0qcmz03">
+                <di:waypoint x="960" y="325" />
+                <di:waypoint x="960" y="240" />
+                <di:waypoint x="530" y="240" />
+                <bpmndi:BPMNLabel>
+                    <dc:Bounds x="944" y="287" width="11" height="14" />
+                </bpmndi:BPMNLabel>
+            </bpmndi:BPMNEdge>
+            <bpmndi:BPMNEdge id="Flow_1ygpy92_di" bpmnElement="Flow_1ygpy92">
+                <di:waypoint x="1075" y="350" />
+                <di:waypoint x="1515" y="350" />
+                <bpmndi:BPMNLabel>
+                    <dc:Bounds x="1278" y="332" width="18" height="14" />
+                </bpmndi:BPMNLabel>
+            </bpmndi:BPMNEdge>
+            <bpmndi:BPMNEdge id="Flow_15bkm5p_di" bpmnElement="Flow_15bkm5p">
+                <di:waypoint x="1050" y="325" />
+                <di:waypoint x="1050" y="240" />
+                <di:waypoint x="1100" y="240" />
+                <bpmndi:BPMNLabel>
+                    <dc:Bounds x="1060" y="287" width="11" height="14" />
+                </bpmndi:BPMNLabel>
+            </bpmndi:BPMNEdge>
+            <bpmndi:BPMNEdge id="Flow_07umobo_di" bpmnElement="Flow_07umobo">
+                <di:waypoint x="1565" y="350" />
+                <di:waypoint x="1620" y="350" />
+            </bpmndi:BPMNEdge>
+            <bpmndi:BPMNEdge id="Flow_12624os_di" bpmnElement="Flow_12624os">
+                <di:waypoint x="1350" y="240" />
+                <di:waypoint x="1400" y="240" />
+            </bpmndi:BPMNEdge>
+            <bpmndi:BPMNEdge id="Flow_0a7auw5_di" bpmnElement="Flow_0a7auw5">
+                <di:waypoint x="1200" y="240" />
+                <di:waypoint x="1250" y="240" />
+            </bpmndi:BPMNEdge>
+            <bpmndi:BPMNEdge id="Flow_0xyvr9r_di" bpmnElement="Flow_0xyvr9r">
+                <di:waypoint x="3010" y="240" />
+                <di:waypoint x="3420" y="240" />
+            </bpmndi:BPMNEdge>
+            <bpmndi:BPMNEdge id="Flow_0e3hzno_di" bpmnElement="Flow_0e3hzno">
+                <di:waypoint x="3520" y="240" />
+                <di:waypoint x="3562" y="240" />
+            </bpmndi:BPMNEdge>
+            <bpmndi:BPMNShape id="Gateway_037cde9_di" bpmnElement="Gateway_037cde9" isMarkerVisible="true">
+                <dc:Bounds x="315" y="325" width="50" height="50" />
+            </bpmndi:BPMNShape>
+            <bpmndi:BPMNShape id="_BPMNShape_StartEvent_2" bpmnElement="StartEvent_1">
+                <dc:Bounds x="242" y="332" width="36" height="36" />
+                <bpmndi:BPMNLabel>
+                    <dc:Bounds x="240" y="375" width="42" height="14" />
+                </bpmndi:BPMNLabel>
+            </bpmndi:BPMNShape>
+            <bpmndi:BPMNShape id="Activity_1rfy22b_di" bpmnElement="addUserDataActivity">
+                <dc:Bounds x="430" y="310" width="100" height="80" />
+            </bpmndi:BPMNShape>
+            <bpmndi:BPMNShape id="Activity_1qrb662_di" bpmnElement="throwNonExistingUserError">
+                <dc:Bounds x="430" y="200" width="100" height="80" />
+            </bpmndi:BPMNShape>
+            <bpmndi:BPMNShape id="Activity_186vwit_di" bpmnElement="Activity_0gmqfkp">
+                <dc:Bounds x="590" y="310" width="100" height="80" />
+            </bpmndi:BPMNShape>
+            <bpmndi:BPMNShape id="DataStoreReference_01mmkfy_di" bpmnElement="DataStoreReference_01mmkfy">
+                <dc:Bounds x="785" y="430" width="50" height="50" />
+                <bpmndi:BPMNLabel>
+                    <dc:Bounds x="789" y="487" width="42" height="14" />
+                </bpmndi:BPMNLabel>
+            </bpmndi:BPMNShape>
+            <bpmndi:BPMNShape id="Gateway_1qud4vj_di" bpmnElement="Gateway_1qud4vj" isMarkerVisible="true">
+                <dc:Bounds x="935" y="325" width="50" height="50" />
+                <bpmndi:BPMNLabel>
+                    <dc:Bounds x="928" y="382" width="65" height="27" />
+                </bpmndi:BPMNLabel>
+            </bpmndi:BPMNShape>
+            <bpmndi:BPMNShape id="Gateway_0pc6mol_di" bpmnElement="Gateway_0pc6mol" isMarkerVisible="true">
+                <dc:Bounds x="1025" y="325" width="50" height="50" />
+                <bpmndi:BPMNLabel>
+                    <dc:Bounds x="1020" y="382" width="62" height="27" />
+                </bpmndi:BPMNLabel>
+            </bpmndi:BPMNShape>
+            <bpmndi:BPMNShape id="Gateway_13366y3_di" bpmnElement="Gateway_13366y3" isMarkerVisible="true">
+                <dc:Bounds x="1515" y="325" width="50" height="50" />
+            </bpmndi:BPMNShape>
+            <bpmndi:BPMNShape id="Activity_0kd0lic_di" bpmnElement="Activity_0kd0lic">
+                <dc:Bounds x="1100" y="200" width="100" height="80" />
+            </bpmndi:BPMNShape>
+            <bpmndi:BPMNShape id="Activity_1pws09s_di" bpmnElement="Activity_183pzam">
+                <dc:Bounds x="760" y="310" width="100" height="80" />
+            </bpmndi:BPMNShape>
+            <bpmndi:BPMNShape id="Gateway_16vs666_di" bpmnElement="Gateway_16vs666" isMarkerVisible="true">
+                <dc:Bounds x="1805" y="325" width="50" height="50" />
+            </bpmndi:BPMNShape>
+            <bpmndi:BPMNShape id="Activity_1ge89sa_di" bpmnElement="Activity_1ge89sa">
+                <dc:Bounds x="1620" y="310" width="100" height="80" />
+            </bpmndi:BPMNShape>
+            <bpmndi:BPMNShape id="Activity_0iniq1g_di" bpmnElement="Activity_084hjku">
+                <dc:Bounds x="2720" y="310" width="100" height="80" />
+            </bpmndi:BPMNShape>
+            <bpmndi:BPMNShape id="Event_1hwiwxu_di" bpmnElement="Event_1hwiwxu">
+                <dc:Bounds x="3562" y="332" width="36" height="36" />
+            </bpmndi:BPMNShape>
+            <bpmndi:BPMNShape id="Activity_0oyg1lb_di" bpmnElement="defineStatusBpActivity">
+                <dc:Bounds x="3420" y="310" width="100" height="80" />
+            </bpmndi:BPMNShape>
+            <bpmndi:BPMNShape id="Activity_0jl8ic5_di" bpmnElement="changeCodesActivity">
+                <dc:Bounds x="2910" y="310" width="100" height="80" />
+            </bpmndi:BPMNShape>
+            <bpmndi:BPMNShape id="Event_197o3w9_di" bpmnElement="Event_197o3w9">
+                <dc:Bounds x="3562" y="222" width="36" height="36" />
+            </bpmndi:BPMNShape>
+            <bpmndi:BPMNShape id="Activity_1ckabbe_di" bpmnElement="Activity_1dxode9">
+                <dc:Bounds x="2910" y="200" width="100" height="80" />
+            </bpmndi:BPMNShape>
+            <bpmndi:BPMNShape id="Activity_1xfcdxk_di" bpmnElement="Activity_1o2mg5f">
+                <dc:Bounds x="3420" y="200" width="100" height="80" />
+            </bpmndi:BPMNShape>
+            <bpmndi:BPMNShape id="Activity_1x2487w_di" bpmnElement="Activity_1l4fr6s">
+                <dc:Bounds x="3080" y="310" width="100" height="80" />
+            </bpmndi:BPMNShape>
+            <bpmndi:BPMNShape id="Activity_1lmxja9_di" bpmnElement="Activity_0b6kc1g">
+                <dc:Bounds x="3250" y="310" width="100" height="80" />
+            </bpmndi:BPMNShape>
+            <bpmndi:BPMNShape id="Activity_0hf61w8_di" bpmnElement="Activity_0hf61w8" isExpanded="true">
+                <dc:Bounds x="1970" y="270" width="640" height="162" />
+            </bpmndi:BPMNShape>
+            <bpmndi:BPMNEdge id="Flow_1l5zefe_di" bpmnElement="Flow_1l5zefe">
+                <di:waypoint x="2340" y="360" />
+                <di:waypoint x="2390" y="360" />
+            </bpmndi:BPMNEdge>
+            <bpmndi:BPMNEdge id="Flow_1piz6bs_di" bpmnElement="Flow_1piz6bs">
+                <di:waypoint x="2490" y="360" />
+                <di:waypoint x="2552" y="360" />
+            </bpmndi:BPMNEdge>
+            <bpmndi:BPMNEdge id="Flow_0metyyy_di" bpmnElement="Flow_0metyyy">
+                <di:waypoint x="2180" y="360" />
+                <di:waypoint x="2240" y="360" />
+            </bpmndi:BPMNEdge>
+            <bpmndi:BPMNEdge id="Flow_004eg66_di" bpmnElement="Flow_004eg66">
+                <di:waypoint x="2046" y="360" />
+                <di:waypoint x="2080" y="360" />
+            </bpmndi:BPMNEdge>
+            <bpmndi:BPMNShape id="Activity_0qk0ogf_di" bpmnElement="Activity_0qk0ogf">
+                <dc:Bounds x="2240" y="320" width="100" height="80" />
+            </bpmndi:BPMNShape>
+            <bpmndi:BPMNShape id="Activity_1kn98kt_di" bpmnElement="Activity_1ej1ms2">
+                <dc:Bounds x="2390" y="320" width="100" height="80" />
+            </bpmndi:BPMNShape>
+            <bpmndi:BPMNShape id="Activity_014tldg_di" bpmnElement="Activity_014tldg" bioc:stroke="#000000" bioc:fill="#ffffff" color:background-color="#ffffff" color:border-color="#000000">
+                <dc:Bounds x="2080" y="320" width="100" height="80" />
+            </bpmndi:BPMNShape>
+            <bpmndi:BPMNShape id="Event_1mxcr3u_di" bpmnElement="Event_1mxcr3u">
+                <dc:Bounds x="2552" y="342" width="36" height="36" />
+            </bpmndi:BPMNShape>
+            <bpmndi:BPMNShape id="Event_0ek3iep_di" bpmnElement="Event_0ek3iep">
+                <dc:Bounds x="2010" y="342" width="36" height="36" />
+            </bpmndi:BPMNShape>
+            <bpmndi:BPMNShape id="Activity_0x3abvz_di" bpmnElement="Activity_03fzwlr">
+                <dc:Bounds x="1400" y="200" width="100" height="80" />
+            </bpmndi:BPMNShape>
+            <bpmndi:BPMNShape id="Activity_0qe49lh_di" bpmnElement="selectUserActivity">
+                <dc:Bounds x="1250" y="200" width="100" height="80" />
+            </bpmndi:BPMNShape>
+            <bpmndi:BPMNShape id="Activity_0i71cbc_di" bpmnElement="Activity_0nodw0c">
+                <dc:Bounds x="2720" y="200" width="100" height="80" />
+            </bpmndi:BPMNShape>
+            <bpmndi:BPMNEdge id="DataOutputAssociation_17ds5h9_di" bpmnElement="DataOutputAssociation_17ds5h9">
+                <di:waypoint x="810" y="390" />
+                <di:waypoint x="810" y="430" />
+            </bpmndi:BPMNEdge>
+        </bpmndi:BPMNPlane>
+    </bpmndi:BPMNDiagram>
+</bpmn:definitions>

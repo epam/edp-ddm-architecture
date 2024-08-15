@@ -1,0 +1,187 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:camunda="http://camunda.org/schema/1.0/bpmn" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:rrm="http://registry-regulation-management" id="Definitions_1u8092e" targetNamespace="http://bpmn.io/schema/bpmn" exporter="Camunda Modeler" exporterVersion="4.11.1">
+  <bpmn:collaboration id="Collaboration_1tcp1im">
+    <bpmn:participant id="Participant_1fwkblj" name="Відправка запиту в ЄДР з використанням SOAP Connector" processRef="soap-http-connector-edr" />
+  </bpmn:collaboration>
+  <bpmn:process id="soap-http-connector-edr" name="Відправка запиту в ЄДР з використанням SOAP Connector" isExecutable="true">
+    <bpmn:scriptTask id="Activity_01o7y6x" name="Підготовка отриманих даних для виведення на форму" scriptFormat="groovy">
+      <bpmn:incoming>Flow_07tbyhu</bpmn:incoming>
+      <bpmn:outgoing>Flow_12tg6nj</bpmn:outgoing>
+      <bpmn:script>def payload = [:]
+
+        payload['state'] = getValueByPropertyName("state_text")
+        payload['name'] = getValueByPropertyName("name")
+        payload['code'] = getValueByPropertyName("code")
+        payload['id'] = getValueByPropertyName("id")
+
+        set_transient_variable('payload', S(payload, 'application/json'))
+
+        def getValueByPropertyName(String propName) {
+        return S(edrResponseBody, 'application/xml').childElement("Body")
+        .childElement("http://nais.gov.ua/api/sevdeir/EDR", "SearchSubjectsResponse")
+        .childElement("SubjectList")
+        .childElement("SubjectInfo")
+        .childElement(propName)
+        .textContent()
+        }</bpmn:script>
+    </bpmn:scriptTask>
+    <bpmn:userTask id="searchEdrpouCodeOfficer" name="Ввести ЄДРПОУ для пошуку" camunda:modelerTemplate="formUserTaskTemplate" camunda:formKey="soap-http-connector-edrpou-search-in-edr" camunda:assignee="${initiator}">
+      <bpmn:extensionElements>
+        <camunda:properties />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_1lubpng</bpmn:incoming>
+      <bpmn:outgoing>Flow_1q5zl1f</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:startEvent id="StartEvent_1" name="Початок" camunda:initiator="initiator">
+      <bpmn:outgoing>Flow_1lubpng</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:scriptTask id="Activity_0h5rsh6" name="Підготувати дані для запиту" scriptFormat="groovy">
+      <bpmn:incoming>Flow_1q5zl1f</bpmn:incoming>
+      <bpmn:outgoing>Flow_13ai529</bpmn:outgoing>
+      <bpmn:script>def edrpou = submission('searchEdrpouCodeOfficer').formData.prop('edrpou').value()
+
+        def requestHeaders = [:]
+        requestHeaders['SOAPAction'] = 'SearchSubjects'
+        requestHeaders['Content-Type'] = 'text/xml;charset=UTF-8;'
+        set_transient_variable('requestHeaders', requestHeaders)
+
+        def requestPayload = """
+        &lt;SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"&gt;
+        &lt;SOAP-ENV:Header&gt;
+        &lt;ns3:id xmlns:ns2="http://nais.gov.ua/api/sevdeir/EDR"
+        xmlns:ns3="http://x-road.eu/xsd/xroad.xsd" xmlns:ns4="http://x-road.eu/xsd/identifiers"&gt;
+        a90606bb-242b-4937-a707-c860e2e2f8db
+        &lt;/ns3:id&gt;
+        &lt;ns3:userId xmlns:ns2="http://nais.gov.ua/api/sevdeir/EDR"
+        xmlns:ns3="http://x-road.eu/xsd/xroad.xsd" xmlns:ns4="http://x-road.eu/xsd/identifiers"&gt;
+        MDTUDDM
+        &lt;/ns3:userId&gt;
+        &lt;ns3:protocolVersion xmlns:ns2="http://nais.gov.ua/api/sevdeir/EDR"
+        xmlns:ns3="http://x-road.eu/xsd/xroad.xsd" xmlns:ns4="http://x-road.eu/xsd/identifiers"&gt;4.0
+        &lt;/ns3:protocolVersion&gt;
+        &lt;ns2:AuthorizationToken xmlns:ns2="http://nais.gov.ua/api/sevdeir/EDR"
+        xmlns:ns3="http://x-road.eu/xsd/xroad.xsd" xmlns:ns4="http://x-road.eu/xsd/identifiers"&gt;
+        1dc9f1f9b1e5be4d37c2b68993af243923ea7620
+        &lt;/ns2:AuthorizationToken&gt;
+        &lt;ns3:client xmlns:ns2="http://nais.gov.ua/api/sevdeir/EDR"
+        xmlns:ns3="http://x-road.eu/xsd/xroad.xsd" xmlns:ns4="http://x-road.eu/xsd/identifiers"
+        ns4:objectType="SUBSYSTEM"&gt;
+        &lt;ns4:xRoadInstance&gt;SEVDEIR-TEST&lt;/ns4:xRoadInstance&gt;
+        &lt;ns4:memberClass&gt;GOV&lt;/ns4:memberClass&gt;
+        &lt;ns4:memberCode&gt;43395033&lt;/ns4:memberCode&gt;
+        &lt;ns4:subsystemCode&gt;IDGOV_TEST_01&lt;/ns4:subsystemCode&gt;
+        &lt;/ns3:client&gt;
+        &lt;ns3:service xmlns:ns2="http://nais.gov.ua/api/sevdeir/EDR"
+        xmlns:ns3="http://x-road.eu/xsd/xroad.xsd" xmlns:ns4="http://x-road.eu/xsd/identifiers"
+        ns4:objectType="SERVICE"&gt;
+        &lt;ns4:xRoadInstance&gt;SEVDEIR-TEST&lt;/ns4:xRoadInstance&gt;
+        &lt;ns4:memberClass&gt;GOV&lt;/ns4:memberClass&gt;
+        &lt;ns4:memberCode&gt;00015622&lt;/ns4:memberCode&gt;
+        &lt;ns4:subsystemCode&gt;2_MJU_EDR_prod&lt;/ns4:subsystemCode&gt;
+        &lt;ns4:serviceCode&gt;SearchSubjects&lt;/ns4:serviceCode&gt;
+        &lt;/ns3:service&gt;
+        &lt;/SOAP-ENV:Header&gt;
+        &lt;SOAP-ENV:Body&gt;
+        &lt;ns2:SearchSubjects xmlns:ns2="http://nais.gov.ua/api/sevdeir/EDR"
+        xmlns:ns3="http://x-road.eu/xsd/xroad.xsd" xmlns:ns4="http://x-road.eu/xsd/identifiers"&gt;
+        &lt;ns2:code&gt;${edrpou}&lt;/ns2:code&gt;
+        &lt;/ns2:SearchSubjects&gt;
+        &lt;/SOAP-ENV:Body&gt;
+        &lt;/SOAP-ENV:Envelope&gt;
+        """
+
+        set_transient_variable('requestPayload', requestPayload as String)</bpmn:script>
+    </bpmn:scriptTask>
+    <bpmn:userTask id="writeResultForm" name="Переглянути дані з ЄДР" camunda:modelerTemplate="formUserTaskTemplate" camunda:formKey="soap-http-connector-edrpou-edr-result-view" camunda:assignee="${initiator}">
+      <bpmn:extensionElements>
+        <camunda:inputOutput>
+          <camunda:inputParameter name="userTaskInputFormDataPrepopulate">${payload}</camunda:inputParameter>
+        </camunda:inputOutput>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_12tg6nj</bpmn:incoming>
+      <bpmn:outgoing>Flow_07tknsj</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:endEvent id="Event_1p7jfnf" name="Кінець">
+      <bpmn:incoming>Flow_07tknsj</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_13ai529" sourceRef="Activity_0h5rsh6" targetRef="Activity_0waovtx" />
+    <bpmn:sequenceFlow id="Flow_1q5zl1f" sourceRef="searchEdrpouCodeOfficer" targetRef="Activity_0h5rsh6" />
+    <bpmn:sequenceFlow id="Flow_07tknsj" sourceRef="writeResultForm" targetRef="Event_1p7jfnf" />
+    <bpmn:sequenceFlow id="Flow_12tg6nj" sourceRef="Activity_01o7y6x" targetRef="writeResultForm" />
+    <bpmn:sequenceFlow id="Flow_1lubpng" sourceRef="StartEvent_1" targetRef="searchEdrpouCodeOfficer" />
+    <bpmn:sequenceFlow id="Flow_07tbyhu" sourceRef="Activity_0waovtx" targetRef="Activity_01o7y6x" />
+    <bpmn:serviceTask id="Activity_0waovtx" name="Відправка запиту в ЄДР" camunda:modelerTemplate="soapHttpConnector">
+      <bpmn:extensionElements>
+        <camunda:connector>
+          <camunda:inputOutput>
+            <camunda:inputParameter name="url">https://trembita-edr-registry-mock.apps.cicd2.mdtu-ddm.projects.epam.com/mockEDRService</camunda:inputParameter>
+            <camunda:inputParameter name="headers">${requestHeaders}</camunda:inputParameter>
+            <camunda:inputParameter name="payload">${requestPayload}</camunda:inputParameter>
+            <camunda:outputParameter name="edrResponseBody">${response}</camunda:outputParameter>
+          </camunda:inputOutput>
+          <camunda:connectorId>soap-http-connector</camunda:connectorId>
+        </camunda:connector>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_13ai529</bpmn:incoming>
+      <bpmn:outgoing>Flow_07tbyhu</bpmn:outgoing>
+    </bpmn:serviceTask>
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="Collaboration_1tcp1im">
+      <bpmndi:BPMNShape id="Participant_1fwkblj_di" bpmnElement="Participant_1fwkblj" isHorizontal="true">
+        <dc:Bounds x="160" y="80" width="1020" height="350" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Flow_1lubpng_di" bpmnElement="Flow_1lubpng">
+        <di:waypoint x="248" y="277" />
+        <di:waypoint x="300" y="277" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_12tg6nj_di" bpmnElement="Flow_12tg6nj">
+        <di:waypoint x="900" y="277" />
+        <di:waypoint x="970" y="277" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_07tknsj_di" bpmnElement="Flow_07tknsj">
+        <di:waypoint x="1070" y="277" />
+        <di:waypoint x="1122" y="277" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_1q5zl1f_di" bpmnElement="Flow_1q5zl1f">
+        <di:waypoint x="400" y="277" />
+        <di:waypoint x="460" y="277" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_13ai529_di" bpmnElement="Flow_13ai529">
+        <di:waypoint x="560" y="277" />
+        <di:waypoint x="620" y="277" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_07tbyhu_di" bpmnElement="Flow_07tbyhu">
+        <di:waypoint x="720" y="277" />
+        <di:waypoint x="800" y="277" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="Activity_01o7y6x_di" bpmnElement="Activity_01o7y6x">
+        <dc:Bounds x="800" y="237" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_1js4b1l_di" bpmnElement="searchEdrpouCodeOfficer">
+        <dc:Bounds x="300" y="237" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="_BPMNShape_StartEvent_2" bpmnElement="StartEvent_1">
+        <dc:Bounds x="212" y="259" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="210" y="302" width="43" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_1c3yfdk_di" bpmnElement="Activity_0h5rsh6">
+        <dc:Bounds x="460" y="237" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_08t49sr_di" bpmnElement="writeResultForm">
+        <dc:Bounds x="970" y="237" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_1p7jfnf_di" bpmnElement="Event_1p7jfnf">
+        <dc:Bounds x="1122" y="259" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1125" y="302" width="34" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_0rn7hfz_di" bpmnElement="Activity_0waovtx">
+        <dc:Bounds x="620" y="237" width="100" height="80" />
+      </bpmndi:BPMNShape>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>
