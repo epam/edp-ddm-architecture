@@ -1,0 +1,1498 @@
+openapi: 3.0.3
+info:
+  title: User process management API
+  description: All user process and task management operations
+  version: "1.0"
+servers:
+- url: http://localhost:8080
+  description: Generated server url
+tags:
+- name: process-history-service-api
+  description: Business processes history management Rest API
+- name: user-process-definition-api
+  description: User process definition Rest API
+- name: user-task-management-api
+  description: User task management Rest API
+- name: process-history-service-runtime-api
+  description: Business processes history management at runtime Rest API
+- name: task-history-service-api
+  description: Business process task history management Rest API
+- name: grouped-user-process-definition-api
+  description: Grouped user process definition Rest API
+paths:
+  /user-task-management/api/task/{id}/save:
+    post:
+      tags:
+      - user-task-management-api
+      summary: Save form data
+      description: |-
+        ### Endpoint purpose:
+        This endpoint allows to save form data to temporary storage without task completion.
+        ### Authorization:
+        If user assigned to task does not match user retrieved from _X-Access-Token_ then _403 Forbidden_ status code returned.
+        ### Form validation:
+        This endpoint requires valid form, if form provided in request body does not match form structure assigned to task, then _422_ status code returned.
+      operationId: saveFormData
+      parameters:
+      - name: X-Access-Token
+        in: header
+        description: Token used for endpoint security
+        required: true
+        schema:
+          type: string
+      - name: Accept-Language
+        in: header
+        description: User preferred language
+        schema:
+          type: string
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FormDataDto'
+            example:
+              data:
+                formFieldName1: field value 1
+                formFieldName2: field value 2
+        required: true
+      responses:
+        "200":
+          description: Form data successfully saved
+        "401":
+          description: Unauthorized
+          content:
+            application/json: {}
+        "403":
+          description: Forbidden
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/SystemErrorDto'
+        "404":
+          description: Task hasn't found
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/SystemErrorDto'
+        "422":
+          description: Form data validation error
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ValidationErrorDto'
+        "500":
+          description: Internal server error
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/SystemErrorDto'
+  /user-task-management/api/task/{id}/complete:
+    post:
+      tags:
+      - user-task-management-api
+      summary: Complete task by id
+      description: |-
+        ### Endpoint purpose:
+         This endpoint allows users to complete a specific task by providing its unique identifier. Users must include the necessary data in the request body using a FormDataDto. Upon successful completion, information about the completed task is returned.
+        ### Authorization:
+         If user assigned to task does not match user retrieved from _X-Access-Token_ then _403 Forbidden_ status code returned.
+        ### Form validation:
+         This endpoint requires valid form, if form provided in request body does not match form structure assigned to task, then _422_ status code returned.
+      operationId: completeTaskById
+      parameters:
+      - name: X-Access-Token
+        in: header
+        description: Token used for endpoint security
+        required: true
+        schema:
+          type: string
+      - name: Accept-Language
+        in: header
+        description: User preferred language
+        schema:
+          type: string
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FormDataDto'
+            example:
+              data:
+                formFieldName1: field value 1
+                formFieldName2: field value 2
+        required: true
+      responses:
+        "200":
+          description: Task successfully completed
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/CompletedTaskResponse'
+              example:
+                id: d5a4eddf-6360-11ee-88e8-0a580a81041b
+                processInstanceId: d5a40376-6360-11ee-88e8-0a580a81041b
+                rootProcessInstanceId: d5a40376-6360-11ee-88e8-0a580a81041b
+                rootProcessInstanceEnded: false
+                variables: {}
+        "401":
+          description: Unauthorized
+          content:
+            application/json: {}
+        "402":
+          description: Occurred if try to complete payment task without completing
+            the payment itself.
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/SystemErrorDto'
+              example:
+                traceId: df5f480c5cd3ba52
+                code: RestException
+                message: "Cannot complete task fa1fdc6e-361a-4236-8d9e-a7ce126a03a5:\
+                  \ ENGINE-03051 There was an exception while invoking the TaskListener.\
+                  \ Message: 'Current task payment is not completed'"
+        "403":
+          description: Forbidden
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/SystemErrorDto'
+        "404":
+          description: Task hasn't found
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/SystemErrorDto'
+        "422":
+          description: Form data is not valid
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/SystemErrorDto'
+        "500":
+          description: Internal server error
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/SystemErrorDto'
+  /user-task-management/api/task/{id}/claim:
+    post:
+      tags:
+      - user-task-management-api
+      summary: Claim task by id
+      description: |-
+        ### Endpoint purpose:
+        This endpoint allows users to claim a task by its unique identifier. Once a task is claimed, it becomes the responsibility of the user who claimed it and is no longer available for other users to claim.
+      operationId: claimTaskById
+      parameters:
+      - name: X-Access-Token
+        in: header
+        description: Token used for endpoint security
+        required: true
+        schema:
+          type: string
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        "204":
+          description: Task successfully claimed
+        "404":
+          description: Task hasn't found or already completed
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/SystemErrorDto'
+        "409":
+          description: Task already assigned on another person
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/SystemErrorDto'
+        "500":
+          description: Internal server error
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/SystemErrorDto'
+  /user-task-management/api/officer/task/{id}/sign-form:
+    post:
+      tags:
+      - user-task-management-api
+      summary: Sign and complete officer task by id
+      description: |-
+        ### Endpoint purpose:
+        This endpoint allows officer to sign form data for a specific task. Users must provide the task's unique identifier and the required form data with signature in the request body. Upon successful signing, information about the task is returned.
+        ### Authorization:
+        If user assigned to task does not match user retrieved from _X-Access-Token_ then _403 Forbidden_ status code returned.
+        ### Form and signature validation:
+        This endpoint requires valid form, if form provided in request body does not match form structure assigned to task or verification of provided signature is failed, then _422_ status code returned.
+      operationId: singOfficerForm
+      parameters:
+      - name: X-Access-Token
+        in: header
+        description: Token used for endpoint security
+        required: true
+        schema:
+          type: string
+      - name: Accept-Language
+        in: header
+        description: User preferred language
+        schema:
+          type: string
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FormDataDto'
+            example:
+              data:
+                formFieldName1: field value 1
+                formFieldName2: field value 2
+              signature: Key-6.dat
+        required: true
+      responses:
+        "200":
+          description: Task successfully signed and completed
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/CompletedTaskResponse'
+              example:
+                id: fed535d9-6360-11ee-88e8-0a580a81041b
+                processInstanceId: d5a40376-6360-11ee-88e8-0a580a81041b
+                rootProcessInstanceId: d5a40376-6360-11ee-88e8-0a580a81041b
+                rootProcessInstanceEnded: true
+                variables: {}
+        "401":
+          description: Unauthorized
+          content:
+            application/json: {}
+        "403":
+          description: Forbidden
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/SystemErrorDto'
+        "404":
+          description: Task hasn't found
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/SystemErrorDto'
+        "422":
+          description: Task hasn't verified
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ValidationErrorDto'
+        "500":
+          description: Internal server error
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/SystemErrorDto'
+  /user-task-management/api/citizen/task/{id}/sign-form:
+    post:
+      tags:
+      - user-task-management-api
+      summary: Sign and complete citizen task by id
+      description: |-
+        ### Endpoint purpose:
+        This endpoint allows citizen to sign form data for a specific task. Users must provide the task's unique identifier and the required form data with signature in the request body. Upon successful signing, information about the task is returned.
+        ### Authorization:
+        If user assigned to task does not match user retrieved from _X-Access-Token_ then _403 Forbidden_ status code returned.
+        ### Form and signature validation:
+        This endpoint requires valid form, if form provided in request body does not match form structure assigned to task or verification of provided signature is failed, then _422_ status code returned.
+      operationId: signCitizenForm
+      parameters:
+      - name: X-Access-Token
+        in: header
+        description: Token used for endpoint security
+        required: true
+        schema:
+          type: string
+      - name: Accept-Language
+        in: header
+        description: User preferred language
+        schema:
+          type: string
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FormDataDto'
+            example:
+              data:
+                formFieldName1: field value 1
+                formFieldName2: field value 2
+              signature: Key-6.dat
+        required: true
+      responses:
+        "200":
+          description: Task successfully signed and completed
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/CompletedTaskResponse'
+              example:
+                id: fed535d9-6360-11ee-88e8-0a580a81041b
+                processInstanceId: d5a40376-6360-11ee-88e8-0a580a81041b
+                rootProcessInstanceId: d5a40376-6360-11ee-88e8-0a580a81041b
+                rootProcessInstanceEnded: true
+                variables: {}
+        "401":
+          description: Unauthorized
+          content:
+            application/json: {}
+        "403":
+          description: Forbidden
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/SystemErrorDto'
+        "404":
+          description: Task hasn't found
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/SystemErrorDto'
+        "422":
+          description: Task hasn't verified
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ValidationErrorDto'
+        "500":
+          description: Internal server error
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/SystemErrorDto'
+  /user-process-management/api/process-definition/{key}/start:
+    post:
+      tags:
+      - user-process-definition-api
+      summary: Start process instance
+      description: |-
+        ### Endpoint purpose:
+        This endpoint allows you to initiate a new process instance based on the provided process definition key
+      operationId: startProcessInstance
+      parameters:
+      - name: X-Access-Token
+        in: header
+        description: Token used for endpoint security
+        required: true
+        schema:
+          type: string
+      - name: Accept-Language
+        in: header
+        description: User preferred language
+        schema:
+          type: string
+      - name: key
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: Returns started process instance
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/StartProcessInstanceResponse'
+              example:
+                id: d81fd894-6842-11ee-b71c-0a580a811836
+                processDefinitionId: fcfea78f-66c2-11ee-b586-0a580a80065a
+                ended: false
+        "401":
+          description: Unauthorized
+          content:
+            application/json: {}
+        "404":
+          description: Business process definition hasn't found
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/SystemErrorDto'
+        "500":
+          description: Internal server error
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/SystemErrorDto'
+  /user-process-management/api/process-definition/{key}/start-with-form:
+    post:
+      tags:
+      - user-process-definition-api
+      summary: Start process instance with form
+      description: |-
+        ### Endpoint purpose:
+        This endpoint allows to start process instance by process definition key with start form data
+        ### Form validation:
+        This endpoint requires valid form, if form provided in request body does not match form structure assigned to task, then _422_ status code returned.
+      operationId: startProcessInstanceWithForm
+      parameters:
+      - name: X-Access-Token
+        in: header
+        description: Token used for endpoint security
+        required: true
+        schema:
+          type: string
+      - name: Accept-Language
+        in: header
+        description: User preferred language
+        schema:
+          type: string
+      - name: key
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FormDataDto'
+            example:
+              data:
+                formFieldName1: field value 1
+                formFieldName2: field value 2
+        required: true
+      responses:
+        "200":
+          description: Returns started process instance
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/StartProcessInstanceResponse'
+              example:
+                id: d81fd894-6842-11ee-b71c-0a580a811836
+                processDefinitionId: fcfea78f-66c2-11ee-b586-0a580a80065a
+                ended: false
+        "404":
+          description: Business process definition hasn't found
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/SystemErrorDto'
+        "422":
+          description: Form validation failed
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ValidationErrorDto'
+        "500":
+          description: Internal server error
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/SystemErrorDto'
+  /user-task-management/api/task:
+    get:
+      tags:
+      - user-task-management-api
+      summary: Retrieve all tasks
+      description: |-
+        ### Endpoint purpose:
+        This endpoint allows users to retrieve a list of tasks associated with a specified process instance or user. Users can optionally filter tasks by providing a process instance ID. Pagination is supported via the pageable parameter. The endpoint returns a list of UserTaskResponse objects, each representing a retrieved task.
+      operationId: getTasks
+      parameters:
+      - name: X-Access-Token
+        in: header
+        description: Token used for endpoint security
+        required: true
+        schema:
+          type: string
+      - name: processInstanceId
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: firstResult
+        in: query
+        description: Pagination of results. Specifies the index of the first result
+          to return.
+        schema:
+          type: integer
+      - name: maxResult
+        in: query
+        description: Pagination of results. Specifies the maximum number of results
+          to return. Will return less results if there are no more results left.
+        schema:
+          type: integer
+      - name: sortBy
+        in: query
+        description: "Sort the results lexicographically by a given criterion. Valid\
+          \ values are instanceId, caseInstanceId, dueDate, executionId, caseExecutionId,assignee,\
+          \ created, description, id, name, nameCaseInsensitive and priority. Must\
+          \ be used in conjunction with the sortOrder parameter."
+        schema:
+          type: string
+      - name: sortOrder
+        in: query
+        description: Sort the results in a given order. Values may be asc for ascending
+          order or desc for descending order. Must be used in conjunction with the
+          sortBy parameter.
+        schema:
+          type: string
+      responses:
+        "200":
+          description: List of user tasks
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/UserTaskResponse'
+              example:
+              - id: 0b52527c-62ae-11ee-be57-0a580a810416
+                taskDefinitionKey: UserTask_AddStatus
+                name: my task name
+                assignee: user
+                created: 2023-10-04T12:03:34.884Z
+                description: some description
+                processDefinitionName: my process name
+                processInstanceId: fd3187f5-62ad-11ee-be57-0a580a810415
+                processDefinitionId: Process_160gicr:14:b8fa558e-62aa-11ee-be57-0a580a810416
+                formKey: null
+                suspended: false
+                businessKey: null
+        "401":
+          description: Unauthorized
+          content:
+            application/json: {}
+        "500":
+          description: Internal server error
+          content:
+            application/json: {}
+  /user-task-management/api/task/{id}:
+    get:
+      tags:
+      - user-task-management-api
+      summary: Get task by id
+      description: |-
+        ### Endpoint purpose:
+        This endpoint allows users to retrieve detailed information about a specific task by providing its unique identifier (ID). The task details include information such as task status, assignee, due date, and other relevant data.
+      operationId: getTaskById
+      parameters:
+      - name: X-Access-Token
+        in: header
+        description: Token used for endpoint security
+        required: true
+        schema:
+          type: string
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: Returns detailed task information
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/UserTaskWithDataResponse'
+              example:
+                id: 97839db1-62b2-11ee-be57-0a580a810415
+                taskDefinitionKey: UserTask_SignSuccessfulStatusActivity
+                name: Sign data
+                assignee: user
+                created: 2023-10-04T12:36:08.075Z
+                description: null
+                processInstanceId: 81ae5334-62b2-11ee-be57-0a580a810415
+                rootProcessInstanceId: 81ae5334-62b2-11ee-be57-0a580a810415
+                processDefinitionId: Process_160gicr:15:4ef94837-62b0-11ee-be57-0a580a810415
+                processDefinitionName: my-process
+                formKey: my-user-task-form
+                suspended: false
+                formVariables: {}
+                signatureValidationPack: []
+                data:
+                  myField: myValue
+                  submit: true
+                esign: true
+                payment: false
+        "401":
+          description: Unauthorized
+          content:
+            application/json: {}
+        "404":
+          description: Not found
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/SystemErrorDto'
+        "500":
+          description: Internal server error
+          content:
+            application/json: {}
+  /user-task-management/api/task/lightweight:
+    get:
+      tags:
+      - user-task-management-api
+      summary: Retrieve all tasks
+      description: |-
+        ### Endpoint purpose:
+        This endpoint allows users to retrieve a lightweight list of tasks associated with a specified process instance or user. Users can optionally filter tasks by providing a root process instance ID. The endpoint returns a list of lightweight user tasks. This lightweight version of the task list provides essential task details for efficient display purposes.
+      operationId: getLightweightTasks
+      parameters:
+      - name: X-Access-Token
+        in: header
+        description: Token used for endpoint security
+        required: true
+        schema:
+          type: string
+      - name: rootProcessInstanceId
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: firstResult
+        in: query
+        description: Pagination of results. Specifies the index of the first result
+          to return.
+        schema:
+          type: integer
+      - name: maxResult
+        in: query
+        description: Pagination of results. Specifies the maximum number of results
+          to return. Will return less results if there are no more results left.
+        schema:
+          type: integer
+      - name: sortBy
+        in: query
+        description: "Sort the results lexicographically by a given criterion. Valid\
+          \ values are instanceId, caseInstanceId, dueDate, executionId, caseExecutionId,assignee,\
+          \ created, description, id, name, nameCaseInsensitive and priority. Must\
+          \ be used in conjunction with the sortOrder parameter."
+        schema:
+          type: string
+      - name: sortOrder
+        in: query
+        description: Sort the results in a given order. Values may be asc for ascending
+          order or desc for descending order. Must be used in conjunction with the
+          sortBy parameter.
+        schema:
+          type: string
+      responses:
+        "200":
+          description: List of user lightweight tasks
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/UserTaskLightweightResponse'
+              example: |-
+                [
+                    {
+                        "id": "0b52527c-62ae-11ee-be57-0a580a810416",
+                        "assignee": "user",
+                    },
+                    {
+                        "id": "0b52527c-62ae-11ee-be57-0a580a2132312",
+                        "assignee": "user",
+                    }
+                ]
+        "401":
+          description: Unauthorized
+          content:
+            application/json: {}
+        "500":
+          description: Internal server error
+          content:
+            application/json: {}
+  /user-task-management/api/task/count:
+    get:
+      tags:
+      - user-task-management-api
+      summary: Retrieve count of all tasks
+      description: |-
+        ### Endpoint purpose:
+        This endpoint allows to retrieve the total count of all available tasks for user.
+      operationId: countTasks
+      parameters:
+      - name: X-Access-Token
+        in: header
+        description: Token used for endpoint security
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: Returns detailed task information
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/CountResponse'
+              example: |-
+                {
+                    "count": 10,
+                }
+        "401":
+          description: Unauthorized
+          content:
+            application/json: {}
+  /user-process-management/api/process-definition:
+    get:
+      tags:
+      - user-process-definition-api
+      summary: Retrieve all process definitions
+      description: |-
+        ### Endpoint purpose:
+        This endpoint allows to retrieve a list of process definitions based on the provided parameters, like _active_ or _suspended_ query parameters
+      operationId: getProcessDefinitions
+      parameters:
+      - name: X-Access-Token
+        in: header
+        description: Token used for endpoint security
+        required: true
+        schema:
+          type: string
+      - name: suspended
+        in: query
+        description: Parameter used to retrieve suspended processes
+        schema:
+          type: boolean
+      - name: active
+        in: query
+        description: Parameter used to retrieve active processes
+        schema:
+          type: boolean
+      - name: params
+        in: query
+        required: true
+        schema:
+          $ref: '#/components/schemas/GetProcessDefinitionsParams'
+      responses:
+        "200":
+          description: List of process definitions
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ProcessDefinitionResponse'
+              example:
+              - id: ea4430c8-66c2-11ee-b586-0a580a80065a
+                key: business-process-key
+                name: Business process name
+                suspended: false
+                formKey: null
+        "401":
+          description: Unauthorized
+          content:
+            application/json: {}
+        "500":
+          description: Internal server error
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/SystemErrorDto'
+  /user-process-management/api/process-definition/{key}:
+    get:
+      tags:
+      - user-process-definition-api
+      summary: Retrieve process definition by key
+      description: |-
+        ### Endpoint purpose:
+        This endpoint allows you to retrieve a process definition based on its unique key.
+      operationId: getProcessDefinitionByKey
+      parameters:
+      - name: X-Access-Token
+        in: header
+        description: Token used for endpoint security
+        required: true
+        schema:
+          type: string
+      - name: key
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: Process definition
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ProcessDefinitionResponse'
+              example:
+                id: ea4430c8-66c2-11ee-b586-0a580a80065a
+                key: business-process-key
+                name: Business process name
+                suspended: false
+                formKey: null
+        "401":
+          description: Unauthorized
+          content:
+            application/json: {}
+        "404":
+          description: Business process definition hasn't found
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/SystemErrorDto'
+        "500":
+          description: Internal server error
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/SystemErrorDto'
+  /user-process-management/api/process-definition/count:
+    get:
+      tags:
+      - user-process-definition-api
+      summary: Retrieve count of process definitions
+      description: |-
+        ### Endpoint purpose:
+        This endpoint allows you to retrieve the total count of available process definitions that match the specified parameters. You can filter the count by specifying criteria like _active_ or _suspended_ query parameters
+      operationId: countProcessDefinitions
+      parameters:
+      - name: X-Access-Token
+        in: header
+        description: Token used for endpoint security
+        required: true
+        schema:
+          type: string
+      - name: suspended
+        in: query
+        description: Parameter used to retrieve suspended processes
+        schema:
+          type: boolean
+      - name: active
+        in: query
+        description: Parameter used to retrieve active processes
+        schema:
+          type: boolean
+      - name: params
+        in: query
+        required: true
+        schema:
+          $ref: '#/components/schemas/GetProcessDefinitionsParams'
+      responses:
+        "200":
+          description: Count of process definitions
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/CountResponse'
+              example:
+                count: 10
+        "401":
+          description: Unauthorized
+          content:
+            application/json: {}
+        "500":
+          description: Internal server error
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/SystemErrorDto'
+  /user-process-management/api/grouped-process-definition:
+    get:
+      tags:
+      - grouped-user-process-definition-api
+      summary: Retrieve all process definitions with groups
+      description: |-
+        ### Endpoint purpose:
+         This endpoint allows users to retrieve grouped and ungrouped business process definitions ordered lists based on their system role in X-Access-Token
+      operationId: getProcessDefinitions_1
+      parameters:
+      - name: X-Access-Token
+        in: header
+        description: Token used for endpoint security
+        required: true
+        schema:
+          type: string
+      - name: params
+        in: query
+        required: true
+        schema:
+          $ref: '#/components/schemas/GetProcessDefinitionsParams'
+      responses:
+        "200":
+          description: List of process definitions with groups
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/GroupedProcessDefinitionResponse'
+              example: |-
+                {
+                    "groups": [
+                        {
+                            "name": "Business processes group name",
+                            "processDefinitions": [
+                                {
+                                    "id": "fcfea78f-66c2-11ee-b586-0a580a80065a",
+                                    "key": "business-process-in-group",
+                                    "name": "Business process in group name",
+                                    "suspended": false,
+                                    "formKey": null
+                                }
+                            ]
+                        },
+                    "ungrouped": [
+                        {
+                            "id": "fcd4151b-66c2-11ee-b586-0a580a80065a",
+                            "key": "ungrouped-process",
+                            "name": "Ungrouped process name",
+                            "suspended": false,
+                            "formKey": null
+                        }
+                    ]
+                }
+        "401":
+          description: Unauthorized
+          content:
+            application/json: {}
+        "500":
+          description: Internal server error
+          content:
+            application/json: {}
+  /api/runtime/process-instances:
+    get:
+      tags:
+      - process-history-service-runtime-api
+      summary: Get a list of historical data of processes in an unfinished state
+      description: |-
+        ### Endpoint assignment:
+        This endpoint is used to retrieve a list of historical data of processes that are in an incomplete state based on specified filtering criteria, including offset, constraint, and sorting parameters. Incomplete processes are defined as processes that are currently running and have not yet been completed.
+      operationId: getProcesses
+      parameters:
+      - name: X-Access-Token
+        in: header
+        description: User access token
+        schema:
+          type: string
+      - name: offset
+        in: query
+        description: Record offset
+        required: true
+        schema:
+          type: integer
+          default: 0
+      - name: limit
+        in: query
+        description: Maximum number of records to return
+        required: true
+        schema:
+          type: integer
+          default: 10
+      - name: sort
+        in: query
+        description: "Field and order for sorting the records. Example: asc(<field>)\
+          \ / desc(<field>)"
+        required: true
+        schema:
+          type: string
+          default: desc(endTime)
+      - name: securityContext
+        in: query
+        required: true
+        schema:
+          $ref: '#/components/schemas/SecurityContext'
+      responses:
+        "200":
+          description: OK. List of historical process data successfully retrieved.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RuntimeProcessResponse'
+              example:
+              - processInstanceId: "1234"
+                superProcessInstanceId: "5678"
+                processDefinitionId: "91011"
+                processDefinitionKey: myProcess
+                processDefinitionName: My Process
+                businessKey: 1234-5678
+                startTime: 2021-01-01T00:00:00Z
+                startUserId: john.doe
+                status:
+                  code: InProgress
+                  title: In Progress
+        "400":
+          description: Bad Request. Invalid excerpt type or incorrect request parameters.
+          content:
+            application/json: {}
+        "401":
+          description: Unauthorized. Missing or invalid access token or digital signature.
+          content:
+            application/json: {}
+        "500":
+          description: Internal Server Error. Server error while processing the request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailedErrorResponse'
+  /api/runtime/process-instances/count:
+    get:
+      tags:
+      - process-history-service-runtime-api
+      summary: Get the count of unfinished process instances
+      description: Returns a count of unfinished process instances based on specified
+        filtering criteria. Unfinished processes refer to those processes that are
+        currently executing and have not yet completed.
+      operationId: count
+      parameters:
+      - name: X-Access-Token
+        in: header
+        description: User access token
+        schema:
+          type: string
+      - name: securityContext
+        in: query
+        required: true
+        schema:
+          $ref: '#/components/schemas/SecurityContext'
+      responses:
+        "200":
+          description: OK. Count of unfinished process instances successfully retrieved.
+          content:
+            application/json:
+              schema:
+                type: integer
+              example:
+                count: 10
+        "400":
+          description: Bad Request. Invalid request parameters.
+          content:
+            application/json: {}
+        "401":
+          description: Unauthorized. Missing or invalid access token or digital signature.
+          content:
+            application/json: {}
+        "500":
+          description: Internal Server Error. Server error while processing the request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailedErrorResponse'
+  /api/history/tasks:
+    get:
+      tags:
+      - task-history-service-api
+      summary: Get a list of historical data of tasks
+      description: |-
+        ### Endpoint assignment:
+        This endpoint is used to retrieve a list of historical data of tasks based on specified filtering criteria, including offset, constraint, and sorting parameters.
+      operationId: getTasks_1
+      parameters:
+      - name: X-Access-Token
+        in: header
+        description: User access token
+        schema:
+          type: string
+      - name: offset
+        in: query
+        description: Record offset
+        required: true
+        schema:
+          type: integer
+          default: 0
+      - name: limit
+        in: query
+        description: Maximum number of records to return
+        required: true
+        schema:
+          type: integer
+          default: 10
+      - name: sort
+        in: query
+        description: "Field and order for sorting the records. Example: asc(<field>)\
+          \ / desc(<field>)"
+        required: true
+        schema:
+          type: string
+          default: desc(endTime)
+      - name: securityContext
+        in: query
+        required: true
+        schema:
+          $ref: '#/components/schemas/SecurityContext'
+      responses:
+        "200":
+          description: OK. List of historical tasks data successfully retrieved.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RuntimeProcessResponse'
+              example:
+              - activityInstanceId: "10001"
+                taskDefinitionKey: task1
+                taskDefinitionName: First task
+                processInstanceId: "1234"
+                processDefinitionId: "91011"
+                processDefinitionKey: myProcess
+                processDefinitionName: My Process
+                startTime: 2021-04-01T09:00:00Z
+                endTime: 2021-04-01T12:00:00Z
+                assignee: john.doe
+        "400":
+          description: Bad Request. Invalid excerpt type or incorrect request parameters.
+          content:
+            application/json: {}
+        "401":
+          description: Unauthorized. Missing or invalid access token or digital signature.
+          content:
+            application/json: {}
+        "500":
+          description: Internal Server Error. Server error while processing the request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailedErrorResponse'
+  /api/history/process-instances:
+    get:
+      tags:
+      - process-history-service-api
+      summary: Get a list of historical data of processes
+      description: |-
+        ### Endpoint assignment:
+        This endpoint is used to retrieve a list of historical data of processes based on specified filtering criteria, including offset, constraint, and sorting parameters.
+      operationId: getProcesses_1
+      parameters:
+      - name: X-Access-Token
+        in: header
+        description: User access token
+        schema:
+          type: string
+      - name: offset
+        in: query
+        description: Record offset
+        required: true
+        schema:
+          type: integer
+          default: 0
+      - name: limit
+        in: query
+        description: Maximum number of records to return
+        required: true
+        schema:
+          type: integer
+          default: 10
+      - name: sort
+        in: query
+        description: "Field and order for sorting the records. Example: asc(<field>)\
+          \ / desc(<field>)"
+        required: true
+        schema:
+          type: string
+          default: desc(endTime)
+      - name: securityContext
+        in: query
+        required: true
+        schema:
+          $ref: '#/components/schemas/SecurityContext'
+      responses:
+        "200":
+          description: OK. List of historical process data successfully retrieved.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RuntimeProcessResponse'
+              example:
+              - processInstanceId: "1234"
+                superProcessInstanceId: "5678"
+                processDefinitionId: "91011"
+                processDefinitionKey: myProcess
+                processDefinitionName: My Process
+                businessKey: 1234-5678
+                startTime: 2021-01-01T00:00:00Z
+                endTime: 2021-01-01T00:01:00Z
+                startUserId: john.doe
+                excerptId: "4321"
+                status:
+                  code: COMPLETED
+                  title: COMPLETED
+        "400":
+          description: Bad Request. Invalid excerpt type or incorrect request parameters.
+          content:
+            application/json: {}
+        "401":
+          description: Unauthorized. Missing or invalid access token or digital signature.
+          content:
+            application/json: {}
+        "500":
+          description: Internal Server Error. Server error while processing the request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailedErrorResponse'
+components:
+  schemas:
+    FormDataDto:
+      type: object
+      properties:
+        signature:
+          type: string
+        language:
+          type: string
+        x-access-token:
+          type: string
+    SystemErrorDto:
+      type: object
+      properties:
+        traceId:
+          type: string
+        code:
+          type: string
+        message:
+          type: string
+        messageKey:
+          type: string
+    ErrorDetailDto:
+      type: object
+      properties:
+        message:
+          type: string
+        messageKey:
+          type: string
+        field:
+          type: string
+        value:
+          type: string
+    ErrorsListDto:
+      type: object
+      properties:
+        errors:
+          type: array
+          items:
+            $ref: '#/components/schemas/ErrorDetailDto'
+    ValidationErrorDto:
+      type: object
+      properties:
+        traceId:
+          type: string
+        code:
+          type: string
+        message:
+          type: string
+        messageKey:
+          type: string
+        details:
+          $ref: '#/components/schemas/ErrorsListDto'
+    CompletedTaskResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        processInstanceId:
+          type: string
+        rootProcessInstanceId:
+          type: string
+        rootProcessInstanceEnded:
+          type: boolean
+    StartProcessInstanceResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        processDefinitionId:
+          type: string
+        ended:
+          type: boolean
+    UserTaskResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        taskDefinitionKey:
+          type: string
+        name:
+          type: string
+        assignee:
+          type: string
+        created:
+          type: string
+          format: date-time
+        description:
+          type: string
+        processDefinitionName:
+          type: string
+        processInstanceId:
+          type: string
+        processDefinitionId:
+          type: string
+        formKey:
+          type: string
+        suspended:
+          type: boolean
+        businessKey:
+          type: string
+    UserTaskWithDataResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        taskDefinitionKey:
+          type: string
+        name:
+          type: string
+        assignee:
+          type: string
+        created:
+          type: string
+          format: date-time
+        description:
+          type: string
+        processInstanceId:
+          type: string
+        rootProcessInstanceId:
+          type: string
+        processDefinitionId:
+          type: string
+        processDefinitionName:
+          type: string
+        formKey:
+          type: string
+        payment:
+          type: boolean
+        suspended:
+          type: boolean
+        signatureValidationPack:
+          uniqueItems: true
+          type: array
+          items:
+            type: string
+            enum:
+            - INDIVIDUAL
+            - ENTREPRENEUR
+            - LEGAL
+        esign:
+          type: boolean
+    UserTaskLightweightResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        assignee:
+          type: string
+    CountResponse:
+      type: object
+      properties:
+        count:
+          type: integer
+          format: int64
+    ProcessDefinitionResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        key:
+          type: string
+        name:
+          type: string
+        suspended:
+          type: boolean
+        formKey:
+          type: string
+    GetProcessDefinitionsParams:
+      type: object
+      properties:
+        active:
+          type: boolean
+        suspended:
+          type: boolean
+    GroupedProcessDefinitionResponse:
+      type: object
+      properties:
+        groups:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProcessDefinitionGroup'
+        ungrouped:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProcessDefinitionResponse'
+    ProcessDefinitionGroup:
+      type: object
+      properties:
+        name:
+          type: string
+        processDefinitions:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProcessDefinitionResponse'
+    RuntimeProcessResponse:
+      type: object
+      properties:
+        processInstanceId:
+          type: string
+        superProcessInstanceId:
+          type: string
+        processDefinitionId:
+          type: string
+        processDefinitionKey:
+          type: string
+        processDefinitionName:
+          type: string
+        businessKey:
+          type: string
+        startTime:
+          type: string
+          format: date-time
+        startUserId:
+          type: string
+        status:
+          $ref: '#/components/schemas/StatusModel'
+    StatusModel:
+      type: object
+      properties:
+        code:
+          type: string
+          enum:
+          - ACTIVE
+          - PENDING
+          - SUSPENDED
+          - COMPLETED
+          - EXTERNALLY_TERMINATED
+        title:
+          type: string
+    DetailedErrorResponse:
+      type: object
+      properties:
+        traceId:
+          type: string
+        code:
+          type: string
+        details:
+          type: object
+    SecurityContext:
+      type: object
+      properties:
+        accessToken:
+          type: string
+        digitalSignature:
+          type: string
+        digitalSignatureDerived:
+          type: string
+        digitalSignatureChecksum:
+          type: string
+        digitalSignatureDerivedChecksum:
+          type: string
