@@ -1,0 +1,267 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:camunda="http://camunda.org/schema/1.0/bpmn" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="Definitions_1v7d9q1" targetNamespace="http://bpmn.io/schema/bpmn" exporter="Camunda Modeler" exporterVersion="4.6.0">
+  <bpmn:collaboration id="Collaboration_003meyg">
+    <bpmn:participant id="Participant_099v9ei" name="Створення довідника хімічний довільні" processRef="update-dict" />
+  </bpmn:collaboration>
+  <bpmn:process id="update-dict" name="Створення довідника хімічний довільні" isExecutable="true">
+    <bpmn:startEvent id="Event_08z8nlg" name="початок процесу" camunda:initiator="initiator">
+      <bpmn:outgoing>Flow_0bdaq8b</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:userTask id="Activity_update-dict-bp-add-name" name="Внести запис довідника" camunda:modelerTemplate="formUserTaskTemplate" camunda:formKey="update-dict-bp-add-name" camunda:assignee="${initiator}">
+      <bpmn:extensionElements>
+        <camunda:properties>
+          <camunda:property name="eSign" value="" />
+        </camunda:properties>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_0b35npj</bpmn:incoming>
+      <bpmn:outgoing>Flow_1a08e1r</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:exclusiveGateway id="Gateway_05rdpqh">
+      <bpmn:incoming>Flow_0bdaq8b</bpmn:incoming>
+      <bpmn:incoming>Flow_0fxiobg</bpmn:incoming>
+      <bpmn:outgoing>Flow_0b35npj</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:sequenceFlow id="Flow_13y4foy" name="так" sourceRef="Gateway_0citdqv" targetRef="Activity_147fj7o">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${!response.value.responseBody.elements().isEmpty()}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_0bdaq8b" sourceRef="Event_08z8nlg" targetRef="Gateway_05rdpqh" />
+    <bpmn:sequenceFlow id="Flow_0b35npj" sourceRef="Gateway_05rdpqh" targetRef="Activity_update-dict-bp-add-name" />
+    <bpmn:sequenceFlow id="Flow_003wsie" name="ні" sourceRef="Gateway_0citdqv" targetRef="Activity_update-dict-bp-sign-add-name">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${response.value.responseBody.elements().isEmpty()}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_1d7odkh" sourceRef="Activity_036b0c0" targetRef="Event_09njj7c" />
+    <bpmn:sequenceFlow id="Flow_0fxiobg" sourceRef="Activity_147fj7o" targetRef="Gateway_05rdpqh" />
+    <bpmn:sequenceFlow id="Flow_18q6nau" sourceRef="Activity_06hhc0f" targetRef="Gateway_0citdqv" />
+    <bpmn:sequenceFlow id="Flow_0u2sojb" sourceRef="Activity_1n5e58b" targetRef="Activity_0vxmbqo" />
+    <bpmn:sequenceFlow id="Flow_0oeywvl" sourceRef="Activity_05txg3g" targetRef="Activity_1n5e58b" />
+    <bpmn:sequenceFlow id="Flow_1d3aai9" sourceRef="Activity_0vxmbqo" targetRef="Activity_036b0c0" />
+    <bpmn:sequenceFlow id="Flow_1a08e1r" sourceRef="Activity_update-dict-bp-add-name" targetRef="Activity_06hhc0f" />
+    <bpmn:dataStoreReference id="DataStoreReference_07leer0" name="Дата Фабрика" />
+    <bpmn:exclusiveGateway id="Gateway_0citdqv" name="Запис довідника присутній?">
+      <bpmn:incoming>Flow_18q6nau</bpmn:incoming>
+      <bpmn:outgoing>Flow_13y4foy</bpmn:outgoing>
+      <bpmn:outgoing>Flow_003wsie</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:serviceTask id="Activity_147fj7o" name="Формування помилки" camunda:modelerTemplate="userDataValidationErrorDelegate" camunda:delegateExpression="${userDataValidationErrorDelegate}">
+      <bpmn:extensionElements>
+        <camunda:inputOutput>
+          <camunda:inputParameter name="validationErrors">
+            <camunda:list>
+              <camunda:value>{"field": "name", "value": "${submission('Activity_update-dict-bp-add-name').formData.prop('name').stringValue().replaceAll("\"", "\\\\\"")}", "message": "Такий запис вже існує"}</camunda:value>
+            </camunda:list>
+          </camunda:inputParameter>
+        </camunda:inputOutput>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_13y4foy</bpmn:incoming>
+      <bpmn:outgoing>Flow_0fxiobg</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:serviceTask id="Activity_06hhc0f" name="Пошук запису довідника" camunda:modelerTemplate="dataFactoryConnectorSearchDelegate" camunda:delegateExpression="${dataFactoryConnectorSearchDelegate}">
+      <bpmn:extensionElements>
+        <camunda:inputOutput>
+          <camunda:inputParameter name="resource">factor-equal-factor-type-name-count</camunda:inputParameter>
+          <camunda:inputParameter name="searchConditions">
+            <camunda:map>
+              <camunda:entry key="name">${submission('Activity_update-dict-bp-add-name').formData.prop('name').value()}</camunda:entry>
+            </camunda:map>
+          </camunda:inputParameter>
+          <camunda:inputParameter name="x_access_token">${completer('Activity_update-dict-bp-add-name').accessToken}</camunda:inputParameter>
+          <camunda:outputParameter name="response">${ response }</camunda:outputParameter>
+        </camunda:inputOutput>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_1a08e1r</bpmn:incoming>
+      <bpmn:outgoing>Flow_18q6nau</bpmn:outgoing>
+      <bpmn:dataOutputAssociation id="DataOutputAssociation_0jbos83">
+        <bpmn:targetRef>DataStoreReference_07leer0</bpmn:targetRef>
+      </bpmn:dataOutputAssociation>
+    </bpmn:serviceTask>
+    <bpmn:userTask id="Activity_update-dict-bp-sign-add-name" name="Підписати дані КЕП" camunda:modelerTemplate="officerSignTaskTemplate" camunda:formKey="update-dict-bp-sign-add-name" camunda:assignee="${initiator}">
+      <bpmn:extensionElements>
+        <camunda:properties>
+          <camunda:property name="eSign" value="true" />
+        </camunda:properties>
+        <camunda:inputOutput>
+          <camunda:inputParameter name="userTaskInputFormDataPrepopulate">${submission('Activity_update-dict-bp-add-name').formData}</camunda:inputParameter>
+        </camunda:inputOutput>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_003wsie</bpmn:incoming>
+      <bpmn:outgoing>Flow_1r1nsod</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:sequenceFlow id="Flow_1r1nsod" sourceRef="Activity_update-dict-bp-sign-add-name" targetRef="Activity_05txg3g" />
+    <bpmn:scriptTask id="Activity_05txg3g" name="Підготовка даних для запису (transient var)" scriptFormat="groovy">
+      <bpmn:incoming>Flow_1r1nsod</bpmn:incoming>
+      <bpmn:outgoing>Flow_0oeywvl</bpmn:outgoing>
+      <bpmn:script>def signedFormData = submission('Activity_update-dict-bp-sign-add-name').formData
+
+        signedFormData.prop('factorType', 'Хімічний: довільні')
+
+        execution.removeVariable('dataPayload')
+        set_transient_variable('dataPayload', signedFormData)</bpmn:script>
+    </bpmn:scriptTask>
+    <bpmn:callActivity id="Activity_1n5e58b" name="Підписати дані системним ключем" calledElement="system-signature-bp">
+      <bpmn:extensionElements>
+        <camunda:out source="system_signature_ceph_key" target="system_signature_ceph_key" />
+        <camunda:in source="dataPayload" target="dataToSign" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_0oeywvl</bpmn:incoming>
+      <bpmn:outgoing>Flow_0u2sojb</bpmn:outgoing>
+    </bpmn:callActivity>
+    <bpmn:serviceTask id="Activity_036b0c0" name="Результат виконання &#34;Запис довідника створено&#34;" camunda:modelerTemplate="defineBusinessProcessStatusDelegate" camunda:delegateExpression="${defineBusinessProcessStatusDelegate}">
+      <bpmn:extensionElements>
+        <camunda:inputOutput>
+          <camunda:inputParameter name="status">Запис довідника створено</camunda:inputParameter>
+        </camunda:inputOutput>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_1d3aai9</bpmn:incoming>
+      <bpmn:outgoing>Flow_1d7odkh</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:dataStoreReference id="DataStoreReference_1re3zgj" name="Дата фабрика" />
+    <bpmn:endEvent id="Event_09njj7c" name="Запис довідника створено">
+      <bpmn:incoming>Flow_1d7odkh</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:serviceTask id="Activity_0vxmbqo" name="Зберегти дані в Дата фабрику" camunda:modelerTemplate="dataFactoryConnectorCreateDelegate" camunda:delegateExpression="${dataFactoryConnectorCreateDelegate}">
+      <bpmn:extensionElements>
+        <camunda:inputOutput>
+          <camunda:inputParameter name="resource">factor</camunda:inputParameter>
+          <camunda:inputParameter name="payload">${dataPayload}</camunda:inputParameter>
+          <camunda:inputParameter name="x_digital_signature_derived_ceph_key">${system_signature_ceph_key}</camunda:inputParameter>
+          <camunda:inputParameter name="x_access_token">${completer('Activity_update-dict-bp-sign-add-name').accessToken}</camunda:inputParameter>
+          <camunda:inputParameter name="x_digital_signature_ceph_key">${sign_submission('Activity_update-dict-bp-sign-add-name').signatureDocumentId}</camunda:inputParameter>
+          <camunda:outputParameter name="response">${ response }</camunda:outputParameter>
+        </camunda:inputOutput>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_0u2sojb</bpmn:incoming>
+      <bpmn:outgoing>Flow_1d3aai9</bpmn:outgoing>
+      <bpmn:dataOutputAssociation id="DataOutputAssociation_1p3jh0a">
+        <bpmn:targetRef>DataStoreReference_1re3zgj</bpmn:targetRef>
+      </bpmn:dataOutputAssociation>
+    </bpmn:serviceTask>
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="Collaboration_003meyg">
+      <bpmndi:BPMNShape id="Participant_099v9ei_di" bpmnElement="Participant_099v9ei" isHorizontal="true">
+        <dc:Bounds x="160" y="60" width="1400" height="650" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Flow_1r1nsod_di" bpmnElement="Flow_1r1nsod">
+        <di:waypoint x="880" y="290" />
+        <di:waypoint x="920" y="290" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_1a08e1r_di" bpmnElement="Flow_1a08e1r">
+        <di:waypoint x="500" y="290" />
+        <di:waypoint x="540" y="290" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_1d3aai9_di" bpmnElement="Flow_1d3aai9">
+        <di:waypoint x="1290" y="290" />
+        <di:waypoint x="1330" y="290" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_0oeywvl_di" bpmnElement="Flow_0oeywvl">
+        <di:waypoint x="1020" y="290" />
+        <di:waypoint x="1050" y="290" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_0u2sojb_di" bpmnElement="Flow_0u2sojb">
+        <di:waypoint x="1150" y="290" />
+        <di:waypoint x="1190" y="290" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_18q6nau_di" bpmnElement="Flow_18q6nau">
+        <di:waypoint x="640" y="290" />
+        <di:waypoint x="675" y="290" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_0fxiobg_di" bpmnElement="Flow_0fxiobg">
+        <di:waypoint x="540" y="530" />
+        <di:waypoint x="337" y="530" />
+        <di:waypoint x="337" y="315" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_1d7odkh_di" bpmnElement="Flow_1d7odkh">
+        <di:waypoint x="1430" y="290" />
+        <di:waypoint x="1472" y="290" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_003wsie_di" bpmnElement="Flow_003wsie">
+        <di:waypoint x="725" y="290" />
+        <di:waypoint x="780" y="290" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="755" y="272" width="9" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_0b35npj_di" bpmnElement="Flow_0b35npj">
+        <di:waypoint x="362" y="290" />
+        <di:waypoint x="400" y="290" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_0bdaq8b_di" bpmnElement="Flow_0bdaq8b">
+        <di:waypoint x="255" y="290" />
+        <di:waypoint x="312" y="290" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_13y4foy_di" bpmnElement="Flow_13y4foy">
+        <di:waypoint x="700" y="315" />
+        <di:waypoint x="700" y="530" />
+        <di:waypoint x="640" y="530" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="713" y="333" width="16" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="Event_08z8nlg_di" bpmnElement="Event_08z8nlg">
+        <dc:Bounds x="219" y="272" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="195" y="315" width="85" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_07f8614_di" bpmnElement="Activity_update-dict-bp-add-name">
+        <dc:Bounds x="400" y="250" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_05rdpqh_di" bpmnElement="Gateway_05rdpqh" isMarkerVisible="true">
+        <dc:Bounds x="312" y="265" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="DataStoreReference_07leer0_di" bpmnElement="DataStoreReference_07leer0">
+        <dc:Bounds x="565" y="395" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="556" y="452" width="72" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_0citdqv_di" bpmnElement="Gateway_0citdqv" isMarkerVisible="true">
+        <dc:Bounds x="675" y="265" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="659" y="220" width="85" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_147fj7o_di" bpmnElement="Activity_147fj7o">
+        <dc:Bounds x="540" y="490" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_0bks7pd_di" bpmnElement="Activity_06hhc0f">
+        <dc:Bounds x="540" y="250" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_0wamihy_di" bpmnElement="Activity_update-dict-bp-sign-add-name">
+        <dc:Bounds x="780" y="250" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_1vqfc1j_di" bpmnElement="Activity_05txg3g">
+        <dc:Bounds x="920" y="250" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_0hvucam_di" bpmnElement="Activity_1n5e58b">
+        <dc:Bounds x="1050" y="250" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_036b0c0_di" bpmnElement="Activity_036b0c0">
+        <dc:Bounds x="1330" y="250" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="DataStoreReference_1re3zgj_di" bpmnElement="DataStoreReference_1re3zgj">
+        <dc:Bounds x="1215" y="395" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1205" y="452" width="72" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_09njj7c_di" bpmnElement="Event_09njj7c">
+        <dc:Bounds x="1472" y="272" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1448" y="315" width="85" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_0k4lwj2_di" bpmnElement="Activity_0vxmbqo">
+        <dc:Bounds x="1190" y="250" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="DataOutputAssociation_0jbos83_di" bpmnElement="DataOutputAssociation_0jbos83">
+        <di:waypoint x="590" y="330" />
+        <di:waypoint x="590" y="395" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="DataOutputAssociation_1p3jh0a_di" bpmnElement="DataOutputAssociation_1p3jh0a">
+        <di:waypoint x="1240" y="330" />
+        <di:waypoint x="1240" y="395" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>
