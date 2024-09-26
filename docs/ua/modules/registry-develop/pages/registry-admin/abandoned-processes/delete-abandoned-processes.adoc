@@ -1,0 +1,300 @@
+= Видалення застарілих бізнес-процесів
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+== Проблематика
+
+*_Застарілі бізнес-процеси (abandoned business processes)_* -- це процеси, що були розпочаті, але не завершені. Причиною можуть бути помилки, виключення або інші перешкоди, через які процес припинився.
+
+Існує кілька варіантів розв'язання цієї проблеми:
+
+. *Уникати застарілих процесів*. Це можливо завдяки коректному моделюванню процесів, наприклад, використовуючи таймери завершення процесу (*Timer Boundary Event*) типу *Duration* для кожного завдання користувача (User Task).
++
+.Бізнес-процес із таймером завершення
+image::platform-develop:platform-prod-deployment/platform-prod-deploy-abandoned-bp.png[]
++
+NOTE: Рекомендується встановлювати таймер на понад 14 днів, оскільки логи бізнес-процесів зберігаються в Elastic Search протягом цього часу. Після видалення логів неможливо ідентифікувати причину помилки.
++
+[TIP]
+====
+* Детальніше про таймери дивіться на сторінці xref:registry-develop:bp-modeling/bp/bpmn/events/timer-event.adoc[].
+* Налаштування таймерів дивіться на сторінці xref:registry-develop:best-practices/bp-timer-launch.adoc[].
+====
+
+. Якщо деякі процеси все ж залишилися незавершеними, можна скористатися інструментом *Business Process Administration Portal (Camunda Cockpit)*, щоб видалити їх вручну.
++
+TIP: Детальніше дивіться на сторінці xref:registry-develop:registry-admin/registry-admin-bp-management-cockpit.adoc[].
+
+. Якщо кількість застарілих процесів велика, їх видалення вручну стає незручним або майже неможливим. У такому випадку варто використовувати скрипти для масового видалення (_див. нижче_).
+
+== Завершення великої кількості застарілих бізнес-процесів
+
+Для завершення великої кількості застарілих процесів можна використовувати скрипти.
+
+NOTE: Усі SQL-запити виконуються на поді `operational-instance`.
+
+=== Запити для отримання списку застарілих бізнес-процесів
+
+Запит №1 (БД `camunda`)::
+Отримання списку ідентифікаторів процесів, які не виконували операції внесення даних в реєстр і перебувають на початкових задачах користувача. Результат виконання запита можна переглянути у вкладенні `xref:attachment$registry-admin/delete-abandoned-processes/process_instance_ids.csv[process_instance_ids.csv]`.
++
+NOTE: Цей запит є безпечним, за умови коректної конфігурації реєстру. Для `test-registry` використовуйте xref:#query-3[Запит №3].
++
+._SQL-сценарій_
+[%collapsible]
+====
+[source,sql]
+----
+COPY
+(
+    select e.id_ -- running process instance id
+    from act_ru_execution e
+        join act_ru_task t ON e.id_ = t.proc_inst_id_
+        join act_re_procdef p on e.proc_def_id_ = p.id_
+        join act_hi_procinst h on e.proc_inst_id_ = h.proc_inst_id_
+    where e.parent_id_ is null -- тільки верхньорівневі процеси
+        and h.start_time_ < '2022-09-26 00:00:00.000' -- часова рамка для безпечного завершення процесів
+        and (
+            (p.key_ like 'test-registry-vpo-to-address-registration-bp' and task_def_key_ in ('searchUserForm', 'officerConnectVpoToAddress')) or
+            (p.key_ like 'test-registry-housing-registration-bp' and task_def_key_ in ('searchUserForm', 'officerHousingRegistration')) or
+            (p.key_ like 'test-registry-compensation-application-bp' and task_def_key_ in ('searchUserForm', 'sharedSearchPropertyForm')) or
+            (p.key_ like 'test-registry-user-registration-bp' and task_def_key_ in ('userRegistrationForm')) or
+            (p.key_ like 'create-vpo' and task_def_key_ in ('createVpoForm')) or
+            (p.key_ like 'test-registry-reimbursement-costs-bp' and task_def_key_ in ('filterForm', 'reimbursementGridForm')) or
+            (p.key_ like 'test-registry-housing-edit-bp' and task_def_key_ in ('housingEditForm', 'officerEditHousingForm')) or
+            (p.key_ like 'test-registry-set-vpo-date-finish-bp' and task_def_key_ in ('officerSetVpoDateFinishSelectDateForm', 'officerSetVpoDateFinishGridForm')) or
+            (p.key_ like 'test-registry-edit-user-registration-bp' and task_def_key_ in ('searchUserForm', 'editUserForm')) or
+            (p.key_ like 'test-registry-completion-data-processing-bp' and task_def_key_ in ('completionDataProcessingFirstForm', 'completionDataProcessingReportForm')) or
+            (p.key_ like 'link-test-registry-owner' and task_def_key_ in ('lsoSearchPropertyForm')) or
+            (p.key_ like 'test-registry-compensation-sum-bp' and task_def_key_ in ('changeCompensationSumForm'))
+        )
+) TO '/var/tmp/process_instance_ids.csv' csv header;
+----
+
+* `test-registry` -- назва вашого реєстру.
+
+====
+
+Запит №2 (БД `audit`)::
+Отримання списку процесів, які виконали операції внесення даних в реєстр, але не завершилися через технічні причини. Результат виконання запита можна переглянути у вкладенні `xref:attachment$registry-admin/delete-abandoned-processes/stuck_processes.csv[stuck_processes.csv]`.
++
+._SQL-сценарій_
+[%collapsible]
+====
+[source,sql]
+----
+create extension dblink;
+
+select distinct ae.source_business_process_instance_id
+    from audit_event ae
+    where context::json ->>'action'='INSERT INTO TABLE'
+        and context::json ->>'step' = 'AFTER'
+        and ae.source_business_process_instance_id in (select proc_inst_id_ from dblink('dbname=camunda','SELECT proc_inst_id_ FROM act_ru_execution') as arec(proc_inst_id_ text) )
+        and source_business_process not in('test-registry-vpo-to-address-registration-bp','test-registry-compensation-application-bp')
+union all
+select ae.source_business_process_instance_id
+    from audit_event ae
+    where context::json ->>'action'='INSERT INTO TABLE'
+        and context::json ->>'step' = 'AFTER'
+        and ae.source_business_process_instance_id in (select proc_inst_id_ from dblink('dbname=camunda','SELECT proc_inst_id_ FROM act_ru_execution') as arec(proc_inst_id_ text) )
+        and source_business_process  in('test-registry-compensation-application-bp')
+    group by ae.source_business_process_instance_id
+    having max (context::json ->>'tablename')<> min (context::json ->>'tablename');
+
+drop extension dblink;
+----
+====
+
+[#query-3]
+Запит №3 (БД `camunda`)::
+Отримання списку процесів, які були запущені до певної дати та залишилися незавершеними (Camunda).
++
+._SQL-сценарій_
+[%collapsible]
+====
+[source,sql]
+----
+COPY
+(
+select e.id_ from act_ru_execution e join act_hi_procinst h on e.proc_inst_id_ = h.proc_inst_id_
+where e.parent_id_ is null
+  and h.start_time_ < '<дата_до_якої_видалити_процеси формат рік-місяц-число> 00:00:00.000'
+) TO '/tmp/process_instance_ids.csv' csv header;
+----
+====
+
+[#check-queries]
+=== Запити для перевірки
+
+Також існують запити для перевірки стану процесів:
+
+. Щоб отримати *список усіх процесів*, виконайте наступний скрипт:
++
+[source,sql]
+----
+psql
+\c camunda
+
+COPY
+(
+select e.id_ from act_ru_execution e join act_hi_procinst h on e.proc_inst_id_ = h.proc_inst_id_
+where e.parent_id_ is null
+) TO '/var/tmp/process_instance_ids.csv' csv header;
+----
+
+. Якщо потрібно дізнатися *кількість усіх процесів*, виконайте наступний запит:
++
+[source,sql]
+----
+select count (e.id_) from act_ru_execution e join act_hi_procinst h on e.proc_inst_id_ = h.proc_inst_id_
+where e.parent_id_ is null;
+----
+
+. xref:#query-3[Запит №3] дозволяє отримати *список усіх процесів, які не були завершені та обмежені за датою*.
+
+. Щоб отримати *кількість усіх процесів, які не були завершені й обмежені за датою*, виконайте наступний запит:
++
+[source,sql]
+----
+select count (e.id_) from act_ru_execution e join act_hi_procinst h on e.proc_inst_id_ = h.proc_inst_id_
+where e.parent_id_ is null
+  and h.start_time_ < '<дата_до_якої_видалити_процеси формат рік-місяц-число>';
+----
+
+=== Bash-скрипт для масового видалення
+
+Цей скрипт використовує CSV-файл з ідентифікаторами процесів, щоб завершити їх адміністративним шляхом.
+
+._Bash-сценарій_
+[%collapsible]
+====
+[source,bash]
+----
+#!/bin/bash
+
+file_location=$1
+
+bpms_api_url="http://bpms:8080/api/process-instance/delete"
+bpms_auth_token=$2
+
+batch_partitioning_factor=150
+
+process_instances_array=()
+echo "Початок обробки CSV-файлу..."
+while IFS= read -r process_instance_id
+do
+  process_instances_array+=("\"$process_instance_id\"")
+done < $file_location
+echo "Завершено обробку CSV-файлу. Усього записів: ${#process_instances_array[@]}"
+
+for((i=0; i < ${#process_instances_array[@]}; i+=batch_partitioning_factor))
+do
+  partitioned_array=("${process_instances_array[@]:i:batch_partitioning_factor}" )
+  echo "Відправка POST-запиту для завершення партії процесів..."
+  curl -H "Content-Type: application/json" \
+       -H "X-Access-Token: ${bpms_auth_token}" \
+       -d "{\
+              \"deleteReason\": \"Завершення застарілих процесів\",\
+              \"processInstanceIds\": [$(IFS=, ; echo "${partitioned_array[*]}")],\
+              \"skipCustomListeners\" : false,\
+              \"skipSubprocesses\" : false,\
+              \"failIfNotExists\" : false\
+           }" \
+       $bpms_api_url
+  sleep 1
+  echo "Завершено партію процесів"
+done
+----
+====
+
+== Інструкція з практичного застосування
+
+[NOTE]
+====
+Спочатку виконайте xref:#check-queries[], щоб отримати загальну кількість процесів, а також кількість процесів до зазначеної дати, які потрібно видалити. Це допоможе визначити, скільки процесів має залишитися після видалення.
+
+Перевірити кількість процесів в інтерфейсі OpenShift можна за роутом `bp-process-administration` реєстру.
+====
+
+. Виконайте xref:#query-3[Запит №3] на поді `operational-instance`, щоб сформувати CSV-файл, та завантажте його локально:
++
+[source,bash]
+----
+oc cp operational-instance-pod:/tmp/file ./file
+----
++
+NOTE: Це шаблон, необхідно підставити відповідні значення.
+
+. Застосуйте тимчасовий *Deployment* `rk-curl`:
++
+[source,yaml]
+.Приклад Deployment для встановлення `rk-curl`
+----
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: rk-curl
+  namespace: <назва реєстру>
+  labels:
+    app: rk-curl
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rk-curl
+  template:
+    metadata:
+      labels:
+        app: rk-curl
+    spec:
+      containers:
+        - name: curl
+          image: ellerbrock/alpine-bash-curl-ssl
+          command:
+            - sleep
+            - '36000'
+          imagePullPolicy: IfNotPresent
+      restartPolicy: Always
+----
+
+. Перевірте, що у *NetworkPolicy* `bpms-policy` дозволено трафік від "`app: rk-curl`":
++
+[source,yaml]
+----
+- podSelector:
+    matchLabels:
+      app: rk-curl
+----
+
+. Скопіюйте CSV-файл та bash-скрипт у теку *_/tmp_* поду `rk-curl`:
++
+[source,bash]
+----
+oc cp ./file rk-curl-pod:/tmp/file
+----
++
+NOTE: Це шаблон, необхідно підставити відповідні значення.
+
+. Отримайте авторизаційний токен доступу до `bpms` для системного користувача `jenkins-deployer`, клієнта відповідного реалму `<registry>-admin`, у Keycloak за секретом, де `<registry>` -- назва вашого реєстру.
++
+[NOTE]
+====
+Приклад запита дивіться у xref:attachment$registry-admin/delete-abandoned-processes/reestr1_postman_collection.json[Postman-колекції]. Врахуйте, що TTL токена становить 5 хвилин. Якщо цього часу недостатньо, змініть параметр *Access Token Lifespan* в налаштуваннях Keycloak для реалму `<registry>-admin`, збільшивши його до 1 години.
+
+* `<registry>` -- назва вашого реєстру.
+====
+
+. Запустіть bash-скрипт, зробивши його виконуваним (`+x`), та передайте необхідні параметри.
++
+.Приклад
+[source,bash]
+----
+./script.sh file.csv "$(cat file.txt з токеном)"
+----
+
+. Виконайте xref:#check-queries[], щоб переконатися, що всі застарілі процеси видалені та порівняйте, скільки файлів було і скільки лишилося після очищення.
+
+CAUTION: Після завершення чистки незавершених бізнес-процесів, також потрібно виконати очищення S3-бакетів і Redis відповідно до інструкції xref:registry-develop:registry-admin/abandoned-processes/delete-docs-s3-ceph-redis-buckets.adoc[].
+
+== Пов'язані сторінки
+
+* xref:registry-develop:registry-admin/abandoned-processes/delete-docs-s3-ceph-redis-buckets.adoc[]
