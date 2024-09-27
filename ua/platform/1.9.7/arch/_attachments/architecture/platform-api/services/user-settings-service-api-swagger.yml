@@ -1,0 +1,404 @@
+openapi: 3.0.3
+info:
+  title: User settings service API
+  description: This document describes REST API of 'User settings service'
+  version: "1.0"
+tags:
+- name: user-settings-service-api
+  description: User settings service Rest API
+paths:
+  /api/settings/me/channels/{channel}/verify:
+    post:
+      tags:
+      - user-settings-service-api
+      summary: Verify channel address
+      description: |-
+        ### Endpoint purpose:
+         This endpoint allows to send verification code to channel address
+        ### User verification:
+         For _diia_ channel expecting not one of _unregistered-officer_ or _officer_ user roles from _X-Access-Token_, for other channels user roles must not be empty, otherwise _403 Forbidden_ status code returned.
+      operationId: verifyChannelAddress
+      parameters:
+      - name: X-Access-Token
+        in: header
+        description: Token used for endpoint security
+        required: true
+        schema:
+          type: string
+      - name: channel
+        in: path
+        required: true
+        schema:
+          type: string
+          enum:
+          - email
+          - diia
+          - inbox
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerificationInputDto'
+            example:
+              address: new@email.com
+        required: true
+      responses:
+        "200":
+          description: Returns verification code expiration in seconds
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/VerificationCodeExpirationDto'
+              example:
+                verificationCodeExpirationSec: 30
+        "401":
+          description: Unauthorized
+          content:
+            application/json: {}
+        "403":
+          description: User role verification failed
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/DetailedErrorResponse'
+        "500":
+          description: Internal server error
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/DetailedErrorResponse'
+  /api/settings/me/channels/{channel}/deactivate:
+    post:
+      tags:
+      - user-settings-service-api
+      summary: Deactivate channel
+      description: |-
+        ### Endpoint purpose:
+         This endpoint allows to deactivate one of predefined communication channels: _email_, _diia_ or _inbox_.
+        ### User verification:
+         For _diia_ channel expecting not one of _unregistered-officer_ or _officer_ user roles from _X-Access-Token_, for other channels user roles must not be empty, otherwise _403 Forbidden_ status code returned.
+      operationId: deactivateChannel
+      parameters:
+      - name: X-Access-Token
+        in: header
+        description: Token used for endpoint security
+        required: true
+        schema:
+          type: string
+      - name: channel
+        in: path
+        required: true
+        schema:
+          type: string
+          enum:
+          - email
+          - diia
+          - inbox
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SettingsDeactivateChannelInputDto'
+            example:
+              address: new@email.com
+              deactivationReason: User deactivated
+        required: true
+      responses:
+        "200":
+          description: Channel deactivated successfully
+        "400":
+          description: Communication channel verification failed
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/DetailedErrorResponse'
+        "401":
+          description: Unauthorized
+          content:
+            application/json: {}
+        "403":
+          description: User role verification failed
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/DetailedErrorResponse'
+        "500":
+          description: Internal server error
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/DetailedErrorResponse'
+  /api/settings/me/channels/{channel}/activate:
+    post:
+      tags:
+      - user-settings-service-api
+      summary: Activate channel
+      description: |-
+        ### Endpoint purpose:
+         This endpoint allows to activate for user one of predefined communication channels: _email_, _diia_ or _inbox_. Accepts verification code in request body, which can be received using [POST](#user-settings-service-api/verifyChannelAddress) endpoint.
+        ### User verification:
+         For _diia_ channel expecting not one of _unregistered-officer_ or _officer_ user roles from _X-Access-Token_, for other channels user roles must not be empty, otherwise _403 Forbidden_ status code returned.
+      operationId: activateChannel
+      parameters:
+      - name: X-Access-Token
+        in: header
+        description: Token used for endpoint security
+        required: true
+        schema:
+          type: string
+      - name: channel
+        in: path
+        required: true
+        schema:
+          type: string
+          enum:
+          - email
+          - diia
+          - inbox
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActivateChannelInputDto'
+            example:
+              address: new@email.com
+              verificationCode: "123456"
+        required: true
+      responses:
+        "200":
+          description: Channel activated successfully
+        "400":
+          description: Communication channel verification failed
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/DetailedErrorResponse'
+        "401":
+          description: Unauthorized
+          content:
+            application/json: {}
+        "403":
+          description: User role verification failed
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/DetailedErrorResponse'
+        "500":
+          description: Internal server error
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/DetailedErrorResponse'
+  /api/settings/me/channels/email/validate:
+    post:
+      tags:
+      - user-settings-service-api
+      summary: Validate email address
+      description: |-
+        ### Endpoint purpose:
+         This endpoint allows to validate user's email address for restricted symbols in it, or verify if it's empty
+      operationId: validateEmailAddress
+      parameters:
+      - name: X-Access-Token
+        in: header
+        description: Token used for endpoint security
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SettingsEmailInputDto'
+            example:
+              address: new@email.com
+        required: true
+      responses:
+        "200":
+          description: Email address validation passed
+        "401":
+          description: Unauthorized
+          content:
+            application/json: {}
+        "422":
+          description: Email address not valid or empty
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/DetailedValidationErrorResponse'
+        "500":
+          description: Internal server error
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/DetailedErrorResponse'
+  /api/settings/{userId}:
+    get:
+      tags:
+      - user-settings-service-api
+      summary: Retrieve user settings based on user identifier
+      description: |-
+        ### Endpoint purpose:
+         This endpoint allows to retrieve the personal settings of the user, such as channels of communication.
+      operationId: findUserSettingsById
+      parameters:
+      - name: X-Access-Token
+        in: header
+        description: Token used for endpoint security
+        required: true
+        schema:
+          type: string
+      - name: userId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: Returns JSON representation of user settings
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/SettingsReadDto'
+              example:
+                settingsId: a6bf7765-1daf-4a51-8510-f1cbf2e943b0
+                channels:
+                - channel: email
+                  activated: true
+                  address: new@email.com
+        "401":
+          description: Unauthorized
+          content:
+            application/json: {}
+        "500":
+          description: Internal server error
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/DetailedErrorResponse'
+  /api/settings/me:
+    get:
+      tags:
+      - user-settings-service-api
+      summary: Retrieve user settings based on X-Access-Token
+      description: |-
+        ### Endpoint purpose:
+         This endpoint allows to retrieve the personal settings of the authenticated user, such as channels of communication.
+      operationId: findUserSettingsFromToken
+      parameters:
+      - name: X-Access-Token
+        in: header
+        description: Token used for endpoint security
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: Returns JSON representation of user settings
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/SettingsReadDto'
+              example:
+                settingsId: a6bf7765-1daf-4a51-8510-f1cbf2e943b0
+                channels:
+                - channel: email
+                  activated: true
+                  address: new@email.com
+        "401":
+          description: Unauthorized
+          content:
+            application/json: {}
+        "500":
+          description: Internal server error
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/DetailedErrorResponse'
+components:
+  schemas:
+    VerificationInputDto:
+      required:
+      - address
+      type: object
+      properties:
+        address:
+          type: string
+    VerificationCodeExpirationDto:
+      type: object
+      properties:
+        verificationCodeExpirationSec:
+          type: integer
+          format: int32
+    DetailedErrorResponse:
+      type: object
+      properties:
+        traceId:
+          type: string
+        code:
+          type: string
+        details:
+          type: object
+    SettingsDeactivateChannelInputDto:
+      required:
+      - deactivationReason
+      type: object
+      properties:
+        address:
+          type: string
+        deactivationReason:
+          type: string
+    ActivateChannelInputDto:
+      required:
+      - address
+      - verificationCode
+      type: object
+      properties:
+        address:
+          type: string
+        verificationCode:
+          type: string
+    SettingsEmailInputDto:
+      required:
+      - address
+      type: object
+      properties:
+        address:
+          type: string
+    DetailedValidationErrorResponse:
+      type: object
+      properties:
+        traceId:
+          type: string
+        code:
+          type: string
+        message:
+          type: string
+        localizedMessage:
+          type: string
+    ChannelReadDto:
+      type: object
+      properties:
+        channel:
+          type: string
+          enum:
+          - email
+          - diia
+          - inbox
+        activated:
+          type: boolean
+        address:
+          type: string
+        deactivationReason:
+          type: string
+    SettingsReadDto:
+      type: object
+      properties:
+        settingsId:
+          type: string
+          format: uuid
+        channels:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChannelReadDto'
