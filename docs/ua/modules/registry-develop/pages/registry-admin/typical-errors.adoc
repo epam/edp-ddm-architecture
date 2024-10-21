@@ -1,0 +1,540 @@
+= Типові помилки та алгоритм їх усунення
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+[#git-bash-errors]
+== Помилки при використанні Git Bash
+
+[#auth-error]
+=== Помилка аутентифікації
+
+==== Помилка
+
+Помилка аутентифікації виникає, коли `commit` створено без вказання електронної пошти, або зазначена електронна пошта відрізняється від тієї, що використовується в Gerrit. Під час спроби виконати `git push` з'являється помилка аутентифікації.
+
+image:registry-develop:registry-admin/typical-errors/typical-errors-35.png[image,width=1471,height=488]
+
+==== Алгоритм усунення
+
+Щоб виправити помилку, оновіть конфігурацію Git з правильними даними:
+
+.Оновлення конфігурації Git з іменем користувача
+[source,bash]
+----
+git config --global user.name "Ваше ім'я користувача"
+----
+
+.Оновлення конфігурації Git з електронною поштою
+[source,bash]
+----
+git config --global user.email "you@example.com"
+----
+
+TIP: Докладніше про налаштування Git можна прочитати на https://git-scm.com/book/uk/v2/%D0%92%D1%81%D1%82%D1%83%D0%BF-%D0%9F%D0%BE%D1%87%D0%B0%D1%82%D0%BA%D0%BE%D0%B2%D0%B5-%D0%BD%D0%B0%D0%BB%D0%B0%D1%88%D1%82%D1%83%D0%B2%D0%B0%D0%BD%D0%BD%D1%8F-Git[офіційному сайті Git].
+
+[#gerrit-errors]
+== Типові помилки при роботі з Gerrit
+
+[#missing-change-id-errors]
+=== Помилка missing Change-ID при спробі відправлення змін до віддаленого репозиторію Gerrit
+
+==== Помилка
+
+`git push` не виконується через помилку `"missing Change-ID in message footer"`.
+Ця помилка виникає, коли у вашій директорії відсутній файл `commit-msg` у системній Git-директорії регламенту: *_registry-regulations\.git\hooks_*.
+
+image:registry-develop:registry-admin/typical-errors/typical-errors-33.png[image,width=1911,height=899]
+
+==== Алгоритм усунення
+
+Щоб виправити помилку, додайте файл `commit-msg` до директорії _registry-regulations\.git\hooks_ вашого регламенту. Цей файл можна отримати з віддаленого репозиторію Gerrit.
+
+. Скопіюйте посилання, яке використовується для клонування регламенту.
++
+image:registry-develop:registry-admin/typical-errors/typical-errors-26.png[image,width=1900,height=899]
+
+. З цього посилання скопіюйте фрагмент для виконання у командному рядку.
++
+.Clone with commit-msg hook
+[source,bash]
+----
+git clone "https://admin-tools-admin-main.apps.first.edu.registry.eua.gov.ua/gerrit/registry-regulations" && (cd "registry-regulations" && mkdir -p .git/hooks && curl -Lo `git rev-parse --git-dir`/hooks/commit-msg https://<your registry name>-main.apps.<cluster name>.registry.eua.gov.ua/gerrit/tools/hooks/commit-msg; chmod +x `git rev-parse --git-dir`/hooks/commit-msg)
+----
++
+Обов'язково замініть:
+
+* `<your registry name>` на назву вашого реєстру;
+* `<cluster name>` на ім’я середовища, в якому розгорнуто регламент.
+
+. Після цього виконайте команду в командному рядку для завантаження файлу `commit-msg` у директорію _registry-regulations\.git\hooks_.
++
+image:registry-develop:registry-admin/typical-errors/typical-errors-13.png[image,width=1918,height=236]
+
+. Далі виконайте команду для виправлення останнього коміту без змін.
++
+[source,bash]
+----
+git commit --amend --no-edit
+----
++
+image:registry-develop:registry-admin/typical-errors/typical-errors-45.png[image,width=921,height=224]
+
+. Після цього зробіть `git push` без змін.
++
+[source,bash]
+----
+git push origin HEAD:refs/for/master
+----
++
+image:registry-develop:registry-admin/typical-errors/typical-errors-22.png[image,width=1421,height=439]
+
+NOTE: Якщо вам не вдається додати hook або потрібно додати лише одну зміну, використовуйте xref:#missing-change-id-alternative[альтернативний шлях], представлений нижче.
+
+[#missing-change-id-alternative]
+==== Альтернативний шлях
+
+. Створіть нову зміну вручну через інтерфейс користувача в Gerrit:
++
+menu:BROWSE[Repositories > registry-regulation > Commands > `CREATE CHANGE`]
+
+. Заповніть обов'язкові поля:
+
+* *Select branch for new change*: `master`
+* *Description*: впишіть опис зміни.
+
+. Скопіюйте *Change-Id* у новій зміні.
++
+----
+Change-Id: I4a63ec798850c1716a432e8c3457613cb9ac8fd8
+----
+
+. Додайте *Change-Id* у текстове повідомлення останнього коміту через IDE або командний рядок.
+
+. Виконайте команду для відправлення змін.
++
+[source,bash]
+----
+git push origin HEAD:refs/for/master
+----
+
+. Видаліть створену зміну вручну через інтерфейс користувача в Gerrit, якщо вона більше не потрібна.
+
+[#regulations-structure-diff]
+=== Структура локального регламенту відрізняється від типової структури в Gerrit
+
+==== Помилка
+
+Структура регламенту, розгорнутого на локальній машині, може відрізнятися від xref:arch:architecture/registry/administrative/regulation-management/registry-regulation/registry-regulation.adoc[типової структури Цифрового регламенту]. Наприклад, можуть бути відсутні розділи `data-model`, `bpmn` тощо.
+
+image:registry-develop:registry-admin/typical-errors/typical-errors-10.png[image,width=312,height=683]
+
+==== Алгоритм усунення
+
+Щоб розв'язати цю проблему, переконайтеся, що ви працюєте з правильним репозиторієм `registry-regulations`.
+
+. Для розгортання регламенту на локальній машині використовуйте виключно репозиторій `registry-regulations`.
++
+image:registry-develop:registry-admin/typical-errors/typical-errors-50.png[image,width=1914,height=486]
+
+. Якщо це ваш перший вхід до Gerrit, зачекайте 3-5 хвилин, а потім оновіть сторінку, щоб потрібний репозиторій з'явився.
+
+[#queue-changes-gerrit]
+=== Виникнення черги змін до регламенту в Gerrit
+
+==== Помилка
+
+Черга змін може виникнути, якщо накопичилися зміни, які не були інтегровані до `master`-гілки.
+
+==== Приклад
+
+Ви виконали `git commit` та `git push`, але на етапі рецензування коду виникла помилка в пайплайні *MASTER-Code-review-registry-regulations*.
+
+image:registry-develop:registry-admin/typical-errors/typical-errors-37.png[image,width=1915,height=985]
+
+Опісля ви додали кілька змін без помилок. У Gerrit це виглядає так:
+
+image:registry-develop:registry-admin/typical-errors/typical-errors-36.png[image,width=1916,height=299]
+
+Якщо перейти до останньої зміни, можна побачити перелік конфліктів, які потрібно розв'язати для продовження роботи.
+
+image:registry-develop:registry-admin/typical-errors/typical-errors-31.png[image,width=1919,height=988]
+
+==== Алгоритм усунення
+
+. Якщо є можливість повторно внести всі зміни, їх можна видалити через вкладку menu:CHANGES[`Open`] у Gerrit, а потім знову додати їх без помилок.
+
+. Для кожної зміни виберіть пункт меню *`Delete change`*.
++
+TIP: Послідовність видалення не є важливою.
+
+. У локальному проєкті виконайте *`Undo commit`*.
++
+image:registry-develop:registry-admin/typical-errors/typical-errors-41.png[image,width=1918,height=987]
+
+. *_АБО_* ви можете по черзі додавати всі зміни в Gerrit, редагуючи файли з помилками безпосередньо в інтерфейсі Gerrit.
++
+NOTE: Якщо застосовувати зміни по черзі, для кожної з них буде запускатися окрема збірка коду. Важливо, щоб кожен етап збірки завершувався успішно. Ця процедура може зайняти певний час.
+
+==== Кроки
+
+. Відкрийте в *Gerrit* збірку з помилками.
++
+image:registry-develop:registry-admin/typical-errors/typical-errors-1.png[image,width=1916,height=303]
+
+. Натисніть кнопку *`&#128393; EDIT`*.
++
+image:registry-develop:registry-admin/typical-errors/typical-errors-15.png[image,width=1916,height=941]
+
+. Виберіть файл, в якому потрібно внести зміни.
++
+image:registry-develop:registry-admin/typical-errors/typical-errors-16.png[image,width=1916,height=987]
+
+. Відредагуйте файл і натисніть кнопку *`SAVE`*.
++
+image:registry-develop:registry-admin/typical-errors/typical-errors-44.png[image,width=1916,height=981]
+
+. Натисніть кнопку *`&#11121; PUBLISH EDIT`*, потім *`&#9632; STOP EDITING`*.
+
+. Проведіть процедуру рецензування коду. Чекайте на успішне завершення пайплайну *MASTER-Code-review-registry-regulations*.
+
+. Далі натисніть кнопку *`✓✓ SUBMIT`*, потім *`CONTINUE`* і зачекайте завершення збірки *MASTER-Build-registry-regulations*. Збірка має завершитися успішно.
++
+image:registry-develop:registry-admin/typical-errors/typical-errors-38.png[image,width=1901,height=1080]
+
+. Перейдіть до наступної зміни та повторіть процедуру рецензування коду. Чекайте на успішне завершення пайплайну *MASTER-Code-review-registry-regulations*.
+
+. Натисніть кнопку *`REBASE`*.
++
+image:registry-develop:registry-admin/typical-errors/typical-errors-53.png[image,width=1915,height=984]
+
+. Натисніть кнопку *`✓ VERIFIED+1`*.
++
+image:registry-develop:registry-admin/typical-errors/typical-errors-42.png[image,width=1915,height=991]
+
+. Натисніть кнопку *`✓✓ SUBMIT`*, потім *`CONTINUE`* і зачекайте завершення збірки. Збірка має завершитися успішно.
++
+image:registry-develop:registry-admin/typical-errors/typical-errors-8.png[image,width=1915,height=984]
+
+. Повторіть ці кроки для всіх змін, що залишилися.
+
+. Після успішного виконання збірок у Gerrit на вкладці menu:CHANGES[Merged] з'явиться наступне:
++
+image:registry-develop:registry-admin/typical-errors/typical-errors-27.png[image,width=1915,height=327]
++
+Це показує успішне розв'язання конфліктів у Gerrit.
+
+==== Альтернативний шлях
+
+Якщо залишилися зміни, які ще не були застосовані до `master`-гілки, ви можете по черзі застосувати їх, використовуючи попередні кроки. Якщо при збірці виникають помилки, їх можна відредагувати в Gerrit.
+
+Після успішного застосування всіх змін у регламенті, оновіть локальний репозиторій ві дповідно до інструкції xref:registry-develop:registry-admin/regulations-deploy/registry-admin-deploy-regulation.adoc[].
+
+==== Примітка
+
+Якщо в процесі розробки регламенту виникають помилки, які неможливо виправити, ви можете виконати *Сleanup* регламенту реєстру як крайній захід. Такими помилками, наприклад, можуть бути:
+
+* порушення цілісності даних у базі;
+* помилки під час міграції даних;
+* застосування merge до зміни з помилками.
+
+TIP: Докладніше про цю процедуру можна прочитати у розділі xref:registry-develop:registry-admin/regulations-deploy/cleanup-job.adoc[].
+
+
+[#jenkins-errors]
+== Помилки при роботі Jenkins-пайплайнів
+
+=== Помилка при зчитуванні схеми документа
+
+==== Помилка
+
+Liquibase видає помилку:
+
+``
+Unexpected error running Liquibase: Error parsing line 13 column 67 of data-model/createTables.xml: schema_reference.4: Failed to read schema document 'https://nexus.apps.envfour.dev.registry.eua.gov.ua/nexus/repository/extensions/com/epam/digital/data/platform/liquibase-ext-schema/latest/liquibase-ext-schema-latest.xsd', because 1) could not find the document; 2) the document could not be read; 3) the root element of the document is not <xsd:schema>
+``
+
+image:registry-develop:registry-admin/typical-errors/typical-errors-12.png[image,width=1915,height=931]
+
+Ця помилка зазвичай виникає, коли вказано некоректне посилання на `.xsd`-схему для валідації `.xml`-файлів.
+
+==== Алгоритм усунення
+
+Щоб виправити цю помилку, замініть некоректне посилання на правильний URL:
+
+[source,bash]
+----
+http://artifactory.control-plane-nexus/nexus/repository/extensions/com/epam/digital/data/platform/liquibase-ext-schema/latest/liquibase-ext-schema-latest.xsd
+----
+
+Замінивши старе посилання на цей загальний URL, ви зможете успішно виконати валідацію `.xml`-файлів.
+
+=== Некоректна міграція даних (change sets checksum)
+
+==== Помилка
+
+Ця помилка виникає, коли дані міграція даних відбувається некоректно, і значення контрольної суми (checksum) у changeSets не збігається Це може трапитися через спробу змінити вже виконаний changeSet, або через створення іншого changeSet з тим самим ID.
+
+``
+Unexpected error running Liquibase: Validation Failed: 1 change sets check sum data-model/createTables.xml::add column (address) in table new_users::registry owner. was: 8:5811bcbfc0f7683bb3949b9b1203bfc1 but is now: :eae0a15fa62e6a5bac49783909e0cc55
+``
+
+image:registry-develop:registry-admin/typical-errors/typical-errors-17.png[image,width=1916,height=984]
+
+==== Алгоритм усунення
+
+Щоб розв'язати проблему, знайдіть зміну, в якій редагувався вже застосований changeSet. Це можна зробити, переглянувши зміни у вкладці *CHANGES* в Gerrit. Після того, як знайдете проблему:
+
+. Видаліть зміни у changeSet, які викликали помилку.
+. Дочекайтеся успішного завершення збірки всіх пайплайнів регламенту.
+. Додайте нові changeSet з необхідними змінами.
+
+TIP: Детальний опис порядку змін у таблицях можна знайти на сторінці xref:data-modeling/data/physical-model/data-model-changes-algorithm.adoc[].
+
+== Помилки при роботі з додатком Camunda
+
+IMPORTANT: Щоб уникнути помилок під час роботи з Camunda і збереження файлів бізнес-процесів, необхідно правильно створювати файли `.bpmn`. Рекомендований спосіб створення файлів бізнес-процесів можна знайти на сторінці xref:bp-modeling/bp/modeling-options.adoc[].
+
+=== Помилки при роботі із бізнес-процесами
+
+==== Бізнес-процес не відкривається
+
+===== Помилка
+
+Бізнес-процес не відкривається.
+
+image:registry-develop:registry-admin/typical-errors/typical-errors-3.png[image,width=1919,height=1029]
+
+===== Алгоритм усунення
+
+. Натисніть кнопку *`Close`*.
++
+image:registry-develop:registry-admin/typical-errors/typical-errors-43.png[image,width=1919,height=1029]
+
+. Видаліть у бізнес-процесі посилання на номер версії, який не підтримується.
++
+image:registry-develop:registry-admin/typical-errors/typical-errors-11.png[image,width=1916,height=1028]
+
+. Після видалення збережіть файл через меню menu:File[`Save file`] та закрийте бізнес-процес.
+
+. Відкрийте бізнес-процес знову через меню menu:File[`Open file`], щоб переконатися, що процес відкривається коректно.
++
+image:registry-develop:registry-admin/typical-errors/typical-errors-6.png[image,width=1919,height=1028]
+
+==== Не знайдено посилання на зовнішній ресурс
+
+===== Помилка
+
+Помилка може виглядати так:
+
+``
+Caused by: org.xml.sax.SAXException: Fatal Error: URI=null Line=542: The prefix "color" for attribute "color:background-color" associated with an element type "bpmndi:BPMNShape" is not bound.
+``
+
+Ця помилка означає, що відсутнє посилання на зовнішню бібліотеку, яка використовується у бізнес-процесі:
+
+``
+xmlns:color="http://www.omg.org/spec/BPMN/non-normative/color/1.0"
+``
+
+image:registry-develop:registry-admin/typical-errors/typical-errors-47.png[image,width=1915,height=987]
+
+===== Алгоритм усунення
+
+. Додайте посилання `xmlns:color="http://www.omg.org/spec/BPMN/non-normative/color/1.0` у "шапку" бізнес-процесу.
+
+. Збережіть зміни у віддаленому репозиторії *Gerrit* та дочекайтесь успішного проходження всіх пайплайнів регламенту.
+
+NOTE: Якщо виникає помилка через відсутність посилань на будь-які ресурси, додайте їх до шапки файлу бізнес-процесу. Докладніше про зовнішні ресурси можна переглянути на сайті розробника: https://docs.camunda.io.
+
+==== Бізнес-процес використовує не ініціалізовану змінну
+
+===== Помилка
+
+Під час запуску послуги у Кабінеті користувача виникає помилка, і процес надання послуги завершується з помилкою.
+
+image:registry-develop:registry-admin/typical-errors/typical-errors-52.png[image,width=1913,height=987]
+
+Знайти помилку можна так:
+
+. Відкрийте панель інструментів розробника у браузері за допомогою комбінації клавіш
+kbd:[Ctrl + Shift + I]  або натисканням kbd:[F12] та перейдіть на вкладку *Network*.
++
+image:registry-develop:registry-admin/typical-errors/typical-errors-5.png[image,width=1917,height=984]
+
+. Замініть фільтр запитів з *All* на *Fetch/XHR*.
+
+. Натисніть кнопку *`start`* і на панелі ліворуч виберіть останній запит.
+
+. На панелі праворуч перейдіть на вкладку *Response*, щоб побачити параметри помилки -- `traceId` і текст.
+
++
+image:registry-develop:registry-admin/typical-errors/typical-errors-7.png[image,width=1916,height=986]
++
+Текст помилки може виглядати так:
++
+``
+{"@timestamp":"2024-08-12T17:49:13.849Z","X-B3-TraceId":"06846406b3750ab9ddaeaf4372b81d07","X-B3-SpanId":"52738eac673bed97","X-Request-Id":"6dcb57b0-caa3-9b61-932f-94b1f4a11763","thread":"http-nio-8080-exec-3","level":"ERROR","class":"com.epam.digital.data.platform.bpms.rest.exception.mapper.CamundaRestExceptionMapper","line_number":46,"method":"toResponse","message":"Camunda rest communication error","exception":{"type":"org.camunda.bpm.engine.rest.exception.RestException","message":"Cannot instantiate process definition 7661ba4a-58d1-11ef-b689-0a580a830e73: Unknown property used in expression: ${inputPayload.prop(\"id\").value()}. Cause: Cannot resolve identifier 'inputPayload'"}}
+``
+
+IMPORTANT: Якщо бізнес-процес завершився з помилкою, рекомендується використовувати інструменти розробника у браузері для діагностики та пошуку можливих причин.
+
+===== Алгоритм усунення
+
+Помилка виникає через спробу використання JSON-об'єкта `inputPayload`, у якого відсутнє поле *id:* `${inputPayload.prop("id").value()}` на початку бізнес-процесу.
+
+Визначте походження об'єкта `inputPayload`.
+
+. Якщо це дані з форми, вкажіть коректну назву поля, значення якого буде використовуватись.
+. Якщо це об'єкт бізнес-процесу, зробіть один із наступних кроків:
+
+.. Скористайтеся наявною скриптовою задачею для підготовки значення цього поля.
+.. Додайте нову скриптову задачу для встановлення значення цього поля.
+
+IMPORTANT: При використанні змінних у бізнес-процесі необхідно переконатись, що вони визначені та заповнені перед тим, як будуть використані.
+
+Цю помилку можна відстежити під час дебагу бізнес-процесу.
+
+TIP: Докладніше про відлагодження можна дізнатися на сторінці xref:registry-admin/debug-registry-regulations.adoc[].
+
+image:registry-develop:registry-admin/typical-errors/typical-errors-49.png[]
+
+Після внесення змін до бізнес-процесу збережіть їх у віддаленому репозиторії *Gerrit* та дочекайтесь успішної збірки.
+
+NOTE: Логування скриптових задач описано у розділі "Вивід даних groovy скрипта у консоль". Перегляд помилок у логах контейнерів, які відповідають за бізнес-процеси, можна знайти у розділі "OpenShift Pods".
+
+[IMPORTANT]
+====
+* Використання методів `print` або `println` у скриптових задачах призводить до логування інформації у *Сервісі виконання бізнес-процесів*, і ці дані не можна прив'язати до конкретного бізнес-процесу або запита користувача.
+* Якщо потрібне логування, ініціалізуйте *`org.slf4j.Logger`* та використовуйте його методи.
+* Використовуйте інструмент *Kibana* для перегляду логів за `traceId`. Див. детальніше: xref:registry-admin/openshift-logging/openshift-logging-overview.adoc[].
+====
+
+== Ролі та доступ до процесів
+
+У деяких випадках можуть виникати помилки, пов'язані з налаштуванням доступів до бізнес-процесів.
+
+=== Відсутність бізнес-процесів у Кабінетах
+
+==== Помилка
+
+Змодельовані бізнес-процеси не відображаються у Кабінеті надавача та отримувача послуг.
+
+image:registry-develop:registry-admin/typical-errors/typical-errors-14.png[image,width=1915,height=984]
+
+NOTE: Рекомендований спосіб створення файлів бізнес-процесів описаний у розділі *Моделювання у настільному додатку Camunda Modeler* документа xref:bp-modeling/bp/modeling-options.adoc[].
+
+==== Алгоритм усунення
+
+Доступ до бізнес-процесів визначається у наступних файлах:
+
+. `registry-regulations\bp-auth\citizen.yml` -- відповідає за бізнес-процеси, що відображаються у кабінеті користувача.
+. `registry-regulations\bp-auth\officer.yml` -- відповідає за бізнес-процеси, що відображаються у кабінеті посадової особи.
+
+Якщо отримувачі послуг не мають доступу до відповідних бізнес-процесів, необхідно додати доступи для бізнес-процесів для отримувачів послуг з ролями: *`citizen`*, *`unregistered-individual`*, *`individual`*.
+
+.Без доступу до БП
+image::registry-develop:registry-admin/typical-errors/typical-errors-20.png[image,width=1919,height=774]
+
+.Додавання доступу до БП
+image::registry-develop:registry-admin/typical-errors/typical-errors-18.png[image,width=1919,height=1031]
+
+Після внесення змін збережіть їх у віддаленому репозиторії *Gerrit* та дочекайтеся успішного проходження всіх пайплайнів регламенту.
+
+У результаті послуги мають стати доступними у Кабінеті користувача.
+
+image:registry-develop:registry-admin/typical-errors/typical-errors-48.png[image,width=1916,height=990]
+
+[NOTE]
+====
+* Зверніть увагу, що отримувачі послуг з різними ролями будуть бачити різний перелік доступних послуг. Перші дві послуги можуть отримати незареєстровані користувачі, останні три — тільки користувачі, що пройшли реєстрацію у системі.
+* Переконайтеся, що у *Keycloak* у отримувачів послуг зазначені відповідні ролі.
+
+image:registry-develop:registry-admin/typical-errors/typical-errors-28.png[image,width=1915,height=985]
+
+====
+
+[TIP]
+====
+* Більш детальну інформацію можна переглянути на сторінці xref:registry-develop:bp-modeling/bp/access/roles-rbac-bp-modelling.adoc[].
+
+* Додатково про розмежування доступу на рівні атрибутів користувачів можна переглянути у розділі xref:registry-develop:bp-modeling/bp/access/bp-limiting-access-keycloak-attributes.adoc[].
+====
+
+[#kibana-errors]
+== Помилки, що виникають у Kibana
+
+=== Помилка 502 у Kibana (невірно створений шаблон пошуку)
+
+==== Помилка
+
+При переході у розділ *Discover* у *Kibana*, з'являється помилка `502 Response`.
+
+image:registry-develop:registry-admin/typical-errors/typical-errors-23.png[image,width=1180,height=265]
+
+==== Видалення невірно створеного індексу
+
+Для видалення помилкового індексу виконайте наступні кроки:
+
+. Перейдіть на вкладку menu:Management[Index Patterns].
+. Зі списку (якщо пошукових патернів декілька) виберіть той, що викликає помилку, та натисніть кнопку видалення праворуч.
++
+image:registry-develop:registry-admin/typical-errors/typical-errors-19.png[image,width=1918,height=989]
+
+{empty}
+
+Альтернативний спосіб: ::
+
+Перейдіть на вкладку menu:Management[Saved Objects], відмітьте помилково створений індекс і видаліть його.
++
+image:registry-develop:registry-admin/typical-errors/typical-errors-54.png[image,width=531,height=504]
+
+==== Створення індексу
+
+Для створення нового індексу:
+
+. Перейдіть на вкладку menu:Management[Index Patterns].
+. Натисніть кнопку *`Create index pattern`* або скористайтеся формою створення індексу праворуч.
+
++
+image:registry-develop:registry-admin/typical-errors/typical-errors-21.png[image,width=1915,height=907]
+
+Назва індексу повинна мати такий формат:
+
+`app-<registry-name>-*`, де `registry-name` -- це ім'я вашого реєстру.
+
+TIP: Детальні інструкції по роботі з технічними логами ви можете знайти на сторінках розділу xref:registry-admin/openshift-logging/openshift-logging-overview.adoc[].
+
+[#redash-errors]
+== Помилки у Redash
+
+=== Доступ до аналітичного представлення відсутній
+
+==== Помилка
+
+Якщо не надати доступ ролі `officer` (надавачу послуг) до нових чи змінених аналітичних представлень, виникає помилка.
+
+image:registry-develop:registry-admin/typical-errors/typical-errors-9.png[image,width=1903,height=905]
+
+==== Алгоритм усунення
+
+Щоб виправити помилку, виконайте наступне:
+
+При додаванні нових або змінених аналітичних представлень (для створення нового дашборда або додавання віджетів до наявних) у файлі `.xml` додайте `changeSet` з тегом `<ext:grantAll>`. Вкажіть у ньому роль `analytics_officer`.
+
+[source,xml]
+----
+<changeSet author="registry owner" id="grants to all analytics users">
+	<ext:grantAll>
+		<ext:role name="analytics_officer"/>
+	</ext:grantAll>
+</changeSet>
+----
+
+IMPORTANT: Якщо ви змінюєте наявне аналітичне представлення, спочатку видаліть його через окремий *changeSet*, а потім додайте змінене представлення через новий *changeSet*.
+
+Після надання прав доступу до аналітичного представлення для ролі `officer`, помилка зникне.
+
+image:registry-develop:registry-admin/typical-errors/typical-errors-29.png[image,width=1890,height=898]
+
+==== Корисні посилання
+
+Для отримання додаткової інформації перейдіть за посиланням: xref:registry-admin/debug-registry-regulations.adoc[]
