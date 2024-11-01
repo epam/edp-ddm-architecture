@@ -3,6 +3,9 @@ include::platform:ROOT:partial$templates/document-attributes/default-set-en.adoc
 
 include::platform:ROOT:partial$admonitions/language-en.adoc[]
 
+[CAUTION,caption=UA-SPECIFIC]
+This training task focuses on scenarios specific to Ukraine. However, it is also valuable for developers working on registry regulations, as it offers a comprehensive guide to using a declarative approach in data-modeling. The task covers essential skills such as creating tables, defining relationships and dependencies, setting up search conditions (views), and managing the initial data load process for registries.
+
 == Task purpose
 
 The goal of this task is to: ::
@@ -18,8 +21,8 @@ to store and process laboratory certification information according to the follo
 
 image:study-project/task-2/task-2-1-logical-model-en.png[]
 
-////
 
+////
 ERD in PlantUML format is not displayed in GitHub environments.
 Use the code below to edit the diagram.
 Converted and used as PNG (see image: above).
@@ -49,8 +52,8 @@ entity "Subject" as Subject {
     *subject_id : UUID [PK]
     --
     subject_code : TEXT
-    subject_type : TEXT
-    subject_status : TEXT
+    subject_type : type_subject_type
+    subject_status : type_subject_status
     subject_name : TEXT
 }
 
@@ -105,9 +108,19 @@ However, you can also clone your project's repository with the regulation by fol
 In the *_data-model_* folder, you will find the `createTables.xml` and `main-liquibase.xml` files (the latter is the main file for deploying the registry’s data model).
 
 All future database and API representation schemes will be created in the *_data-model_* folder, while CSV dictionaries for populating reference tables will be placed in the *_data-model/data-load_* folder.
+====
+
+[CAUTION]
+====
+Create a separate file named `tablesSubjects.xml` to contain changeSets with custom data types:
+
+* `type_subject_type`
+* `type_subject_status`
+
+Although these changeSets can be included in the main table creation file (`createTables.xml`), we recommend keeping them in separate files for clarity. Key rule: changeSets with custom data types must run *_BEFORE_* the table creation changeSets, as the tables depend on these custom data types. If this order is not maintained, Liquibase will be unable to correctly process the data model, resulting in a build error.
+====
 
 More details about all the configurations are provided later in this document.
-====
 
 [#physical-data-model-actions-plan]
 == Data model development plan
@@ -119,6 +132,104 @@ More details about all the configurations are provided later in this document.
 . Define the names of tables and fields in Latin characters.
 
 == Creating tables and relationships
+
+. Open the *_data-model_* folder in the registry and create a file called `tablesSubjects.xml` to store changeSets with custom data types. This file will define the following types:
+
+* `type_subject_type`
+* `type_subject_status`
+
+.. Copy the metadata from the XML template below and add it to your `tablesSubjects.xml` file without modifications.
++
+This XML template defines the key parameters for Liquibase to handle custom data types. It specifies the XML schema versions and namespaces for extensions like `dbchangelog` and `dbchangelog-ext`. The `xsi:schemaLocation` tells Liquibase where to find schemas for validating database changes.
++
+[source,xml]
+----
+<?xml version="1.0" encoding="UTF-8"?>
+
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xmlns:ext="http://www.liquibase.org/xml/ns/dbchangelog-ext"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://artifactory.control-plane-nexus/nexus/repository/extensions/com/epam/digital/data/platform/dbchangelog/4.5/dbchangelog-4.5.xsd
+        http://www.liquibase.org/xml/ns/dbchangelog-ext http://artifactory.control-plane-nexus/nexus/repository/extensions/com/epam/digital/data/platform/liquibase-ext-schema/latest/liquibase-ext-schema-latest.xsd">
+
+</databaseChangeLog>
+----
+
+.. Add a changeSet for the `type_subject_type` inside the `<databaseChangeLog>` tag:
++
+This code block creates a custom data type `type_subject_type` as an enumerated list, used to define the type of subject. The changeSet includes metadata such as the author and a unique ID to track this change. Enum values also include translations for each value, allowing them to be used in localized interfaces.
++
+[source,xml]
+----
+<?xml version="1.0" encoding="UTF-8"?>
+
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xmlns:ext="http://www.liquibase.org/xml/ns/dbchangelog-ext"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://artifactory.control-plane-nexus/nexus/repository/extensions/com/epam/digital/data/platform/dbchangelog/4.5/dbchangelog-4.5.xsd
+        http://www.liquibase.org/xml/ns/dbchangelog-ext http://artifactory.control-plane-nexus/nexus/repository/extensions/com/epam/digital/data/platform/liquibase-ext-schema/latest/liquibase-ext-schema-latest.xsd">
+
+    <changeSet author="registry owner" id="enum subject_type">
+        <comment>CREATE TYPE type_subject_type</comment>
+        <ext:createType name="type_subject_type">
+            <ext:asEnum>
+                <ext:label translation="Individual">INDIVIDUAL</ext:label>
+                <ext:label translation="Entrepreneur">ENTREPRENEUR</ext:label>
+                <ext:label translation="Legal Entity">LEGAL</ext:label>
+                <ext:label translation="Officer">OFFICER</ext:label>
+            </ext:asEnum>
+        </ext:createType>
+    </changeSet>
+
+</databaseChangeLog>
+----
+
+.. Add a changeSet for the `type_subject_status` after the `type_subject_type` changeSet within the same `<databaseChangeLog>` tag:
++
+Here, a second custom data type `type_subject_status` is added. This type is also defined as an enum, but its values describe the statuses of subjects in the system. Placing this changeSet after `type_subject_type` ensures correct execution order, enabling Liquibase to process each custom type properly before creating tables. The final structure should look like this:
++
+[source,xml]
+----
+<?xml version="1.0" encoding="UTF-8"?>
+
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xmlns:ext="http://www.liquibase.org/xml/ns/dbchangelog-ext"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://artifactory.control-plane-nexus/nexus/repository/extensions/com/epam/digital/data/platform/dbchangelog/4.5/dbchangelog-4.5.xsd
+        http://www.liquibase.org/xml/ns/dbchangelog-ext http://artifactory.control-plane-nexus/nexus/repository/extensions/com/epam/digital/data/platform/liquibase-ext-schema/latest/liquibase-ext-schema-latest.xsd">
+
+    <changeSet author="registry owner" id="enum subject_type">
+        <comment>CREATE TYPE type_subject_type</comment>
+        <ext:createType name="type_subject_type">
+            <ext:asEnum>
+                <ext:label translation="Individual">INDIVIDUAL</ext:label>
+                <ext:label translation="Entrepreneur">ENTREPRENEUR</ext:label>
+                <ext:label translation="Legal Entity">LEGAL</ext:label>
+                <ext:label translation="Officer">OFFICER</ext:label>
+            </ext:asEnum>
+        </ext:createType>
+    </changeSet>
+
+    <changeSet author="registry owner" id="enum subject_status">
+        <comment>CREATE TYPE type_subject_status</comment>
+        <ext:createType name="type_subject_status">
+            <ext:asEnum>
+                <ext:label translation="Canceled">CANCELED</ext:label>
+                <ext:label translation="Registered">REGISTERED</ext:label>
+                <ext:label translation="Suspending">SUSPENDING</ext:label>
+                <ext:label translation="Suspended">SUSPENDED</ext:label>
+                <ext:label translation="Bankruptcy">BANKRUPTCY</ext:label>
+                <ext:label translation="Sanction">SANCTION</ext:label>
+                <ext:label translation="Not Valid">NOTVALID</ext:label>
+            </ext:asEnum>
+        </ext:createType>
+    </changeSet>
+
+</databaseChangeLog>
+----
 
 . Using the information defined in the xref:physical-data-model-actions-plan[data model development plan], and the XML template provided below, create an *empty* file called `createTables.xml`.
 +
@@ -1068,14 +1179,15 @@ The schema includes the *<include>* element, which references the external file 
 +
 [TIP]
 ====
-You should have _7 files_ in total for deploying the data model and initially populating the database:
+You should have _8 files_ in total for deploying the data model and initially populating the database:
 
-4 files with XML templates: ::
+5 files with XML templates: ::
 ** `link:{attachmentsdir}/study-project/task-2/xml-temp/createTables.xml[createTables.xml]`
 ** `link:{attachmentsdir}/study-project/task-2/xml-temp/createSearchConditions.xml[createSearchConditions.xml]`
 ** `link:{attachmentsdir}/study-project/task-2/xml-temp/populateDictionaries.xml[populateDictionaries.xml]`
 ** `link:{attachmentsdir}/study-project/task-2/xml-temp/main-liquibase.xml[main-liquibase.xml]`
-3 CSV files with reference data for initial load: ::
+** `tablesSubjects.xml`
+3 CSV files with reference data for an initial load: ::
 ** `link:{attachmentsdir}/study-project/task-2/csv-dict/dict_formy_vlasnosti.csv[dict_formy_vlasnosti.csv]`
 ** `link:{attachmentsdir}/study-project/task-2/csv-dict/dict_status_spivrobitnyka.csv[dict_status_spivrobitnyka.csv]`
 ** `link:{attachmentsdir}/study-project/task-2/csv-dict/dict_koatuu_workshop.csv[dict_koatuu_workshop.csv]`
