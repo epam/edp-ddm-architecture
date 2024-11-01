@@ -4118,12 +4118,39 @@
 <div class="paragraph">
 <p>Надалі всі схеми для розгортання БД та API-представлень створюються у папці <strong><em>data-model</em></strong>, CSV-довідники для подальшого наповнення даними таблиць-довідників розміщуються у <strong><em>data-model/data-load</em></strong>.</p>
 </div>
+</td>
+</tr>
+</table>
+</div>
+<div class="admonitionblock caution">
+<table>
+<tr>
+<td class="icon">
+<i class="fa icon-caution" title="УВАГА"></i>
+</td>
+<td class="content">
 <div class="paragraph">
-<p>Детальніше про всі налаштування ви дізнаєтеся нижче у цьому документі.</p>
+<p>Окремо потрібно також створити файл <code>tablesSubjects.xml</code>, який міститиме changeSet-и з кастомними типами даних:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><code>type_subject_type</code></p>
+</li>
+<li>
+<p><code>type_subject_status</code></p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>Хоча ці changeSet-и можна включити до основного файлу для створення таблиць (<code>createTables.xml</code>), для зручності радимо розділити їх у різні файли. Головне правило: changeSet-и з кастомними типами даних мають виконуватися <strong><em>РАНІШЕ</em></strong> створення таблиць, оскільки таблиці залежать від цих changeSet-ів. У разі порушення порядку Liquibase не зможе коректно обробити модель даних, й ви отримаєте помилку при збірці регламенту.</p>
 </div>
 </td>
 </tr>
 </table>
+</div>
+<div class="paragraph">
+<p>Детальніше про всі налаштування ви дізнаєтеся нижче у цьому документі.</p>
 </div>
 </div>
 </div>
@@ -4156,6 +4183,122 @@
 <div class="sectionbody">
 <div class="olist arabic">
 <ol class="arabic">
+<li>
+<p>Відкрийте теку <strong><em>data-model</em></strong> у регламенті та створіть файл <code>tablesSubjects.xml</code>, який міститиме changeSet-и з кастомними типами даних. Зокрема, у цьому файлі будуть визначені наступні типи:</p>
+<div class="ulist">
+<ul>
+<li>
+<p><code>type_subject_type</code></p>
+</li>
+<li>
+<p><code>type_subject_status</code></p>
+<div class="olist loweralpha">
+<ol class="loweralpha" type="a">
+<li>
+<p>Скопіюйте метадані із шаблону XML-файлу, наведеного нижче, та додайте їх до свого файлу <code>tablesSubjects.xml</code> без змін.</p>
+<div class="paragraph">
+<p>Цей шаблон XML задає основні параметри для роботи Liquibase з кастомними типами даних. Він визначає версії XML-схем та специфічні простори назв для розширень (наприклад, <code>dbchangelog</code> та <code>dbchangelog-ext</code>). Зокрема, <code>xsi:schemaLocation</code> вказує Liquibase, де знайти схеми для перевірки змін у базі даних.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-xml hljs" data-lang="xml">&lt;?xml version="1.0" encoding="UTF-8"?&gt;
+
+&lt;databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xmlns:ext="http://www.liquibase.org/xml/ns/dbchangelog-ext"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://artifactory.control-plane-nexus/nexus/repository/extensions/com/epam/digital/data/platform/dbchangelog/4.5/dbchangelog-4.5.xsd
+        http://www.liquibase.org/xml/ns/dbchangelog-ext http://artifactory.control-plane-nexus/nexus/repository/extensions/com/epam/digital/data/platform/liquibase-ext-schema/latest/liquibase-ext-schema-latest.xsd"&gt;
+
+&lt;/databaseChangeLog&gt;</code></pre>
+</div>
+</div>
+</li>
+<li>
+<p>Додайте changeSet для типу <code>type_subject_type</code> всередині тега <code>&lt;databaseChangeLog&gt;</code>:</p>
+<div class="paragraph">
+<p>У цьому блоці коду створюється кастомний тип <code>type_subject_type</code> як enum-список, що використовується для визначення типу суб’єкта. <code>changeSet</code> включає метадані, такі як автор і унікальний ідентифікатор, які відстежують цю зміну. Значення enum включають переклади для кожного значення, що дозволяє використовувати їх у локалізованих інтерфейсах.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-xml hljs" data-lang="xml">&lt;?xml version="1.0" encoding="UTF-8"?&gt;
+
+&lt;databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xmlns:ext="http://www.liquibase.org/xml/ns/dbchangelog-ext"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://artifactory.control-plane-nexus/nexus/repository/extensions/com/epam/digital/data/platform/dbchangelog/4.5/dbchangelog-4.5.xsd
+        http://www.liquibase.org/xml/ns/dbchangelog-ext http://artifactory.control-plane-nexus/nexus/repository/extensions/com/epam/digital/data/platform/liquibase-ext-schema/latest/liquibase-ext-schema-latest.xsd"&gt;
+
+    &lt;changeSet author="registry owner" id="enum subject_type"&gt;
+        &lt;comment&gt;CREATE TYPE type_subject_type&lt;/comment&gt;
+        &lt;ext:createType name="type_subject_type"&gt;
+            &lt;ext:asEnum&gt;
+                &lt;ext:label translation="Фізична особа"&gt;INDIVIDUAL&lt;/ext:label&gt;
+                &lt;ext:label translation="ФОП"&gt;ENTREPRENEUR&lt;/ext:label&gt;
+                &lt;ext:label translation="Юридична особа"&gt;LEGAL&lt;/ext:label&gt;
+                &lt;ext:label translation="Чиновник"&gt;OFFICER&lt;/ext:label&gt;
+            &lt;/ext:asEnum&gt;
+        &lt;/ext:createType&gt;
+    &lt;/changeSet&gt;
+
+&lt;/databaseChangeLog&gt;</code></pre>
+</div>
+</div>
+</li>
+<li>
+<p>Додайте changeSet для типу <code>type_subject_status</code> після changeSet-у <code>type_subject_type</code>, у тому ж <code>&lt;databaseChangeLog&gt;</code>:</p>
+<div class="paragraph">
+<p>Тут додається другий кастомний тип даних <code>type_subject_status</code>. Цей тип також визначений як enum, але його значення описують статуси суб’єктів у системі. Додаючи цей changeSet після <code>type_subject_type</code>, ми забезпечуємо правильний порядок виконання, який дозволяє Liquibase коректно обробити кожен кастомний тип перед створенням таблиць. В результаті ви маєте отримати наступну структуру:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-xml hljs" data-lang="xml">&lt;?xml version="1.0" encoding="UTF-8"?&gt;
+
+&lt;databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xmlns:ext="http://www.liquibase.org/xml/ns/dbchangelog-ext"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://artifactory.control-plane-nexus/nexus/repository/extensions/com/epam/digital/data/platform/dbchangelog/4.5/dbchangelog-4.5.xsd
+        http://www.liquibase.org/xml/ns/dbchangelog-ext http://artifactory.control-plane-nexus/nexus/repository/extensions/com/epam/digital/data/platform/liquibase-ext-schema/latest/liquibase-ext-schema-latest.xsd"&gt;
+
+    &lt;changeSet author="registry owner" id="enum subject_type"&gt;
+        &lt;comment&gt;CREATE TYPE type_subject_type&lt;/comment&gt;
+        &lt;ext:createType name="type_subject_type"&gt;
+            &lt;ext:asEnum&gt;
+                &lt;ext:label translation="Фізична особа"&gt;INDIVIDUAL&lt;/ext:label&gt;
+                &lt;ext:label translation="ФОП"&gt;ENTREPRENEUR&lt;/ext:label&gt;
+                &lt;ext:label translation="Юридична особа"&gt;LEGAL&lt;/ext:label&gt;
+                &lt;ext:label translation="Чиновник"&gt;OFFICER&lt;/ext:label&gt;
+            &lt;/ext:asEnum&gt;
+        &lt;/ext:createType&gt;
+    &lt;/changeSet&gt;
+
+    &lt;changeSet author="registry owner" id="enum subject_status"&gt;
+        &lt;comment&gt;CREATE TYPE type_subject_status&lt;/comment&gt;
+        &lt;ext:createType name="type_subject_status"&gt;
+            &lt;ext:asEnum&gt;
+                &lt;ext:label translation="скасовано"&gt;CANCELED&lt;/ext:label&gt;
+                &lt;ext:label translation="зареєстровано"&gt;REGISTERED&lt;/ext:label&gt;
+                &lt;ext:label translation="в стані припинення"&gt;SUSPENDING&lt;/ext:label&gt;
+                &lt;ext:label translation="припинено"&gt;SUSPENDED&lt;/ext:label&gt;
+                &lt;ext:label translation="порушено справу про банкрутство"&gt;BANKRUPTCY&lt;/ext:label&gt;
+                &lt;ext:label translation="порушено справу про банкрутство (санація)"&gt;SANCTION&lt;/ext:label&gt;
+                &lt;ext:label translation="зареєстровано, свідоцтво про державну реєстрацію недійсне"&gt;NOTVALID&lt;/ext:label&gt;
+            &lt;/ext:asEnum&gt;
+        &lt;/ext:createType&gt;
+    &lt;/changeSet&gt;
+
+&lt;/databaseChangeLog&gt;</code></pre>
+</div>
+</div>
+</li>
+</ol>
+</div>
+</li>
+</ul>
+</div>
+</li>
 <li>
 <p>Використовуючи інформацію, визначену у <a href="#physical-data-model-actions-plan">плані розробки фізичної моделі даних</a>, та відповідний XML-шаблон, поданий нижче, створіть <em>порожній</em> файл <em>createTables.xml</em></p>
 <div class="admonitionblock tip">
@@ -5821,11 +5964,11 @@ Input parameters: name, edrpou</code></pre>
 </td>
 <td class="content">
 <div class="paragraph">
-<p>Усього маємо отримати <em>7 файлів</em> для розгортання моделі даних та первинного наповнення БД:</p>
+<p>Усього маємо отримати <em>8 файлів</em> для розгортання моделі даних та первинного наповнення БД:</p>
 </div>
 <div class="dlist">
 <dl>
-<dt class="hdlist1">4 файли із шаблонами XML: </dt>
+<dt class="hdlist1">5 файлів із шаблонами XML: </dt>
 <dd>
 <div class="ulist">
 <ul>
@@ -5840,6 +5983,9 @@ Input parameters: name, edrpou</code></pre>
 </li>
 <li>
 <p><code><a href="../../_attachments/study-project/task-2/xml-temp/main-liquibase.xml">main-liquibase.xml</a></code></p>
+</li>
+<li>
+<p><code>tablesSubjects.xml</code></p>
 </li>
 </ul>
 </div>
