@@ -1,0 +1,143 @@
+= Налаштування регламенту для формування локалізованих витягів у форматах _PDF, DOCX, CSV_
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+include::platform:ROOT:partial$admonitions/language-ua.adoc[]
+
+== Загальний опис
+
+Формування та завантаження витягів у форматах `.pdf`, `.docx`, або `.csv`, а також заповнення цих файлів відповідними бізнес-даними реєстру можливе лише після попередньої конфігурації регламенту реєстру.
+
+Цей документ описує, як налаштувати регламент для формування локалізованих витягів різними мовами. Локалізовані витяги можуть бути створені в кількох форматах: *PDF*, *DOCX*, і *CSV*.
+
+== Налаштування шаблонів витягів у форматах PDF, DOCX, CSV
+
+Розробник регламенту має додати новий шаблон для витягу певною мовою до відповідної директорії в *Gerrit*. Шаблони для кожного типу витягів зберігаються у спеціальних директоріях:
+
+* *_excerpts_* -- для шаблонів PDF-витягів. Кожен витяг розташовується в окремій папці.
+* *_excerpts-docx_* -- для шаблонів DOCX-витягів.
+* *_excerpts-csv_* -- для шаблонів CSV-витягів.
+
+.Приклад структури регламенту для локалізованих витягів
+[plantuml]
+----
+@startsalt
+{
+{T
++ <&folder> **registry-regulations**
+++ <&folder> **excerpts**
++++ <&folder> **excerpt-pdf**
+++++ <&file> index.html.ftl
+++++ <&folder> css
++++++ <&file> style-1.css
++++++ <&file> style-2.css
+++++ <&folder> images
++++++ <&file> image.png
++++ <&folder> **excerpt-pdf-en**
+++++ <&file> index.html.ftl
++++ <&folder> **excerpt-pdf-fr**
+++++ <&file> index.html.ftl
+++ <&folder> **excerpts-docx**
++++ <&file> excerpt-docx.docx
++++ <&file> excerpt-docx-en.docx
+++ <&folder> **excerpts-csv**
++++ <&file> excerpt-csv.json
++++ <&file> excerpt-csv-it.json
+}
+}
+@endsalt
+----
+
+* *_excerpts_*, *_excerpts-docx_*, *_excerpts-csv_* -- обов'язкові назви директорій для витягів у відповідному форматі.
+* Для кожного витягу створюється окрема папка. Локалізовані версії витягів вказуються за допомогою суфіксів для кожної мови (наприклад, `-en`, `-fr`).
+
+[IMPORTANT]
+Назви папок та файлів мають бути унікальними. Використовуйте суфікси для позначення мови, наприклад, `-en` для англійської.
+
+[NOTE]
+Шаблони мають зберігатися у відповідних директоріях для кожного формату.
+
+=== Налаштування шаблонів для PDF
+
+Шаблони витягів у форматі *PDF* зберігаються у директорії *_excerpts_*. Кожен витяг має власну папку, яка містить файли шаблону, наприклад, `index.html.ftl`. Для кожної мови додається окрема папка з шаблоном локалізації:
+
+* *_/excerpts/excerpt-pdf/index.html.ftl_* -- шаблон витягу за замовчуванням.
+* *_/excerpts/excerpt-pdf-en/index.html.ftl_* -- шаблон для англійської мови.
+* *_/excerpts/excerpt-pdf-fr/index.html.ftl_* -- шаблон для французької мови.
+
+=== Налаштування шаблонів для DOCX
+
+Шаблони витягів у форматі *DOCX* зберігаються в директорії *_excerpts-docx_*. Для кожної мови додається окремий файл із суфіксом, що вказує на локалізацію:
+
+* *_/excerpts-docx/excerpt-docx.docx_* -- шаблон витягу за замовчуванням.
+* *_/excerpts-docx/excerpt-docx-en.docx_* -- шаблон для англійської мови.
+
+=== Налаштування шаблонів для CSV
+
+Шаблони витягів у форматі *CSV* зберігаються в директорії *_excerpts-csv_*. Для кожної мови додається окремий файл із суфіксом, що вказує на локалізацію:
+
+* *_/excerpts-csv/excerpt-csv-.json_* -- шаблон витягу за замовчуванням.
+* *_/excerpts-csv/excerpt-csv-it.json_* -- шаблон для італійської мови.
+
+== Налаштування бізнес-процесів
+
+Після додавання шаблону витягу до відповідної директорії у регламенті реєстру, необхідно налаштувати мову у бізнес-процесі для формування витягу. Окрім обов'язкових атрибутів, у розширенні xref:bp-modeling/bp/element-templates/service-task-templates/excerpts/generate-excerpt.adoc[Generate Excerpt] потрібно заповнити необов'язкове поле *Excerpt Language*, вказавши мову.
+
+.Приклад налаштування мови у бізнес-процесі
+image::registry-admin/excerpts/localized-excerpts/localized-excerpts-3.png[]
+
+[IMPORTANT]
+Значення мови має відповідати стандарту *ISO 639-1*. Наприклад: `en` для англійської, `fr` для французької тощо.
+
+=== Використання JUEL-функції для динамічного вибору мови
+
+Під час налаштування делегата xref:bp-modeling/bp/element-templates/service-task-templates/excerpts/generate-excerpt.adoc[Generate Excerpt], для динамічного вибору мови витягу можна передати код мови у параметрі *Excerpt Language* через JUEL-функцію `xref:bp-modeling/bp/juel-functions/users/completer.adoc[completer()]`:
+
+[source,groovy]
+----
+${completer('<task_id>').language}
+----
+
+де `<task_id>` -- ідентифікатор завдання користувача у бізнес-процесі.
+
+Це дозволяє формувати витяги мовою, обраною користувачем у Кабінеті.
+
+== Fallback-сценарії
+
+=== Налаштування за замовчуванням
+
+Якщо атрибут *Excerpt Language* не вказано, система використовує шаблон за замовчуванням. Якщо для зазначеної мови немає шаблону, використовується шаблон за замовчуванням.
+
+=== Приклад формування витягу
+
+Якщо мову не вказано, система генерує витяг за допомогою шаблону за замовчуванням. Наприклад, для PDF це може бути файл: *_/excerpts/excerpt-pdf/index.html.ftl_*.
+
+.Приклад формування PDF-витягу за замовчуванням
+image::registry-admin/excerpts/localized-excerpts/localized-excerpts-5.png[]
+
+== Генерація локалізованих витягів у Кабінетах користувачів
+
+Після налаштування бізнес-процесу користувач може згенерувати витяг у Кабінеті, запустивши бізнес-процес відповідно до інструкцій на сторінках: xref:user:officer/reports/overview.adoc[] та xref:user:citizen/citizen-get-excerpts.adoc[].
+
+* Наприклад, згенерований PDF-витяг на основі локалізованого шаблону італійською мовою виглядатиме так:
+
+image:registry-admin/excerpts/localized-excerpts/localized-excerpts-4.png[]
+
+* Згенерований PDF-витяг на основі шаблону за замовчуванням українською мовою виглядатиме так:
+
+image::registry-admin/excerpts/localized-excerpts/localized-excerpts-6.png[]
+
+== Витяг історії змін даних
+
+Ви можете згенерувати та переглянути витяг історії змін, який містить інформацію про зміни в записах бази даних. Це допомагає відстежувати еволюцію, а також виявляти помилки чи порушення цілісності даних.
+
+Детальніше про витяги історії змін читайте на сторінці xref:registry-admin/excerpts/history-excerptor.adoc[].
+
+== Пов'язані сторінки
+
+* xref:registry-admin/excerpts/excerpt-templates-pdf-docx-csv.adoc[]
+* xref:registry-develop:bp-modeling/bp/excerpts/bp-modeling-excerpt-csv-docx.adoc[]
+* xref:registry-develop:/bp-modeling/bp/element-templates/service-task-templates/excerpts/generate-excerpt.adoc[]
+* xref:registry-admin/excerpts/history-excerptor.adoc[]
+* xref:user:citizen/citizen-get-excerpts.adoc[]
+* xref:user:officer/reports/reports-csv.adoc[]
+* xref:user:officer/reports/reports-docx.adoc[]
