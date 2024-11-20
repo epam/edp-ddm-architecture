@@ -1,0 +1,247 @@
+= Налаштування шаблонів витягів у форматах _PDF, DOCX, CSV_
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+include::platform:ROOT:partial$admonitions/language-ua.adoc[]
+
+== Загальний опис
+
+Щоб сформувати та завантажити витяги у форматах `.pdf`, `.docx`, або `.csv`, необхідно попередньо налаштувати відповідні шаблони у регламенті реєстру.
+
+Адміністратор має додати шаблон витягу та його атрибути до відповідної директорії регламенту, зокрема:
+
+* для `.pdf` -- *_excerpts/excerpt-name-pdf/index.html.ftl_*;
+* для `.docx` -- *_excerpts-docx/excerpt.docx_*;
+* для `.csv` -- *_excerpts-csv/excerpt-csv.json_*.
+
+[IMPORTANT]
+====
+У шаблонах витягів Платформа використовує *Apache FreeMarker*, але з *альтернативним синтаксисом тегів*. Це відрізняється від стандартного синтаксису, описаного в офіційній документації FreeMarker.
+Детальніше про можливості та використання цього альтернативного синтаксису див. за https://freemarker.apache.org/docs/dgui_misc_alternativesyntax.html[посиланням].
+
+Враховуйте це при налаштуванні шаблонів, щоб уникнути помилок у їх обробці та відображенні.
+====
+
+.Структура регламенту для формування витягів у форматах PDF, DOCX та CSV
+[plantuml]
+----
+@startsalt
+{
+{T
++ <&folder> **registry-regulations**
+++ <&folder> **excerpts**
++++ <&folder> **excerpt-pdf-1**
+++++ <&file> index.html.ftl
+++++ <&folder> css
++++++ <&file> style-1.css
++++++ <&file> style-2.css
+++++ <&folder> images
++++++ <&file> image.png
++++ <&folder> **excerpt-pdf-2**
+++++ <&file> index.html.ftl
+++++ <&folder> css
++++++ <&file> style-1.css
++++++ <&file> style-2.css
+++++ <&folder> images
++++++ <&file> image.png
+++ <&folder> **excerpts-docx**
++++ <&file> excerpt-1.docx
++++ <&file> excerpt-2.docx
+++ <&folder> **excerpts-csv**
++++ <&file> excerpt-1.json
++++ <&file> excerpt-2.json
+}
+}
+@endsalt
+----
+
+* `excerpts`, `excerpts-docx`, `excerpts-csv` -- обов'язкові назви директорій для витягів у відповідному форматі.
+* `index.html.ftl`, `excerpt.docx`, `excerpt-csv.json` -- приклади назв витягів.
+
+[IMPORTANT]
+Назви кожної директорії та файлів мають бути унікальними навіть для різних форматів.
+На базі цих шаблонів формуються файли витягів у Кабінетах користувачів реєстру.
+
+[NOTE]
+Для налаштування локалізованих витягів потрібною мовою зверніться до сторінки xref:registry-admin/excerpts/localized-excerpts.adoc[].
+
+== Налаштування шаблонів витягів
+
+=== Налаштування шаблонів для PDF-витягів
+
+Налаштувати шаблон PDF-витягу можна так:
+
+. Увійдіть до локального репозиторію *Gerrit* у вашому реєстрі.
+. Додайте файл шаблону `index.html.ftl` до директорії з унікальною назвою, наприклад, *_excerpts/excerpt-pdf-1_*.
++
+[NOTE]
+====
+Шаблон PDF-витягу має бути створений у форматі `.html.ftl` за допомогою *Apache FreeMarker* з альтернативним синтаксисом тегів. Це шаблонізатор, який дозволяє підставляти змінні у шаблонах PDF (`.html.ftl`) або `.docx`. Використовуйте конструкції FreeMarker для вставки змінних:
+
+[source,html]
+----
+<html>
+   <body>
+      <h1>Витяг для [=userName]</h1>
+      <p>Дата: [=currentDate]</p>
+   </body>
+</html>
+----
+Тут `[=userName]` і `[=currentDate]` -- змінні, значення яких будуть підставлені під час генерації документа. Обов'язково враховуйте альтернативний синтаксис тегів FreeMarker, щоб уникнути помилок при обробці шаблонів.
+====
+
+. Створіть та збережіть файл стилів `style.css` у директорії *_excerpts/excerpt-pdf-1/css_*.
++
+Ви можете використовувати кілька файлів стилів. Для цього додайте посилання на кожен файл у шаблоні:
++
+[source,html]
+----
+<html>
+  <head>
+     <meta charset="UTF-8">
+     <link rel="stylesheet" href="style-1.css">
+     <link rel="stylesheet" href="style-2.css">
+     <style>
+        * { font-family: Roboto; }
+     </style>
+  </head>
+  <body>
+     <h1>Заголовок витягу</h1>
+     <p>Це приклад вмісту PDF-документа.</p>
+  </body>
+</html>
+----
++
+[IMPORTANT]
+====
+Використовуйте кодування UTF-8. За замовчуванням шрифт має бути `Roboto`. Використання інших шрифтів може спричинити помилки.
+====
++
+[TIP]
+====
+Щоб вказати горизонтальну орієнтацію сторінки, налаштуйте `style.css`:
+
+[source,css]
+----
+@page {
+    size: 15in 8.5in;
+    margin: 0.75in 0.9in;
+}
+----
+
+У параметрі `size` зазначте широту і висоту файлу в дюймах.
+====
+
+. Додайте зображення у форматі `.png` до директорії *_excerpts/excerpt-pdf-1/images_*. Використовуйте посилання на зображення у шаблоні:
++
+[source,html]
+----
+<img src="images/image.png" alt="Опис зображення" width="300">
+----
++
+У цьому прикладі використовується зображення з папки `images`, яка розташована у директорії шаблону. Атрибут `alt` забезпечує альтернативний текст для випадків, коли зображення не відображається, а атрибут `width` задає ширину зображення у пікселях.
+
+. Фінальний варіант шаблону із доданим зображенням може виглядати так:
++
+[source,html]
+----
+<html>
+   <head>
+      <meta charset="UTF-8">
+      <link rel="stylesheet" href="style-1.css">
+      <link rel="stylesheet" href="style-2.css">
+      <style>
+         * { font-family: Roboto; }
+      </style>
+   </head>
+   <body>
+      <h1>Заголовок витягу для [=userName]</h1>
+      <p>Дата створення: [=currentDate]</p>
+      <p>Нижче наведено зображення, яке використовується у витягу:</p>
+      <img src="images/image.png" alt="Опис зображення" width="300">
+      <p>Додаткова інформація про витяг може бути додана тут.</p>
+   </body>
+</html>
+----
+
+. Збережіть зміни до віддаленого репозиторію *Gerrit* (_див. детальніше на сторінці xref:registry-admin/regulations-deploy/registry-admin-deploy-regulation.adoc[]_).
+
+. Після оновлення регламенту можна буде формувати PDF-витяги у Кабінеті користувача (_див. деталі на сторінці xref:user:citizen/citizen-get-excerpts.adoc[]_).
+
+=== Налаштування шаблонів для DOCX-витягів
+
+Щоб налаштувати шаблон DOCX-витягу:
+
+. Увійдіть до локального репозиторію *Gerrit*.
+. Додайте файл `excerpt.docx` до директорії *_excerpts-docx_*.
+. Збережіть зміни до віддаленого репозиторію *Gerrit* (_див. детальніше на сторінці xref:registry-admin/regulations-deploy/registry-admin-deploy-regulation.adoc[]_).
+. Після оновлення регламенту можна буде формувати DOCX-витяги у Кабінеті користувача (_див. деталі на сторінці xref:user:officer/reports/reports-docx.adoc[]_).
+
+[TIP]
+====
+Завантажте приклад витягу у форматі `.docx`: link:{attachmentsdir}/registry-admin/excerpts/template_example.docx[Приклад шаблону DOCX].
+====
+
+[TIP]
+====
+Приклад моделювання бізнес-процесів для формування CSV та DOCX-витягів доступний за посиланням: xref:registry-develop:bp-modeling/bp/excerpts/bp-modeling-excerpt-csv-docx.adoc[].
+====
+
+=== Налаштування шаблонів для CSV-витягів
+
+Щоб налаштувати шаблон CSV-витягу:
+
+. Увійдіть до локального репозиторію *Gerrit*.
+. Додайте файл `excerpt.json` у директорію *_excerpts-csv_*.
++
+[NOTE]
+====
+Щоб налаштувати заголовки стовпців, створіть `.json`-файл із заміною назв:
+
+[source,json]
+----
+{
+"lastName": "Прізвище",
+"firstName": "Ім'я",
+"secondName": "По батькові",
+"birthday": "Дата народження",
+"residenceAddress": "Адреса",
+"phoneNumber": "Телефон",
+"gender": "Стать"
+}
+----
+Ключі у лівому стовпці відповідають назвам параметрів у системі, а значення у правому стовпці -- новим назвам, які будуть відображені у витягу.
+====
+
+. Збережіть зміни до віддаленого репозиторію *Gerrit* (_див. детальніше на сторінці xref:registry-admin/regulations-deploy/registry-admin-deploy-regulation.adoc[]_).
+. Після оновлення регламенту можна буде формувати CSV-витяги у Кабінеті користувача (_див. деталі на сторінці xref:user:officer/reports/reports-csv.adoc[]_).
+
+[TIP]
+====
+Приклад моделювання бізнес-процесів для формування CSV та DOCX-витягів доступний за посиланням: xref:registry-develop:bp-modeling/bp/excerpts/bp-modeling-excerpt-csv-docx.adoc[].
+====
+
+== Поширені помилки та їх усунення
+
+=== Помилка з неправильним форматом шаблону
+
+Якщо система не може сформувати витяг, перевірте, чи відповідає шаблон рекомендованому формату та, чи вказано правильні шляхи до файлів.
+
+=== Конфлікт шрифтів
+
+При використанні нестандартних шрифтів можливі помилки. Переконайтеся, що використовується шрифт `Roboto` за замовчуванням.
+
+== Витяг історії змін даних
+
+Ви можете згенерувати та переглянути витяг історії змін, який містить інформацію про зміни в записах бази даних. Це допомагає відстежувати еволюцію, а також виявляти помилки чи порушення цілісності даних.
+
+Детальніше про витяги історії змін читайте на сторінці xref:registry-admin/excerpts/history-excerptor.adoc[].
+
+== Пов'язані сторінки
+
+* xref:registry-admin/excerpts/localized-excerpts.adoc[]
+* xref:registry-admin/excerpts/history-excerptor.adoc[]
+* xref:registry-develop:bp-modeling/bp/excerpts/bp-modeling-excerpt-csv-docx.adoc[]
+* xref:registry-develop:/bp-modeling/bp/element-templates/service-task-templates/excerpts/generate-excerpt.adoc[]
+* xref:user:citizen/citizen-get-excerpts.adoc[]
+* xref:user:officer/reports/reports-csv.adoc[]
+* xref:user:officer/reports/reports-docx.adoc[]
