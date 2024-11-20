@@ -1,0 +1,155 @@
+= Getting a data change history excerpt in PDF Format
+include::platform:ROOT:partial$templates/document-attributes/default-set-en.adoc[]
+
+include::platform:ROOT:partial$admonitions/language-en.adoc[]
+
+== Overview
+
+*_Data history review_* is a mechanism for tracking changes in data and their origin, useful for identifying errors or integrity violations.
+
+The *_Data history excerpt_* function creates a report on changes to a specific database record. The excerpt is generated based on a template that includes system metadata and business data from the table. Business fields are retained in the original form, in Latin characters, and are not part of the template fields (e.g., `user_name`, `birthdate`).
+
+== Regulations configuration
+
+To generate an excerpt, you need to configure the template in the system. Each template must be stored in the appropriate directory and include files for different languages.
+
+=== Configuring excerpt templates
+
+The placement of templates should follow the structure of directories depending on the configured service region:
+
+.Directory structure for the default `-en` template and localized template `-uk`
+[plantuml]
+----
+@startsalt
+{
+{T
++ <&folder> **excerpts**
+++ <&folder> **HistoryExcerpt**
++++ <&folder> css
+++++ <&file> style.css
++++ <&folder> images
+++++ <&file> global.png
++++ <&file> index.html.ftl
+++ <&folder> **HistoryExcerpt-uk**
++++ <&folder> css
+++++ <&file> style.css
++++ <&folder> images
+++++ <&file> global.png
++++ <&file> index.html.ftl
+}
+}
+@endsalt
+----
+
+[IMPORTANT]
+The language value must comply with the *ISO 639-1* standard. For example, `en` for English, `fr` for French, etc.
+
+=== Template selection rules
+
+. If the excerpt is generated for a registry in the global service region, the system will use templates under the directory `*_HistoryExcerpt_*`. The language is configured globally in the registry: menu:Control Plane[Registries > Edit Registry > Localization].
+
+. If the language specified in the request does not match the registry's configured language, the default template will be used (e.g., `*_HistoryExcerpt_*` for the global region or `*_HistoryExcerpt-uk_*` for Ukraine).
+
+. If the registry's language is changed to _Ukrainian_, and the regulations include the directory `*_HistoryExcerpt-uk_*`, this template will be used.
+
+=== Description of template fields
+
+The excerpt template includes the following fields:
+
+[cols="1,2", options="header"]
+|===
+| Field                   | Description
+| Created at              | The time of the operation, formatted as `dd.MM.yyyy HH:mm:ss`.
+| Creator ID              | The identification code of the person whose token is used for data signing in the business process. Examples: `initiator`, `system_user`, `completer`.
+//xref:bp-modeling/bp/juel-functions/users/initiator.adoc[initiator],
+//xref:bp-modeling/bp/juel-functions/users/system-user.adoc[system_user],
+//xref:bp-modeling/bp/juel-functions/users/completer.adoc[completer]
+| Operation code          | The type of operation: *Create*, *Update*, or *Delete*.
+| System name             | *_System field_*. The name of the subsystem where the operation was performed.
+| App name                | *_System field_*. The name of the service that performed the operation, e.g., `bpms`.
+| Business process ID     | A unique identifier for the business process.
+| Business activity name  | The identifier of the task or activity in the business process.
+| Assignee full name      | The full name of the assignee or executor.
+| Assignee DRFO code     a|
+
+[NOTE,caption=UA-SPECIFIC]
+*_System field for Ukraine only_*. The identification code of individuals or private entrepreneurs in Ukraine. This is obtained from the digital signature (QES).
+
+| Assignee EDRPOU code    a|
+
+[NOTE,caption=UA-SPECIFIC]
+*_System field for Ukraine only_*. The identification code for legal entities or organizations in Ukraine. This is obtained from the digital signature (QES).
+
+|===
+
+=== Business fields included in the excerpt
+
+Business fields in the excerpt may vary for each table and will be specific to each entity. Their display in the excerpt remains unchanged, regardless of the template's language settings (`-en`, `-uk`, etc.).
+
+== Process for generating the excerpt using a template
+
+Follow these steps to generate a historical data excerpt:
+
+. Log in to the *Openshift* console.
+. Select the project with your registry. For example, `demo-registry`.
+. In the left-hand menu, open the *Pipelines* section and find the *history-excerptor* pipeline.
++
+image:registry-admin/excerpts/history-excerptor/history-excerptor-1-en.png[]
+
+. Open the *Parameters* tab and click menu:Actions[`Start`].
++
+image:registry-admin/excerpts/history-excerptor/history-excerptor-2-en.png[]
+
+. In the menu:Start Pipeline[Parameters] window, fill in the following fields:
+* *_Required_* `table_name` -- the name of the table from which to generate the excerpt, e.g., `user`.
+* *_Required_* `uuid` -- the identifier in the table, for example, the user's UUID.
+* *_Optional_* `log_level` -- the logging level: `info` or `debug`.
+. Click btn:[Start].
+
++
+image:registry-admin/excerpts/history-excerptor/history-excerptor-3-en.png[]
+
+== Retrieving the generated excerpt
+
+. Open menu:Pipelines[Tasks > TaskRuns] and find the task named `*history-excerptor-run*-<excerpt-id>`.
++
+image:registry-admin/excerpts/history-excerptor/history-excerptor-4-en.png[]
+
+. Go to menu:TaskRun details[Logs].
+. At the bottom of the log, find the HTTPS link to the generated excerpt in `.pdf` format.
++
+image:registry-admin/excerpts/history-excerptor/history-excerptor-5-en.png[]
+
+. Copy the link and paste it in a browser to download the PDF file with the change history.
+
+== Example of a generated excerpt
+
+.Example of a generated excerpt table
+[cols="3,7", options="header"]
+|===
+| Field                   | Changes
+| Created at              | 24.10.2024 14:56:27
+| `consent_id`            | dfe6d3d6-0fd9-4f45-aa03-5edfbd29aed8
+| `consent_date`          | 01.01.2024 07:25:01
+| `person_gender`         | W
+| `person_full_name`      | AUTO_DFlaizyw
+| `person_pass_number`    | ET181898
+| Creator ID              | 1111111111
+| Operation code          | Create
+| System name             | ihrbyerou
+| App name                | bforzfoxfo
+| Business process ID     | fc26fd42-5918-4a8e-aef5-38c3f1251a2b
+| Business activity name  | ponjufptzr
+| Assignee full name      | AUTO_DFlaizyw
+| Assignee DRFO code      | 1234567890
+| Assignee EDRPOU code    | 9876543210
+|===
+
+This example shows a generated PDF excerpt detailing changes in the `pd_processing_consent` table.
+
+TIP: Download the sample PDF here: xref:registry-develop:attachment$registry-admin/excerpts/history-excerptor/history-excerpt-example-en.pdf[history-excerpt-example-en.pdf].
+
+== Related pages
+
+* xref:registry-admin/excerpts/excerpt-templates-pdf-docx-csv.adoc[]
+* xref:registry-admin/excerpts/localized-excerpts.adoc[]
