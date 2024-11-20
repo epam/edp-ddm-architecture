@@ -1,0 +1,248 @@
+= Configuring excerpt templates in _PDF, DOCX, CSV_ formats
+include::platform:ROOT:partial$templates/document-attributes/default-set-en.adoc[]
+
+include::platform:ROOT:partial$admonitions/language-en.adoc[]
+
+== Overview
+
+To generate and download excerpts in `.pdf`, `.docx`, or `.csv` formats, you must configure the appropriate templates in the registry's regulation settings in advance.
+
+The administrator must add an excerpt template and its attributes to the regulation directory, specifically:
+
+* for `.pdf` -- *_excerpts/excerpt-name-pdf/index.html.ftl_*;
+* for `.docx` -- *_excerpts-docx/excerpt.docx_*;
+* for `.csv` -- *_excerpts-csv/excerpt-csv.json_*.
+
+[IMPORTANT]
+====
+The Platform uses *Apache FreeMarker* in extract templates, but with an *alternative tag syntax*. This differs from the standard syntax described in the official FreeMarker documentation.
+See more about using this alternative syntax at https://freemarker.apache.org/docs/dgui_misc_alternativesyntax.html[link].
+
+Keep this in mind when setting up templates to avoid errors in processing and display.
+====
+
+.Structure of regulation for generating excerpts in PDF, DOCX, and CSV formats
+[plantuml]
+----
+@startsalt
+{
+{T
++ <&folder> **registry-regulations**
+++ <&folder> **excerpts**
++++ <&folder> **excerpt-pdf-1**
+++++ <&file> index.html.ftl
+++++ <&folder> css
++++++ <&file> style-1.css
++++++ <&file> style-2.css
+++++ <&folder> images
++++++ <&file> image.png
++++ <&folder> **excerpt-pdf-2**
+++++ <&file> index.html.ftl
+++++ <&folder> css
++++++ <&file> style-1.css
++++++ <&file> style-2.css
+++++ <&folder> images
++++++ <&file> image.png
+++ <&folder> **excerpts-docx**
++++ <&file> excerpt-1.docx
++++ <&file> excerpt-2.docx
+++ <&folder> **excerpts-csv**
++++ <&file> excerpt-1.json
++++ <&file> excerpt-2.json
+}
+}
+@endsalt
+----
+
+* *_excerpts_*, *_excerpts-docx_*, *_excerpts-csv_* — mandatory directory names for excerpts in the respective format.
+* `index.html.ftl`, `excerpt.docx`, `excerpt-csv.json` — examples of excerpt file names.
+
+[IMPORTANT]
+The names of each directory and file must be unique, even across different formats.
+The system uses these templates to create excerpts in the registry's user interface.
+
+[NOTE]
+For setting up localized excerpts in the required language,
+refer to the page
+xref:registry-admin/excerpts/localized-excerpts.adoc[].
+
+== Configuring excerpt templates
+
+=== Configuring templates for PDF excerpts
+
+To configure a PDF excerpt template:
+
+. Access the local *Gerrit* repository in your registry.
+. Add the `index.html.ftl` template file to a directory with a unique name, for example, *_excerpts/excerpt-pdf-1_*.
++
+[NOTE]
+====
+The PDF extract template must be created in `.html.ftl` format using *Apache FreeMarker* with alternative tag syntax. This templating tool allows variables to be inserted in PDF (`.html.ftl`) or `.docx` templates. Use FreeMarker expressions to insert variables:
+
+[source,html]
+----
+<html>
+   <body>
+      <h1>Extract for [=userName]</h1>
+      <p>Date: [=currentDate]</p>
+   </body>
+</html>
+----
+Here, `[=userName]` and `[=currentDate]` are variables whose values will be populated during document generation. Be sure to use FreeMarker's alternative tag syntax to avoid errors in processing.
+====
+
+. Create and save the style file `style.css` in the directory *_excerpts/excerpt-pdf-1/css_*.
++
+You can use multiple style files. To do this, link each file in the template:
++
+[source,html]
+----
+<html>
+   <head>
+      <meta charset="UTF-8">
+      <link rel="stylesheet" href="style-1.css">
+      <link rel="stylesheet" href="style-2.css">
+      <style>
+         * { font-family: Roboto; }
+      </style>
+   </head>
+   <body>
+      <h1>Excerpt Title</h1>
+      <p>This is an example of PDF document content.</p>
+   </body>
+</html>
+----
++
+[IMPORTANT]
+====
+Use UTF-8 encoding. The default font should be `Roboto`. Using other fonts may cause errors.
+====
++
+[TIP]
+====
+To specify landscape orientation, adjust `style.css`:
+
+[source,css]
+----
+@page {
+    size: 15in 8.5in;
+    margin: 0.75in 0.9in;
+}
+----
+
+Set the `size` parameter to the width and height of the file in inches.
+====
+
+. Add an image in `.png` format to the *_excerpts/excerpt-pdf-1/images_* directory. Use the image reference in the template:
++
+[source,html]
+----
+<img src="images/image.png" alt="Image description" width="300">
+----
+In this example, an image from the `images` folder, located in the template directory, is used. The `alt` attribute provides alternative text if the image does not display, and the `width` attribute sets the image width in pixels.
++
+The final template version with an added image may look like this:
++
+[source,html]
+----
+<html>
+   <head>
+      <meta charset="UTF-8">
+      <link rel="stylesheet" href="style-1.css">
+      <link rel="stylesheet" href="style-2.css">
+      <style>
+         * { font-family: Roboto; }
+      </style>
+   </head>
+   <body>
+      <h1>Extract Title for [=userName]</h1>
+      <p>Date created: [=currentDate]</p>
+      <p>The image used in this extract is shown below:</p>
+      <img src="images/image.png" alt="Image description" width="300">
+      <p>Additional information about the extract can be added here.</p>
+   </body>
+</html>
+----
+
+. Save changes to the remote *Gerrit* repository (for more details, see xref:registry-admin/regulations-deploy/registry-admin-deploy-regulation.adoc[]).
+
+. After updating the regulation, PDF excerpts can be generated in the Citizen Portal (see details at xref:user:citizen/citizen-get-excerpts.adoc[]).
+
+=== Configuring templates for DOCX excerpts
+
+To configure a DOCX excerpt template:
+
+. Access the local *Gerrit* repository.
+. Add the `excerpt.docx` file to the *_excerpts-docx_* directory.
+. Save changes to the remote *Gerrit* repository (for more details, see xref:registry-admin/regulations-deploy/registry-admin-deploy-regulation.adoc[]).
+. After updating the regulation, DOCX excerpts can be generated in the User Portal (see details at xref:user:officer/reports/reports-docx.adoc[]).
+
+[TIP]
+====
+Download a sample excerpt in `.docx` format: link:{attachmentsdir}/registry-admin/excerpts/template_example.docx[Sample DOCX template].
+====
+
+[TIP]
+====
+An example of business process modeling for generating CSV and DOCX excerpts is available at: xref:registry-develop:bp-modeling/bp/excerpts/bp-modeling-excerpt-csv-docx.adoc[].
+====
+
+=== Configuring templates for CSV excerpts
+
+To configure a CSV excerpt template:
+
+. Access the local *Gerrit* repository.
+. Add the `excerpt.json` file to the `_excerpts-csv_` directory.
++
+[NOTE]
+====
+To configure column headers, create a `.json` file with header mappings:
+
+[source,json]
+----
+{
+"lastName": "Last Name",
+"firstName": "First Name",
+"secondName": "Middle Name",
+"birthday": "Date of Birth",
+"residenceAddress": "Address",
+"phoneNumber": "Phone",
+"gender": "Gender"
+}
+----
+The keys in the left column correspond to the parameter names in the system, and the values in the right column are the new names displayed in the excerpt.
+====
+
+. Save changes to the remote *Gerrit* repository (for more details, see xref:registry-admin/regulations-deploy/registry-admin-deploy-regulation.adoc[]).
+. After updating the regulation, CSV excerpts can be generated in the User Portal (see details at xref:user:officer/reports/reports-csv.adoc[]).
+
+[TIP]
+====
+An example of business process modeling for generating CSV and DOCX excerpts is available at: xref:registry-develop:bp-modeling/bp/excerpts/bp-modeling-excerpt-csv-docx.adoc[].
+====
+
+== Common errors and troubleshooting
+
+=== Incorrect template format
+
+If the system cannot generate the excerpt, check if the template meets the recommended format and if the file paths are correctly specified.
+
+=== Font conflict
+
+Using non-standard fonts may cause errors. Ensure that the default font is `Roboto`.
+
+== Data history excerpt
+
+You can generate and review a data history excerpt containing information about changes made to database records. This helps track evolution as well as detect any data integrity issues.
+
+For more details on data history excerpts, see xref:registry-admin/excerpts/history-excerptor.adoc[].
+
+== Related pages
+
+* xref:registry-admin/excerpts/localized-excerpts.adoc[]
+* xref:registry-admin/excerpts/history-excerptor.adoc[]
+* xref:registry-develop:bp-modeling/bp/excerpts/bp-modeling-excerpt-csv-docx.adoc[]
+* xref:registry-develop:/bp-modeling/bp/element-templates/service-task-templates/excerpts/generate-excerpt.adoc[]
+* xref:user:citizen/citizen-get-excerpts.adoc[]
+* xref:user:officer/reports/reports-csv.adoc[]
+* xref:user:officer/reports/reports-docx.adoc[]
