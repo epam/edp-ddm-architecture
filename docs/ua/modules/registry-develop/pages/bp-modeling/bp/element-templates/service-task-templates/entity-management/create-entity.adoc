@@ -1,0 +1,211 @@
+= Створення сутності у Фабриці даних: _Create entity in data factory_
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+== Загальна інформація
+
+Інтеграційне розширення *Create entity in data factory* дозволяє налаштовувати завдання для створення нових сутностей у базі даних в рамках бізнес-процесу. Це розширення допомагає автоматизувати процеси збереження даних до БД, забезпечуючи належне оброблення запитів та передачу даних між процесами. Розширення додає різні властивості до завдання типу *Service Task*.
+
+.Короткі відомості про делегат
+|===
+|Назва |Пояснення
+
+|Бізнес-назва інтеграційного розширення
+|*Create entity in data factory*
+
+|Службова назва інтеграційного розширення
+|`${dataFactoryConnectorCreateDelegate}`
+
+|Назва файлу у бібліотеці розширень
+|*_dataFactoryConnectorCreateDelegate.json_*
+|===
+
+Розширення *Create entity in data factory* використовується, коли необхідно створити новий запис з певними даними у базі даних.
+
+== Перед початком
+
+include::partial$admonitions/install-element-templates.adoc[]
+
+== Налаштування
+
+Делегат *Create entity in data factory* призначений для використання у завданнях типу *Service Task* бізнес-процесу. Він дозволяє налаштувати збереження даних до БД.
+
+TIP: Створення сутності у Фабриці даних відбувається за допомогою `POST`-метода.
+
+=== Налаштування завдання
+
+. Створіть завдання типу *Service Task* у вашому бізнес-процесі.
+. Назвіть завдання, наприклад, `Збереження даних до БД`.
+. Застосуйте шаблон делегата, обравши *Create entity in data factory* зі списку в налаштуваннях завдання.
+
++
+image:bp-modeling/bp/element-temp/service-task/entity-management/create-entity/create-entity-2.png[]
+
+=== Налаштування делегата
+
+Виконайте наступні налаштування:
+
+Resource ::
+У полі *Resource* вкажіть назву ендпоінту / таблиці, в яку будуть зберігатися дані. Наприклад, `entity-build-acts`.
+
+Payload ::
+У полі *Payload* введіть дані для створення запису: `${payload}`. Це забезпечить передачу необхідних даних у задачу.
++
+[NOTE]
+====
+Дані для створення запису можна отримати скриптом, сформувати JSON-об'єкт та передати у полі *Payload* у вигляді змінної.
+
+Наприклад, це може бути об'єкт, що містить інформацію про будівлю:
+
+[source,groovy]
+----
+        def formDataForm = submission('UserTask_SignDataBuildInfo').formData
+
+        def buildTypeId = formDataForm.prop('buildType').prop("buildTypeId").value()
+
+        def data = [:]
+        data['buildType'] = buildTypeId;
+        data['buildNumber'] = formDataForm.prop('buildNumber').value()
+        data['sectionNumber'] = formDataForm.prop('sectionNumber').value()
+        data['flatNumber'] = formDataForm.prop('flatNumber').value()
+
+        def payload = S(data, 'application/json')
+        set_transient_variable('payload', payload)
+----
+
+Пояснення роботи скрипту, який формує об'єкт `payload`:
+
+. *Отримання даних форми*:
++
+```groovy
+def formDataForm = submission('UserTask_SignDataBuildInfo').formData
+```
+Цей рядок коду отримує дані з форми, яка була заповнена користувачем у завданні `UserTask_SignDataBuildInfo`. Дані форми зберігаються у змінній `formDataForm`.
+
+. *Отримання конкретного значення з форми*:
++
+```groovy
+def buildTypeId = formDataForm.prop('buildType').prop("buildTypeId").value()
+```
+Цей рядок отримує значення властивості `buildTypeId`, яка знаходиться всередині властивості `buildType`. Це значення зберігається у змінній `buildTypeId`.
+
+. *Формування об'єкта `data`*:
++
+```groovy
+def data = [:]
+data['buildType'] = buildTypeId;
+data['buildNumber'] = formDataForm.prop('buildNumber').value()
+data['sectionNumber'] = formDataForm.prop('sectionNumber').value()
+data['flatNumber'] = formDataForm.prop('flatNumber').value()
+```
+Тут створюється порожній об'єкт `data` у вигляді мапи (словника). Далі у цю мапу додаються наступні поля:
+
+- `buildType` з отриманим значенням `buildTypeId`.
+- `buildNumber` з значенням поля `buildNumber` з форми.
+- `sectionNumber` з значенням поля `sectionNumber` з форми.
+- `flatNumber` з значенням поля `flatNumber` з форми.
+
+. *Створення об'єкта `payload` у форматі JSON*:
++
+```groovy
+def payload = S(data, 'application/json')
+```
+Тут об'єкт `data` перетворюється у формат JSON та зберігається у змінній `payload`.
+
+. *Встановлення змінної `payload` як транзитної*:
++
+```groovy
+set_transient_variable('payload', payload)
+```
+Цей рядок зберігає змінну `payload` як транзитну змінну, що дозволяє використовувати її у подальших кроках процесу.
+
+Таким чином, скрипт отримує дані з форми, формує об'єкт `payload` у форматі JSON, який містить необхідні дані для створення запису в базі даних, та зберігає цей об'єкт як транзитну змінну для подальшого використання у процесі.
+====
+
++
+[NOTE]
+====
+Дані, що передаються для створення запису, повинні мати відповідний формат:
+
+.Приклад. Тіло POST-запита
+[source, json]
+----
+{
+  "name": "string",
+  "active": true,
+  "buildTypeId": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+}
+----
+====
+
+X-Access-Token ::
+У полі *X-Access-Token* вкажіть токен доступу користувача, під яким виконується операція. Цей токен забезпечує повноваження виконавця задачі щодо доступу до даних.
+
+* Наприклад, вкажіть токен ініціатора процесу через JUEL-функцію `initiator()`, використавши метод `accessToken`:
++
+[source,groovy]
+----
+${initiator().accessToken}
+----
+
+* Альтернативно, ви можете вказати токен виконавця останнього користувацького завдання. Для цього ви можете використати JUEL-функцію `completer()`, передавши ID попередньої задачі та використавши метод `accessToken`. Наприклад:
++
+[source,groovy]
+----
+${completer('UserTask_SignDataBuildInfo').accessToken}
+----
++
+** `completer()` — назва JUEL-функції.
+** `'UserTask_SignDataBuildInfo'` — ID попередньої задачі користувача.
+** `accessToken` — метод, який передає JWT-токен користувача.
+
+X-Digital-Signature source ::
+У полі *X-Digital-Signature source* вкажіть джерело цифрового підпису. Це поле вказує на Ceph-документ із цифровим підписом даних КЕП на стороні користувача (_див. детальніше про підпис КЕП у делегатах xref:bp-modeling/bp/element-templates/user-task-templates/officer-sign-task.adoc[] та xref:bp-modeling/bp/element-templates/user-task-templates/citizen-sign-task.adoc[]_). Функція `sign_submission()` та метод `signatureDocumentId` дозволяють отримати підписані дані з UI-форми та передати ID Ceph-документа. Наприклад:
++
+----
+${sign_submission('UserTask_SignDataBuildInfo').signatureDocumentId}
+----
+
+* `sign_submission` -- назва JUEL-функції.
+* `'UserTask_SignDataBuildInfo'` -- ID завдання користувача, із даними, на які накладено КЕП.
+* `signatureDocumentId` -- метод, який дозволяє отримати ID Ceph-документа, в якому зберігаються підписані КЕП дані.
+
+X-Digital-Signature-Derived source ::
+У полі *X-Digital-Signature-Derived source* вкажіть джерело системного цифрового підпису (цифрової печатки). Це поле вказує на Ceph-документ із системним цифровим підписом (цифровою печаткою), накладеним на дані. Наприклад, `${system_signature_key}`.
++
+[TIP]
+====
+Значення ключа/ідентифікатора системного підпису можна отримати після підпису даних за допомогою делегата xref:bp-modeling/bp/element-templates/service-task-templates/signature/system-signature-by-dso-service.adoc[]. Результат виконання операції підписання даних системним ключем буде збережено до вказаної змінної, наприклад, `system_signature_key`. Надалі ви зможете використати змінну в іншому місці процесу, зокрема під час збереження даних до БД або для генерування витягу тощо.
+====
+
+Result variable ::
+У полі *Result variable* задайте ім'я для змінної, в якій буде зберігатися відповідь від операції створення сутності, наприклад, `response`.
+
+include::registry-develop:partial$snippets/element-templates/delegate-http-code-response.adoc[]
+
+== Приклад
+
+Ось приклад, який показує, як відповідний делегат використовується у бізнес-процесі:
+
+.Приклад. Налаштування делегата Create entity in data factory
+image::bp-modeling/bp/element-temp/service-task/entity-management/create-entity/create-entity-1.png[]
+
+[TIP]
+====
+[%collapsible]
+.Де можна знайти приклад бізнес-процесу?
+=====
+include::partial$snippets/demo-reg-reference-examples-ua.adoc[]
+
+*Create entity in data factory* — делегат, який використовується у всіх бізнес-процесах, які потребують збереження даних до БД.
+
+Ви можете використати один із багатьох прикладів процесів за пошуком по ключовим словам — *_reference-search-type-or_*.
+
+У Кабінеті користувача бізнес-процес буде доступний у розділі *Доступні послуги*.
+=====
+====
+
+== Пов'язані сторінки
+
+* xref:best-practices/bp-and-or-single-table.adoc[]
+* xref:bp-modeling/bp/element-templates/service-task-templates/entity-management/batch-creation-entities-v2.adoc[]
+* xref:bp-modeling/bp/element-templates/service-task-templates/entity-management/create-nested-entities.adoc[]

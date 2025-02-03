@@ -1,0 +1,677 @@
+= Відображення інформації про автора створення та редагування об'єктів
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+== Загальні відомості
+
+Команда Платформи розробила референтні приклади моделювання бізнес-процесів для можливості відображення інформації про особу, яка створила та останньою редагувала сутність в певній таблиці бази даних реєстру:
+
+* Бізнес-процес зі створення та редагуванню сутності.
+* Бізнес-процес отримання витягу у форматі PDF.
+* Відображення даних про сутність в аналітичному представленні Redash Viewer (сервіс перегляду звітів).
+
+== Бізнес-процес створення та редагування сутності
+
+=== Передумови
+
+==== Референтні приклади моделювання регламенту
+
+Скористайтеся референтними прикладами моделювання регламенту.
+
+[TIP]
+====
+[%collapsible]
+.Де можна знайти приклад референтного бізнес-процесу?
+=====
+include::partial$snippets/demo-reg-reference-examples-ua.adoc[]
+
+Приклад BPMN-схеми процесу буде доступний у регламенті демо-реєстру за пошуком по ключовим словам -- *_reference-create-factor_*.
+
+Назви форм ви можете знайти всередині відповідних користувацьких задач (User Task) бізнес-процесу у полі *`Form key`*:
+
+* _reference-view-factors.json_
+* _reference-create-factor.json_
+* _reference-create-factor-sign.json_
+* _reference-edit-factor.json_
+* _reference-edit-factor-sign.json_
+
+У Кабінеті користувача процес буде доступний у папці *_Референтні бізнес-процеси з відображенням автора та часу змін_ > Створення та редагування фактора_*.
+
+image:best-practices/view-object-creator-editor/bp-view-object-creator-editor-01.png[]
+=====
+====
+
+==== Моделювання структури даних
+
+Змоделюйте Liquibase ChangeSet для створення таблиці відповідно до вашої логічної моделі даних. Використовуйте ChangeSet `20490-2` із регламенту демо-реєстру. Модель буде доступна за шляхом: _data-model/reference/entity-creator-updater-information/main.xml_.
+
+.ERD-діаграма референтної логічної моделі
+[plantuml]
+----
+@startuml
+!define TABLE(x) class x << (T,orchid) >>
+!define PRIMARY_KEY(x) <u>x</u>
+!define NOT_NULL(x) <b>x</b>
+
+package "Your Database" {
+    TABLE(factor_names) {
+        PRIMARY_KEY(id) : uuid
+        NOT_NULL(name) : text
+        NOT_NULL(creator_full_name) : text
+        NOT_NULL(updater_full_name) : text
+    }
+}
+@enduml
+----
+
+.XML-схема референтної фізичної моделі
+[source,xml]
+----
+<changeSet author="vc" id="20490-2">
+  <ext:createSearchCondition name="factor_names_all">
+    <ext:table name="factor_names" alias="f">
+      <ext:column name="id"/>
+      <ext:column name="name"/>
+      <ext:column name="creator_full_name"/>
+      <ext:column name="updater_full_name"/>
+    </ext:table>
+  </ext:createSearchCondition>
+</changeSet>
+----
+
+У цій моделі:
+
+* `factor_names` -- назва таблиці.
+* `id` визначено як первинний ключ типу uuid.
+* `name`, `creator_full_name` і `updater_full_name` є полями типу `text` і є обов'язковими для заповнення (`NOT NULL`).
+
+.Вихідний SQL-синтаксис для створення таблиці
+[source,sql]
+----
+CREATE TABLE factor_names (
+    id UUID PRIMARY KEY,
+    name TEXT NOT NULL,
+    creator_full_name TEXT NOT NULL,
+    updater_full_name TEXT NOT NULL
+);
+----
+
+Цей SQL-код створює таблицю `factor_names` з чотирма колонками. Тип `UUID` використовується для `id`, а `TEXT` для інших колонок. Всі поля крім `id` позначені як `NOT NULL`, що означає обов'язкове заповнення цих полів.
+
+TIP: Ви можете додатково вказати атрибути відображення дати та часу створення сутності. Як це зробити, дивіться у розділі xref:faq:faq.adoc#get-date-time-entity-creation[Як отримати дату та час створення сутності у БД?]
+
+==== Моделювання бізнес-процесу
+
+Змоделюйте власний бізнес-процес за наведеними прикладом нижче.
+
+=== Опис референтного процесу
+
+==== Загальний вигляд бізнес-процесу створення та редагування сутності
+
+Референтний бізнес-процес у моделері адміністративного порталу виглядатиме наступним чином:
+
+image::best-practices/view-object-creator-editor/bp-view-object-creator-editor-1.png[]
+
+==== Сервісна задача для пошуку сутностей у БД
+
+. Змоделюйте сервісну задачу (*Service Task*).
+. Використайте шаблон делегата *Search for entities in data factory* та вкажіть у полі *Resource* назву таблиці для пошуку всіх сутностей (у цьому прикладі -- `factor-names-all`), відповідно до створеної фізичної моделі даних.
++
+TIP: Детальніше про пошук сутностей у БД ви можете переглянути на сторінці xref:bp-modeling/bp/element-templates/service-task-templates/search-entities-in-data-factory.adoc[]
+
+image::best-practices/view-object-creator-editor/bp-view-object-creator-editor-2.png[]
+
+==== Скрипт для показу даних на формі
+
+Змоделюйте скрипт-задачу (*Script Task*) та сформуйте скрипт для подальшого відображення сутностей на формі.
+
+[source,groovy]
+----
+def factorResponseBody = factorNameResponse.responseBody
+def payload = S([:], 'application/json')
+
+payload.prop('factorData', factorResponseBody)
+set_transient_variable('existingFactors', payload)
+----
+
+Цей скрипт забезпечує чітке та ефективне управління даними, отриманими від сервісної задачі, для їх подальшого використання у процесі.
+
+У цьому скрипті: ::
+
+* `factorResponseBody` зберігає тіло відповіді, отримане від сервісної задачі.
+* Ініціалізується новий об'єкт `payload` з порожнім словником (`[:]`) і типом даних `application/json`.
+* В `payload` додається властивість `factorData`, яка містить дані з `factorResponseBody`.
+* Встановлюється тимчасова змінна `existingFactors`, що дозволяє використовувати дані `payload` у наступних кроках бізнес-процесу.
+
+==== Користувацька задача для перегляду факторів, отриманих із БД
+
+Налаштування бізнес-процесу: ::
+
+. Змоделюйте користувацьку задачу (*User Task*).
+. Застосуйте шаблон делегата (*User Form*).
+. У полі *Form key* вкажіть службову назву UI-форми (_тут_ -- `reference-view-factors`).
+
+Налаштування UI-форми задачі: ::
+
+. Змоделюйте компонент *Edit Grid*.
+
+.. У рамках Edit Grid додайте три текстових поля за допомогою компонента *Text Field* для відображення даних сутностей, які отримано з БД.
+.. Назви трьох полів у *Text Field* у нашому прикладі: *Назва фактора*, *Створив* та *Редагував*.
++
+image::best-practices/view-object-creator-editor/bp-view-object-creator-editor-3.png[]
+
+.. У налаштуваннях *Edit Grid*, на вкладці *Display*, активуйте параметри *Read only* та *Quick Search*.
++
+image::best-practices/view-object-creator-editor/bp-view-object-creator-editor-3-1.png[]
+
+.. На вкладці *Logic* додайте *Action*: `edit`. Це поле відповідає за навігаційну дію по редагуванню сутності, відповідно до визначеної умови (*Condition*), налаштованої на відповідній гілці xref:#xor-gw[XOR-шлюзу] (_див. нижче_).
++
+image::best-practices/view-object-creator-editor/bp-view-object-creator-editor-3-2.png[]
+
+. Змоделюйте компонент *Button*.
+* На вкладці *Display* встановіть наступні параметри:
+
+** *Action*: `Navigation`
+** *Action code*: `create`. Це поле відповідає за навігаційну дію зі створення сутності, відповідно до логіки умови (*Condition*), налаштованої на відповідній гілці XOR-шлюзу (_див. нижче_).
+
++
+image::best-practices/view-object-creator-editor/bp-view-object-creator-editor-3-3.png[]
+
++
+[TIP]
+====
+Основний референтний сценарій: ::
+
+У цьому референтному процесі для редагування сутності використано логіку налаштування дії над рядком таблиці через контекстне меню "три крапки" з опцією редагування відповідно, для якої й налаштовується *Action*: `edit`.
++
+image::best-practices/view-object-creator-editor/bp-view-object-creator-editor-3-4.png[]
++
+Детально про це описано у xref:best-practices/edit-grid-rows-action.adoc[].
++
+Для створення сутності використано кнопку (компонент *Button*) з опцією створення відповідно, для якої налаштовується Action code: `create`.
++
+image::best-practices/view-object-creator-editor/bp-view-object-creator-editor-3-5.png[]
+
+Додатковий сценарій: ::
+
+Ви можете також розглянути альтернативний варіант редагування записів у вашій таблиці -- через додавання окремої кнопки (компонент *Button*) та додавання Action code: `edit` безпосередньо для цього компонента.
++
+image::best-practices/view-object-creator-editor/bp-view-object-creator-editor-3-6.png[]
++
+У такому випадку, щоб обрати потрібні записи для редагування не з контекстного меню, потрібно активувати опцію `Multiple-record selection`, яка дозволяє користувачам вибирати кілька записів в таблиці одночасно. Тобто ви оберете кілька записів, натиснете кнопку *`Редагувати`* і згідно з налаштованим *Action code* та умовою XOR-шлюзу (*Condition Expression*), процес перейде до задачі редагування цих записів.
++
+image::best-practices/view-object-creator-editor/bp-view-object-creator-editor-3-7.png[]
+
++
+В такому сценарії налаштування у вас буде дві кнопки (компоненти *Button*), які матимуть налаштовані коди дії (action codes).
++
+image::best-practices/view-object-creator-editor/bp-view-object-creator-editor-3-8.png[]
+
+====
+
++
+[TIP]
+====
+Більш детально з моделюванням форм ви можете ознайомитися на сторінках:
+
+* xref:bp-modeling/forms/registry-admin-modelling-forms.adoc[]
+* xref:bp-modeling/forms/components/index.adoc[]
+* xref:bp-modeling/forms/components/edit-grid/edit-grid.adoc[]
+====
+
+[#xor-gw]
+==== Створення XOR-шлюзу (Exclusive Gateway) та відповідних гілок процесу
+
+Для управління потоком рішень у вашому бізнес-процесі, ви можете додати exclusive-шлюз (XOR-шлюз), який дозволить розгалужувати процес на основі певних умов.
+
+image::best-practices/view-object-creator-editor/bp-view-object-creator-editor-4.png[]
+
+Налаштуйте події, щоб керувати процесом залежно від введених даних чи станів сутностей. Використання XOR-шлюзу дозволяє гнучко маніпулювати ходом процесу, використовуючи умови, що залежать від дій користувача або системних параметрів.
+
+Гілка створення сутності ::
++
+. *Налаштування умови для створення*:
+
+.. Використайте поле *Type* для вибору `Expression`.
+.. У полі *Condition Expression* задайте JUEL-функцію `submission()` для перевірки дії користувача.
++
+[source,groovy]
+----
+${submission('UserTask_ViewFactorData').formData.prop('_action_code').value().equals('create')}
+----
++
+Цей вираз перевіряє, чи дія користувача полягає у створенні нової сутності. Якщо так, процес буде спрямований гілкою створення.
+
++
+image::best-practices/view-object-creator-editor/bp-view-object-creator-editor-4-1.png[]
+
+Гілка редагування сутності ::
+
+. *Налаштування умови для редагування*:
+
+.. Знову використайте поле *Type* для вибору `Expression`.
+.. У полі *Condition Expression* використайте JUEL-функцію `submission()` для перевірки дії користувача.
++
+[source,groovy]
+----
+${submission('UserTask_ViewFactorData').formData.prop('_action_code').value().equals('edit')}
+----
++
+Цей вираз перевіряє, чи користувач обрав дію редагування наявної сутності. У разі позитивної відповіді, процес буде спрямований гілкою редагування.
+
++
+image::best-practices/view-object-creator-editor/bp-view-object-creator-editor-4-2.png[]
+
+==== Користувацька задача для створення фактора
+
+Налаштування бізнес-процесу: ::
+
+. Змоделюйте користувацьку задачу (*User Task*).
+. Застосуйте шаблон делегата (*User Form*).
+. У полі *Form key* вкажіть службову назву UI-форми (_тут_ -- `reference-create-factor`).
+
++
+image::best-practices/view-object-creator-editor/bp-view-object-creator-editor-5.png[]
+
+Налаштування UI-форми задачі: ::
+
+. Змоделюйте компонент *Text Field*.
+. У полі *Label* вкажіть назву поля -- *Назва фактора*.
+. Перейдіть до вкладки *Validation* та активуйте параметр *Required*, який вимагатиме обов'язкового заповнення цього поля на формі.
+
++
+image::best-practices/view-object-creator-editor/bp-view-object-creator-editor-6.png[]
+
++
+[TIP]
+====
+Більш детально з моделюванням форм ви можете ознайомитися на сторінках:
+
+* xref:bp-modeling/forms/registry-admin-modelling-forms.adoc[]
+* xref:bp-modeling/forms/components/index.adoc[]
+* xref:bp-modeling/forms/components/text-field.adoc[]
+====
+
+==== Користувацька задача для підписання даних КЕП
+
+. Створіть користувацьку задачу (*User Task*) і застосуйте шаблон делегата *Officer Sign Task*.
+. Заповніть необхідні поля, зокрема у полі *Form key* вкажіть службову назву форми для підписання даних КЕП (_тут_ -- `reference-create-factor-sign`).
++
+image::best-practices/view-object-creator-editor/bp-view-object-creator-editor-7.png[]
+
+TIP: Детальніше про моделювання форм для підписання даних див. xref:bp-modeling/forms/registry-admin-modelling-forms.adoc#form-sign-task[Створення форми для підписання даних КЕП].
+
+==== Скрипт підготування даних для збереження до БД
+
+Для ефективного оброблення та збереження даних, використовуйте скрипт-задачу, що дозволяє підготувати дані перед їх записом у базу даних. Цей процес включає отримання даних від користувача, їх обробку та формування відповідного формату для збереження.
+
+[source,groovy]
+----
+def factorName = submission('UserTask_SignData').formData.prop('name').value()
+def username = completer('UserTask_SignData').fullName
+def factor = [:]
+
+factor['name'] = factorName
+factor['creatorFullName'] = username
+
+set_transient_variable('payload', S(factor, 'application/json'))
+----
+
+У цьому скрипті:
+
+* `factorName` отримує значення назви фактора з форми `UserTask_SignData`.
+* `username` визначає повне ім'я користувача, який є виконавцем задачі.
+* Ініціалізується порожній словник `factor`, де зберігаються дані для запису.
+
+Скрипт виконує наступні дії:
+
+* Присвоює отримане ім'я фактора (`factorName`) та ім'я користувача (`username`) до словника `factor`.
+* Встановлює тимчасову змінну `payload`, використовуючи функцію `set_transient_variable`, для передачі оброблених даних у форматі `application/json`.
+
+==== Сервісна задача для підпису даних системним ключем
+
+Для забезпечення безпеки та автентичності даних у вашому бізнес-процесі, ви можете використовувати сервісну задачу, яка дозволяє підписати дані системним ключем. Це важлива частина процесу, що забезпечує цілісність та незмінність інформації. Ось як це можна зробити:
+
+. Створення сервісної задачі:
+
+.. Додайте нову сервісну задачу (*Service Task*) у вашому бізнес-процесі. Ця задача використовуватиметься для автоматичного підписання даних системним ключем.
+
+.. Використовуйте шаблон делегата *System signature by DSO service* для реалізації процесу підпису.
+
+. Передача даних для підпису:
+
+* У полі *Payload* вкажіть дані, які необхідно підписати, використовуючи змінну `${payload}`. Ця змінна містить дані, отримані з попередньої скрипт-задачі.
+
+. *Налаштування токена підписанта*:
+
+* У полі *X-Access-Token source* внесіть токен підписанта, отриманий з останньої користувацької задачі: `${completer('UserTask_SignData').accessToken}`. Для цього використайте функцію `completer()`, якій передайте ID задачі, а також застосуйте метод `accessToken`. Цей токен забезпечує аутентифікацію виконавця процесу та його повноваження щодо підписання даних.
+
+. *Збереження результату підпису*:
+
+* У полі *Result variable* внесіть значення `systemSignatureKey`. Це змінна, де буде зберігатися результат підписання даних системним ключем
+
+Ця сервісна задача є ключовим елементом у забезпеченні безпеки даних. Вона дозволяє використовувати сучасні механізми шифрування та підпису, забезпечуючи, що дані, які переміщуються через різні етапи бізнес-процесу, залишаються захищеними та недоступними для несанкціонованого доступу.
+
+image::best-practices/view-object-creator-editor/bp-view-object-creator-editor-8.png[]
+
+==== Сервісна задача для збереження даних до БД
+
+Збережіть дані до постійного сховища. Для створення сервісної задачі, що зберігатиме дані до БД, виконайте наступні кроки:
+
+. Створення задачі:
+
+* Додайте нову сервісну задачу (*Service Task*) у вашому бізнес-процесі. Ця задача буде відповідати за збереження оброблених та підписаних даних.
+
+. Налаштування параметрів задачі:
+
+.. У полі *Name* вкажіть назву задачі, яка відображатиме її функцію, наприклад, `Збереження оброблених даних`.
+.. Застосуйте шаблон делегата *Create entity in data factory*.
+.. У полі *Resource* вкажіть ресурс або назву API-ендпоінту, через який будуть зберігатися дані. У нашому випадку -- `factor-names`.
+.. У полі *Payload* вкажіть тіло запита: `${payload}`. Це передає дані, які необхідно зберегти, і які були підготовлені на попередніх етапах.
+.. У полі *X-Access-Token* вкажіть `${completer('UserTask_SignData').accessToken}`. Це токен доступу користувача, що забезпечує авторизацію для здійснення операції збереження.
+.. У полі *X-Digital-Signature source* вкажіть `${sign_submission('UserTask_SignData').signatureDocumentId}`. Це ідентифікатор документа, який містить цифровий підпис.
+.. У полі *X-Digital-Signature-Derived source* вкажіть `${system_signature_ceph_key}`. Це посилання на ключ цифрового підпису, отриманого від системи.
+.. У полі *Result variable* вкажіть назву для вихідного параметра, наприклад, `response`. Це буде змінна, в якій зберігатиметься результат операції збереження.
+
+image::best-practices/view-object-creator-editor/bp-view-object-creator-editor-9.png[]
+
+==== Опис гілки для редагування факторів
+
+Після відпрацювання логіки, налаштованої на гілках XOR-шлюзу, бізнес-процес може піти по шляху редагування сутності.
+
+Створіть ланцюг задач для редагування сутності, подібно до описаних вище налаштувань для створення факторів.
+
+==== Оновлення сутності у базі даних
+
+Для забезпечення можливості оновлення відредагованих даних сутності у вашій базі даних, використовуйте сервісну задачу, що дозволяє впроваджувати зміни в постійне сховище даних. Цей процес є важливим для підтримання актуальності та цілісності інформації. Ось як ви можете це реалізувати:
+
+. *Створення сервісної задачі*:
+
+.. Додайте нову сервісну задачу (*Service Task*) у бізнес-процес.
+.. Використайте типове розширення *Update entity in Data factory* для оновлення сутності в базі даних.
+
+. *Налаштування параметрів задачі*:
+
+.. У полі *Resource* вкажіть `factor-names` для ідентифікації таблиці, де буде оновлюватися сутність.
+.. У полі *Resource id* використовуйте наступне значення для визначення ідентифікатора сутності, що оновлюється:
++
+[source,groovy]
+----
+${submission('UserTask_ViewFactorData').formData.prop('factorData').elements().get(0).prop('id').value()}`.
+----
++
+[TIP]
+====
+[%collapsible]
+.Деталі використання виразу
+=====
+
+. **`submission('UserTask_ViewFactorData')`**:
+
+* Ця функція звертається до даних, які були введені користувачем у попередній користувацькій задачі з назвою `UserTask_ViewFactorData`.
+* Вона використовується для доступу до відповіді, яка містить дані, заповнені користувачем у формі.
+
+. **`.formData.prop('factorData')`**:
+
+* Це дозволяє вибрати конкретне поле форми, яке містить дані про сутність. У цьому випадку, поле називається `factorData`.
+* `formData` є об'єктом, що містить всі дані форми, а `prop('factorData')` вибирає властивість `factorData` з цих даних.
+
+. **`.elements().get(0)`**:
+
+* Якщо `factorData` містить список елементів (наприклад, якщо це масив або колекція), цей вираз вибирає перший елемент цього списку.
+* `get(0)` позначає перший елемент, де індексація починається з 0.
+
+. **`.prop('id').value()`**:
+
+* Цей рядок витягує значення властивості `id` з обраного елемента (`factorData[0]`).
+* `prop('id')` звертається до поля `id` в даних елемента, а `.value()` отримує його значення.
+=====
+====
+
+.. У полі *Payload* передайте `${payload}`, що містить дані сутності для оновлення.
+
+. *Налаштування авторизації та підпису*:
+
+.. У полі *X-Access-Token* вкажіть `${completer('UserTask_EditFactorSign').accessToken}` для авторизації доступу до операції оновлення.
+.. У полі *X-Digital-Signature source* задайте `${sign_submission('UserTask_EditFactorSign').signatureDocumentId}` для визначення цифрового підпису документа.
+.. У полі *X-Digital-Signature-Derived source* вкажіть `${system_signature_ceph_key}`, що вказує на ключ цифрового підпису.
+
+. **Запис результату операції**:
+
+* Встановіть змінну *Result variable* як `response`. Це забезпечує збереження відповіді від сервісної задачі для подальшого використання у процесі.
+
+Ця задача є критично важливою для підтримки актуальності бази даних та забезпечення цілісності відредагованих даних. Завдяки цьому механізму оновлення, бізнес-процес стає більш надійним та ефективним у управлінні даними.
+
+image::best-practices/view-object-creator-editor/bp-view-object-creator-editor-10.png[]
+
+==== Завершення процесу та результат
+
+Додайте *End Event* для завершення бізнес-процесу.
+
+У результаті користувачу на формі бізнес-процесу, в таблиці будуть відображені назви сутностей, автор створення та останній, хто редагував певну сутність.
+
+image:release-notes:wn-1-9-7/wn-1-9-7-13.png[]
+
+== Формування витягу у форматі PDF з інформацією про автора створення та редагування сутності
+
+=== Моделювання витягів
+
+. Ознайомтеся з процесом моделювання витягів на сторінках:
+
+* xref:registry-admin/registry-admin-reports-pdf-docx-csv.adoc[]
+* xref:registry-develop:bp-modeling/bp/excerpts/bp-modeling-excerpt-csv-docx.adoc[]
+
+. Виконайте кроки з формування шаблону витягу.
+
+=== Приклади моделювання регламенту
+
+Скористайтеся референтними прикладами моделювання регламенту.
+
+[TIP]
+====
+[%collapsible]
+.Де можна знайти приклад бізнес-процесу?
+=====
+include::partial$snippets/demo-reg-reference-examples-ua.adoc[]
+
+Приклад BPMN-схеми процесу буде доступний у регламенті демо-реєстру за пошуком по ключовим словам -- *_feature-zvit-pdf-bp_*.
+
+Назви форм ви можете знайти всередині відповідних користувацьких задач (User Task) бізнес-процесу у полі *`Form key`*: *_feature-read-factor-data-zvit.json_*
+
+У Кабінеті отримувача послуг процес буде доступний користувачам у папці *_Референтні бізнес-процеси з відображенням автора та часу змін > Формування звіту по факторах у форматі pdf_*.
+
+image:best-practices/view-object-creator-editor/bp-view-object-creator-editor-02.png[]
+=====
+====
+
+[TIP]
+====
+.Референтний приклад шаблону формування витягу
+[%collapsible]
+=====
+Референтний приклад шаблону формування витягу буде доступний у регламенті демо-реєстру за шляхом: _excerpts/reference-factor-names-excerpt/index.html.ftl_.
+
+[source,html]
+----
+<!DOCTYPE html>
+<html>
+<head>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="center">
+        <img src="images/ua.png" class="trinity"/>
+    </div>
+    <p class="header text14">
+        ДЕРЖАВНА СЛУЖБА УКРАЇНИ З ПИТАНЬ ПРАЦІ
+        <br/>
+        <span class="header text12">
+            (ДЕРЖПРАЦІ)
+        </span>
+    </p>
+
+    <p class="header text12">
+        ВИТЯГ
+        <br/>
+        з Інформаційного переліку  факторів
+    </p>
+    <br/>
+
+    <table>
+        <colgroup>
+            <col style="width: 40%;">
+            <col style="width: 60%;">
+        </colgroup>
+        <tbody>
+            <tr>
+                <td>Дата, час формування</td>
+                <td class="value">[=.now?string('dd.MM.yyyy HH:mm:ss')]</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <p class="header text10">
+        Параметри запита
+    </p>
+
+    <table>
+        <colgroup>
+            <col style="width: 40%;">
+            <col style="width: 60%;">
+        </colgroup>
+        <tbody>
+            <tr>
+                <td>Тип витягу</td>
+                <td class="value">Про надання інформації щодо факторів виробничого середовища і трудового процесу</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <p class="header text10">
+        Актуальна інформація про фактори
+    </p>
+
+    <p class="paragraph">
+        Згідно рішення про внесення до інформаційного переліку наступні фактори виробничого середовища і трудового процесу:
+        <table align="center">
+          <tr>
+            <th>Назва</th>
+            <th>Створив</th>
+            <th>Редагував</th>
+          </tr>
+          [#list factors as factor]
+          <tr>
+            <td>[=factor.name]</td>
+            <td>[=factor.creatorFullName]</td>
+            <td>[=factor.updaterFullName?default('')]</td>
+          </tr>
+          [/#list]
+        </table>
+    </p>
+    <p class="paragraph">
+        Інформацію про фактори виробничого середовища і трудового процесу внесено до інформаційного переліку та розміщено на офіційному вебсайті Держпраці.
+    </p>
+</body>
+</html>
+----
+=====
+====
+
+=== Відображення інформації у витягу для користувача
+
+Після проходження бізнес-процесу, користувачу в pdf форматі витягу відобразяться відповідні сутності з ПІБ того, хто створив сутність, та ПІБ того, хто останній редагував сутність у базі даних реєстру.
+
+image:release-notes:wn-1-9-7/wn-1-9-7-12.png[]
+
+== Створення та відображення звіту в Redash з інформацією про автора створення та редагування сутності
+
+=== Передумови
+
+. Ознайомтеся з особливостями звітності на сторінці xref:data-modeling/reports/reports-overview.adoc[].
+
+. Скористайтеся докладною інструкцією на сторінці xref:study-project/study-tasks/task-6-registry-reports-modeling.adoc[Розробка аналітичної звітності: покрокове керівництво], яка охоплює всі аспекти розробки та перегляду аналітичної звітності від початку до кінця.
+
+
+=== Створення аналітичного представлення
+
+. Створіть аналітичне представлення.
++
+--
+* Назва аналітичного представлення: `report_factors`
+* Інформація з таблиці: `factor_names`
+--
++
+TIP: Для аналітичних представлень створіть окремий файл. Наприклад, _createAnalyticsViews.xml_.
+
++
+TIP: Приклад аналітичного представлення "Звіт по факторам" міститься у регламенті демо-реєстру у файлі _createViewsForAnalytics.xml_ за шляхом:
+_/data-model/reference/entity-creator-updater-information/createViewsForAnalytics.xml_.
+
++
+.XML-шаблон створення аналітичного представлення
+[source,xml]
+----
+<changeSet author="vc" id="20490-3">
+  <ext:createAnalyticsView name="report_factors">
+    <ext:table name="factor_names" alias="f">
+      <ext:column name="id"/>
+      <ext:column name="name"/>
+      <ext:column name="creator_full_name"/>
+      <ext:column name="updater_full_name"/>
+      <ext:column name="ddm_created_at" alias="created_date"/>
+      <ext:column name="ddm_updated_at" alias="updated_date"/>
+    </ext:table>
+  </ext:createAnalyticsView>
+</changeSet>
+----
+
++
+TIP: Читайте також: xref:registry-develop:data-modeling/data/physical-model/liquibase-ddm-ext.adoc#create-analytical-views[Керування аналітичними представленнями].
+
+. Надайте права доступу до цього аналітичного представлення.
++
+.XML-шаблон видачі прав доступу до аналітичного представлення для ролі analytics_officer
+[source,xml]
+----
+<changeSet author="vc" id="20490-4">
+  <ext:grant>
+    <ext:role name="analytics_officer">
+      <ext:view name="report_factors"/>
+    </ext:role>
+  </ext:grant>
+</changeSet>
+----
++
+TIP: Читайте також: xref:registry-develop:data-modeling/data/physical-model/liquibase-ddm-ext.adoc#manage-access-to-analytical-data[Керування доступом до аналітичних даних].
+
+. У файлі _main-liquibase.xml_ додайте тег `*<include>*` з обов'язковим вказанням атрибута `file="data-model/createAnalyticsViews.xml"` у кінці тегу `<databaseChangeLog>`:
++
+[source,xml]
+----
+<databaseChangeLog...>
+    <include file="data-model/createAnalyticsViews.xml"/>
+</databaseChangeLog>
+----
+
+. Застосуйте зміни до мастер-версії регламенту в Gerrit (`git commit`, `git push`).
+. Проведіть процедуру рецензування коду вашого commit. За відсутності прав, попросіть про це відповідальну особу.
+. Дочекайтеся виконання *Jenkins*-пайплайну *MASTER-Build-registry-regulations*.
+
+=== Створення звіту в Redash
+
+. Створіть новий запит для визначеного вище аналітичного представлення.
+. Натисніть на вкладку *Запити* > *`Новий запит`*. Ви побачите створений раніше запит до представлення `report_factors_v`.
++
+image:best-practices/view-object-creator-editor/bp-view-object-creator-editor-001.png[]
+
+. Створіть нову інформаційну панель (*Dashboard*). Створений дашборд буде доступний для перегляду та міститиме такі поля:
++
+--
+* Назва
+* Автор створення об'єкта
+* Автор редагування об'єкта
+* (_Додатково_) Дата створення та дата останнього редагування разом з міткою часу виконання дій над сутністю
+--
++
+image:best-practices/view-object-creator-editor/bp-view-object-creator-editor-002.png[]
++
+image:release-notes:wn-1-9-7/wn-1-9-7-11.png[]

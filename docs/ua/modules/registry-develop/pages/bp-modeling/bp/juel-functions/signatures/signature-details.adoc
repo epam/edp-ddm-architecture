@@ -1,0 +1,155 @@
+= Функція _signature_details()_
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+== Опис
+
+Функція *`signature_details(String data, SignFormat container): SignatureInfoDto`* використовується для отримання деталей підпису з підписаних даних. Ця функція приймає дані у форматі Base64 та тип контейнера підпису, і повертає об'єкт типу `SignatureInfoDto`, що містить інформацію про підписантів.
+
+== Параметри
+
+.Параметри функції
+|===
+|*Аргумент* | *Опис*
+| `data`    | Дані, що включають підпис у форматі Base64.
+| `container` | Тип контейнера підпису.
+|===
+
+== Що повертає
+
+Ця функція повертає об'єкт типу `SignatureInfoDto`, що містить інформацію про підписантів.
+
+.SignatureInfoDto
+|===
+|*Поле*        | *Опис*
+| `allSignInfo` | Список всіх деталей підпису.
+| `signInfo`    | Деталі останнього підпису.
+|===
+
+== Алгоритм роботи
+
+Функція працює за таким алгоритмом:
+
+. Приймає дані, що включають підпис у форматі Base64, та тип контейнера підпису.
+. Виконує запит до сервісу цифрового підпису для отримання деталей підпису.
+. Повертає об'єкт типу `SignatureInfoDto`, що містить список всіх деталей підпису та деталі останнього підпису.
+
+== Методи взаємодії
+
+Функція надає наступні методи:
+
+|===
+|*Метод*           | *Опис*
+| `getAllSignInfo()` | Повертає список всіх деталей підпису.
+| `getSignInfo()`    | Повертає деталі останнього підпису.
+|===
+
+== Приклади використання
+
+Цей розділ демонструє приклади використання JUEL-функції у Groovy-скриптах бізнес-процесу.
+
+Змоделюйте Script Task та використайте скрипт, що збиратиме інформацію про підписантів отриманих файлів та виконуватиме перевірку на збіги персональних даних. Використайте у скрипті JUEL-функцію `signature_details()`.
+
+image::best-practices/bp-sign-validate/bp-sign-validate-5.png[]
+
+._Скрипт отримання деталей цифрового підпису_
+[%collapsible]
+====
+[source,groovy]
+----
+var asicSignInfo = signature_details(animalResponse.prop('photos').value(),
+                        validationAsicResult.container).getSignInfo()
+var cadesSignInfo = signature_details(animalResponse.prop('mainPhoto').value(),
+                        validationCadesResult.container).getSignInfo()
+
+var isEqualFullName = asicSignInfo.getSubjFullName()
+                                .equalsIgnoreCase(cadesSignInfo.getSubjFullName())
+
+def signerPayload = S([:], 'application/json')
+signerPayload.prop('fullName', cadesSignInfo.getSubjFullName())
+signerPayload.prop('drfo', cadesSignInfo.getSubjDRFOCode())
+signerPayload.prop('edrpou', cadesSignInfo.getSubjEDRPOUCode())
+
+set_transient_variable('isEqualFullName', isEqualFullName)
+set_transient_variable('signerPayload', signerPayload)
+set_variable('validationCadesRes', validationCadesResult)
+set_variable('validationAsicRes', validationAsicResult)
+----
+====
+
+Поданий скрипт спрямований на роботу з деталями цифрового підпису і робить наступне:
+
+* Отримує деталі цифрових підписів для фотографій тварини.
+* Порівнює повні імена осіб, які підписали обидва документи.
+* Формує JSON-об'єкт з деталями підпису.
+* Зберігає отримані дані в змінних для подальшого використання.
+
+Функція `signature_details(...)` приймає два аргументи: контент, що підписується, та контейнер підпису. Вона повертає деталі про підпис (як про особу, яка підписала, так і технічні деталі підпису).
+
+Розглянемо скрипт докладно:
+
+. *Використання функції `signature_details(...)`*:
++
+--
+* *asicSignInfo*:
++
+[source,groovy]
+----
+var asicSignInfo = signature_details(animalResponse.prop('photos').value(),
+                        validationAsicResult.container).getSignInfo()
+----
++
+Функція `signature_details(...)` приймає два аргументи: контент для підпису (_у цьому випадку -- це фотографії тварини_) та контейнер підпису. Ця функція повертає деталі про цифровий підпис `ASIC`. Після цього за допомогою методу `.getSignInfo()` ми отримуємо інформацію про підпис.
+
+* *cadesSignInfo*:
++
+[source,groovy]
+----
+var cadesSignInfo = signature_details(animalResponse.prop('mainPhoto').value(),
+                        validationCadesResult.container).getSignInfo()
+----
++
+Аналогічно попередньому пункту, але тут ми працюємо з основною фотографією тварини та контейнером підпису `CADES`.
+--
++
+IMPORTANT: Функція `signature_details(...)` приймає лише контейнери `ASIC` та `CAdES`.
+
+. Порівняння імен у підписах:
++
+[source,groovy]
+----
+var isEqualFullName = asicSignInfo.getSubjFullName()
+                    .equalsIgnoreCase(cadesSignInfo.getSubjFullName())
+----
++
+Скрипт порівнює повні імена суб'єктів (_людей, які підписали документи_) в обох підписах (`ASIC` та `CADES`) і перевіряє, чи вони збігаються. Результат порівняння зберігається у змінній `isEqualFullName`.
+
+. Формування JSON-об'єкта з деталями підпису:
++
+[source,groovy]
+----
+def signerPayload = S([:], 'application/json')
+signerPayload.prop('fullName', cadesSignInfo.getSubjFullName())
+signerPayload.prop('drfo', cadesSignInfo.getSubjDRFOCode())
+signerPayload.prop('edrpou', cadesSignInfo.getSubjEDRPOUCode())
+----
++
+Тут ми створюємо порожній JSON-об'єкт (`signerPayload`) та наповнюємо його даними з підпису `CADES`: повне ім'я, код `DRFO` та код `EDRPOU`.
+
+. Збереження змінних:
++
+[source,groovy]
+----
+set_transient_variable('isEqualFullName', isEqualFullName)
+set_transient_variable('signerPayload', signerPayload)
+set_variable('validationCadesRes', validationCadesResult)
+set_variable('validationAsicRes', validationAsicResult)
+----
++
+Результати обробки зберігаються у змінних, які будуть доступні для подальшого використання в бізнес-процесі.
+
+TIP: Детальніше з використанням функції у бізнес-процесі ви можете ознайомитися на сторінці xref:best-practices/bp-sign-validate-asics-cades.adoc[].
+
+== Пов'язані сторінки
+
+* xref:best-practices/bp-sign-validate-asics-cades.adoc[]
+* xref:bp-modeling/bp/juel-functions/signatures/signature-content.adoc[]

@@ -1,0 +1,183 @@
+= Аварійне відновлення роботи кластера у випадку збоїв
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+Ця сторінка надає практичне керівництво з відновлення кластера, який знаходиться в аварійному стані.
+
+== Загальна інформація
+
+Для процедури відновлення кластера використовуйте наступну документацію Платформи:
+
+* *_AWS_*: xref:admin:installation/platform-deployment/platform-aws-deployment.adoc#deploy-additional-recources-for-okd[Розгортання додаткових ресурсів для інсталяції OKD-кластера в AWS]
+
+* *_vSphere_*: xref:admin:installation/platform-deployment/platform-vsphere-deployment.adoc#launch-okd-installer-deploy-empty-okd[Запуск OKD4-інсталера та розгортання порожнього кластера OKD4]
+
+[IMPORTANT]
+У випадку аварії кластера, важливо мати доступ до ресурсів відновлення. Оскільки актуальний стан кластера зберігається на ресурсах (віртуальній машині), без них відновлення не буде можливим. Уникнути втрати даних можна лише забезпечивши, що всі критично важливі ресурси доступні та функціональні.
+
+== Підготовка кластера до видалення
+
+=== Середовище AWS
+
+Підготовка до видалення кластера у хмарному сервісі AWS включає критичний етап видалення тегів з EC2 Snapshots. Виконайте наступні кроки для ефективного видалення:
+
+. Відкрийте *консоль AWS* та перейдіть до розділу *EC2 Snapshots*.
++
+image:admin:disaster-recovery/ebs-snapshot-common-view.png[]
+
+. Використовуйте поле пошуку для введення назви кластера (як показано на зображенні, пошук за назвою `1-9-7-42`). Фільтруйте результати, щоб відобразити лише ті snapshots, що належать вашому кластеру.
++
+image:admin:disaster-recovery/filtered-snapshot-by-name-view.png[]
+
+. Пройдіться по списку відфільтрованих snapshots. Для кожного з них використовуйте опцію *Manage Tags* та видаліть тег у форматі: `kubernetes.io/cluster/<cluster-name>-<hash>: owned`, де `<cluster-name>` -- назва кластера, `<hash>` -- хеш.
++
+Зображення нижче демонструють приклад із тегом `kubernetes.io/cluster/1-9-7-42-d2gdt: owned`.
++
+.Manage Tags
+image::admin:disaster-recovery/ebs-snapshot-tag-view.png[]
++
+.Manage Tags
+image::admin:disaster-recovery/ebs-snapshot-delete-tag.png[]
++
+.Manage Tags
+image::admin:disaster-recovery/ebs-snapshot-tag-deleted.png[]
+
+NOTE: Повторіть ці кроки для всіх snapshots, які асоціюються з вашим кластером. Такий підхід забезпечить чисте та безпечне видалення кластера з урахуванням усіх пов'язаних ресурсів.
+
+=== Середовище vSphere
+
+Openshift-кластер, що розгорнуто у середовищі vSphere, використовує інший підхід до зберігання даних, тому передумов для видалення немає.
+
+== Процедура видалення кластера
+
+Перед тим, як розпочинати видалення кластера, упевніться, що виконуєте дії з інстансу (jumpbox), з якого здійснювалася інсталяція кластера. Нижче наведено детальні кроки для безпечного видалення кластера на різних платформах, зокрема AWS або vSphere.
+
+=== Середовище AWS
+
+. *Запуск контейнера openshift-install*: +
+Дотримуйтеся інструкцій на сторінці xref:admin:installation/platform-deployment/platform-aws-deployment.adoc#launch-openshift-install[Запуск контейнера openshift-install] для налаштування та запуску контейнера, необхідного для видалення кластера.
+
+. *Виконання команди видалення кластера*: +
+У терміналі інстансу виконайте команду:
++
+[source,bash]
+----
+$ ./openshift-install destroy cluster --dir /tmp/openshift-cluster/cluster-state
+----
++
+Це ініціює процес видалення кластера.
+
+. *Перевірка видалення кластера*: +
+По завершенню, ви маєте отримати повідомлення схоже на наступне, що підтверджує успішне видалення:
++
+[source,bash]
+----
+level=info msg=Time elapsed: 10min
+----
+
+=== Середовище vSphere
+
+. *Перехід до інстансу інсталяції*: +
+Переконайтеся, що ви виконуєте дії з інстансу, з якого кластер був розгорнутий. Дотримуйтеся інструкцій на сторінці xref:admin:installation/platform-deployment/platform-vsphere-deployment.adoc#launch-okd-installer-deploy-empty-okd[Запуск OKD4-інсталера та розгортання порожнього кластера OKD4].
+
+. *Команда видалення кластера*: +
+Запустіть наступну команду у терміналі інстансу для ініціації процесу видалення кластера:
++
+[source,bash]
+----
+openshift-installer destroy cluster
+----
+
+== Інсталяція кластера та розгортання Платформи
+
+Для інсталяції кластера та розгортання платформи на різних типах хмарних провайдерів, використовуйте наступну документацію:
+
+* *_AWS_*: xref:admin:installation/platform-deployment/platform-aws-deployment.adoc[]
+
+* *_vSphere_*: xref:admin:installation/platform-deployment/platform-vsphere-deployment.adoc[]
+
+[WARNING]
+====
+Версія Платформи має бути такою ж, як і та, що була встановлена на кластер до його видалення.
+====
+
+== Відновлення платформи з останніх доступних резервних копій
+
+[NOTE]
+====
+Відновлення платформи рекомендовано виконувати з інстансу, де проводилася процедура інсталяції кластера/Платформи
+====
+
+Після встановлення Платформи, можна розпочати відновлення центральних компонент та реєстрів із резервних копій. Для цього:
+
+. Збережіть link:{attachmentsdir}/disaster-recovery/disaster-recovery.zip[архів],
+що містить Helm chart для відновлення з останніх резервних копій.
+
+. Актуалізуйте логін через *oc client* у терміналі інстансу.
+
+.. Відкрийте консоль Openshift та у правому верхньому куті, де профіль користувача, натисніть *`Copy Login Command`*.
+
+.. Пройдіть авторизацію через *Keycloak/kubeadmin*.
+
+.. Далі натисніть *`Display token`*, скопіюйте рядок *Log in with this token*, вставте його у терміналі та пройдіть процедуру логіну.
+
+. Перейдіть у директорію зі збереженим архівом та виконайте наступну команду для його розпакування.
++
+[source,bash]
+----
+unzip disaster-recovery.zip
+----
+
+. Виконайте наступну команду для запуску процедури відновлення платформних компонент з останніх резервних копій:
++
+[source,bash]
+----
+helm install disaster-recovery disaster-recovery -n velero
+----
++
+У випадку, коли потрібно використати не останню версію резервної копії, а вибрати з наявних для центральних компонент, команду можна доповнити наступними ключами:
+
+* для компонента *`user-management`*
++
+[source,bash]
+----
+--set umBackupName="<назва бекапу>"#приклад
+--set umBackupName="velero-usermanagement-20231206093235"
+----
+
+* для компонента *`control-plane`*
++
+[source,bash]
+----
+--set cpBackupName="<назва бекапу>"#приклад
+--set cpBackupName="control-plane-2023-12-04-18-53-02"
+----
+* для компонента *`control-plane-nexus`*
++
+[source,bash]
+----
+--set cpNexusBackupName="<назва бекапу>"#приклад
+--set cpNexusBackupName="velero-controlplanenexus-20231206095034"
+----
+
++
+--
+Приклад команди, де вибрана версія резервної копії для компонента *`control-plane`*:
+
+[source,bash]
+----
+helm install disaster-recovery ./disaster-recovery -n velero --set cpBackupName="control-plane-2023-12-04-18-53-02"
+----
+
+У випадку, де для одного з компонент (`control-plane`) вибрана версія для двох інших компонент (`control-plane-nexus`, `user-management`), процес самостійно обере останні доступні версії резервних копій.
+
+Ключі можна поєднувати через пробіл:
+
+[source,bash]
+----
+--set cpBackupName="control-plane-2023-12-04-18-53-02"  --set umBackupName="velero-usermanagement-20231206093235"
+----
+--
+
+. Після виконання команди, зачекайте коли под *`disaster-recovery`* в Openshift проєкті *`velero`* буде у статусі `completed`.
+
+. Увійдіть до адміністративної панелі Control Plane, відкрийте розділ *Керування Платформою* > *Швидкі посилання*, перейдіть до *Сервісу розгортання конфігурації (Jenkins)* та для кожного з наявних реєстрів виконайте кроки з відновлення, описані у розділі xref:admin:backup-restore/control-plane-backup-restore.adoc#restore-registry[Відновлення реєстру (Restore)].

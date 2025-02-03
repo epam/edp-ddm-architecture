@@ -1,0 +1,949 @@
+= Налаштування рейт-лімітів для пошукових умов, файлових ендпоінтів та бізнес-процесів
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+Це керівництво надає детальні інструкції з налаштування обмеження кількості запитів (рейт-лімітів) до певних сервісів за допомогою плагінів Kong. Інструкція покриває основні аспекти управління мережевим трафіком на Платформі й спрямована на забезпечення оптимального використання ресурсів та підвищення стабільності сервісів.
+
+== Загальний опис
+
+[TIP]
+====
+*Рейт-лімітування* (_англ. -- **Rate limiting**_) є ключовою стратегією для контролю мережевого трафіку.
+====
+
+*API рейт-ліміти* встановлюють обмеження на кількість HTTP-запитів до *сервісу чи маршруту* за визначений часовий період, який може варіюватися від секунд до років.
+
+*Маршрут* визначає _вхідний роут_ до конкретного сервісу в межах реєстру, в Kubernetes відомий як *Ingress*. На Платформі реєстрів, заснованій на технологіях OpenShift та Kubernetes, Ingress є вирішальним для налаштування вхідних роутів до специфічних сервісів, надаючи можливість тонкого управління маршрутизацією трафіку з використанням HTTP та HTTPS-запитів.
+
+Ключовою практикою є використання `KongPlugin` для реалізації рейт-лімітування, яке дозволяє точно визначати обсяги оброблюваних запитів сервісами Платформи, підтримуючи її стабільність та доступність. Рейт-лімітування важливе для декількох ключових сценаріїв:
+
+* **Пошукові критерії:** ефективний контроль доступу до пошукових сервісів (Search Conditions) забезпечує ощадливе використання ресурсів та швидке оброблення запитів.
+* **Отримання файлів/цифрових документів:** ліміти на доступ до сервісів файлів зберігають високу пропускну спроможність та забезпечують безпеку даних.
+* **Бізнес-процеси:** обмеження запитів до сервісів управління процесами запобігає перевантаженню системи та забезпечує надійне управління.
+
+Застосування `KongPlugin` для налаштування *Ingress* підсилює контроль трафіку та безпеку на Платформі, дозволяючи адміністраторам детально налаштовувати мережевий доступ до сервісів, оптимізуючи використання ресурсів і забезпечуючи стабільність роботи Платформи.
+
+[TIP]
+====
+Дізнайтеся більше про механізм рейт-лімітування на сторінці xref:registry-admin/api-rate-limits.adoc[].
+====
+
+== Кроки налаштування
+
+У цьому розділі описані кроки налаштування рейт-лімітів для трьох ключових сценаріїв:
+
+* Пошукові умови
+* Файлові ендпоінти
+* Бізнес-процеси
+
+У результаті система створить наступні ресурси:
+
+.Ключові ресурси та їх призначення
+[cols="1,3a",options="header"]
+|===
+| Ресурс
+| Призначення
+
+| Rate limiting `KongPlugin`
+| Використовується в Kong API Gateway для застосування правил рейт-лімітування до певного URL. Плагін підключається до `Ingress` і посилається на `Secret`, який містить конфігурацію допустимих запитів за одиницю часу.
+
+| Rate limiting `Secret`
+| Використовується в `KongPlugin`. Зберігає дані про кількість дозволених запитів за одиницю часу (_можливі значення:_ `second`, `minute`, `hour`, `day`, `month`, `year`) і адресу Redis для зберігання лічильників.
+
+| Rate limiting `Service`
+| Виступає в ролі хоста для адреси, зазначеної у `Secret`, де зберігаються лічильники рейт-лімітів. Сервіс діє як проксі для запитів до Redis.
+
+| Backend `Ingress`
+| Визначає правила доступу до конкретного URL. Конфігурація має включати назву `KongPlugin` для рейт-лімітування, а також повну інформацію про URL, включно з `host`, `path` і HTTP-методом. Якщо рейт-ліміт не досягнуто, запит перенаправляється на `Service`.
+
+| Backend `Service`
+| Визначає набір подів для обробки запитів, що надійшли через `Ingress`. Цей ресурс не відповідає за рейт-лімітування.
+|===
+
+Цей процес дозволяє налаштувати рейт-ліміти для оптимального використання і захисту ресурсів від перевантаження, а також забезпечення стабільності сервісів.
+
+=== Обмеження кількості запитів для умов пошуку
+
+Рейт-лімітування для умов пошуку забезпечує контроль доступу до пошукових сервісів (*Search Conditions*), зменшуючи навантаження на ресурси.
+
+Для конфігурацій, пов'язаних з умовами пошуку, автоматично генеруються ресурси вхідних роутів (*Ingresses*). Ці ресурси можуть бути використані як шаблони для створення нових роутів та підключення плагіну Kong.
+
+TIP: Детальніше про параметри конфігурації Kong-плагіну ви можете переглянути на сторінках https://docs.konghq.com/hub/kong-inc/rate-limiting/configuration/[офіційної документації].
+
+Виконайте наступні кроки для налаштування рейт-лімітів для умов пошуку.
+
+[#create-kong-plugin-secret]
+==== Створення плагіну Kong та секретів для конфігурації
+
+. Визначте ресурс `KongPlugin` з необхідними конфігураціями. Цей плагін використовує секрет для своїх деталей конфігурації.
+
++
+.Приклад додавання Kong-плагіну
+[source,yaml]
+----
+kind: KongPlugin
+apiVersion: configuration.konghq.com/v1
+metadata:
+  name: sc-rate-limiting-plugin
+configFrom:
+  secretKeyRef:
+    name: sc-rate-limiting-plugin-secret-conf
+    key: by-header
+plugin: rate-limiting
+----
+{empty}
++
+.Опис ключових параметрів:
+--
+* `configFrom.secretKeyRef.name`: вказує ім'я секрета, що містить конфігурацію плагіну.
+* `configFrom.secretKeyRef.key`: вказує ключ у секреті, що містить конфігурацію.
+--
+
+. *Створіть секрет Kubernetes для зберігання деталей конфігурації плагіну.*
++
+.Приклад секрету для конфігурації обмеження кількості запитів
+[source,yaml]
+----
+apiVersion: v1
+kind: Secret
+metadata:
+  name: sc-rate-limiting-plugin-secret-conf
+  labels:
+    kong-plugin-conf: rate-limiting
+stringData:
+  by-header: |
+    second: 100
+    policy: redis
+    limit_by: header
+    header_name: forwarded
+    redis_host: ext-system-rate-limiting
+    redis_port: 26379
+    redis_password: <redis_password_from_secret>
+type: Opaque
+----
+
++
+.Опис ключових параметрів
+[cols="1,3a",options="header"]
+|===
+| Параметр | Опис
+
+| `apiVersion`
+| Версія API, яка використовується для створення секрету. У цьому випадку, `v1`.
+
+| `kind`
+| Тип ресурсу, який створюється. У цьому контексті, `Secret`.
+
+| `metadata.name`
+| Назва секрету, який використовується для ідентифікації в Kubernetes.
+
+| `metadata.labels.kong-plugin-conf`
+| Мітка для ідентифікації конфігурації плагіну, асоційованої з цим секретом. Вказує на використання цього секрету для плагіну обмеження кількості запитів.
+
+| `stringData.by-header`
+| Стрічкове значення, яке містить конфігурацію для плагіну рейт-лімітування, включно з лімітом запитів на секунду, політикою використання Redis, способом обмеження (за заголовком), ім'ям заголовка, хостом та портом Redis.
+
+| `second`
+| Кількість запитів, дозволених на секунду.
+
+| `policy`
+| Політика обмеження, яка використовується. У цьому випадку, `redis`, що вказує на використання Redis для зберігання лічильників.
+
+| `limit_by`
+| Метод обмеження, який використовується. У цьому випадку, `header`, що означає обмеження за значенням заголовка.
+
+| `header_name`
+| Ім'я заголовка, яке використовується для обмеження. У прикладі використовується `forwarded`.
+
+| `redis_host`
+| Назва сервісу, хост, який потрібно створити. За його допомогою лічильники рейт-лімітів зберігатимуться у Redis (_див. детальніше -- xref:#rate-limit-counters-redis[]_).
+
+| `redis_port`
+| Порт, на якому працює Redis.
+
+| `redis_password`
+| Пароль для доступу до Redis. Значення `<redis_password_from_secret>` потрібно замінити на фактичний пароль Redis, який можна отримати з секрету `redis-auth`.
+
+| `type`
+| Тип секрету, який в цьому випадку є `Opaque`, означає, що він містить довільні дані.
+|===
+
+[#rate-limit-counters-redis]
+==== Створення сервісу Redis для зберігання лічильників рейт-лімітів
+
+Налаштуйте сервіс Redis, який зберігатиме лічильники обмеження кількості запитів (рейт-лімітів) і буде використовуватися як бекенд для Kong-плагіну.
+
+.Приклад сервісу збереження лічильників рейт-лімітів для Redis
+[source,yaml]
+----
+kind: Service
+apiVersion: v1
+metadata:
+  name: ext-system-rate-limiting
+spec:
+  clusterIP: None
+  ipFamilies:
+    - IPv4
+  ports:
+    - name: http
+      protocol: TCP
+      port: 26379
+      targetPort: 6379
+  internalTrafficPolicy: Cluster
+  type: ClusterIP
+  ipFamilyPolicy: SingleStack
+  sessionAffinity: None
+  selector:
+    app.kubernetes.io/component: redis
+----
+
+.Опис ключових параметрів
+[cols="1,3a",options="header"]
+|===
+| Параметр | Опис
+
+| `kind`
+| Тип ресурсу, який створюється. У цьому випадку, `Service`.
+
+| `apiVersion`
+| Версія API, яка використовується для створення сервісу. У цьому випадку, `v1`.
+
+| `metadata.name`
+| Назва сервісу, яка використовується для ідентифікації в Kubernetes.
+
+| `spec.clusterIP`
+| IP-адреса сервісу в межах кластера. `None` означає, що для сервісу не буде створено ClusterIP.
+
+| `spec.ipFamilies`
+| Список підтримуваних IP-протоколів. Вказує на використання IPv4.
+
+| `spec.ports.name`
+| Назва порту, яка використовується для ідентифікації в конфігурації.
+
+| `spec.ports.protocol`
+| Протокол, який використовується для порту. У цьому випадку, `TCP`.
+
+| `spec.ports.port`
+| Порт, на якому слухає сервіс.
+
+| `spec.ports.targetPort`
+| Порт пода, до якого спрямовується трафік.
+
+| `spec.internalTrafficPolicy`
+| Політика обробки внутрішнього трафіку в межах кластера. `Cluster` означає, що трафік може бути спрямований до будь-якого пода в кластері.
+
+| `spec.type`
+| Тип сервісу. `ClusterIP` вказує, що сервіс доступний в межах кластера.
+
+| `spec.ipFamilyPolicy`
+| Політика використання сімейства IP-адрес. `SingleStack` означає, що використовується лише одне сімейство IP-адрес.
+
+| `spec.sessionAffinity`
+| Політика афінітету сесії. `None` означає, що афінітет сесії не використовується.
+
+| `selector.app.kubernetes.io/component`
+| Селектор для визначення подів, які обслуговуватимуть трафік для цього сервісу. У цьому випадку, вказує на компонент `redis`.
+|===
+
+==== Створення та конфігурація вхідних роутів (Ingress)
+
+Використовуйте наявні ресурси вхідних роутів як шаблон для створення нових, інтегруючи плагін Kong.
+
+[TIP]
+====
+Розглянемо приклад для умови пошуку `search-educational-all-allow-access-contains-b`.
+====
+
+. *Ініціювання нового вхідного маршруту для контролю доступу.*
++
+Для встановлення обмежень доступу через рейт-лімітування, створіть спеціалізований вхідний маршрут (роут), `external-system-api-kong-proxy-custom`. Це можна зробити шляхом адаптації наявного маршруту `external-system-api-kong-proxy` з додаванням суфікса `-custom` до хосту. Таким чином ви створите новий хост `external-service-api-<registry-name>-main-custom.apps.<cluster-name>.<dns-wildcard>`, який використовується для детального керування трафіком до вашого сервісу.
++
+.Приклад ініціювання нового роуту для контролю доступу
+[source,yaml]
+----
+kind: Route
+apiVersion: route.openshift.io/v1
+metadata:
+  name: external-system-api-kong-proxy-custom
+  namespace: dima01
+  labels:
+    app: istio-ingressgateway
+    release: istio
+    install.operator.istio.io/owning-resource: istiocontrolplane
+    istio: istio-ingressgateway-dima01-main
+    operator.istio.io/version: 1.18.0
+    istio.io/rev: default
+    install.operator.istio.io/owning-resource-namespace: istio-system
+    operator.istio.io/component: IngressGateways
+    operator.istio.io/managed: Reconcile
+spec:
+  host: >-
+    external-service-api-<registry-name> -main-custom.apps.<cluster-name>.<dns-wildcard>
+  to:
+    kind: Service
+    name: istio-ingressgateway-dima01-main
+    weight: 100
+  port:
+    targetPort: http2
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+  wildcardPolicy: None
+----
+
++
+.Опис ключових параметрів
+[cols="1,3a",options="header"]
+|===
+| Параметр | Опис
+
+| `kind`
+| Вказує на тип ресурсу в Kubernetes/OpenShift. У цьому випадку `Route` визначає маршрут, що керує зовнішнім трафіком до сервісів у кластері.
+
+| `apiVersion`
+| Версія API, яка використовується для створення цього об'єкта. `route.openshift.io/v1` є специфічною для OpenShift версією API для маршрутизації.
+
+| `metadata.name`
+| Унікальна назва маршруту в межах простору імен, яка дозволяє ідентифікувати його серед інших ресурсів.
+
+| `metadata.namespace`
+| Простір імен, до якого належить маршрут. У цьому випадку вказує на `dima01`.
+
+| `labels`
+| Мітки, що асоціюють маршрут з конкретними елементами або аплікаціями в кластері, наприклад, `istio-ingressgateway` або `istiocontrolplane`.
+
+| `spec.host`
+| Хост або DNS ім'я, через яке маршрут буде доступний зовнішньому трафіку.
+
+| `spec.to.kind`
+| Тип ресурсу, до якого буде спрямовано трафік. Зазвичай це `Service`.
+
+| `spec.to.name`
+| Назва сервісу, до якого маршрут спрямовує трафік.
+
+| `spec.to.weight`
+| Вага маршруту, що може використовуватись для розподілу навантаження між кількома маршрутами.
+
+| `spec.port.targetPort`
+| Порт сервісу, до якого буде направлено трафік. `http2` вказує на використання протоколу HTTP/2.
+
+| `spec.tls.termination`
+| Визначає тип TLS-термінації. `edge` означає, що TLS-термінація відбувається на краю мережі (на ingress controller).
+
+| `spec.tls.insecureEdgeTerminationPolicy`
+| Політика для обробки незахищеного трафіку. `Redirect` означає, що всі HTTP-запити будуть перенаправлені на HTTPS.
+
+| `spec.wildcardPolicy`
+| Вказує на політику використання wildcard. `None` означає, що wildcard не використовуються.
+|===
+
++
+[NOTE]
+====
+Замініть наступні значення параметрів на потрібні:
+
+* `<registry-name>` -- назва реєстру;
+* `<cluster-name>.<dns-wildcard>` -- назва кластера, домен та піддомени, де розгорнута Платформа.
+====
+
+. *Інтеграція нового хоста в Gateway та VirtualService.*
++
+Щоб активувати новий хост для управління трафіком, необхідно оновити конфігурації *Gateway* та *VirtualService*. Додайте новий хост `external-service-api-<registry-name>-main-custom.apps.<cluster-name>.<dns-wildcard>` до списку хостів у цих ресурсах, аналогічно до наявного хосту `external-service-api-*`, забезпечуючи таким чином його розпізнавання та правильну маршрутизацію запитів.
++
+[CAUTION]
+====
+Запуск пайплайну оновлення реєстру може призвести до видалення налаштувань `custom`-хосту, тому важливо повторно застосувати ці зміни після кожного оновлення реєстру. Для забезпечення постійності цих налаштувань, рекомендується внести відповідні зміни безпосередньо у вихідні файли репозиторію реєстру:
+
+* *_deploy-templates/istio-configuration/templates/040-gateway.yaml_*
+* *_deploy-templates/istio-configuration/templates/060-virtual-service.yaml_*
+====
++
+.Консоль OpenShift. Gateways та VirtualServices
+image::registry-admin/api-rate-limits/sc-files-bp/rate-limit-sc-files-bp-1.png[]
++
+.Ресурс gateway. YAML-конфігурація
+image::registry-admin/api-rate-limits/sc-files-bp/rate-limit-sc-files-bp-2.png[]
++
+.Ресурс kong-virtual-service. YAML-конфігурація
+image::registry-admin/api-rate-limits/sc-files-bp/rate-limit-sc-files-bp-3.png[]
+
+. *Конфігурація специфічного Ingress для керування доступом*.
++
+Для створення індивідуалізованого доступу до сервісів за допомогою рейт-лімітування, ініціюйте новий Ingress, використовуючи як основу наявний маршрут із префіксом `ext-system-api-*`. Адаптуйте його, задавши `custom`-хост і додавши анотацію `konghq.com/plugins: sc-rate-limiting-plugin` для інтеграції плагіну Kong. Це дозволяє детально налаштувати обробку запитів до конкретної умови пошуку, забезпечуючи ефективне управління навантаженням на сервіси.
++
+.Приклад налаштування Ingress для керування доступом
+[source,yaml]
+----
+kind: Ingress
+apiVersion: networking.k8s.io/v1
+metadata:
+  annotations:
+    konghq.com/methods: 'GET,POST'
+    konghq.com/plugins: sc-rate-limiting-plugin
+    konghq.com/preserve-host: 'false'
+    konghq.com/protocols: 'http,https'
+    konghq.com/strip-path: 'true'
+    meta.helm.sh/release-name: registry-rest-api
+    meta.helm.sh/release-namespace: registry-name
+  name: ext-system-api-0-search-educational-all-allow-access-contains-b-custom
+  namespace: registry-name
+  labels:
+    app.kubernetes.io/component: app
+    app.kubernetes.io/instance: registry-rest-api
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: external-system-api
+    app.kubernetes.io/version: 1.0.0
+    helm.sh/chart: registry-rest-api-1.0.0
+spec:
+  ingressClassName: kong
+  rules:
+    - host: >-
+        external-service-api-<registry-name>-main-custom.apps.<cluster-name>.<dns-wildcard>
+      http:
+        paths:
+          - path: >-
+              /api/gateway/data-factory/search-educational-all-allow-access-contains-by-name
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: >-
+                  ext-system-api-0-search-educational-all-allow-access-contains-b
+                port:
+                  number: 8080
+----
+
++
+.Опис ключових параметрів
+[cols="1,3a",options="header"]
+|===
+| Параметр | Опис
+
+| `kind`
+| Вказує, що створюється ресурс типу Ingress, який використовується для маршрутизації зовнішнього трафіку до сервісів у кластері.
+
+| `apiVersion`
+| Версія API, яка вказує на використання специфікації Ingress від `networking.k8s.io/v1`.
+
+| `metadata.annotations`
+| Метадані, що містять анотації для налаштування поведінки Ingress, зокрема використання плагінів Kong для рейт-лімітування, методів запитів та протоколів.
+
+| `metadata.name`
+| Унікальна назва об'єкта Ingress у межах простору імен, що ідентифікує конкретний вхідний маршрут.
+
+| `metadata.namespace`
+| Простір імен, в якому розміщено Ingress, дозволяє ізолювати ресурси в межах одного кластера.
+
+| `labels`
+| Мітки, призначені для категоризації та організації Ingress у кластері, включаючи інформацію про аплікацію, версію тощо.
+
+| `spec.ingressClassName`
+| Ім'я класу Ingress, який використовується для застосування конкретних налаштувань Ingress Controller, у цьому випадку Kong.
+
+| `spec.rules`
+| Правила, що визначають, як трафік має бути маршрутизований до сервісів на основі запитаних хостів та шляхів.
+
+| `spec.rules[].host`
+| Хост, для якого застосовуються ці правила маршрутизації, визначає доменне ім'я, через яке зовнішній трафік надходить до сервісів.
+
+| `spec.rules[].http.paths[].path`
+| Шлях в URL, для якого має бути застосоване правило, визначає конкретний маршрут в межах хоста.
+
+| `spec.rules[].http.paths[].pathType`
+| Вказує на тип використовуваного шляху, `ImplementationSpecific` дозволяє контролеру Ingress вибирати власну стратегію зіставлення шляхів.
+
+| `spec.rules[].http.paths[].backend.service.name`
+| Назва сервісу, до якого має бути спрямований трафік, відповідає конкретному сервісу у кластері.
+
+| `spec.rules[].http.paths[].backend.service.port.number`
+| Номер порту сервісу, на який має бути спрямований трафік, вказує на порт, через який сервіс приймає зовнішні запити.
+|===
+
++
+[NOTE]
+====
+Замініть наступні значення параметрів на потрібні:
+
+* `<registry-name>` -- назва реєстру;
+* `<cluster-name>.<dns-wildcard>` -- назва кластера, домен та піддомени, де розгорнута Платформа.
+====
+
+=== Налаштування ingress для файлових ендпоінтів
+
+Конкретні ingresses для кінцевих точок файлів дозволяють детально керувати доступом та забезпечувати безпеку даних.
+
+==== Створення специфічних ingresses для доступу до файлів
+
+Визначте ingresses з конкретними шляхами для керування запитами до файлів.
+
+Специфікація для ендпоінтів файлів ::
+
+Для точного управління доступом до файлів через API, потрібно створити спеціалізовані ingresses, що дозволяють деталізовано керувати запитами до файлів. Це стосується ендпоінтів типу `/files/{table}/{id}/column/{fileId}`, для яких базові ingresses наразі охоплюють лише шлях `/files/`.
+
+Детальне налаштування шляхів ::
+
+Для досягнення цієї мети, використовуйте шляхи, як-от `/api/gateway/data-factory/files/animal-profile/(.*)/main-photo/(.*)`, які дозволяють більш гнучко визначати доступ до конкретних файлів або документів.
+
+Створення ingress та сервісів ::
+
+При створенні цих вхідних роутів та відповідних сервісів, рекомендується використовувати як зразок наявні роути та сервіси з ідентифікатором `ext-system-api-***-files`, доступні у розділі *Networking* > *Ingresses* та *Networking* > *Services* відповідно.
++
+NOTE: Важливо зазначити, що для новостворених сервісів необхідно опустити анотацію `konghq.com/path: /files`, щоб забезпечити коректну маршрутизацію запитів.
+
+.Приклад коду з Ingress для доступу до файлів
+[source,yaml]
+----
+kind: Ingress
+apiVersion: networking.k8s.io/v1
+metadata:
+  annotations:
+    konghq.com/methods: 'GET,POST'
+    konghq.com/plugins: 'es-rate-limiting-plugin,animal-profile-edit-path
+    konghq.com/preserve-host: 'false'
+    konghq.com/protocols: 'http,https'
+    konghq.com/regex-prefix: /~
+    konghq.com/strip-path: 'false'
+    meta.helm.sh/release-namespace: registry-name
+  name: es-animal-profile-rate-limiting
+  namespace: registry-name
+  labels:
+    app.kubernetes.io/component: app
+    app.kubernetes.io/name: external-system-api
+spec:
+  ingressClassName: kong
+  rules:
+    - host: >-
+        external-service-api-<registry-name>-main.apps.<cluster-name>.<dns-wildcard>
+      http:
+        paths:
+          - path: >-
+              /~/api/gateway/data-factory/files/animal-profile/(.*)/main-photo/(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: ext-system-api-4-files-bp
+                port:
+                  number: 8080
+----
+
+.Опис ключових параметрів
+[cols="1,3a",options="header"]
+|===
+| Параметр | Опис
+
+| `kind`
+| Визначає тип об'єкта, який створюється. У цьому випадку, `Ingress` використовується для маршрутизації зовнішнього трафіку до сервісів у кластері.
+
+| `apiVersion`
+| Вказує на версію API Kubernetes, яка використовується для створення ingress. `networking.k8s.io/v1` є актуальною версією для ingress-ресурсів.
+
+| `metadata.annotations`
+| Набір анотацій, які застосовуються до ingress для налаштування додаткової поведінки. Включає методи запитів (`GET, POST`), назви плагінів Kong (`es-rate-limiting-plugin, animal-profile-edit-path`), налаштування збереження хосту, протоколи, використання регулярних виразів та політику видалення шляху.
+
+| `metadata.name`
+| Унікальна назва ingress в межах простору імен, яка дозволяє ідентифікувати його серед інших ресурсів.
+
+| `metadata.namespace`
+| Простір імен, в якому розміщено ingress. Вказує на розташування ingress в рамках кластера.
+
+| `labels`
+| Мітки використовуються для асоціації ingress з конкретними сервісами або додатками, спрощуючи їх керування та ідентифікацію.
+
+| `spec.ingressClassName`
+| Ім'я класу ingress, яке вказує на використання конкретного Ingress Controller, у цьому випадку `kong`, для обробки маршрутизації.
+
+| `spec.rules[].host`
+| Хост, для якого застосовуються правила маршрутизації. Визначає доменне ім'я, за яким буде доступний сервіс.
+
+| `spec.rules[].http.paths[].path`
+| Шлях, за яким запити будуть направлені до відповідного сервісу. Використовує регулярні вирази для гнучкого визначення шляхів.
+
+| `spec.rules[].http.paths[].pathType`
+| Визначає, як шлях повинен інтерпретуватися Ingress Controller. `ImplementationSpecific` дозволяє контролеру вибрати власну логіку обробки шляхів.
+
+| `spec.rules[].http.paths[].backend.service.name`
+| Назва сервісу, до якого направляються запити. Це вказує на конкретний сервіс у кластері, який оброблятиме запити.
+
+| `spec.rules[].http.paths[].backend.service.port.number`
+| Номер порту сервісу, на який направляються запити. Це вказує на порт в межах сервісу, який слухатиме вхідні запити.
+|===
+
+[NOTE]
+====
+Замініть наступні значення параметрів на потрібні:
+
+* `<registry-name>` -- назва реєстру;
+* `<cluster-name>.<dns-wildcard>` -- назва кластера, домен та піддомени, де розгорнута Платформа.
+====
+
+==== Конфігурація сервісів для обробки файлових запитів
+
+Налаштуйте сервіси для маршрутизації трафіку від ingresses до цільових подів.
+
+.Приклад конфігурації сервісу
+[source,yaml]
+----
+kind: Service
+apiVersion: v1
+metadata:
+  name: ext-system-api-4-files-bp
+  labels:
+    app.kubernetes.io/component: app
+    app.kubernetes.io/instance: registry-rest-api
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: external-system-api
+  annotations:
+    ingress.kubernetes.io/service-upstream: 'true'
+    konghq.com/override: kong-set-timeouts
+    konghq.com/path: /
+    konghq.com/plugins: external-system-datafactory-nopublic-oidc
+    konghq.com/protocol: http
+    meta.helm.sh/release-name: registry-rest-api
+    meta.helm.sh/release-namespace: registry-name
+spec:
+  ipFamilies:
+    - IPv4
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 8080
+  internalTrafficPolicy: Cluster
+  type: ClusterIP
+  ipFamilyPolicy: SingleStack
+  sessionAffinity: None
+  selector:
+    app: registry-rest-api-ext
+----
+
+.Опис ключових параметрів
+[cols="1,3a",options="header"]
+|===
+| Параметр | Опис
+
+| `kind`
+| Визначає тип ресурсу. `Service` є стандартним ресурсом Kubernetes для визначення мережевих служб.
+
+| `apiVersion`
+| Вказує версію API, яка використовується для створення сервісу. `v1` є основною версією для сервісів.
+
+| `metadata.name`
+| Унікальна назва сервісу в межах простору імен.
+
+| `labels`
+| Мітки, що дозволяють асоціювати сервіс з конкретними додатками або компонентами.
+
+| `annotations`
+| Анотації надають додаткові налаштування сервісу, такі як використання конкретних плагінів Kong та маршрутизація трафіку.
+
+| `spec.ipFamilies`
+| Вказує на підтримку IP-протоколів. В цьому випадку, використовується IPv4.
+
+| `spec.ports`
+| Визначає порти, на які сервіс слухає вхідні запити, і маршрутизацію цих запитів до подів.
+
+| `spec.type`
+| Тип сервісу. `ClusterIP` вказує, що сервіс доступний лише в межах кластера.
+
+| `selector`
+| Визначає, які поди будуть обслуговувати запити, що надходять до цього сервісу, засновано на мітках подів.
+|===
+
+==== Інтеграція плагіну для трансформації запитів
+
+Використовуйте плагін `request-transformer` для модифікації шляхів запитів до сервісу. Це дозволить детально налаштувати обробку вхідних запитів, зокрема змінюючи їх шляхи для точного спрямування до цільових сервісів. Цей підхід підвищує гнучкість маршрутизації в Kong, дозволяючи адаптувати обробку запитів до специфіки вашого додатка або сервісу.
+
+[NOTE]
+====
+Підготовка плагіну та секретів ::
+Перед додаванням плагіну `request-transformer` для фільтрації та трансформації запитів до файлових ендпоінтів, необхідно створити відповідний об'єкт `KongPlugin` та асоційований з ним секрет для зберігання конфігурації плагіну. Цей процес аналогічний до описаного у розділі xref:#create-kong-plugin-secret[], проте фокусується на специфіці обробки файлових запитів.
+====
+
+.Приклад конфігурації плагіну для формування правильного шляху (path)
+[source,yaml]
+----
+apiVersion: configuration.konghq.com/v1
+config:
+  replace:
+    uri: '/files/animal-profile/$(uri_captures[1])/main-photo/$(uri_captures[2])'
+kind: KongPlugin
+metadata:
+  name: animal-profile-edit-path
+  namespace: registry-name
+plugin: request-transformer
+----
+
+.Опис ключових параметрів
+[cols="1,3a",options="header"]
+|===
+| Параметр | Опис
+
+| `apiVersion`
+| Вказує на версію KongPlugin API, яка використовується. `configuration.konghq.com/v1` є поточною версією для конфігурації плагінів.
+
+| `config.replace.uri`
+| Налаштування, що вказує новий URI для запитів, які відповідають певному шаблону. У цьому випадку, шаблон дозволяє динамічно замінювати частини шляху на основі вловлених з URL параметрів.
+
+| `kind`
+| Тип ресурсу, який в цьому контексті є `KongPlugin`, вказує на використання плагіну в Kong.
+
+| `metadata.name`
+| Унікальна назва плагіну в просторі імен, що дозволяє ідентифікувати його серед інших плагінів.
+
+| `metadata.namespace`
+| Простір імен, де розміщено плагін, забезпечує логічну ізоляцію та організацію ресурсів у кластері.
+
+| `plugin`
+| Вказує на тип плагіну, який застосовується. У цьому випадку `request-transformer` модифікує запити, змінюючи їх URI відповідно до заданої конфігурації.
+|===
+
+=== Налаштування Ingress для бізнес-процесів
+
+Індивідуальні ingresses для бізнес-процесів дозволяють точно керувати доступом до різних частин бізнес-логіки.
+
+==== Передумови
+
+Перед інтеграцією плагіну для управління доступом до API бізнес-процесів:
+
+. Створіть `KongPlugin` з відповідними конфігураціями, як зазначено в розділі  xref:#create-kong-plugin-secret[].
+. Створіть `Secret` для зберігання параметрів конфігурації плагіну, як описано в розділі xref:#create-kong-plugin-secret[].
+. Налаштуйте `Service`, який буде використовуватися для маршрутизації запитів до бізнес-процесів, як описано в розділі xref:#rate-limit-counters-redis[].
+
+Отже, ви маєте отримати створені `KongPlugin`, `Secret` та `Service`.
+
+[NOTE]
+====
+Цей крок є критичним для забезпечення можливості застосування плагіну через анотації в ingress (`konghq.com/plugins`).
+Процедура створення плагіну та секрету для бізнес-процесів схожа на описану для файлових ендпоінтів, але адаптована під специфіку управління бізнес-процесами через API.
+====
+
+==== Створення ingresses для бізнес-процесів
+
+Адаптуйте наявні ingresses для створення нових, з унікальними шляхами, що ведуть до бізнес-процесів.
+
+Ви можете адаптувати наявний ingress `ext-system-api-bp-gateway`, який знаходиться у розділі *Networking* > *Ingresses* вашої OpenShift-консолі.
+
+Замініть у цьому ingress хост з `external-service-api-dev.apps.<cluster-name>.<dns-wildcard>` на `external-service-api-<registry-name>-main.apps.<cluster-name>.<dns-wildcard>` для створення нового, специфічного для вашого реєстру хоста. Альтернативно, ви можете просто скопіювати наявні налаштування хоста з відповідного маршруту і використати їх як основу для нового ingress. Цей підхід дозволяє легко розширювати конфігурацію ingress для підтримки різноманітних бізнес-процесів, забезпечуючи гнучке та цілеспрямоване управління мережевим трафіком.
+
+[NOTE]
+====
+Замініть наступні значення параметрів на потрібні:
+
+* `<registry-name>` -- назва реєстру;
+* `<cluster-name>.<dns-wildcard>` -- назва кластера, домен та піддомени, де розгорнута Платформа.
+====
+
+Роут або ingress `ext-system-api-bp-gateway` включає два типи шляхів (`path`):
+
+* `/api/gateway/business-process/api/start-bp` -- для розмежування доступу до усіх бізнес-процесів;
+* `/api/gateway/business-process/api/start-bp/{bp-definition-id}` -- для детального розмежування та керування доступом до конкретних бізнес-процесів. Ingress повинні бути налаштовані з унікальними шляхами, що відповідають ідентифікаторам бізнес-процесів. Це забезпечує точне спрямування запитів до відповідних компонентів системи.
++
+TIP: `{bp-definition-id}` вказує на ідентифікатор бізнес-процесу у BPMS.
+
+.Приклад створення ingress для бізнес-процесу
+[source,yaml]
+----
+kind: Ingress
+apiVersion: networking.k8s.io/v1
+metadata:
+  annotations:
+    konghq.com/plugins: 'specific-bp-rate-limiting'
+    konghq.com/methods: POST
+    konghq.com/preserve-host: 'false'
+    konghq.com/protocols: 'http,https'
+    konghq.com/strip-path: 'true'
+  name: es-specific-bp
+  namespace: registry-name
+  labels:
+    app.kubernetes.io/component: app
+    app.kubernetes.io/name: external-system-api
+spec:
+  ingressClassName: kong
+  rules:
+    - host: external-service-api-<registry-name>-main.apps.<cluster-name>.<dns-wildcard>
+      http:
+        paths:
+          - path: /api/gateway/business-process/api/start-bp/{bp-definition-id}
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: ext-system-api-bp-gateway-specific-bp
+                port:
+                  number: 8080
+----
+
+[cols="1,3a",options="header"]
+|===
+| Параметр | Опис
+
+| `kind`
+| Тип ресурсу, який створюється. У цьому випадку, `Ingress`.
+
+| `apiVersion`
+| Версія API, яка використовується для створення ingress. У цьому випадку, `networking.k8s.io/v1`.
+
+| `metadata.annotations.konghq.com/plugins`
+| Список плагінів Kong, які застосовуються до цього ingress. Вказує на використання плагіну `specific-bp-rate-limiting`.
+
+| `metadata.annotations.konghq.com/methods`
+| Методи HTTP, для яких діє цей ingress. У цьому випадку, дозволено лише `POST`.
+
+| `metadata.annotations.konghq.com/preserve-host`
+| Вказує на збереження або ігнорування заголовка хоста в запитах. `false` означає, що заголовок хоста буде ігноруватися.
+
+| `metadata.annotations.konghq.com/protocols`
+| Протоколи, які підтримуються цим ingress. Вказує на використання `http` та `https`.
+
+| `metadata.annotations.konghq.com/strip-path`
+| Вказує, чи потрібно видаляти вказаний шлях з URL запиту перед пересиланням до сервісу. `true` означає, що шлях буде видалено.
+
+| `metadata.name`
+| Назва ingress, яка використовується для ідентифікації в Kubernetes.
+
+| `metadata.namespace`
+| Простір імен, в якому створюється ingress.
+
+| `labels.app.kubernetes.io/component`
+| Мітка, яка асоціює ingress з конкретним компонентом або додатком.
+
+| `labels.app.kubernetes.io/name`
+| Назва додатка або компоненту, до якого належить ingress.
+
+| `spec.ingressClassName`
+| Ім'я класу ingress, що вказує на використання конкретного Ingress Controller. У цьому випадку, `kong`.
+
+| `spec.rules[].host`
+| Хост, для якого застосовуються правила ingress. Включає замінні, які потрібно адаптувати до конкретного випадку.
+
+| `spec.rules[].http.paths[].path`
+| Шлях, для якого діють правила маршрутизації. Вказує на конкретний бізнес-процес за допомогою ідентифікатора `{bp-definition-id}`.
+
+| `spec.rules[].http.paths[].pathType`
+| Тип шляху, який використовується для маршрутизації. `ImplementationSpecific` дозволяє контролеру ingress самостійно визначати, як обробляти шлях.
+
+| `spec.rules[].http.paths[].backend.service.name`
+| Назва сервісу, до якого має бути спрямований трафік.
+
+| `spec.rules[].http.paths[].backend.service.port.number`
+| Номер порту сервісу, на який направляється трафік.
+|===
+
+[NOTE]
+====
+Замініть наступні значення параметрів на потрібні:
+
+* `<registry-name>` -- назва реєстру;
+* `<cluster-name>.<dns-wildcard>` -- назва кластера, домен та піддомени, де розгорнута Платформа.
+====
+
+==== Конфігурація сервісів для бізнес-процесів
+
+Створіть сервіси для обробки запитів до конкретних бізнес-процесів, використовуючи наявні як зразок.
+
+TIP: Для налаштування сервісу, що відповідає за обробку запитів до конкретного бізнес-процесу, рекомендуємо використовувати як зразок наявний сервіс `ext-system-api-bp-gateway`. Цей сервіс можна знайти у розділі *Networking* > *Services* вашої консолі OpenShift. Важливим кроком є модифікація анотації `konghq.com/path` зі встановленням її у значення `/api/start-bp/{bp-definition-id}`, де `{bp-definition-id}` -- це унікальний ідентифікатор вашого бізнес-процесу. Ця зміна забезпечить коректне спрямування запитів до API, призначеного для запуску або управління конкретним бізнес-процесом.
+
+.Приклад створення сервісу для ingress бізнес-процесу
+[source,yaml]
+----
+kind: Service
+apiVersion: v1
+metadata:
+  name: ext-system-api-bp-gateway-specific-bp
+  namespace: registry-name
+  labels:
+    app.kubernetes.io/component: app
+    app.kubernetes.io/instance: bp-webservice-gateway
+    app.kubernetes.io/name: external-system-api
+  annotations:
+    ingress.kubernetes.io/service-upstream: 'true'
+    konghq.com/override: kong-set-timeouts
+    konghq.com/path: /api/start-bp/{bp-definition-id}
+    konghq.com/plugins: external-system-bp-gateway-nopublic-oidc
+    konghq.com/protocol: http
+spec:
+  ipFamilies:
+    - IPv4
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 8080
+  internalTrafficPolicy: Cluster
+  type: ClusterIP
+  ipFamilyPolicy: SingleStack
+  sessionAffinity: None
+  selector:
+    app: bp-webservice-gateway
+----
+
+[cols="1,3a",options="header"]
+|===
+| Параметр | Опис
+
+| `kind`
+| Тип ресурсу, який створюється. У цьому випадку, `Service`.
+
+| `apiVersion`
+| Версія API, яка використовується для створення сервісу. У цьому випадку, `v1`.
+
+| `metadata.name`
+| Назва сервісу, яка використовується для ідентифікації в Kubernetes.
+
+| `metadata.namespace`
+| Простір імен, в якому створюється сервіс.
+
+| `labels.app.kubernetes.io/component`
+| Мітка, що вказує на компонент додатка, до якого належить сервіс.
+
+| `labels.app.kubernetes.io/instance`
+| Інстанція додатка, до якої належить сервіс.
+
+| `labels.app.kubernetes.io/name`
+| Назва додатка, до якого належить сервіс.
+
+| `annotations.ingress.kubernetes.io/service-upstream`
+| Вказує на використання upstream сервісу для обробки запитів. `true` означає, що запити будуть направлятися безпосередньо на поди.
+
+| `annotations.konghq.com/override`
+| Налаштування для перевизначення конфігурацій Kong. У цьому випадку, вказує на використання кастомних тайм-аутів.
+
+| `annotations.konghq.com/path`
+| Шлях, який буде використовуватися для маршрутизації запитів до сервісу. Включає ідентифікатор бізнес-процесу.
+
+| `annotations.konghq.com/plugins`
+| Список плагінів Kong, які застосовуються до сервісу.
+
+| `annotations.konghq.com/protocol`
+| Протокол, який використовується для обробки запитів. У цьому випадку, `http`.
+
+| `spec.ipFamilies`
+| Список підтримуваних IP-протоколів. Вказує на використання IPv4.
+
+| `spec.ports.protocol`
+| Протокол, який використовується для порту. У цьому випадку, `TCP`.
+
+| `spec.ports.port`
+| Порт, на якому слухає сервіс.
+
+| `spec.ports.targetPort`
+| Порт пода, до якого спрямовується трафік.
+
+| `spec.internalTrafficPolicy`
+| Політика обробки внутрішнього трафіку в межах кластера. `Cluster` означає, що трафік може бути спрямований до будь-якого пода в кластері.
+
+| `spec.type`
+| Тип сервісу. `ClusterIP` вказує, що сервіс доступний в межах кластера.
+
+| `spec.ipFamilyPolicy`
+| Політика використання сімейства IP-адрес. `SingleStack` означає, що використовується лише одне сімейство IP-адрес.
+
+| `spec.sessionAffinity`
+| Політика афінітету сесії. `None` означає, що афінітет сесії не використовується.
+
+| `selector.app`
+| Селектор, який використовується для визначення подів, що обслуговуватимуть трафік для цього сервісу. У цьому випадку, вказує на `bp-webservice-gateway`.
+|===
+
+[NOTE]
+====
+Замініть наступні значення параметрів на потрібні:
+
+* `<registry-name>` -- назва реєстру;
+* `<cluster-name>.<dns-wildcard>` -- назва кластера, домен та піддомени, де розгорнута Платформа.
+====

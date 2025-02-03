@@ -1,0 +1,111 @@
+= Розширення дисків Elasticsearch в середовищі vSphere з використанням StorageClass "thin"
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+Ця інструкція надає покрокові вказівки для збільшення обсягу дискового простору для *Elasticsearch* у середовищі *vSphere*, використовуючи OpenShift-ресурс `StorageClass` зі значенням `thin`. Описані дії дозволяють обійти обмеження, пов'язані з динамічним розширенням обсягу даних, та забезпечити належне збільшення дискового простору для _Підсистеми журналювання подій_.
+
+[WARNING]
+====
+Не застосовуйте цю процедуру для систем, налаштованих з політикою `ZeroRedundancy` (`spec.logStore.elasticsearch.redundancyPolicy`). Такі дії можуть призвести до втрати даних.
+====
+
+== Передумови
+
+Переконайтеся, що ви маєте адміністративний доступ до середовища vSphere та простору імен `openshift-logging` у вашому OpenShift-кластері.
+
+== Процедура розширення
+
+. Перейдіть до простору імен `openshift-logging`.
++
+----
+kubectl config set-context --current --namespace=openshift-logging
+----
+
+. Оновіть конфігурацію `ClusterLogging.instance`, вказавши новий обсяг диска в `spec.logStore.elasticsearch.storage.size`.
++
+[source,yaml]
+----
+spec:
+  logStore:
+    elasticsearch:
+      nodeCount: 3
+      nodeSelector:
+        platform/logging: 'true'
+      redundancyPolicy: MultipleRedundancy
+      storage:
+        size: 600G
+----
++
+[NOTE]
+====
+Під час спроби збільшення обсягу дисків Elasticsearch, які використовують клас сховища `thin` у vSphere, просте змінення параметра `spec.logStore.elasticsearch.storage.size` у конфігурації `ClusterLogging.instance` може не привести до очікуваного результату. Це пов'язано з обмеженнями на динамічне розширення такого типу сховища.
+
+Крім того, у відповіді системи може з'явитися повідомлення про помилку у параметрі `status.logStore.elasticsearchStatus[].cluster.clusterConditions[].message`, що містить наступний текст:
+----
+"Resizing the storage for a custom resource is not supported"
+----
+
+Це служить підтвердженням того, що спроба динамічного збільшення простору неможлива для даного типу ресурсу.
+====
+
+. Перейдіть до розділу *Storage* > *Persistent Volume Claims* (*PVC*) та видаліть PVC з першим індексом. Наприклад, якщо PVC називається `elasticsearch-elasticsearch-cdm-esdk45rm-1`, виконайте:
++
+----
+kubectl delete pvc elasticsearch-elasticsearch-cdm-esdk45rm-1
+----
+
+. Перейдіть до списку подів у вашому кластері та видаліть под, який був підключений до видаленого PVC. Щоб переконатися, що ви видаляєте правильний под, важливо перевірити деталі його конфігурації перед видаленням. Це дозволить уникнути помилок, пов'язаних з видаленням неправильного пода, що може призвести до непотрібних перебоїв у роботі сервісів.
++
+Для цього перейдіть до розділу *Details* вибраного пода та знайдіть секцію *Volumes*. Переконайтеся, що ім'я потрібного тому (*Name*) відповідає імені видаленого PVC. Також зверніть увагу на тип тому (*Type*), що має відповідати імені видаленого PVC. Наприклад, якщо ви видалили PVC з іменем `elasticsearch-elasticsearch-cdm-esdk45rm-1`, то переконайтеся, що в *Volumes* вказано:
++
+--
+* *Name*: `elasticsearch-storage`
+* *Type*: `elasticsearch-elasticsearch-cdm-esdk45rm-1`
+--
++
+Після підтвердження, що ви вибрали правильний под для видалення, використовуйте наступну команду:
+
++
+----
+kubectl delete pod elasticsearch-cdm-esdk45rm-1-556d99bc96-7vvsr
+----
++
+Ця команда ініціює процес видалення пода `elasticsearch-cdm-esdk45rm-1-556d99bc96-7vvsr`, який був підключений до видаленого PVC. Важливо виконати цей крок для забезпечення правильного переналаштування та реплікації даних у вашому Elasticsearch-кластері.
+
+. Перевірте створення нового PVC з оновленим обсягом диска.
++
+.Перехід до списку PVC для перевірки
+----
+kubectl get pvc
+----
+
+. Дочекайтеся завершення реплікації даних на новий диск до моменту вирівнювання зайнятого простору у порівнянні з іншими PVC. Розміри дисків Elasticsearch повинні бути приблизно однакові.
++
+image:admin:logging/es-expand-space-storage-class-thin/es-expand-disk-space-storage-class-thin-1.png[]
+
++
+Ви також можете спостерігати за процесом, порівнюючи зайнятий обсяг між PVC, виконавши команду:
++
+----
+kubectl describe pvc elasticsearch-elasticsearch-cdm-esdk45rm-1
+----
+
+. Повторіть кроки 3-6 для кожного диска у вашому кластері Elasticsearch, який потребує збільшення обсягу.
+
+== Післядії
+
+. Після завершення процедури збільшення обсягу диска, виконайте наступну команду для перевірки стану індексів Elasticsearch:
++
+----
+curl -XGET -s --cacert /etc/elasticsearch/secret/admin-ca --cert /etc/elasticsearch/secret/admin-cert --key /etc/elasticsearch/secret/admin-key -H "Content-Type: application/json" https://localhost:9200/_cat/indices?h=h,s,i,id,p,r,dc,dd,ss,creation.date.string
+----
+
+. Якщо ви знайдете індекси у стані RED, видаліть їх, використовуючи наступну команду:
++
+----
+curl -s --cacert /etc/elasticsearch/secret/admin-ca --cert /etc/elasticsearch/secret/admin-cert --key /etc/elasticsearch/secret/admin-key -XDELETE -H "Content-Type: application/json" https://localhost:9200/<ім'я індексу>
+----
++
+[WARNING]
+====
+Виконуйте ці дії з обережністю, оскільки видалення зайвих індексів призведе до втрати даних, які вони містять.
+====

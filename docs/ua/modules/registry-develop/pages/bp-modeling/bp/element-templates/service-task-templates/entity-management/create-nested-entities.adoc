@@ -1,0 +1,254 @@
+= Створення декількох сутностей в рамках однієї транзакції: _Create nested entities in data factory_
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+== Загальна інформація
+
+Інтеграційне розширення *Create nested entities in data factory* дозволяє налаштовувати завдання для створення декількох сутностей у рамках однієї транзакції під час виконання бізнес-процесу. Це розширення допомагає автоматизувати процеси збереження складних даних до БД, забезпечуючи належне оброблення запитів та передачу даних між процесами. Розширення додає різні властивості до завдання типу *Service Task*.
+
+.Короткі відомості про делегат
+|===
+|Назва |Пояснення
+
+|Бізнес-назва інтеграційного розширення
+|*Create nested entities in data factory*
+
+|Службова назва інтеграційного розширення
+|`${dataFactoryConnectorNestedCreateDelegate}`
+
+|Назва файлу у бібліотеці розширень
+|*_dataFactoryConnectorNestedCreateDelegate.json_*
+|===
+
+Розширення *Create nested entities in data factory* використовується, коли необхідно створити декілька взаємопов'язаних (вкладених) записів у базі даних у рамках однієї транзакції.
+
+TIP: Більш детально про особливості використання делегата у бізнес-процесі див. на сторінці xref:bp-modeling/bp/modeling-facilitation/bp-nested-entities-in-data-factory.adoc[].
+
+== Перед початком
+
+include::partial$admonitions/install-element-templates.adoc[]
+
+== Налаштування
+
+Делегат *Create nested entities in data factory* призначений для використання у завданнях типу *Service Task* бізнес-процесу. Він дозволяє налаштувати створення декількох записів з передачею вхідних та вихідних даних у рамках однієї транзакції.
+
+=== Налаштування завдання
+
+. Створіть завдання типу *Service Task* у вашому бізнес-процесі.
+. Назвіть завдання, наприклад, `Зберегти дані до Фабрики даних`.
+. Застосуйте шаблон делегата, обравши *Create nested entities in data factory* зі списку в налаштуваннях завдання.
++
+image:bp-modeling/bp/element-temp/service-task/entity-management/create-nested-entity/create-nested-entities-1.png[]
+
+=== Налаштування делегата
+
+Виконайте наступні налаштування:
+
+Resource ::
+У полі *Resource* вкажіть назву ендпоінту / таблицю, до якої необхідно звернутися. Наприклад, `person-profile`.
++
+NOTE: На рівні API, ендпоінт виглядає наступним чином: `/nested/<resource name>`, де `<resource name>` -- назва ресурсу. Тобто у полі *Resource* необхідно вказати значення, яке визначається після останньої косої риски (`/`).
+
+Payload ::
+У полі *Payload* введіть тіло запита -- JSON-об'єкт із вкладеною структурою декількох сутностей, яку необхідно зберегти до Фабрики даних. Наприклад, `${createComplexPayload}`.
++
+[NOTE]
+====
+Необхідно попередньо побудувати цей JSON-об'єкт, тобто *payload*, в рамках задачі скриптування.
+
+.Приклад. Groovy-скрипт, що формує комплексний JSON-об'єкт для подальшого запису до БД
+[source,groovy]
+----
+def personProfileId = createPersonProfileResponse.responseBody.prop('id').value()
+
+        def personEduProfile = ['personProfileId':personProfileId]
+
+        def formData = submission('signPersonProfileActivity').formData
+
+        def orders = [:]
+        orders['ordersType'] = formData.prop('order_type').value()
+        orders['ordersNumber'] = formData.prop('order_number').value()
+        orders['ordersDate'] = formData.prop('order_date').value()
+        orders['personProfileId'] = personProfileId
+
+        def cephData = ['personEduProfile':personEduProfile,'orders':orders]
+
+        set_transient_variable('createComplexPayload', S(cephData, 'application/json'))
+----
+
+Пояснення роботи скрипту, який формує об'єкт `createComplexPayload`:
+
+Цей скрипт виконує ряд дій для створення об'єкта `createComplexPayload`, який містить дані про профіль особи та пов'язані з ним освітні профілі та накази. Ці дані потім зберігаються як транзитна змінна для подальшого використання у бізнес-процесі.
+
+. *Отримання ID профілю особи*:
++
+```groovy
+def personProfileId = createPersonProfileResponse.responseBody.prop('id').value()
+```
+Цей рядок отримує значення `id` з відповіді на створення профілю особи `createPersonProfileResponse` та зберігає його у змінній `personProfileId`.
+
+. *Створення об'єкта `personEduProfile`*:
++
+```groovy
+def personEduProfile = ['personProfileId':personProfileId]
+```
+Тут створюється об'єкт `personEduProfile`, який містить `personProfileId`.
+
+. *Отримання даних з форми*:
++
+```groovy
+def formData = submission('signPersonProfileActivity').formData
+```
+Цей рядок отримує дані з форми, яка була заповнена користувачем у завданні `signPersonProfileActivity`, та зберігає їх у змінній `formData`.
+
+. *Формування об'єкта `orders`*:
++
+```groovy
+def orders = [:]
+orders['ordersType'] = formData.prop('order_type').value()
+orders['ordersNumber'] = formData.prop('order_number').value()
+orders['ordersDate'] = formData.prop('order_date').value()
+orders['personProfileId'] = personProfileId
+```
+Тут створюється порожній об'єкт `orders` у вигляді мапи (словника). Далі у цю мапу додаються наступні поля:
+- `ordersType` з значенням поля `order_type` з форми.
+- `ordersNumber` з значенням поля `order_number` з форми.
+- `ordersDate` з значенням поля `order_date` з форми.
+- `personProfileId` з раніше отриманим значенням `personProfileId`.
+
+. *Формування об'єкта `cephData`*:
++
+```groovy
+def cephData = ['personEduProfile':personEduProfile,'orders':orders]
+```
+Тут створюється об'єкт `cephData`, який містить два вкладені об'єкти: `personEduProfile` та `orders`.
+
+. *Створення транзитної змінної `createComplexPayload`*:
++
+```groovy
+set_transient_variable('createComplexPayload', S(cephData, 'application/json'))
+```
+Цей рядок перетворює об'єкт `cephData` у формат JSON та зберігає його як транзитну змінну `createComplexPayload`.
+====
++
+[NOTE,caption="Тіло запита"]
+====
+Дані, що передаються для створення записів, повинні мати відповідний формат:
+
+.Приклад. Тіло запита. Сформований JSON-об'єкт, збережений до змінної 'createComplexPayload'
+[source,json]
+----
+{
+  "personEduProfile": {
+    "personProfileId": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+  },
+  "orders": {
+    "ordersType": "string",
+    "ordersNumber": "string",
+    "ordersDate": "2022-02-16T13:33:30.660Z",
+    "personProfileId": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+  }
+}
+----
+====
++
+[NOTE,caption="Відповідь"]
+====
+
+HTTP-код: ::
+----
+200 OK
+----
+
+Тіло відповіді: ::
+----
+{
+   "id":"d1394f5d-5274-4831-90ac-0dfdb6d7bd35"
+}
+----
+====
++
+[WARNING]
+====
+Для окремого типу запита використовують окремий делегат. Тобто в загальному випадку є REST-контролер, який підтримує певні типи запитів (методи): `POST`, `GET`, `PUT`, `PATCH` та `DELETE`. Для кожного методу -- свій делегат.
+
+Для ресурсу `/nested/<resource name>` та делегата `$dataFactoryConnectorNestedCreateDelegate` використовується _ЛИШЕ_ метод `PUT`.
+
+І хоча метод `PUT` зазвичай використовується для оновлення записів, та у нашому випадку `PUT` може як _створити сутність_, так і _оновити_ її, в залежності від того, які параметри ми передаємо у запиті:
+
+* Якщо необхідно _створити сутність_, то ми НЕ передаємо параметр `<table_primary_key>_id` у тілі запита. Наприклад, `orders_id`.
+
+* Якщо необхідно _оновити сутність_, то ми включаємо параметр ``<table_primary_key>_id`` у тіло запита. Наприклад, `orders_id`.
+====
+
+X-Access-Token ::
+У полі *X-Access-Token* вкажіть токен доступу користувача, під яким виконується операція. Цей токен забезпечує повноваження виконавця задачі щодо доступу до даних.
+
+* Наприклад, вкажіть токен ініціатора процесу через JUEL-функцію `initiator()`, використавши метод `accessToken`:
++
+[source,groovy]
+----
+${initiator().accessToken}
+----
+
+* Альтернативно, ви можете вказати токен виконавця останнього користувацького завдання. Для цього ви можете використати JUEL-функцію `completer()`, передавши ID попередньої задачі та використавши метод `accessToken`. Наприклад:
++
+[source,groovy]
+----
+${completer('UserTask_SignDataBuildInfo').accessToken}
+----
++
+** `completer()` — назва JUEL-функції.
+** `'UserTask_SignDataBuildInfo'` — ID попередньої задачі користувача.
+** `accessToken` — метод, який передає JWT-токен користувача.
+
+
+
+X-Digital-Signature source ::
+У полі *X-Digital-Signature source* вкажіть джерело цифрового підпису. Це поле вказує на Ceph-документ із цифровим підписом даних КЕП на стороні користувача (_див. детальніше про підпис КЕП у делегатах xref:bp-modeling/bp/element-templates/user-task-templates/officer-sign-task.adoc[] та xref:bp-modeling/bp/element-templates/user-task-templates/citizen-sign-task.adoc[]_). Функція `sign_submission()` та метод `signatureDocumentId` дозволяють отримати підписані дані з UI-форми та передати ID Ceph-документа. Наприклад:
++
+----
+${sign_submission('UserTask_SignDataBuildInfo').signatureDocumentId}
+----
+
+* `sign_submission` -- назва JUEL-функції.
+* `'UserTask_SignDataBuildInfo'` -- ID завдання користувача, із даними, на які накладено КЕП.
+* `signatureDocumentId` -- метод, який дозволяє отримати ID Ceph-документа, в якому зберігаються підписані КЕП дані.
+
+X-Digital-Signature-Derived source ::
+У полі *X-Digital-Signature-Derived source* вкажіть джерело системного цифрового підпису (цифрової печатки). Це поле вказує на Ceph-документ із системним цифровим підписом (цифровою печаткою), накладеним на дані. Наприклад, `${system_signature_key}`.
++
+[TIP]
+====
+Значення ключа/ідентифікатора системного підпису можна отримати після підпису даних за допомогою делегата xref:bp-modeling/bp/element-templates/service-task-templates/signature/system-signature-by-dso-service.adoc[]. Результат виконання операції підписання даних системним ключем буде збережено до вказаної змінної, наприклад, `system_signature_key`. Надалі ви зможете використати змінну в іншому місці процесу, зокрема під час збереження даних до БД або для генерування витягу тощо.
+====
+
+Result variable ::
+У полі *Result variable* задайте ім'я для змінної, в якій буде зберігатися відповідь від операції створення сутності, наприклад, `response`.
+
+== Приклад
+
+Ось приклад, який показує, як відповідний делегат використовується у бізнес-процесі:
+
+.Приклад. Налаштування делегата Create nested entities in data factory
+image::bp-modeling/bp/element-temp/service-task/entity-management/create-nested-entity/create-nested-entities-2.png[]
+
+[TIP]
+====
+[%collapsible]
+.Де можна знайти приклад бізнес-процесу?
+=====
+include::partial$snippets/demo-reg-reference-examples-ua.adoc[]
+
+*Create nested entities in data factory* -- делегат, який використовується у деяких бізнес-процесах, що потребують створення декількох взаємопов'язаних записів у БД.
+
+Ви можете використати один із прикладів процесів за пошуком по ключовим словам -- *_feature-nested-entity-test-process_*.
+
+У Кабінеті користувача бізнес-процес буде доступний у розділі *Доступні послуги*.
+=====
+====
+
+== Пов'язані сторінки
+
+* xref:bp-modeling/bp/modeling-facilitation/bp-nested-entities-in-data-factory.adoc[]
+* xref:bp-modeling/bp/element-templates/service-task-templates/entity-management/create-entity.adoc[]
+* xref:bp-modeling/bp/element-templates/service-task-templates/entity-management/batch-creation-entities-v2.adoc[]

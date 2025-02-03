@@ -1,0 +1,84 @@
+= Визначення розміру бакетів бізнес-процесів
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+== Огляд
+
+Цей документ описує процедуру перегляду розмірів усіх бакетів у кластері за допомогою CEPH Dashboard. Інструкція включає кроки для доступу до дашборда та ідентифікації бакетів з даними бізнес-процесів.
+
+== Кроки для визначення розміру бакетів
+
+. *Додавання конфігурації в `StorageCluster` CR*.
++
+Для активації Ceph Dashboard додайте наступну конфігурацію в `StorageCluster` CR одноразово:
++
+[source,yaml]
+----
+managedResources:
+    cephBlockPools: {}
+    cephDashboard:
+      enable: true
+      ssl: false
+    cephFilesystems: {}
+----
+
+. *Вхід у кластер*.
++
+Виконайте вхід у кластер за допомогою *`Copy login command`*, яку можна отримати в інтерфейсі OpenShift-консолі.
+
+. *Переадресація портів для доступу до дашборда*.
++
+У консолі виконайте команду для переадресації портів:
++
+[source,bash]
+----
+oc -n openshift-storage port-forward svc/rook-ceph-mgr-dashboard 8088:7000
+----
++
+Відкрийте вебінтерфейс за адресою `http://localhost:8088/` (порт може змінюватися, якщо порт з інструкції зайнятий).
+
+. *Вхід в Ceph Dashboard*.
++
+Логін для входу -- `admin`. Пароль можна знайти у проєкті `openshift-storage`, в секреті `rook-ceph-dashboard-password`.
+
+. *Перегляд бакетів у дашборді*.
++
+Перейдіть до menu:Object Gateway[Buckets]. Тут ви зможете переглянути наступні бакети:
+
+* `lowcode-file-storage`
+* `lowcode-form-data-storage`
++
+[WARNING]
+====
+Якщо виникла `500` помилка, необхідно перезапустити поди `rook-ceph-rgw-ocs-storagecluster-cephobjectstore` і `rook-ceph-mgr` у проєкті *`openshift-storage`*. Опційно також перезапустіть поди `rook-operators`.
+====
+
+. *Розв'язання проблеми з `403` помилкою доступу*.
++
+.. Для розв'язання помилки доступу створіть користувача `dashboard` в Ceph, який матиме необхідні права для перегляду ресурсів. Виконайте наступні команди:
++
+[source,bash]
+.Список наявних реалмів
+----
+radosgw-admin --conf=/var/lib/rook/openshift-storage/openshift-storage.config realm list
+----
++
+[source,bash]
+.Створення користувача для кожного реалму
+----
+radosgw-admin --conf=/var/lib/rook/openshift-storage/openshift-storage.config user create --display-name="dashboard" --uid=dashboard --rgw-realm <realm-name>
+----
++
+.. Після створення користувача перезапустіть наступні компоненти для застосування змін:
++
+[source,bash]
+----
+reboot mgr, operator, rgw pods
+----
++
+image:registry-admin/define-ceph-bucket-storage/define-ceph-bucket-storage-1.png[]
+
+== Пов'язані сторінки
+
+* xref:registry-admin/abandoned-processes/delete-abandoned-processes.adoc[]
+* xref:registry-admin/abandoned-processes/delete-docs-s3-ceph-redis-buckets.adoc[]
+* xref:registry-admin/abandoned-processes/port-forward-redis.adoc[]

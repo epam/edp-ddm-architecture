@@ -1,0 +1,171 @@
+= Створення сутностей масивом у фабриці даних v2: _Batch creation of entities in data factory v2_
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+include::platform:ROOT:partial$admonitions/language-ua.adoc[]
+
+Цей документ надає інструкції щодо завантаження даних до БД масивом.
+
+== Загальна інформація
+
+Інтеграційне розширення *Batch creation of entities in data factory v2* надає змогу створювати сутності масивом через REST API, що сприяє оптимізації взаємодії з базою даних.
+
+CAUTION: Делегат є розширеною версією делегата xref:bp-modeling/bp/element-templates/service-task-templates/entity-management/batch-creation-entities.adoc[].
+
+.Короткі відомості про делегат
+|===
+|Назва | Пояснення
+
+|Бізнес-назва інтеграційного розширення
+|*Batch creation of entities in data factory v2*
+
+|Службова назва інтеграційного розширення
+|*`${dataFactoryConnectorBatchCreateDelegateV2}`*
+
+|Назва файлу у бібліотеці розширень
+|*_dataFactoryConnectorBatchCreateDelegateV2.json_*
+|===
+
+== Перед початком
+
+include::partial$admonitions/install-element-templates.adoc[]
+
+== Налаштування делегата
+
+Делегат *Create Keycloak officer user* призначений для використання у сервісних завданнях (Service Task) бізнес-процесу. Він надає можливість взаємодіяти з REST API реєстру та створювати сутності у базі даних масивом як *`LIST`* або *`CSV`* *_транзакційно_* -- _тобто зберігаються або усі дані, або жодні_.
+
+[NOTE]
+====
+Максимальна кількість записів для завантаження до БД через цей делегат -- 50:
+
+* 50 записів для *`LIST`*
+* 50 записів для `*CSV*`.
+====
+
+TIP: Детальніше про застосування делегата у бізнес-процесах ви можете переглянути на сторінці xref:registry-develop:bp-modeling/bp/loading-data-from-csv.adoc[].
+
+=== Налаштування сервісного завдання
+
+. Створіть завдання типу *Service Task* у вашому бізнес-процесі.
+. Назвіть завдання, наприклад, `Групове завантаження даних до БД`.
+. Застосуйте шаблон делегата, обравши відповідний зі списку в налаштуваннях завдання.
+
++
+image:registry-develop:bp-modeling/bp/element-temp/service-task/batch-creation/v2/batch-creation-v2-01.png[]
+
+=== Налаштування делегата
+
+У розділі *Custom properties* налаштуйте параметри завантаження:
+
+. У полі *Resource* вкажіть ресурс, назву ендпоінту для таблиці, куди зберігатимуться дані. Наприклад, `diplomas`.
+. У полі *Upload type* оберіть формат завантаження даних зі списку -- `CSV`, або `LIST`.
++
+[NOTE]
+====
+Для обох типів, `*CSV*` та `*LIST*`, конфігурація делегата є однаковою. Відрізнятиметься лише `${payload}`, який зазвичай формується у попередній скрипт-задачі процесу та передається до сервісної задачі як змінна `${payload}`.
+
+* Якщо необхідно завантажити дані масивом у *CSV*-форматі, то `payload` може формуватися у скрипті наступним чином:
++
+.Приклад формування payload (CSV)
+[source,groovy]
+----
+set_transient_variable('payload', submission('signCsvFileActivity').formData.prop('csvFile').elements().first())
+----
+
+Пояснення: ::
++
+** Скрипт отримує список елементів `csvFile` із форми (`formData`) за допомогою JUEL-функції `submission()`.
+** Формує об'єкт `payload`, який надалі можна використати як змінну при налаштуванні делегата.
+** СSV-дані на форму можна завантажити за допомогою компонента *`Content`* (_детальніше про моделювання форм -- за xref:registry-develop:bp-modeling/bp/loading-data-from-csv.adoc#save-data-csv-content[посиланням]_).
+
+* Якщо необхідно завантажити дані масивом як *`LIST`*, то `payload` може формуватися у скрипті наступним чином:
++
+.Приклад формування масиву даних (LIST)
+[source,groovy]
+----
+var data=
+'''
+[
+   {
+      "data":"test data",
+      "description":"some description"
+   },
+   {
+      "data2":"test data2",
+      "description2":"some description2"
+   }
+]
+'''
+
+execution.setVariable("jsonArray", S(data))
+----
+
+Пояснення: ::
+
+** Вказаний скрипт створює рядок `data`, який містить JSON-масив із двома об'єктами. Кожний об'єкт містить пари ключ-значення -- дані, отримані з UI-форми.
+** Записує результат до змінної *`jsonArray`*, яка потім використовується при налаштуванні делегата.
+** Дані на форму можна завантажити як масив за допомогою компонента `*Edit Grid*` (_детальніше про моделювання форм -- за xref:registry-develop:bp-modeling/forms/components/edit-grid/edit-grid.adoc#save-data-array-edit-grid[посиланням]_).
+
+====
+. У полі *Payload* введіть дані для створення, що передаються як тіло запита. Наприклад, `${dataPayload}`.
++
+[NOTE]
+====
+Попередньо сформуйте *Payload* у скрипт-задачі процесу. Скрипт може виглядати наступним чином:
+
+[source,groovy]
+----
+// Завантаження списку дипломів з відповіді форми
+def diplomasGrid = submission('signDiplomDataActivity').formData.prop('diplomas').elements()
+// Ініціалізація порожнього JSON об'єкта для збору даних
+def dataPayload = S([], 'application/json')
+
+// Перебір кожного диплома в списку і додавання його до dataPayload
+diplomasGrid.each{
+    dataPayload.append(it)
+}
+
+// Збереження оновленого списку дипломів як тимчасової змінної для подальшого використання
+set_transient_variable('dataPayload', dataPayload)
+----
+
+Пояснення: ::
+
+Цей скрипт обробляє інформацію про дипломи, отриману через форму. Ось, що він робить:
+
+. *Завантажує список дипломів* із форми.
+. *Створює порожній контейнер* для зберігання даних дипломів у форматі JSON.
+. *Додає кожен диплом* до цього контейнера.
+. *Зберігає оновлені дані* про дипломи у тимчасову змінну для подальшого використання.
+====
+
+. У полі *X-Access-Token* вкажіть токен доступу користувача до системи, під яким виконується операція. Наприклад, `${completer('signDiplomDataActivity').accessToken}`.
+. У полі *X-Digital-Signature source* вкажіть джерело цифрового підпису. Наприклад, `${sign_submission('signDiplomDataActivity').signatureDocumentId}`.
+. У полі *Result variable* вкажіть назву змінної, в яку потрібно записати результат. За замовчуванням -- `response`.
+
+include::registry-develop:partial$snippets/element-templates/delegate-http-code-response.adoc[]
+
+== Приклад
+
+Нижче наведено приклад, який демонструє використання делегата *Batch creation of entities in data factory v2*:
+
+.Приклад. Внесення інформації про дипломи з СSV-файлу
+image::registry-develop:bp-modeling/bp/element-temp/service-task/batch-creation/v2/batch-creation-v2-02.png[]
+
+[TIP]
+====
+[%collapsible]
+.Де можна знайти приклад бізнес-процесу?
+=====
+include::registry-develop:partial$snippets/demo-reg-reference-examples-ua.adoc[]
+
+Приклад BPMN-схеми процесу буде доступний у регламенті демо-реєстру за пошуком по ключовим словам -- *_feature-save-array-from-edit-grid_*. Назви форм ви можете знайти всередині відповідних користувацьких задач бізнес-процесу у полі *`Form key`*.
+=====
+====
+
+== Пов'язані сторінки
+
+* xref:registry-develop:bp-modeling/bp/element-templates/service-task-templates/entity-management/batch-creation-entities.adoc[]
+* xref:registry-develop:bp-modeling/bp/loading-data-from-csv.adoc[]
+* xref:bp-modeling/bp/element-templates/service-task-templates/entity-management/async-data-load-csv-delegate.adoc[]
+* xref:bp-modeling/bp/element-templates/service-task-templates/entity-management/create-entity.adoc[]
+* xref:bp-modeling/bp/element-templates/service-task-templates/entity-management/create-nested-entities.adoc[]

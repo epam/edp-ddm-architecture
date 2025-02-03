@@ -1,38 +1,70 @@
-openapi: 3.0.1
+openapi: 3.0.3
 info:
-  title: OpenAPI definition
-  version: v0
+  title: Business process web service gateway API
+  description: This document describes REST API of 'Business process web service gateway'
+  version: "1.0"
+tags:
+- name: bp-webservice-gateway-api
+  description: Business process web service gateway Rest API
 paths:
   /api/start-bp:
     post:
       tags:
-        - start-bp-controller
+      - bp-webservice-gateway-api
       summary: Start process instance
-      description: Returns result variable of business process
+      description: |-
+        ### Endpoint purpose:
+         This endpoint allows you to start a business process instance based on the provided _businessProcessDefinitionKey_ in request body.
+        ### Business process start validation:
+         This endpoint requires valid _businessProcessDefinitionKey_ and _startVariables_. If no business process definition found or required parameters are missing, then _422_ response code returned.
       operationId: startBp
+      parameters:
+      - name: X-Access-Token
+        in: header
+        description: Token used for endpoint security
+        required: true
+        schema:
+          type: string
       requestBody:
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/StartBpRestRequest'
+            example:
+              businessProcessDefinitionKey: my-business-process
+              startVariables:
+                variable1: value1
+                variable2: value2
+                variable3: null
         required: true
       responses:
-        '200':
+        "200":
           description: Returns result variable of business process
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: '#/components/schemas/StartBpResponse'
-        '422':
-          description: Business process definition cannot be started or missing required start variable for the business process
+              example:
+                resultVariables:
+                  return_var_1: return_value_1
+                  return_var_2: null
+        "404":
+          description: Business process definition not found in trembita.process_definitions
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: '#/components/schemas/SystemErrorDto'
-        '500':
+        "422":
+          description: Business process definition cannot be started or missing required
+            start variable for the business process
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemErrorDto'
+        "500":
           description: Internal server error
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: '#/components/schemas/SystemErrorDto'
 components:
@@ -43,6 +75,15 @@ components:
         businessProcessDefinitionKey:
           type: string
         startVariables:
+          type: object
+          additionalProperties:
+            type: object
+    StartBpResponse:
+      required:
+      - resultVariables
+      type: object
+      properties:
+        resultVariables:
           type: object
           additionalProperties:
             type: object
@@ -57,12 +98,3 @@ components:
           type: string
         localizedMessage:
           type: string
-    StartBpResponse:
-      required:
-        - resultVariables
-      type: object
-      properties:
-        resultVariables:
-          type: object
-          additionalProperties:
-            type: object
