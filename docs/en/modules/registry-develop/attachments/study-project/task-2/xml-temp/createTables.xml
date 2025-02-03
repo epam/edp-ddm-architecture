@@ -1,12 +1,13 @@
-<?xml version="1.1" encoding="UTF-8" standalone="no"?>
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xmlns:ext="http://www.liquibase.org/xml/ns/dbchangelog-ext"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.2.xsd
+                    http://www.liquibase.org/xml/ns/dbchangelog-ext
+                    http://artifactory.control-plane-nexus/nexus/repository/extensions/com/epam/digital/data/platform/liquibase-ext-schema/latest/liquibase-ext-schema-latest.xsd">
 
-<databaseChangeLog
-        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
-        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-        xmlns:ext="http://www.liquibase.org/xml/ns/dbchangelog-ext"
-        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.2.xsd
-        http://www.liquibase.org/xml/ns/dbchangelog-ext https://nexus.apps.envone.dev.registry.eua.gov.ua/nexus/repository/extensions/com/epam/digital/data/platform/liquibase-ext-schema/latest/liquibase-ext-schema-latest.xsd">
-
+    <!-- 1. KOATUU Table -->
     <changeSet id="table koatuu" author="registry owner">
         <createTable tableName="koatuu" ext:historyFlag="true">
             <column name="koatuu_id" type="UUID" defaultValueComputed="uuid_generate_v4()">
@@ -28,71 +29,105 @@
             </column>
         </createTable>
     </changeSet>
+
+    <!-- 2. Ownership Type Table -->
     <changeSet id="table ownership" author="registry owner">
-        <createTable tableName="ownership" ext:historyFlag="true" remarks="Довідник форм власності">
+        <createTable tableName="ownership" ext:historyFlag="true" remarks="Reference table for ownership types">
             <column name="ownership_id" type="UUID" defaultValueComputed="uuid_generate_v4()">
                 <constraints nullable="false" primaryKey="true" primaryKeyName="pk_ownership_id"/>
             </column>
-            <column name="code" type="TEXT" remarks="Код">
+            <column name="code" type="TEXT" remarks="Code">
                 <constraints nullable="false"/>
             </column>
-            <column name="name" type="TEXT" remarks="Назва">
+            <column name="name" type="TEXT" remarks="Name">
                 <constraints nullable="false" unique="true"/>
             </column>
         </createTable>
     </changeSet>
+
+    <!-- 3. Subject Table -->
+    <changeSet id="table subject" author="registry owner">
+        <createTable tableName="subject" ext:historyFlag="true">
+            <column name="subject_id" type="UUID" defaultValueComputed="uuid_generate_v4()">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="pk_subject"/>
+            </column>
+            <column name="subject_code" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="subject_type" type="type_subject_type"/>
+            <column name="subject_status" type="type_subject_status"/>
+            <column name="subject_name" type="TEXT"/>
+        </createTable>
+    </changeSet>
+
+    <!-- 4. Laboratory Table -->
     <changeSet id="table laboratory" author="registry owner">
-        <createTable tableName="laboratory" ext:historyFlag="true" remarks="Лабораторії що атестуються">
+        <createTable tableName="laboratory" ext:historyFlag="true" remarks="Accredited laboratories">
             <column name="laboratory_id" type="UUID" defaultValueComputed="uuid_generate_v4()">
                 <constraints nullable="false" primaryKey="true" primaryKeyName="pk_laboratory_id"/>
             </column>
+            <column name="subject_id" type="UUID" remarks="Subject identifier">
+                <constraints nullable="false" foreignKeyName="fk_laboratory_subject"
+                             referencedTableName="subject" referencedColumnNames="subject_id"/>
+            </column>
             <column name="name" type="TEXT">
-                <constraints nullable="false"/>
+                <constraints nullable="false" unique="true"/>
             </column>
             <column name="koatuu_id" type="UUID">
-                <constraints nullable="false" foreignKeyName="fk_laboratory_koatuu" referencedTableName="koatuu" referencedColumnNames="koatuu_id"/>
+                <constraints nullable="false" foreignKeyName="fk_laboratory_koatuu"
+                             referencedTableName="koatuu" referencedColumnNames="koatuu_id"/>
             </column>
             <column name="address" type="TEXT">
-                <constraints nullable="false"/>
+                <constraints nullable="false" unique="true"/>
             </column>
             <column name="edrpou" type="TEXT">
-                <constraints nullable="false"/>
+                <constraints nullable="false" unique="true"/>
             </column>
             <column name="ownership_id" type="UUID">
-                <constraints nullable="false" foreignKeyName="fk_laboratory_ownership" referencedTableName="ownership" referencedColumnNames="ownership_id"/>
+                <constraints nullable="false" foreignKeyName="fk_laboratory_ownership"
+                             referencedTableName="ownership" referencedColumnNames="ownership_id"/>
             </column>
-            <column name="premises_file" type="type_file" remarks="Документи про приміщення"/>
+            <column name="premises_file" type="type_file" remarks="Premises documents"/>
         </createTable>
         <addUniqueConstraint tableName="laboratory" columnNames="name,edrpou"/>
     </changeSet>
-    <changeSet id="table staff_status" author="registry_owner">
-        <createTable tableName="staff_status" ext:historyFlag="true" remarks="Довідник статусів співробітників">
-            <column name="staff_status_id" type="UUID" defaultValueComputed="uuid_generate_v4()" remarks="Ідентифікатор статусів співробітників">
+
+    <!-- 5. Staff Status Table -->
+    <changeSet id="table staff_status" author="registry owner">
+        <createTable tableName="staff_status" ext:historyFlag="true" remarks="Reference table for staff statuses">
+            <column name="staff_status_id" type="UUID" defaultValueComputed="uuid_generate_v4()"
+                    remarks="Staff status identifier">
                 <constraints nullable="false" primaryKey="true" primaryKeyName="pk_staff_status_id"/>
             </column>
-            <column name="name" type="TEXT" remarks="Назва статуса співробітника">
+            <column name="name" type="TEXT" remarks="Staff status name">
                 <constraints nullable="false" unique="true"/>
             </column>
         </createTable>
     </changeSet>
+
+    <!-- 6. Staff Table -->
     <changeSet id="table staff" author="registry owner">
-        <createTable tableName="staff" ext:historyFlag="true" remarks="Кадровий склад">
-            <column name="staff_id" type="UUID" defaultValueComputed="uuid_generate_v4()" remarks="Ідентифікатор кадрової одиниці">
+        <createTable tableName="staff" ext:historyFlag="true" remarks="Staff composition">
+            <column name="staff_id" type="UUID" defaultValueComputed="uuid_generate_v4()"
+                    remarks="Staff unit identifier">
                 <constraints nullable="false" primaryKey="true" primaryKeyName="pk_staff_id"/>
             </column>
-            <column name="laboratory_id" type="UUID" remarks="Ідентифікатор лабораторії">
-                <constraints nullable="false" foreignKeyName="fk_staff_laboratory" referencedTableName="laboratory" referencedColumnNames="laboratory_id"/>
+            <column name="laboratory_id" type="UUID" remarks="Laboratory identifier">
+                <constraints nullable="false" foreignKeyName="fk_staff_laboratory"
+                             referencedTableName="laboratory" referencedColumnNames="laboratory_id"/>
             </column>
-            <column name="staff_status_id" type="UUID" remarks="Ідентифікатор статусів співробітників">
-                <constraints nullable="false" foreignKeyName="fk_staff_status" referencedTableName="staff_status" referencedColumnNames="staff_status_id"/>
+            <column name="staff_status_id" type="UUID" remarks="Staff status identifier">
+                <constraints nullable="false" foreignKeyName="fk_staff_status"
+                             referencedTableName="staff_status" referencedColumnNames="staff_status_id"/>
             </column>
-            <column name="full_name" type="TEXT" remarks="Прізвище, ім'я, по батькові">
+            <column name="full_name" type="TEXT" remarks="Full name">
                 <constraints nullable="false"/>
             </column>
-            <column name="hygienist_flag" type="BOOLEAN" remarks="Лікар з гігієни праці (true) / Лаборант (false)">
+            <column name="hygienist_flag" type="BOOLEAN" remarks="Occupational hygienist (true) / Lab assistant (false)">
                 <constraints nullable="false"/>
             </column>
-            <column name="hygienist_certificate_file" type="type_file" remarks="Сертифікат для лікаря з гігієни праці"/>
+            <column name="hygienist_certificate_file" type="type_file"
+                    remarks="Occupational hygienist certificate"/>
         </createTable>
     </changeSet>
 

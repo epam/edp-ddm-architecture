@@ -1,0 +1,183 @@
+=  Secure Software Development Lifecycle (SSDLC)
+
+== Статичні контролі безпеки
+
+До всіх build та code review пайплайн (гілка master/main) додані різноманітні статичні сканери для сканування коду на вразливості. Додавання кожного сканеру має під собою додавання двох стейджів до пайплайни: власне самого сканеру (наприклад, iaac-security стейдж для сканування інфраструктурних файлів інструментом kics) та security-quality-gate стейджу, який обробляє файл звіту сканера та пушить знайдені вразливості до vulnerability management tool (Defectdojo).
+
+На даний момент до усіх пайплайн додані наступні сканери:
+
+* Semgrep - стейдж sast, статичний сканер, сканує код на типові вразливості. Містить набори правил (ruleset) для всіх популярних мов програмування, а також набори правил під конкретні вразливості (наприклад, owasp-top-ten ruleset). На даний момент у скануванні використовуються  рулсети https://semgrep.dev/p/default[default] (містить базові правила для всіх мов програмування та для різних конфігураційних файлів - json, yaml тощо), https://semgrep.dev/p/java[java], https://semgrep.dev/p/javascript[javascript], https://semgrep.dev/p/golang[golang] (містять розширені рули стосовно мов програмування, які використовуються на проекті), https://semgrep.dev/p/owasp-top-ten[owasp-top-ten] (містить додаткові рули, що базуються на виявленні вразливостей з OWASP Top 10). Багато рулів з цих списків перетинаються між собою, проте семгреп перевіряє і сканує кожен рул по одному разу, тому час сканування прийнятний. Посилання на https://gerrit-mdtu-ddm-edp-cicd.apps.cicd2.mdtu-ddm.projects.epam.com/admin/repos/mdtu-ddm/security/semgrep-jenkins-agent[агент] 
+
+* Detect-secrets - стейдж detect-secrets, сканує всі файли в репозиторії на секрети. Без додаткових налаштувань генерує багато false-positives, тому час від часу необхідно аналізувати найчастіші false-positives та додавати винятки у сканер. Це можна зробити в репозиторії https://gerrit-mdtu-ddm-edp-cicd.apps.cicd2.mdtu-ddm.projects.epam.com/gitweb?p=mdtu-ddm/general/libraries/edp-library-stages-fork.git;a=blob;f=src/com/epam/edp/customStages/impl/security/DetectSecrets.groovy;h=c8bfb8e1d20e96e1ea888011e831bae7223589de;hb=refs/heads/master[edp-library-stages-fork]. Посилання на https://gerrit-mdtu-ddm-edp-cicd.apps.cicd2.mdtu-ddm.projects.epam.com/admin/repos/mdtu-ddm/security/detect-secrets-jenkins-agent[агент] 
+
+* Trivy - стейдж container-security, запускається одразу після стейджа build-image-from-dockerfile. Сканує збілджений імедж на наявність вразливих додатків та бібліотек. Посилання на https://gerrit-mdtu-ddm-edp-cicd.apps.cicd2.mdtu-ddm.projects.epam.com/admin/repos/mdtu-ddm/security/trivy-jenkins-agent[агент] 
+
+* Dependency track - стейдж sca. Цей стейдж не сканує додаток, а створює https://www.aquasec.com/cloud-native-academy/supply-chain-security/sbom/#:~:text=A%20software%20bill%20of%20materials,components%20from%20third%2Dparty%20vendors[SBOM] в форматі https://cyclonedx.org/[cycloneDX]. Основні дії з виявлення вразливостей та створення графу залежностей відбуваються у додатку Dependency Track (див розділ керування залежностями). Посилання на https://gerrit-mdtu-ddm-edp-cicd.apps.cicd2.mdtu-ddm.projects.epam.com/admin/repos/mdtu-ddm/security/kics-jenkins-agent[агент] 
+
+* Kics - стейдж iaac-security. Сканує типові інфраструктурні файли на місконфігурації та небезпечні налаштування (docker, terraform, helm etc.). Посилання на https://gerrit-mdtu-ddm-edp-cicd.apps.cicd2.mdtu-ddm.projects.epam.com/admin/repos/mdtu-ddm/security/kics-jenkins-agent[агент] 
+
+Також є спеціальний стейдж security-quality-gate. Він вставляється в пайплайну після кожного стейджа зі сканером. Задача стейджа зі сканером просканувати аплікейшн чи імедж і створити репорт з результатами. security-quality-gate стейдж натомість виконує всі подальші дії з цими репортами: завантажує репорти в Defectdojo чи Dependency-Track, робить різноманітні перевірки на валідність репорту, також саме цей стейдж "валить" пайплайну, завершуючись з ненульовим exit code, якщо встановлені Security Baselines та вони не виконуються (див розділ Керування вразливостями).
+
+Посилання на код для стейджів дженкінсу https://gerrit-mdtu-ddm-edp-cicd.apps.cicd2.mdtu-ddm.projects.epam.com/gitweb?p=mdtu-ddm/general/libraries/edp-library-stages-fork.git;a=tree;f=src/com/epam/edp/customStages/impl/security;h=e6e7261e03290b9e25fbd6a51f8eb55be141595a;hb=refs/heads/master[тут]. В стейджах власне описуються параметри, з якими запускаються сканери, там же можна змінити verbosity level, режим сканування, додати винятки до сканування тощо.
+
+== Динамічні контролі безпеки 
+
+=== Загальний опис OWASP ZAP та процесу сканування
+
+Для динамічного сканування порталів та API був обраний https://www.zaproxy.org/[OWASP ZAP]. Він містить досить широкий набір правил для https://www.zaproxy.org/docs/desktop/addons/active-scan-rules/[активного] та https://www.zaproxy.org/docs/desktop/addons/passive-scan-rules/[пасивного] сканування додатку. Для порталів ми використовуємо повний набір правил для пасивного та активного сканування. Для API використовуємо https://www.zaproxy.org/docs/docker/api-scan/[скрипт], який оптимізований спеціально під сканування API та містить тільки ті правила, які актуальні для API. 
+
+Zap Proxy https://console-openshift-console.apps.cicd2.mdtu-ddm.projects.epam.com/k8s/ns/mdtu-ddm-edp-cicd/deployments/zapproxy[задеплоєний] на енв mdtu-ddm-edp-cicd. Самі DAST тести раняться на енві mdtu-ddm-edp-cicd-proxy-mode-ci-proxy.
+
+
+Для того, щоб успішно виконати динамічне сканування порталів (admin, officer, citizen), необхідно спочатку очистити ZAP від контексту та налаштувань, що залишилися від минулого сканування. Контекст - це список url, на яких буде проводитись сканування. Контекст можна збирати як автоматично засобами ZAP (spider, AJAX spider), так і заповнити його вручну або автотестами. У нашому випадку контекст заповнюється, коли в proxy-mode пайплайні запускаються автотести, створені командою QA. Вони біжать через ZAP Proxy, тому після закінчення автотестів ZAP містить повний контекст. Також у рамках стейджу dast-setup запускається selenium script, який автентифікується на порталах та отримує Cookie. Ці куки також передаються в ZAP в рамках стейджу dast-setup. Далі ZAP engine починає сканувати портали в рамках зібраного контексту, цей процес може зайняти декілька годин. Саме тому стейдж dast-scan періодично перевіряє статус сканування, і у разі його успішного завершення, скачує репорт з ZAP Engine та відправляє його до Defectdojo.
+
+image::architecture-workspace/security/ssdlc/proxy-mode-portals.png[Процес динамічного сканування для порталів]
+
+
+Процес сканування API набагато простіший. Список API, які скануються на даний момент: user-process-management, user-task-management, digital-signature-ops, digital-document-service, form-schema-provider, registry-regulation-management, process-history-service, excerpt-service, user-settings-service, registry-rest-api. Для кожного api всі необхідні налаштування, сканування та пуш в Defectdojo відбуваються в рамках одного стейджу (наприклад, для — digital-document-service цей стейдж має назву dast-api-scan-dig-doc-service). На стейджі відбуваються всі підготовчі дії, такі як автентифікація та отримання кукі через selenium, отримання swagger та приведення його до необхідного формату. Після цього запускається спеціальний скрипт, наданий розробниками ZAP для сканування API. Цей скрипт сам збирає контекст відповідно до вмісту swagger файлу і запускає всі необхідні правила. Після закінчення роботи скрипта, репорт пушиться в Defectdojo. Сканування одного API займає порівняно невеликий час (до 10 хвилин).
+
+=== Proxy-mode env для динамічних тестів
+
+Proxy-mode env використовується виключно командою DevSecOps для запуску тестів безпеки (переважно DAST — динамічне тестування додатків) на порталах та API. Потрібен окремий env, оскільки тести безпеки можуть навмисно намагатися порушити функціональність програми.
+
+Де знайти:
+
+Дженкінс: https://jenkins-mdtu-ddm-edp-cicd.apps.cicd2.mdtu-ddm.projects.epam.com/job/proxy-mode-cd-pipeline/
+
+EDP: https://edp-admin-console-mdtu-ddm-edp-cicd.apps.cicd2.mdtu-ddm.projects.epam.com/admin/edp/cd-pipeline/proxy-mode/update
+
+Пайплайна proxy-mode складається з 2 завдань:
+
+* Proxy-mode-cron - автоматично запускає завдання ci-proxy кожного робочого дня о 10:00 з параметрами: DEPLOY_ALL_LATEST і на medium machine-set
+
+* ci-proxy - містить стейджі білду енва (build-from-helmfile та інші), підготовки його до тестування (autosetup) та стейджі для запуску тестів безпеки DAST (officer-portal-tests, admin-portal-tests, citizen-portal-tests, dast-api-scan-dig-doc-service та інші)
+
+=== Список стейджів ci-proxy:
+----
+{"name":"checkout-registry-tenant","step_name":"checkout-registry-tenant"},{"name":"create-machine-set","step_name":"create-machine-set "},{"name":"prepare-helmfile","step_name":"prepare-helmfile"},{"name":"deploy-via-helmfile","step_name":"deploy-via-helmfile"} ,{"name":"deploy-codebases","step_name":"deploy-codebases"},{"name":"upload-form-modeler","step_name":"upload-form-modeler"},{ "name":"dast-setup","step_name":"dast-setup"},{"name":"autotests","step_name":"auto-setup"},[{"name":"autotests- no-failure","step_name":"officer-portal-tests"},{"name":"autotests-no-failure","step_name":"admin-portal-tests"},{"name":" autotests-no-failure","step_name":"citizen-portal-tests"}],{"name":"dast-scan","step_name":"dast-scan"},{"name":"dast -api-scan-dig-doc-service","step_name":"dast-api-scan-dig-doc-service"},{"name":"dast-api-scan-dig-sign-ops", "step_name":"dast-api-scan-dig-sign-ops"},{"name":"dast-api-scan-form-schema","step_name":"dast-api-scan-form-schema "},{"name":"dast-api-scan-user-proc","step_name":"dast-api-scan-user-proc"},{"name":"dast-api-scan-user -task","step_name":"dast-api-scan-user-task"},{"name":"dast-api-scan-reg-regulation","step_name":"dast-api-scan-reg -regulation"},{"name":"promote-images","step_name":"promote-images"}
+----
+
+=== Детальний опис стейджів ci-proxy для сканування порталів:
+
+* checkout-registry-tenant, create-machine-set, ready-helmfile, deploy-via-helmfile, deploy-codebases, upload-form-modeler, autotests, promote-images – стандартні стейджі, створені командою EDP і QA
+
+* dast-setup - етап, який створює нову сесію для ZAP і змінює параметри ZAP для сканування
+
+* officer-portal-tests, admin-portal-tests, citizen-portal-tests – автоматичні тести, розроблені командою QA, які налаштовані для запуску через ZAP Proxy. Ці тести сканують усі ендпоінти порталів, ZAP-проксі фіксує всю цю інформацію та використовує її для сканування, яке відбувається у фоновому режимі.
+
+* dast-scan — цей етап містить функцію, яка періодично перевіряє, чи завершилося сканування ZAP (оскільки воно зазвичай виконується набагато довше, ніж тести порталу на попередніх етапах). Після завершення сканування сценарій завантажує звіти про сканування в defectdojo.
+
+=== Детальний опис стейджів ci-proxy для сканування API:
+
+dast-api-scan-dig-doc-service — сканує api digital-document-service за допомогою спеціального сканування ZAP, розробленого спеціально для api. Щоб отримати доступ до API, ми використовуємо сценарій автентифікації за допомогою Selenium, щоб отримати дійсні заголовки Cookie і User-Agent. Після завершення сканування звіт завантажується в defectdojo. Той самий процес дійсний для всіх інших API. Swagger:
+https://digital-document-service-proxy-mode-ci-proxy.apps.cicd2.mdtu-ddm.projects.epam.com/v3/api-docs
+
+dast-api-scan-dig-sign-ops - сканує api dig-signature-ops. Swagger:
+https://dig-sign-ops-proxy-mode-ci-proxy.apps.cicd2.mdtu-ddm.projects.epam.com/v3/api-docs
+
+dast-api-scan-form-schema - сканує api form-schema-provider. Swagger: https://form-schema-provider-mdtu-ddm-edp-cicd-proxy-mode-ci-proxy.apps.cicd2.mdtu-ddm.projects.epam.com/v3/api-docs/all
+
+dast-api-scan-user-proc - сканує API user-process-management. Swagger:
+https://user-proc-mng-proxy-mode-ci-proxy.apps.cicd2.mdtu-ddm.projects.epam.com/user-process-management/v3/api-docs
+
+dast-api-scan-user-task - сканує api user-task-management. Swagger:
+ttps://user-task-mng-proxy-mode-ci-proxy.apps.cicd2.mdtu-ddm.projects.epam.com/user-task-management/v3/api-docs
+
+ 
+dast-api-scan-reg-regulation - сканує registry-regulation-management api. Посилання на API було змінено на rmm, оскільки в іншому випадку воно перевищувало б ліміт символів посилання, і API був би недоступний. Swagger:
+https://rrm-api-mdtu-ddm-edp-cicd-proxy-mode-ci-proxy.apps.cicd2.mdtu-ddm.projects.epam.com/v3/api-docs
+
+=== Тести в пайплайні:
+
+Усі тести, які виконуються в пайплайні, є спеціальними і не виконуються через Moon. Тести налаштовано для виконання через zapproxy https://www.zaproxy.org/, який працює як проксі-сервер безпеки та збирає всі дані, які проходять через нього, і використовує їх для подальшого сканування.
+
+=== Актуалізація середовища:
+
+Іноді стадії деплою або autosetup зазнають збою в пайплайні через зміни деяких компонентів або конфігурацій командами розробників. 
+
+Перше, що вам потрібно перевірити, чи правильні версії компонентів використовуються в конфігурації пайплайни. Їх можна перевірити та змінити в EDP https://edp-admin-console-mdtu-ddm-edp-cicd.apps.cicd2.mdtu-ddm.projects.epam.com/admin/edp/cd-pipeline/proxy-mode/update . Зазвичай найкраще місце для порівняння – sit. Якщо версії env EDP у проксі-режимі відрізняються від sit EDP, спробуйте змінити їх відповідно. Доцільно періодично перевіряти збіг версій, навіть якщо пайплайна працює нормально.
+
+=== Пуш результатів динамічного сканування в систему керування вразливостями
+
+В кінці кожного стейджа, де відбувається сканування за допомогою ZAP, відбувається пуш репорту зі знайденими вразливостями в Defectdojo. Усі продукти, які містять репорти з результатами динамічного сканування згруповані в Product Type https://mdtu-ddm-edp-cicd-defectdojo-uat.apps.cicd2.mdtu-ddm.projects.epam.com/product/type/5[DAST]
+
+== Керування вразливостями
+
+Структура в дефектоджо від більш загального до менш загального:
+
+*Product type* - кожен продукт обов'язково належить до одного з product type. Станом на зараз існують такі product type:
+
+* Uncategorized - дефолтний тип, куди завантажуються всі нові продукти. Обов'язково security engineer періодично переглядає продукти, які приписані до цього типу і переносить їх до інших типів продуктів. В ідеалі в Uncategorized не має бути продуктів.
+* Research and Development - тип, куди входять всі сервіси, які належать до DevSecOps Security Scope. Містить найбільше сервісів серед інших product type та найчастіше використовується в процесі тріажу вразливостей.
+* OutOfScope - містить сервіси, що були визначені як OutOfScope для security активностей (deprecated, internal repos etc.)
+* 3rd-party - зовнішні сервіси, які ми використовуємо без модифікацій. Поки в цій групі лише geo-server
+* Security products - сервіси, задеплоєні DevSecOps командою. Вони не підлягають тріажу, оскільки не йдуть в інсталер, але інформація з вразливостями може бути корисною при плануванні оновлень.
+* DAST - репорти з результатами динамічного сканування з  https://jenkins-mdtu-ddm-edp-cicd.apps.cicd2.mdtu-ddm.projects.epam.com/job/proxy-mode-cd-pipeline/[proxy-mode-cd-pipeline] 
+
+*Product* - продукт в Defectdojo відповідає одному сервісу (наприклад, bpms чи excerpt-service-api).
+
+*Engagement* - сутність всередині продукта, в яку завантажуються тести з різних сканерів. За яким принципом створювати engagements та як часто їх міняти - рішення суто індивідуальне. У нас для всіх продуктів створюється engagement за тегами в геріті порелізно (наприклад, енгейджмент може називатися "Scans for release 1.9.7"). Енгейджмент закривається та створюється новий у двох випадках: змінився тег релізу в геріті або пройшло 3 місяці з дати створення енгейджменту. Це необхідно, щоб мати можливість відслідкувати як змінювалась кількість вразливостей між релізами, побачити в якому саме релізі з'явилася певна вразливість. 
+
+*Test* - сутність всередині енгейджменту, яка містить один репорт одного сканера. Наприклад, "Semgrep Scan", "Trivy Scan". 
+
+=== Групування в Defectdojo
+
+Defectdojo дозволяє групувати файндінги в рамках одного тесту. Після налаштування це відбувається автоматично.
+
+Для semgrep та kics файндінги згруповані по finding_title, для detect-secrets по file_path, для trivy по component_name. Це означає, що якщо trivy знайде 10 вразливостей в одному компоненті, буде створений не 20 тікетів в джирі, а 1 тікет з описом на 10 вразливостей. Аналогічно, такий самий процес працює для finding_title (Наприклад, знайдена відсутня User інструкція в 10 Dockerfiles) та file_path (в одному файлі знайдено 10 секретів). Групування зменшує кількість тікетів та дозволяє логічніше розприділити зусилля на фікс вразливостей.
+
+=== Можливість встановити Security Baseline
+
+Всі продукти в Defectdojo містять Custom Fields: Container_Security_Severity_Baseline, Detect_Secrets_Severity_Baseline, IAAC_Severity_Baseline, SCA_Severity_Baseline, Semgrep_Severity_Baseline. 
+
+По дефолту всі ці поля створюються зі значенням Disabled, що означає, що Security baseline не встановлена. Ці поля потрібні для того, щоб валити пайплайни, якщо в скані присутні вразливості певної Severity та вище. Наприклад, якщо Container_Security_Severity_Baseline = High, а в Trivy скані присутня хоч одна High чи Critical вразливість, тоді security-quality-gate буде падати з помилкою. 
+
+Змінити значення Custom Field можна в Product - Settings - Edit Custom Fields
+
+=== Triage вразливостей
+
+Спочатку варто відфільтрувати вразливосмті по severity, product type (для статичних сканів Research and Development, для динамічних DAST) та по іншим полям, які можуть бути корисні. Для цього варто відкрити панель Open Findings. Після дослідження вразливостей та оцінки ризиків, варто обрати статус вразливості. Вразливість може одночасно містити декілька статусів. Можливі статуси:
+
+* Active - дефолтний статус, в якому завантажуються вразливості. Якщо забрати цей статус, тікет перейде в Inactive статус та не буде показуватися в Open Findings. 
+
+* Verified - цей статус ставиться після дослідження вразливості, коли підтверджено, що її буде передано на фікс. Без цього статусу буде неможливо запушити файндінг в джиру.
+
+* False Positive - файндінг не валідний, фікситися не буде
+
+* Mitigated - Файндінг пофікшений, зазвичайй цей статус підтягується аввтоматично, коли вразливість закривається за допомогою фікса. Дуже рідко цей статус треба проставляти вручну, але це можливо зробити за необхідності.
+
+Також в bulk edit є поле Risk Acceptance (опції Accept/unaccept) - при виборі accept ризики оцінені і обговорені з бізнесом. Ризик прийнято, фікса не буде.
+
+Якщо обраний статус Active+Verified, то є можливість запушити тікет в джиру, поставивши в Bulk edit галочку біля "Push to Jira".
+
+=== Інтеграція з Jira
+
+Подивитися налаштування інтеграції з Jira на рівні всього дефектдоджо можна https://mdtu-ddm-edp-cicd-defectdojo-uat.apps.cicd2.mdtu-ddm.projects.epam.com/jira[тут] . Також при додаванні нових продуктів у дефектдоджо, необхідно налаштувати інтеграцію з джирою на рівні продукту, інакше не буде можливості пушити в джиру файндінги з цього продукту. Приклад налаштувань Jira на рівні продукту https://mdtu-ddm-edp-cicd-defectdojo-uat.apps.cicd2.mdtu-ddm.projects.epam.com/product/5/edit[тут]. Важливо виставити правильні лейбли. Для статичних сканів label=SAST, для динамічних label=DAST.
+
+Тікети в Джирі створюються в епіку https://jiraeu.epam.com/browse/MDTUDDM-3017[Security Vulnerabilities]. Тікети створюються в статусі Open та заасайнені на дефолтну людину на проекті. Обов'язково треба перевести тікет в статус In Analysis, бо зі статусу Open тікет не зможе перейти в статус Closed у разі успішного фікса, і буде помилка. Також бажано змінити Asignee на відповідального за конкретний тікет. 
+
+Дефектдоджо підтримує двосторонню інтеграцію з Jira. Це значить, якщо вразливість буде пофікшена і тому відсутня в нових сканах, то Defectdojo відправить сигнал в джиру, щоб перевести тікет в статус Closed. І навпаки, якщо тікет в статусі Closed, а вразливість з'явилася знову, то Defectdojo переведе тікет в статус Open. Так само можна управляти тікетами в дефекдоджо з джири - якщо закрити тікет в джирі, то закриється і вразливість в Defectdojo.
+
+== Керування залежностями
+
+Dependency-Track - це відкрите програмне забезпечення, яке призначене для управління залежностями та аналізу безпеки компонентів в програмних проектах. Основна мета Dependency-Track - це допомогти розробникам та інженерам у виявленні та вирішенні потенційних проблем безпеки, пов'язаних із залежностями, використовуваними в їх програмному забезпеченні.
+
+За допомогою Dependency-Track розробники можуть ефективно керувати ризиками безпеки, пов'язаними з використанням сторонніх компонентів у своєму програмному забезпеченні та приймати відповідні заходи для його поліпшення.
+
+У dependency track сервіс ідетифікується сукупністю двох речей: project name та version. Project name = назві сервісу, a version завжди дорівнює 1. По суті у dependency track завжди зберігається лише поточна версія сервісу. 
+
+у dependency track завантажується репорт формату cyclonedx та декомпозується методом SBOM. Sbom містить повний список компонентів сервісу та залежності між ними. На відміну від репортів статичних і динамічних сканерів, цей репорт не містить виявлених вразливостей в компонентах. Аналіз виявлених компонентів на вразливості проводить сам dependency track, звертаючись до різноманітних баз вразливостей.
+
+Dependency track дуже допомагає в роботі з транзитивними залежностями, оскільки можна перевірити, наскільки глибоко в графі залежностей знаходиться транзитивна вразливість. Треба перейти в vulnerabilities, біля назви компоненту натиснути "show in dependency graph" і dependency track покаже, в якому місці в графі містяться різні версії компоненту.
+
+Defectdojo містить лише вразливі компоненти, тоді як Dependency Track містить всі компоненти. Також Dependency Track надає можливість візуалізувати де саме знаходяться компоненти в рамках одного сервісу за допомогою dependency графу. Крім того, dependency track дозволяє зробити запит по всім сервісам і відповісти на питання: які сервіси містять компонент певної версії, що може бути корисним при розробці.
+
+У dependencytrack налаштована інтеграція з Defectdojo, як це налаштувати дивись https://docs.dependencytrack.org/integrations/defectdojo/[тут]. Тому всі знайдені вразливості періодично (наразі інтервал налаштований раз в годину, цей параметр можна змінити) пушаться в Дефектдоджо.
+
+== Цілісність при розробці програмного забезпечення
+
+Для реалізації цілісності при розробці ПЗ був обраний CIS Software Supply Chain Security Guide. Таблиця з порівняннями з іншими фреймворками знаходиться https://kb.epam.com/pages/viewpage.action?pageId=1782762755[тут]. 
+
+Оцінка відповідності проекту до CIS Software Supply Chain Security Guide знаходиться за https://kb.epam.com/display/MDTUDDM/CIS+Software+Supply+Chain+Security+Assessment[посиланням].
+
+Щодо більшості вимог з статусом Non-Valid заведені тікети в епіку https://jiraeu.epam.com/browse/MDTUDDM-12999[Гарантія цілісності компонентів платформи] .

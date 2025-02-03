@@ -1,0 +1,173 @@
+= Відправлення повідомлень користувачам: _Send User Notification (v1)_
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+== Загальна інформація
+
+Інтеграційне розширення *Send User Notification* дозволяє налаштовувати автоматичне надсилання повідомлень користувачам через внутрішні та зовнішні канали в рамках бізнес-процесу. Делегат дозволяє адаптувати формат і зміст повідомлень на основі динамічних шаблонів у регламенті, а також вибирати Keycloak-реалми доставлення. Використовується у завданнях типу *Send Task*.
+
+.Короткі відомості про делегат
+|===
+|Назва |Пояснення
+
+|Бізнес-назва інтеграційного розширення
+|*Send User Notification*
+
+|Службова назва інтеграційного розширення
+|`${sendUserNotificationDelegate}`
+
+|Назва файлу у бібліотеці розширень
+|`sendUserNotification.json`
+|===
+
+== Перед початком
+
+include::partial$admonitions/install-element-templates.adoc[]
+
+== Налаштування
+
+Делегат *Send User Notification* призначений для використання у завданнях типу *Send Task* бізнес-процесу. Він дозволяє налаштувати ключові параметри відправки повідомлень, включаючи отримувача, шаблон, тему повідомлення, мовні налаштування та реалми доставлення.
+
+TIP: Повідомлення можуть надсилатися через кілька каналів, включаючи _inbox_, _електронну пошту_ або _мобільний додаток "ДіЯ"_ (за умови їхньої активації).
+
+=== Налаштування завдання
+
+. Створіть завдання типу *Send Task* у бізнес-процесі.
+. Назвіть завдання, наприклад, `Відправка повідомлення в inbox`.
+. Застосуйте шаблон делегата, обравши *Send User Notification* у списку налаштувань завдання.
++
+image:bp-modeling/bp/element-temp/send-task/send-user-notification/send-user-notification-4.png[]
+
+=== Налаштування делегата
+
+Для налаштування делегата вкажіть наступні параметри:
+
+Recipient ::
+У полі *Recipient* вкажіть ідентифікатор отримувача повідомлення. Наприклад, для відправки повідомлення ініціатору процесу, можна використати JUEL-функцію `xref:bp-modeling/bp/juel-functions/users/initiator.adoc[initiator()]`:
++
+[source,groovy]
+----
+${initiator().userName}
+----
++
+[TIP]
+====
+Для надсилання повідомлення користувачу, який завершив попереднє завдання, використовуйте функцію `xref:bp-modeling/bp/juel-functions/users/completer.adoc[completer()]`:
+
+[source,groovy]
+----
+${completer('taskDefinitionId').userName}
+----
+де `taskDefinitionId` -- ID попередньої задачі.
+====
+
+Realm ::
+Виберіть *Realm* для відправлення повідомлень, залежно від типу користувача, наприклад, `CITIZEN` для отримувачів послуг або `OFFICER` для надавачів.
+
+Subject ::
+Вкажіть тему повідомлення як текст. Наприклад, `Автоматичне відправлення повідомлень у inbox-template-ubki`. Це значення визначає заголовок повідомлення у `inbox`.
+
+Notification message template ::
+У полі *Notification message template* вкажіть назву шаблону повідомлення напряму, як константу. Наприклад, `feature-inbox-template-ubki`. Важливо, щоб назва збігалася із наявним шаблоном у регламенті вашого реєстру.
++
+[TIP]
+====
+Шаблон повідомлення можна також отримати динамічно, наприклад, як значення з форми процесу. Докладніше про це ви можете дізнатися на сторінці xref:bp-modeling/bp/element-templates/send-task-templates/send-user-notification-v2.adoc[].
+====
+
+Notification template model ::
+У полі *Notification template model* вкажіть змінну `${templateModel}`, яка зберігає дані для заповнення шаблону. Ця змінна створюється попереднім Groovy-скриптом і включає значення полів форми, наприклад, дату відкриття кредиту (`dateCredOpen`) та ім'я кредитора (`creditor`).
+
+Notification Language ::
+У полі *Notification Language* вкажіть мову, наприклад, `de` для німецької.
++
+IMPORTANT: Значення має відповідати стандарту *ISO 639-1*. Якщо поле порожнє, буде використана мова за замовчуванням у реєстрі.
++
+[TIP]
+====
+Для автоматичного вибору мови, обраної користувачем у Кабінеті, скористайтеся JUEL-функцією `xref:bp-modeling/bp/juel-functions/users/completer.adoc[completer()]` і методом `language`. Наприклад:
+
+[source,groovy]
+----
+${completer(<task_id>).language}
+----
+
+де `<task_id>` -- ідентифікатор завдання користувача у бізнес-процесі.
+====
+
+== Приклад використання у бізнес-процесі
+
+=== Опис бізнес-процесу
+
+Цей бізнес-процес автоматизує відправлення повідомлень у `inbox` користувача. Процес включає два ключові етапи:
+
+. *Підготовка шаблону повідомлення*.
+. *Відправлення повідомлення користувачеві*.
+
+[TIP]
+====
+[%collapsible]
+.Де можна знайти приклад бізнес-процесу?
+=====
+include::partial$snippets/demo-reg-reference-examples-ua.adoc[]
+
+*Send User Notification* — делегат, який використовується у всіх бізнес-процесах, що потребують автоматичного надсилання повідомлень.
+
+Процес можна знайти за ключовими словами — *_feature-auto-send-inbox_*.
+
+image:bp-modeling/bp/element-temp/send-task/send-user-notification/send-user-notification-0.png[]
+
+У Кабінеті користувача бізнес-процес буде доступний у розділі *Доступні послуги*.
+=====
+====
+
+=== Кроки процесу
+
+. *Старт процесу*:
+
+* Процес розпочинається подією *Start Event*, де ініціатором визначається користувач, який отримає повідомлення. У полі *Start initiator* вкажіть `initiator`.
++
+image:bp-modeling/bp/element-temp/send-task/send-user-notification/send-user-notification-1.png[]
+
+. *Підготовка шаблону повідомлення*:
+
+* Виконується завдання *Script Task* з Groovy-скриптом для підготовки даних шаблону.
++
+image:bp-modeling/bp/element-temp/send-task/send-user-notification/send-user-notification-2.png[]
+
+* Скрипт формує об'єкт `templateModel` з поточною датою та ім'ям кредитора:
++
+[source,groovy]
+----
+import java.text.SimpleDateFormat
+def date = new Date()
+def dateFormat = new SimpleDateFormat("MM/dd/yyyy HH:mm:ss")
+
+def templateModel = S([:], 'application/json')
+templateModel.prop("dateCredOpen", dateFormat.format(date))
+templateModel.prop("creditor", "Monobank")
+
+execution.removeVariable('templateModel')
+set_transient_variable('templateModel', S(templateModel, 'application/json'))
+----
+Цей скрипт виконує такі кроки:
+
+* Створює об'єкт `templateModel` та додає до нього поля `dateCredOpen` (з поточною датою) та `creditor` (значення -- `Monobank`).
+* Зберігає `templateModel` як транзитну змінну для використання у наступному завданні.
+
+. *Відправка повідомлення*:
++
+Виконується завдання *Send Task* з делегатом *Send User Notification* для відправки сформованого повідомлення користувачу. Опис налаштувань див. у розділі вище.
++
+image:bp-modeling/bp/element-temp/send-task/send-user-notification/send-user-notification-3.png[]
+
+=== Результат виконання
+
+Цей бізнес-процес автоматизує відправлення повідомлення, яке містить дані про поточну дату та кредитора. Користувач отримує повідомлення у скриньку повідомлень (_inbox_) Кабінету із контекстуально налаштованим змістом та визначеним заголовком.
+
+TIP: Детальніше про локалізовані повідомлення у реєстрі див. на сторінці xref:registry-admin/user-notifications/localized-notifications.adoc[].
+
+== Пов'язані сторінки
+
+* xref:registry-admin/user-notifications/user-notifications-overview.adoc[]
+* xref:registry-admin/user-notifications/localized-notifications.adoc[]
+* xref:bp-modeling/bp/element-templates/send-task-templates/send-user-notification-v2.adoc[]

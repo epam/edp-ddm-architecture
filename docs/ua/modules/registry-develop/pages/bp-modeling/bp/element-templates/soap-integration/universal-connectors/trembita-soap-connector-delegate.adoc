@@ -1,0 +1,341 @@
+= Загальний Trembita SOAP-конектор: _Trembita SOAP connector_
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+== Загальна інформація
+
+[CAUTION]
+====
+Конектор можна використати для інтеграції з будь-яким SOAP-сервісом, зареєстрованим у СЕВ ДЕІР "Трембіта". Є делегатом.
+
+Детальніше про налаштування взаємодії з "Трембітою" див. на сторінці xref:registry-admin/external-integration/cp-integrate-trembita.adoc[].
+====
+
+*Trembita SOAP connector* -- інтеграційне розширення-делегат *`${trembitaSoapConnectorDelegate}`*, призначене для виклику зовнішнього SOAP-сервісу через ШБО "Трембіта". Воно налаштовується у бізнес-процесі за допомогою шаблону *Trembita SOAP connector* (*_trembitaSoapConnectorDelegate.json_*).
+
+[#configure-trembita-soap-delegate]
+== Налаштування делегата
+
+Делегат конфігурується за допомогою спеціального шаблону-розширення для сервісної (системної) задачі бізнес-процесу.
+
+. Створіть *Service Task* (Сервісну задачу).
+
+. На панелі справа натисніть `*Select*`, оберіть та налаштуйте шаблон *Trembita SOAP connector* зі списку:
+
+. У полі `*Name*` секції *General* вкажіть назву задачі. Наприклад, `Відправлення запита до ЄДР`.
+
+. Розділ *Custom properties*:
+
+* У полі `*Trembita system name*` вкажіть назву зовнішньої системи-учасника СЕВ ДЕІР "Трембіта", з якою встановлено підключення через адміністративну панель *Control Plane*. Наприклад, *`trembita-registry-test`*.
+
+* У полі `*Trembita service name*` вкажіть назву сервісу зовнішньої системи "Трембіта", куди необхідно виконати запит. Наприклад, *`testAction`*.
++
+NOTE: [.underline]#Назва сервісу = SOAP Action#. Вона визначає, який процес або програму необхідно викликати, коли запит надсилається клієнтом сервісу.
+
+* У полі `*Content type*` визначається формат представлення даних та кодування. За замовчуванням -- *`text/xml;charset=UTF-8;`*.
+
+* У полі *`Request payload`* вкажіть змінну, яка містить дані запита. Наприклад, *`${requestPayload}`*.
++
+NOTE: *`${requestPayload}`* формується попередньо у скрипті (_див. детальніше -- xref:#request-trembita-soap-connector[]_).
++
+Тіло запита може виглядати так:
++
+.Тіло запита згідно з контрактом для сервісу ЄДР
+====
+[source,xml]
+----
+<ns2:SearchSubjects xmlns:ns2="http://nais.gov.ua/api/sevdeir/EDR" xmlns:ns3="http://x-road.eu/xsd/xroad.xsd" xmlns:ns4="http://x-road.eu/xsd/identifiers">
+	<ns2:code>$edrpou</ns2:code>
+</ns2:SearchSubjects>
+----
+====
+
+* У полі `*Result variable*` вкажіть змінну, до якої необхідно записати відповідь від сервісу. Наприклад, `*edrResponseBody*`.
+
++
+image:registry-develop:bp-modeling/ext-integration/connectors/trembita-connector/trembita-connector-1.png[]
+
++
+.Відповідь від API згідно з контрактом для сервісу ЄДР
+====
+[source,xml]
+----
+<soap11env:Envelope xmlns:soap11env="http://schemas.xmlsoap.org/soap/envelope/" xmlns:tns="http://nais.gov.ua/api/sevdeir/EDR" xmlns:xroad="http://x-road.eu/xsd/xroad.xsd" xmlns:id="http://x-road.eu/xsd/identifiers">
+   <soap11env:Header>
+        ...
+   </soap11env:Header>
+   <soap11env:Body>
+      <tns:SearchSubjectsResponse>
+         <tns:SubjectList>
+            <tns:SubjectInfo>
+               <tns:state>1</tns:state>
+               <tns:state_text>зареєстровано</tns:state_text>
+               <tns:name>Сидоренко Василь Леонідович</tns:name>
+               <tns:url>http://zqedr-api.nais.gov.ua/1.0/subjects/2222</tns:url>
+               <tns:code>2222</tns:code>
+               <tns:id>2222</tns:id>
+            </tns:SubjectInfo>
+         </tns:SubjectList>
+      </tns:SearchSubjectsResponse>
+   </soap11env:Body>
+</soap11env:Envelope>
+----
+
+[NOTE]
+Делегат повертає відповідь у вигляді об'єкта типу https://javadoc.io/static/org.camunda.spin/camunda-spin-core/1.6.3/org/camunda/spin/xml/SpinXmlElement.html[SpinXmlElement].
+====
+
+== Використання у бізнес-процесі на прикладі надсилання запита до сервісу ЄДР
+
+Розглянемо приклад використання розробленого інтеграційного конектора у бізнес-процесі, який має взаємодію із SOAP-сервісом ЄДР (_тут -- виконує пошук інформації про посадову особу за кодом ЄДРПОУ (атрибутом `edrpou`)_).
+
+[TIP]
+====
+Скористайтеся референтними прикладами бізнес-процесу та UI-форм для кращого розуміння деталей моделювання:
+
+* [*] Бізнес-процес: _link:{attachmentsdir}/bp-modeling/soap-connectors/trembita-connector.bpmn[trembita-connector.bpmn]_
+* [*] Форма введення даних: _link:{attachmentsdir}/bp-modeling/soap-connectors/soap-http-connector-edrpou-search-in-edr.json[soap-http-connector-edrpou-search-in-edr.json]_
+* [*] Форма перегляду результату: _link:{attachmentsdir}/bp-modeling/soap-connectors/soap-http-connector-edrpou-edr-result-view.json[soap-http-connector-edrpou-edr-result-view.json]_
+====
+
+[NOTE]
+====
+Конектор можна використати для інтеграції з будь-яким SOAP-сервісом, зареєстрованому у СЕВ ДЕІР "Трембіта".
+====
+
+. Створіть бізнес-процес і додайте пул до панелі моделювання.
++
+image:registry-develop:bp-modeling/ext-integration/connectors/trembita-connector/trembita-connector-2.png[]
+
+. Створіть стартову задачу для ініціювання процесу.
++
+[WARNING]
+====
+Для того, щоб використовувати змінну `*initiator*` у бізнес-процесі, необхідно визначити її на стартовій події як `*initiator*` у полі `*Start initiator*`.
+
+image:registry-develop:bp-modeling/ext-integration/connectors/soap-http/soap-http-2-1.png[]
+
+====
+
+=== Користувацька задача введення даних для пошуку в іншому реєстрі
+
+Далі змоделюйте користувацьку задачу (*User Task*), оберіть шаблон *User Form* (користувацька UI-форма) та виконайте налаштування.
+
+. Введіть назву задачі. Наприклад, `Ввести ЄДРПОУ для пошуку`.
+. У полі `*ID*` введіть ідентифікатор задачі (`activity_id`). Його ви можете використовувати надалі у бізнес-процесі відповідно до вашої логіки. Наприклад, `*searchEdrpouCodeOfficer*`.
+. У полі `*Form key*` введіть службову назву UI-форми вводу даних. Наприклад, `*soap-http-connector-edrpou-search-in-edr*`.
+. У полі `Assignee` введіть токен ініціатора процесу -- `${initiator}`.
+
+image:registry-develop:bp-modeling/ext-integration/connectors/soap-http/soap-http-3.png[]
+
+Приклад UI-форми на інтерфейсі користувача може виглядати так: ::
++
+image:registry-develop:bp-modeling/ext-integration/connectors/soap-http/soap-http-5.png[]
+
+[#request-trembita-soap-connector]
+=== Скрипт для виконання запита через Trembita SOAP-конектор
+
+Далі сформуйте Groovy-скрипт, в якому необхідно визначити параметри, а саме _тіло_ запита й опціонально -- _заголовки_, які будуть використані SOAP-конектором для отримання даних в іншому реєстрі.
+
+[WARNING]
+====
+Делегат _автоматично додасть наступні системні заголовки_ при виконанні запита до SOAP-сервісу.
+
+.Перелік і структура заголовків
+[%collapsible]
+=====
+[source,xml]
+----
+<xro:client iden:objectType="?" xmlns:xro="http://x-road.eu/xsd/xroad.xsd" xmlns:iden="http://x-road.eu/xsd/identifiers">
+    <iden:xRoadInstance>?</iden:xRoadInstance>
+    <iden:memberClass>?</iden:memberClass>
+    <iden:memberCode>?</iden:memberCode>
+    <iden:subsystemCode>?</iden:subsystemCode>
+</xro:client>
+<xro:service iden:objectType="SERVICE" xmlns:xro="http://x-road.eu/xsd/xroad.xsd" xmlns:iden="http://x-road.eu/xsd/identifiers">
+    <iden:xRoadInstance>?</iden:xRoadInstance>
+    <iden:memberClass>?</iden:memberClass>
+    <iden:memberCode>?</iden:memberCode>
+    <iden:subsystemCode>?</iden:subsystemCode>
+    <iden:serviceCode>?</iden:serviceCode>
+    <iden:serviceVersion>?</iden:serviceVersion>
+</xro:service>
+<xro:userId xmlns:xro="http://x-road.eu/xsd/xroad.xsd">?</xro:userId>
+<xro:id xmlns:xro="http://x-road.eu/xsd/xroad.xsd">?</xro:id>
+<xro:protocolVersion xmlns:xro="http://x-road.eu/xsd/xroad.xsd">?</xro:protocolVersion>
+----
+=====
+====
+
+. Створіть скрипт-задачу (*Script Task*).
+. Введіть назву. Наприклад, `Підготувати дані для запита`.
+. Відкрийте візуальний редактор скриптів та напишіть необхідний скрипт.
++
+image:registry-develop:bp-modeling/ext-integration/connectors/soap-http/soap-http-4.png[]
+
+Загалом скрипт може виглядати так: ::
++
+image:registry-develop:bp-modeling/ext-integration/connectors/trembita-connector/trembita-connector-3.png[]
+
+* 3.1. Отримуємо значення коду `*edrpou*`, який ввели на першій формі вводу даних (`*formData*`):
++
+[source,groovy]
+----
+def edrpou = submission('searchEdrpouCodeOfficer').formData.prop('edrpou').value()
+----
+
+* 3.2. Отримуємо токен авторизації для доступу до сервісу за допомогою JUEL-функції *`get_trembita_auth_token()`*.
++
+[source,groovy]
+----
+def registryAuthSecretValue = get_trembita_auth_token('trembita-registry-test')
+----
++
+[NOTE]
+====
+Функція *`get_trembita_auth_token()`* дозволяє отримати токен авторизації для доступу до сервісів СЕВ ДЕІР "Трембіта", з якими попередньо налаштовано взаємодію у Control Plane (_див. детальніше -- xref:bp-modeling/bp/modeling-facilitation/modelling-with-juel-functions.adoc[]_).
+====
+
+* 3.3. Створюємо шаблон заголовка SOAP-запита із токеном авторизації.
++
+[source,groovy]
+----
+def authHeaderTagTemplate = """
+        <ns2:AuthorizationToken xmlns:ns2="http://nais.gov.ua/api/sevdeir/EDR" xmlns:ns3="http://x-road.eu/xsd/xroad.xsd" xmlns:ns4="http://x-road.eu/xsd/identifiers">
+            $registryAuthSecretValue
+        </ns2:AuthorizationToken>
+"""
+----
+
+* 3.4. Заповнюємо шаблон заголовка із токеном авторизації.
++
+[source,groovy]
+----
+def headerString = sprintf(authHeaderTagTemplate, registryAuthSecretValue)
+----
+
+* 3.5. Створюємо шаблон тіла SOAP-запита для пошуку суб'єкта за кодом ЄДРПОУ.
++
+[source,groovy]
+----
+def bodyTemplate = """
+ <ns2:SearchSubjects xmlns:ns2="http://nais.gov.ua/api/sevdeir/EDR" xmlns:ns3="http://x-road.eu/xsd/xroad.xsd" xmlns:ns4="http://x-road.eu/xsd/identifiers">
+            <ns2:code>$edrpou</ns2:code>
+        </ns2:SearchSubjects>
+"""
+----
+
+* 3.6. Заповнюємо шаблон тіла SOAP-запита зі значенням `*edrpou*`.
++
+[source,groovy]
+----
+def bodyString = sprintf(bodyTemplate, edrpou)
+----
+
+* 3.7. Створюємо шаблон SOAP-запита зі згенерованим заголовком та тілом.
++
+[source,groovy]
+----
+String requestTemplate = """
+<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/">
+    <SOAP-ENV:Header>
+        $headerString
+    </SOAP-ENV:Header>
+    <SOAP-ENV:Body>
+        $bodyString
+    </SOAP-ENV:Body>
+</SOAP-ENV:Envelope>
+"""
+----
++
+Змінні `*headerString*` та `*bodyString*` формуються з шаблонів `*authHeaderTagTemplate*` та `*bodyTemplate*` відповідно, де змінні `*$registryAuthSecretValue*` і `*$edrpou*` замінюються на значення змінних `*registryAuthSecretValue*` та *`edrpou`*, що були отримані на попередніх етапах у скрипті.
+
+* 3.8. Далі формуємо запит на отримання інформації про суб'єкт за його ЄДРПОУ.
++
+[source,groovy]
+----
+def requestPayload = sprintf(requestTemplate, headerString, bodyString)
+----
++
+Запит формується за допомогою змінної *`requestTemplate`*, в якій змінні *$headerString* і *$bodyString* замінюються на їх відповідні значення.
+
+* 3.9. Кінцевий запит зберігаємо у змінній `*requestPayload*` і додаємо до тимчасових змінних за допомогою функції *`set_transient_variable()`*. Значення цієї змінної ми використаємо як вхідний параметр запита у налаштуваннях Trembita SOAP-конектора (_див. детальніше -- xref:#configure-trembita-soap-delegate[]_).
++
+[source,groovy]
+----
+set_transient_variable('requestPayload', requestPayload)
+----
++
+TIP: Тимчасові змінні дозволяють зберігати дані на певний час, щоб вони були доступні наступним етапам скрипту (до наступної користувацької задачі), але не були збережені назавжди.
+
+
+=== Сервісна задача для відправлення пошукового запита до іншого реєстру
+
+Далі необхідно створити сервісну задачу, застосувати та налаштувати делегат для *Trembita SOAP*-конектора.
+
+TIP: Див. детальніше у розділі xref:#configure-trembita-soap-delegate[].
+
+[#trembita-soap-script-form-output]
+=== Скрипт для виводу даних на UI-форму користувача
+
+Далі необхідно передати дані на UI-форму, отримані в іншому реєстрі за допомогою SOAP-http-конектора. Для цього спочатку сформуйте відповідний скрипт, який зможе це зробити.
+
+. Створіть скрипт-задачу (*Script Task*).
+. Введіть назву. Наприклад, `Підготовка отриманих даних для виведення на форму`.
+. Відкрийте візуальний редактор скриптів та напишіть необхідний скрипт.
++
+image:registry-develop:bp-modeling/ext-integration/connectors/soap-http/soap-http-6.png[]
+
+Загалом скрипт може виглядати так: ::
++
+image:registry-develop:bp-modeling/ext-integration/connectors/trembita-connector/trembita-connector-4.png[]
+
+* 3.1. Формуємо JSON-об'єкт із параметрами *`state`*, `*name*`, `*code*`, `*id*`, щоб передати їх на форму.
+
+* 3.2. Зберігаємо об'єкт до змінної *`payload`*, яку ми й використаємо як вхідний параметр для передачі даних на форму.
++
+._Скрипт для виводу даних на UI-форму користувача_
+[%collapsible]
+====
+[source,groovy]
+----
+def payload = [:]
+
+        payload['state'] = getValueByPropertyName("state_text")
+        payload['name'] = getValueByPropertyName("name")
+        payload['code'] = getValueByPropertyName("code")
+        payload['id'] = getValueByPropertyName("id")
+
+        set_transient_variable('payload', S(payload, 'application/json'))
+
+        def getValueByPropertyName(String propName) {
+            return edrResponseBody.childElement("Body")
+            .childElement("http://nais.gov.ua/api/sevdeir/EDR", "SearchSubjectsResponse")
+            .childElement("SubjectList")
+            .childElement("SubjectInfo")
+            .childElement(propName)
+            .textContent()
+}
+----
+====
+
+=== Користувацька задача передачі даних на UI-форму
+
+Насамкінець необхідно вивести отримані в іншому реєстрі та опрацьовані скриптом дані на UI-форму користувача.
+
+Змоделюйте користувацьку задачу (*User Task*), оберіть шаблон *User Form* (користувацька UI-форма) та виконайте налаштування.
+
+. Введіть назву задачі. Наприклад, `Переглянути дані з ЄДР`.
+. У полі `*ID*` введіть ідентифікатор задачі (`activity_id`). Наприклад, `*writeResultForm*`.
+. У полі `*Form key*` введіть службову назву UI-форми вводу даних. Наприклад, `*soap-http-connector-edrpou-edr-result-view*`.
+. У полі `Assignee` введіть токен ініціатора процесу -- `${initiator}`.
+. У полі `*Form data pre-population*` вкажіть як змінну об'єкт із параметрами, які необхідно передати на форму, -- `*${payload}*`.
++
+TIP: Змінна формується у задачі xref:#trembita-soap-script-form-output[].
+
+image:registry-develop:bp-modeling/ext-integration/connectors/soap-http/soap-http-7.png[]
+
+Приклад UI-форми на інтерфейсі користувача може виглядати так: ::
++
+image:registry-develop:bp-modeling/ext-integration/connectors/soap-http/soap-http-8.png[]
+
+Змоделюйте задачу завершення процесу та збережіть зміни.

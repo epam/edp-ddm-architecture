@@ -1,0 +1,191 @@
+= Завдання 4. Оновлення ключів та сертифікатів цифрового підпису
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+== Мета завдання
+
+Виконання цього завдання має на меті: ::
+
+* [*] Навчити оновлювати ключі та сертифікати цифрового підпису для реєстру.
+
+== Передумови
+
+. Перед оновленням сертифікатів цифрового підпису завантажте необхідні файли:
+
+* Сертифікати АЦСК тестового середовища: https://iit.com.ua/download/productfiles/CAs.Test.All.json.
+* Сертифікати АЦСК тестового середовища: https://iit.com.ua/download/productfiles/CACertificates.Test.All.p7b.
+
++
+[WARNING]
+======
+При завантаженні тестових файлів, ви отримаєте у назвах значення `Test.All.`. Наприклад, _CACertificates.Test.All.p7b_.
+
+Видаліть значення `Test.All.` для обох типів сертифікатів. В результаті ви маєте отримати наступні назви:
+
+* _CACertificates.p7b_
+* _CAs.json_
+======
+
+. Ознайомтеся з інструкцією
+ xref:admin:registry-management/system-keys/control-plane-registry-keys.adoc[].
+
+
+== Процес виконання завдання
+
+=== Оновлення ключа системного підпису
+
+Для оновлення ключа системного підпису використовуйте інструкцію, наведену нижче інформацію та попередньо завантажені файли.
+
+. Заповніть наступні поля відповідними значеннями:
++
+--
+* *Тип носія*: `Файловий носій`;
+* *Файловий ключ (розширення .dat)*: _key-6.dat_;
+* *АЦСК, що видав ключ*: `Тестовий ЦСК АТ "ІІТ"`;
+* *Пароль до файлового ключа*: `123`;
+* *Перелік дозволених ключів*:  заповніть, використовуючи дані з файлу _allowed-keys.yml_.
+
+[TIP]
+====
+Завантажте наведені нижче файли та використовуйте попередньо підготовлений ключ цифрового підпису та дані про цей ключ:
+
+* файловий ключ для цифрового підпису для тестового користувача xref:registry-develop:attachment$registry-admin-study/task-3-update-registry-keys/key-6.dat[_key-6.dat_];
+* перелік дозволених ключів xref:attachment$registry-admin-study/task-3-update-registry-keys/allowed-keys.yml[_allowed-keys.yml_];
++
+====
+
+--
++
+image:registry-develop:registry-admin-study/task-3/task-3-01.png[]
+
+. Додайте декілька дозволених ключів. Для цього натисніть кнопку
+`*Додати ключ*`.
++
+image:registry-develop:registry-admin-study/task-3/task-3-03.png[]
++
+[NOTE]
+====
+У *переліку дозволених ключів *
+необхідно заповнити дані для усіх попередніх довірених ключів:
+
+* *Емітент ключа*: параметр `issuer` у файлі _allowed-keys.yml_;
+* *Серійний номер ключа*: параметр `serial` у файлі _allowed-keys.yml_.
+
+Усі дані беруться з файлу _allowed-keys.yml_.
+
+image:registry-develop:registry-admin-study/task-3/task-3-02.png[]
+====
++
+NOTE: Проміжним результатом буде заповнення всіх полів та вказані 2 дозволені ключі.
++
+image:registry-develop:registry-admin-study/task-3/task-3-04.png[]
+
+. Підтвердьте зміни, відкрийте *Запити на оновлення* та схваліть новий запит.
++
+image:registry-develop:registry-admin-study/task-3/task-3-05.png[]
++
+NOTE: Успішним результатом буде завершення пайплайну *MASTER-Build-`<registry-name>`* зі статусом *`SUCCESS`*, де `<registry-name>` -- назва вашого реєстру.
++
+image:registry-develop:registry-admin-study/task-3/task-3-06.png[]
+
+. Перевірте, що под  *`digital-signature-ops`*  знаходиться у стані `Running`.
++
+image:registry-develop:registry-admin-study/task-3/task-3-11.png[]
+
+. Впевніться, що дані було оновлено. Перейдіть до *Secrets* та пошуком знайдіть  *`digital-signature-data`* та *`digital-signature-env-vars`*.
++
+image:registry-develop:registry-admin-study/task-3/task-3-12.png[]
+
+. Перейдіть до секрету *`digital-signature-data`*, натисніть *`Reveal values`*.
++
+image:registry-develop:registry-admin-study/task-3/task-3-13.png[]
+
+. Порівняйте вміст allowed-keys із файлом _allowed-keys.yml_. +
+Перейдіть до секрету *`digital-signature-env-vars`*, натисніть *Reveal values*, та переконайтеся, що зазначені дані, відповідають тим, які ви вказали при заміні ключа.
++
+image:registry-develop:registry-admin-study/task-3/task-3-14.png[]
+
+[NOTE]
+====
+Результатом виконання цього підзавдання буде:
+
+[%interactive]
+* [ ] успішний білд;
+* [ ] перевірка поду;
+* [ ] перевірка _allowed keys.yml_.
+====
+
+=== Оновлення даних для перевірки підписів
+
+[IMPORTANT,caption=Особливості завантаження сертифікатів цифрового підпису]
+====
+[%collapsible]
+.Особливості завантаження сертифікатів CA та p7b
+=====
+При розгортанні та роботі з тестовим реєстром, використовуйте сертифікати тестового АЦСК, інакше пайплайн розгортання реєстру не пройде, а ви отримаєте помилку ініціалізації криптосервісу `digital-signature-ops`. Це станеться через те, що файли сертифікатів для виробничого середовища просто не містять даних про тестові АЦСК.
+
+Для промислового середовища використовуйте відповідні prod-сертифікати.
+
+CACertificates.p7b: ::
+
+* Сертифікати АЦСК тестового середовища: https://iit.com.ua/download/productfiles/CACertificates.Test.All.p7b[CACertificates.p7b].
+* Сертифікати АЦСК промислового середовища: https://iit.com.ua/download/productfiles/CACertificates.p7b[productfiles/CACertificates.p7b].
+
+CAs.json: ::
+* Сертифікати АЦСК тестового середовища: https://iit.com.ua/download/productfiles/CAs.Test.All.json[CAs.json].
+* Сертифікати АЦСК промислового середовища: https://iit.com.ua/download/productfiles/CAs.json[productfiles/CAs.json].
+
+[WARNING]
+======
+При завантаженні тестових файлів, ви отримаєте у назвах значення `Test.All`. Наприклад, _CACertificates.Test.All.p7b_.
+
+Видаліть значення `Test.All.` для обох типів сертифікатів. В результаті ви маєте отримати наступні назви:
+
+* _CACertificates.p7b_
+* _CAs.json_
+======
+=====
+====
+
+Щоб оновити дані для перевірки підписів, виконайте наступні кроки:
+
+. Перейдіть на вкладку *Дані для перевірки підписів*.
+
+. Оновіть дані, використовуючи попередньо завантажені файли.
++
+image:registry-develop:registry-admin-study/task-3/task-3-07.png[]
++
+--
+* У полі *Публічні сертифікати АЦСК (CACertificates.p7b)* завантажте сертифікат *_CACertificates.p7b_*.
+* У полі *Перелік АЦСК (розширення .json)*   завантажте сертифікат *_CAs.json_*.
++
+--
++
+NOTE: Успішним результатом буде підвантаження двох файлів.
++
+image:registry-develop:registry-admin-study/task-3/task-3-08.png[]
+
+. Підтвердьте зміни, відкрийте *Запити на оновлення* та схваліть новий запит.
++
+image:registry-develop:registry-admin-study/task-3/task-3-05.png[]
++
+NOTE: Успішним результатом буде завершення пайплайну *MASTER-Build-`<registry-name>`* зі статусом *`SUCCESS`*, де `<registry-name>` -- назва вашого реєстру.
++
+image:registry-develop:registry-admin-study/task-3/task-3-09.png[]
++
+image:registry-develop:registry-admin-study/task-3/task-3-10.png[]
+
+. Виконайте перевірку вмісту файлу *_CACertificates.p7b_*. Для цього перейдіть до секрету `*digital-signature-data*`, завантажте файл *_CACertificates.p7b_* із публічними сертифікатами АЦСК та порівняйте його з тим, який ви використали при заміні.
++
+image:registry-develop:registry-admin-study/task-3/task-3-15.png[]
+
+[NOTE]
+====
+Результатом виконання цього підзавдання буде:
+
+[%interactive]
+* [ ] підвантаження сертифікатів;
+* [ ] успішний білд;
+* [ ] перевірка вмісту файлу _CACertificates.p7b_.
+====
+
+

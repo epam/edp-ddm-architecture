@@ -1,10 +1,18 @@
-openapi: 3.0.1
+openapi: 3.0.3
 info:
-  title: Keycloak rest api extension
-  version: v1
+  title: Keycloak rest api extension API
+  description: This document describes Rest API of 'Keycloak rest api extension'
+  version: "1.0"
+tags:
+  - name: keycloak-rest-api-extension-api
+    description: Keycloak rest api extension API
+  - name: keycloak-rest-api-extension-api-v2
+    description: Keycloak rest api extension API v2
 paths:
   /admin/search/{realm}:
     post:
+      tags:
+        - keycloak-rest-api-extension-api
       summary: Search users by attributes
       operationId: searchUsersByAttribute
       parameters:
@@ -19,7 +27,7 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/SearchUserRequestDto'
-
+      deprecated: true
       responses:
         '200':
           description: Successful response
@@ -27,11 +35,11 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/UserRepresentation'
-      security:
-        - bearerAuth: []
 
   /admin/search-by-attributes/{realm}:
     post:
+      tags:
+        - keycloak-rest-api-extension-api
       summary: Search users by attributes
       operationId: searchUsersByAttributesDeprecated
       parameters:
@@ -54,14 +62,23 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/UserRepresentation'
-      security:
-        - bearerAuth: []
 
   /admin/v2/search-by-attributes/{realm}:
     post:
+      tags:
+        - keycloak-rest-api-extension-api-v2
       summary: Search users by attributes (v2)
+      description: |-
+        ### Endpoint purpose:
+          This endpoint allows to search users by attributes. Pagination implemented with using of _imit_ as a page size and _continueToken_. Any response will provide a continue token that must be used for the next page. Returns -1 on the last page. If -1 was passed to a request as continue token it will return empty list of users with _continueToken=-1_. If 0 or _null_ was passed as continue token it will return first page. If 0 or _null_ was passed as _limit_ then pagination is disabled and request will return all found users.
       operationId: searchUsersByAttributesV2
       parameters:
+        - name: X-Access-Token
+          required: true
+          in: header
+          description: Token used for endpoint security
+          schema:
+            type: string
         - in: path
           name: realm
           required: true
@@ -69,10 +86,24 @@ paths:
             type: string
       requestBody:
         required: true
+        description: <b>attributesEquals</b> - contains a map of attributes that user must have with <b>exact match</b> to be returned, <b>attributesStartsWith</b> - contains a map of attributes that user must have with <b>starts with match</b> to be returned, <b>attributesThatAreStartFor</b> - contains a map of attributes that user must have <b>a start for</b> to be returned.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/SearchUsersByAttributesRequestDto'
+            example:
+              attributesEquals:
+                attribute1:
+                  - value1
+                  - value2
+              attributesStartsWith:
+                hierarchyCode:
+                  - "100"
+                  - "101.201"
+              attributesThatAreStartFor:
+                hierarchyCode:
+                  - "100.200.300"
+                  - "101"
       responses:
         '200':
           description: Successful response
@@ -80,17 +111,34 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SearchUsersByAttributesResponseDto'
-
-      security:
-        - bearerAuth: []
+              example:
+                users:
+                  - attributes:
+                      attribute1: value1
+                      hierarchyCode: "100"
+                    email: user@email.com
+                    firstName: John
+                    lastName: Doe
+                  - attributes:
+                      attribute1: value2
+                      hierarchyCode: "101.200"
+                    email: user2@email.com
+                    firstName: Steve
+                    lastName: Doe
+        '401':
+          description: Unauthorized. Missing auth token or wrong _realm_ in token
+          content:
+            application/json: {}
+        '403':
+          description: Forbidden users search request for specified realm
+          content:
+            application/json: {}
+        '404':
+          description: Can happen when could not find client for authorization
+          content:
+            application/json: {}
 
 components:
-  securitySchemes:
-    bearerAuth:
-      type: http
-      scheme: bearer
-      bearerFormat: JWT
-
   schemas:
     SearchUserRequestDto:
       type: object

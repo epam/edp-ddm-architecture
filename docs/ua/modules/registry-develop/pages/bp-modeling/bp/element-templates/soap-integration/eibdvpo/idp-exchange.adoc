@@ -1,0 +1,110 @@
+= Отримання інформації за довідкою внутрішньо переміщеної особи (ВПО): _Idp Exchange Service Registry Connector_
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+== Загальна інформація
+
+Для спрощення моделювання бізнес-процесів розроблено типовий інтеграційний конектор для обміну інформацією з ЄІБДВПОfootnote:[**ЄІБДВПО** -- Єдина інформаційна база даних внутрішньо переміщених осіб.], налаштування якого відбувається на схемах бізнес-процесів у додатку *Camunda Modeler*.
+
+_Наразі імплементовано 1 тип конектора для обміну даними з ЄІБДВПО:_
+
+* Типове інтеграційне розширення-конектор до SOAP-сервісу ЄІБДВПО для отримання інформації за довідкою внутрішньо переміщеної особи -- `idpExchangeServiceRegistryConnector`.
+
+== Налаштування делегата
+
+Розширення *Idp Exchange Service Registry Connector* -- інтеграційний конектор для виклику зовнішнього SOAP-сервісу для отримання даних за довідкою внутрішньо переміщеної особи (ВПО), який налаштовується за допомогою шаблону *Idp Exchange Service Registry Connector* (_idpExchangeServiceRegistryConnector.json_).
+
+[WARNING]
+====
+Передумови ::
+
+За умови налаштування шаблону у *Camunda Modeler* переконайтеся, що папка із застосунком *_resources/element-templates_* містить файл _idpExchangeServiceRegistryConnector.json_.
+====
+
+. Відкрийте Service Task.
+
+. На панелі налаштувань справа натисніть Open Catalog та оберіть шаблон *Idp Exchange Service Registry Connector* зі списку.
+
++
+image:registry-develop:bp-modeling/ext-integration/connectors/eibdvpo/get-vpo-eibdvpo-01.png[]
+
+. Налаштуйте обраний шаблон:
+
+* У полі `Name` вкажіть назву задачі. Це може бути призначення сервісної задачі. Наприклад, `Idp Exchange Service Registry`.
+* У полі `Url` вкажіть шлях до сервісу. Наприклад, `/idp/getCertificateByGUID/${submission('FORM_IDP_INPUT').formData.prop('uid').value()}`.
+* У полі `Metgod` вкажіть HTTP-спосіб взаємодії з сервісом `GET` або `POST`.
+* У полі `Body`, у разі використання методу `POST`, вкажіть тіло запиту. Наприклад, `${submission('FORM_IDP_INPUT').formData}`.
+* У полі `Result variable` вкажіть результівну змінну, до якої необхідно записати відповідь від сервісу -- `response`.
+
++
+image:registry-develop:bp-modeling/ext-integration/connectors/eibdvpo/get-vpo-eibdvpo-02.png[]
+
+== Імплементація на рівні API
+
+При налаштуванні шаблонів делегата у бізнес-процесі, делегати формують запити у форматі XML і за протоколом SOAP надсилають їх відповідним сервісам ЄІБДВПО.
+
+.Приклад SOAP-запита до API-сервісу IDPexchangeService згідно з контрактом:
+* запит за РНОКПП:
++
+[source, json]
+----
+{
+"method": "GET",
+"url": "/idp/getCertificateByRNOKPP/3333333333",
+"body": null
+}
+----
+* запит за UID (унікальний ідентифікатор довідки в реєстрі ВПО):
++
+[source, json]
+----
+{
+"method": "GET",
+"url": "/idp/getCertificateByGUID/79cefcce20028d82fc1d6dda6a498da2",
+"body": null
+}
+----
+
+.Приклад відповіді від API-сервісу IDPexchangeService згідно з контрактом:
+[source, json]
+----
+{
+  "person": {
+    "idpSurname": "ІВАНОВ",
+    "idpName": "ІВАН",
+    "idpPatronymic": "ІВАНОВИЧ",
+    "birthDate": "01.01.1979 00.00.00.000",
+    "birthPlace": "хутір Ізбушенка, Луганської області",
+    "RNOKPP": "3333333333",
+    "gender": "Жінка",
+    "documentType": "1",
+    "documentSerie": "ЕК",
+    "documentNumber": "633666",
+    "documentDate": "13.11.1997 00.00.00.000",
+    "documentIssuer": "Артемівським РВЛМУУМВС укр. в Луг. обл.",
+    "regAddress": "ЛУГАНСЬКА ОБЛАСТЬ/М.ЛУГАНСЬК ЛУГАНСЬК ВУЛ.ПОГРАНИЧНА буд.0",
+    "factAddress": "М.БАХМУТ ДОНЕЦЬКА ОБЛ. ВУЛ. МИРУ буд. 00 кв. 00",
+    "certificateNumber": "1419-69164",
+    "certificateDate": "02.09.2015 00.00.00.000",
+    "certificateIssuer": "М.БАХМУТ ДОНЕЦЬКА ОБЛ.",
+    "certificateState": "знята з обліку",
+    "UID": "f895ad5fbbe66605979afb7e18847c1b"
+  },
+  "accompanied": []
+}
+----
+
+[TIP]
+====
+У разі необхідності використання окремого параметру(наприклад, `idpSurname`) при моделюванні бізнес-процесу, можливе використання наступного скрипту:
+
+[source, groovy]
+----
+def serviceResponse = response.responseBody.elements().get(0)
+serviceResponse.prop('person').prop('idpSurname')
+
+
+accompanied.each{
+    it ...
+}
+----
+====
