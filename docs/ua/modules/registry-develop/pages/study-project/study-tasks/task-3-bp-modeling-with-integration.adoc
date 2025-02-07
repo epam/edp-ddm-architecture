@@ -48,12 +48,12 @@
 ====
 На етапі моделювання бізнес-процесу необхідно створити та зберегти відповідну BPMN-діаграму.
 
-Використовуйте файл _link:{attachmentsdir}/study-project/task-3/bp-schema/add-lab.bpmn[add-lab.bpmn]_ із готовою схемою бізнес-процесу для прикладу.
+Використовуйте файл `link:{attachmentsdir}/study-project/task-3/bp-schema/feature-add-lab.bpmn[feature-add-lab.bpmn]` із готовою схемою бізнес-процесу для прикладу.
 ====
 
 ==== Етапи моделювання бізнес-процесу
 
-В рамках цього завдання моделювальник має створити бізнес-процес, що складається з наступних етапів:
+В рамках цього завдання розробник має змоделювати бізнес-процес, що складається з наступних етапів:
 
 . xref:#create-pool-bp[].
 . xref:#create-start-event[].
@@ -90,25 +90,116 @@ image:registry-develop:bp-modeling/bp/modeling-instruction/bp-2.png[]
 ** у полі `Process name` вкажіть `Створення лабораторії`.
 
 +
-image:registry-develop:study-project/task-3/task-3-1-bp.png[]
+image:registry-develop:study-project/task-3/task-3-1-bp-ua.png[]
 
+
+image:registry-develop:study-project/task-3/task-3-1-1-bp-ua.png[]
+
+// TODO: Check and improve
 [#create-start-event]
 ==== Створення початкової події
 
-_Створіть початкову подію_. Для цього виконайте наступні кроки:
+*_Створіть початкову подію_*. Ця подія буде грати роль стартової форми, де користувач зможе ввести дані про лабораторію, інформацію про яку потрібно знайти, зокрема ім'я та код ЄДРПОУ.
 
-. На панелі інструментів, зліва, знайдіть елемент (коло) *CreateStartEvent* та перетягніть його до панелі моделювання:
-+
-image::registry-develop:bp-modeling/bp/bp-keys/bp-keys-create-start-event.png[]
-+
-image::registry-develop:bp-modeling/bp/bp-keys/bp-keys-create-start-event-1.png[]
+Під час налаштування події визначте її тип -- *Forms* > *Type*: *Embedded or External Task Forms*,
+
+далі у полі Form key вкажіть ключ форми: `feature-search-subject`. Ця UI-форма моделюється окремо в рамках процесу моделювання форм і вкладена як приклад у файлі `feature-search-subject.json`.
+
+---
+
 
 . На панелі налаштувань справа заповніть наступні параметри відповідними значеннями:
-** у полі `Name` введіть `Початок`;
-** у полі `Initiator` введіть `initiator`.
+
+* Розділ *General*:
+
+** У полі *Name* вкажіть назву. Наприклад, `Початок`.
+** У полі *ID* вкажіть ідентифікатор стартової події, наприклад, `start_event`. *_Альтернативно_* ви можете лишити згенероване значення за замовчуванням.
+
+* У розділі menu:Start initiator[Initiator] введіть `initiator`.
 
 +
-image:registry-develop:study-project/task-3/task-3-2-bp.png[]
+image:registry-develop:study-project/task-3/task-3-2-bp-ua.png[]
+
+//TODO: Check and improve
+==== Налаштування сервісного завдання для отримання даних про лабораторії
+
+Сервісне завдання перевіряє, чи існують лабораторії з однаковим кодом ЄДРПОУ або назвою перед додаванням нового запису в систему.
+
+---
+
+Налаштуйте завдання наступним чином:
+
+General ::
+У полі *Name* введіть назву завдання. Наприклад, `Отримання суб'єкта з дата-фабрики`.
+
+Template ::
+Використовуйте інтеграційне розширення (делегат) xref:bp-modeling/bp/element-templates/service-task-templates/entity-management/search-entities-in-data-factory.adoc[] для налаштування запиту.
+
++
+image:registry-develop:study-project/task-3/task-3-2-1-bp-ua.png[]
+
+Inputs ::
+Передайте вхідні параметри запиту у вигляді *Map* (ключ-значення), де ключами є назви полів форми -- `subjectCode` та `subjectType`. Значення ключів можна передати як вирази за допомогою JUEL-функції `xref:bp-modeling/bp/juel-functions/forms/submission.adoc[submission()]`.
+
+* `subjectCode`:
++
+[source,groovy]
+----
+${submission('start_event').formData.prop('subjectType').value().equals('ENTREPRENEUR')
+   ? submission('start_event').formData.prop('rnokppCode').value()
+   : submission('start_event').formData.prop('edrpou').value()}
+----
++
+[TIP]
+====
+Розбір виразу:
+
+* `submission('start_event').formData.prop('subjectType').value().equals('ENTREPRENEUR')`
+** Отримує значення `subjectType` зі стартової події `start_event`.
+** Перевіряє, чи дорівнює це значення `"ENTREPRENEUR"`.
+
+* Якщо умова `true` (тип суб'єкта — `ENTREPRENEUR`):
+** Викликає `submission('start_event').formData.prop('rnokppCode').value()` (повертає `rnokppCode`).
+
+* Якщо умова `false` (інший тип суб'єкта):
+** Викликає `submission('start_event').formData.prop('edrpou').value()` (повертає `edrpou`).
+====
+
+* `subjectType`:
++
+[source,groovy]
+----
+${submission('start_event').formData.prop('subjectType').value()}
+----
++
+Отримує значення `subjectType` зі стартової події `start_event`.
+
++
+image:registry-develop:study-project/task-3/task-3-2-2-bp-ua.png[]
+
+{empty}
+
+Custom properties ::
+
+* У полі *Resource* введіть ендпоінт `subject-equal-subject-type-equal-subject-code`. Це відповідник критерію пошуку `subject_equal_subject_type_equal_subject_code`, який було налаштовано в xref:registry-develop:study-project/study-tasks/task-1-registry-db-modeling.adoc#search-subject-by-type-code[навчальному завданні 1].
+
+* У полі *X-Access-Token* вкажіть токен ініціатора процесу, використовуючи JUEL-функцію `xref:bp-modeling/bp/juel-functions/users/initiator.adoc[initiator()]`:
++
+[source,groovy]
+----
+${initiator().accessToken}
+----
+
+* У полі *Result variable* збережіть результат виконання запиту у змінну `subjectResponse`.
+
++
+image:registry-develop:study-project/task-3/task-3-2-3-bp-ua.png[]
+
+
+//TODO: CHECK and confirm and expand
+==== Користувацька задача для підписання даних КЕП
+
+...
 
 [#create-task-add-lab-data]
 ==== Створення користувацької задачі для внесення даних про лабораторію
