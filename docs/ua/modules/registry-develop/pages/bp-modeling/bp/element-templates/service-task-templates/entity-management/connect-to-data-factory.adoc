@@ -1,0 +1,400 @@
+= Конектор до Фабрики даних: _Connect to data factory_
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+include::platform:ROOT:partial$admonitions/language-ua.adoc[]
+
+== Загальний огляд
+
+Розширення *Connect to data factory* -- загальний делегат для інтеграції бізнес-процесів із Фабрикою даних, який налаштовується за допомогою розробленого однойменного шаблону *Connect to data factory* (_dataFactoryConnectorDelegate.json_).
+
+Завдяки цьому делегату можна надіслати будь-який запит до будь-якого АРІ-ендпоінту для отримання будь-яких даних.
+Тобто можна використати для запита будь-яку точку інтеграції (ендпоінт), розроблену на рівні Фабрики даних, яка відображена у REST API реєстру, тобто у Swagger UI.
+
+TIP: Один цей загальний делегат здатен замінити усі інші делегати конкретного призначення.
+
+Делегат підтримує взаємодію із HTTP-методами, а саме: ::
+
+* `POST` -- для створення сутності/ресурсу. Відповідає БД-операції `CREATE`.
+* `GET`  -- для пошуку або читання даних. Відповідає БД-операції `READ`.
+* `PUT`  -- для оновлення сутності. Відповідає БД-операції `UPDATE`.
+* `DELETE` -- для видалення сутності. Відповідає БД-операції `DELETE`).
+* `PATCH`  -- для часткового оновлення (модифікації) сутності. Відповідає БД-операції `UPDATE`.
+
++
+image:release-notes:whats-new-1-6-15.png[]
+
+NOTE: Перед налаштуванням шаблону в Сamunda Modeler переконайтеся, що папка із застосунком _resources_ -> _element-templates_ містить файл _dataFactoryConnectorDelegate.json_.
+
+TIP: Ця інструкція розглядає випадки взаємодії делегата з різними типами ендпоінтів на прикладі сутності `ownership` (право власності).
+
+[#connect-to-df-post]
+== Налаштування взаємодії з POST-ендпоінтом
+
+HTTP-метод `POST` використовується для створення сутності/ресурсу в базі даних реєстру.
+
+Для налаштування шаблону делегата в Camunda Modeler, необхідно виконати наступні кроки:
+
+. Створіть *Service Task*.
+
+. На панелі налаштувань справа натисніть кнопку `Open Catalog`, оберіть відповідний шаблон *Connect to data factory* зі списку та натисніть `Apply` для підтвердження.
++
+image:registry-develop:bp-modeling/bp/element-temp/universal-delegate/connect-to-data-factory-delegate-1.png[]
+
+. Сконфігуруйте обраний шаблон:
+
+* У полі `Name` вкажіть назву задачі. Наприклад, `Створити сутність (POST)`.
+
+* Розгорніть блок *Method* у секції *Custom Fields* та оберіть з випадного списку HTTP-метод *`POST`* для взаємодії з Фабрикою даних.
++
+image:registry-develop:bp-modeling/bp/element-temp/universal-delegate/connect-to-data-factory-delegate-2.png[]
+
+* Розгорніть блок *Path* та вкажіть шлях до ресурсу у Фабриці даних, тобто назву ендпоінту, до якого необхідно звернутися:
+
+** Активуйте позначку `Local Variable Assignment` -> `ON`. Це дозволить створити локальну змінну для ендпоінту.
+** У полі `Variable Assignment Type` оберіть з випадного списку тип призначення змінної -- `String or Expression`.
+** У полі `Variable Assignment Value` вкажіть ендпоінт -- `/ownership`.
++
+NOTE: Назву ендпоінту необхідно вказувати через косу риску (`/`) як префікс.
+
++
+image:registry-develop:bp-modeling/bp/element-temp/universal-delegate/connect-to-data-factory-delegate-3.png[]
+
+* Метод `POST` не вимагає додаткових request-параметрів, окрім тіла запита, а отже блок *Request parameters* залиште порожнім.
++
+image:registry-develop:bp-modeling/bp/element-temp/universal-delegate/connect-to-data-factory-delegate-4.png[]
+
+* Розгорніть блок *Payload* та вкажіть вхідні параметри, тобто тіло запита:
+
+** Активуйте позначку `Local Variable Assignment` -> `ON`. Це дозволить створити локальну змінну для тіла запита.
+** У полі `Variable Assignment Type` оберіть з випадного списку тип призначення змінної -- `String or Expression`.
+** У полі `Variable Assignment Value` введіть тіло запита -- JSON-структуру із параметрами, які необхідно записати до БД. Наприклад, `${payload}`.
++
+[TIP]
+====
+У нашому прикладі ми передаємо змінну `${payload}`, до якої були збережені дані в одній із попередніх задач бізнес-процесу.
+
+.Схема тіла запита згідно з REST API реєстру
+=====
+[source,json]
+----
+{
+  "ownershipId": "b45b90c0-c53d-4fd3-aa82-02e8e7392345",
+  "code": "string",
+  "name": "string"
+}
+----
+=====
+====
+
++
+image:registry-develop:bp-modeling/bp/element-temp/universal-delegate/connect-to-data-factory-delegate-5.png[]
+
+* Розгорніть блок *X-Access-Token* та вкажіть введіть токен доступу до ресурсу:
+
+** Активуйте позначку `Local Variable Assignment` -> `ON`. Це дозволить створити локальну змінну для токена доступу.
+** У полі `Variable Assignment Type` оберіть з випадного списку тип призначення змінної -- `String or Expression`.
+** У полі `Variable Assignment Value` введіть токен доступу. Наприклад, `${completer('taskId').accessToken}`.
++
+[TIP]
+====
+Токен доступу береться з АБО ініціатора (наприклад, `$initiator().accessToken}`), АБО виконавця останньої користувацької задачі (наприклад, `${completer('taskDefinitionId').accessToken}`).
+====
+
++
+image:registry-develop:bp-modeling/bp/element-temp/universal-delegate/connect-to-data-factory-delegate-6.png[]
+
+* Розгорніть блок *X-Digital-Signature source* та вкажіть джерело для Ceph-документа, де зберігається підпис користувача (КЕП), накладений на дані UI-форми при внесенні:
+
+** Активуйте позначку `Local Variable Assignment` -> `ON`. Це дозволить створити локальну змінну для КЕП.
+** У полі `Variable Assignment Type` оберіть з випадного списку тип призначення змінної -- `String or Expression`.
+** У полі `Variable Assignment Value` вкажіть підпис користувача (КЕП). Наприклад, `${sign_submission('taskId').signatureDocumentId}`.
++
+[TIP]
+====
+У нашому прикладі ми передаємо КЕП із користувацької форми, де його застосовано, через функцію `sign_submission()` (_детальніше про використання JUEL-функцій у бізнес-процесах -- за xref:bp-modeling/bp/modeling-facilitation/modelling-with-juel-functions.adoc[посиланням]._)
+====
+
++
+image:registry-develop:bp-modeling/bp/element-temp/universal-delegate/connect-to-data-factory-delegate-7.png[]
+
+* Розгорніть блок *X-Digital-Signature-Derived source* та вкажіть джерело для Ceph-документа, де зберігається системний підпис, автоматично накладений на тіло запита:
+
+** Активуйте позначку `Local Variable Assignment` -> `ON`. Це дозволить створити локальну змінну для системного підпису.
+** У полі `Variable Assignment Type` оберіть з випадного списку тип призначення змінної -- `String or Expression`.
+** У полі `Variable Assignment Value` передайте системний підпис. `Наприклад, `${createPersonPayloadDerivedKey}`.
++
+TIP: У нашому прикладі ми передаємо змінну `${createPersonPayloadDerivedKey}`, до якої було збережено системний підпис в одній із попередніх задач бізнес-процесу.
+
++
+image:registry-develop:bp-modeling/bp/element-temp/universal-delegate/connect-to-data-factory-delegate-8.png[]
+
+* Розгорніть блок *Result variable* та вкажіть назву змінної процесу, до якої необхідно записати результат (за замовчуванням -- `response`):
+
+** Активуйте позначку `Local Variable Assignment` -> `ON`.
+** У полі `Variable Assignment Type` оберіть з випадного списку тип призначення змінної -- `String or Expression`.
+** У полі `Variable Assignment Value` введіть назву результівної змінної (за замовчуванням -- `response`).
++
+[NOTE]
+====
+Сервіс не повертає тіла у відповідь на `POST`-запит. В результаті повертається лише код відповіді та його опис.
+
+.Код відповіді та його опис згідно з REST API реєстру
+=====
+[source,http]
+----
+201
+OK, ресурс успішно створено
+----
+=====
+====
+
++
+image:registry-develop:bp-modeling/bp/element-temp/universal-delegate/connect-to-data-factory-delegate-9.png[]
+
+[#connect-to-df-get]
+== Налаштування взаємодії з GET-ендпоінтом
+
+HTTP-метод `GET` використовується для отримання даних сутності (`SELECT` за id із таблиці в БД) або пошуку даних за певними критеріями (`SELECT` із представлення (view)) в базі даних реєстру. Використовується для отримання об’єктів. Не змінює стан ресурсу.
+
+CAUTION: КЕП і системний підпис не використовуються при GET-запиті.
+
+Отримання даних сутності за id ::
+
+Цей випадок описує приклад отримання ресурсу за його ID із певної таблиці в базі даних.
++
+Для налаштування шаблону делегата в Camunda Modeler, необхідно виконати наступні кроки:
+
+. Створіть *Service Task*.
+
+. На панелі налаштувань справа натисніть кнопку `Open Catalog`, оберіть відповідний шаблон *Connect to data factory* зі списку та натисніть `Apply` для підтвердження.
++
+image:registry-develop:bp-modeling/bp/element-temp/universal-delegate/connect-to-data-factory-delegate-1.png[]
+
+. Сконфігуруйте обраний шаблон:
+
+* У полі `Name` вкажіть назву задачі. Наприклад, `Отримати сутніть за id (GET)`.
+
+* Розгорніть блок *Method* у секції *Custom Fields* та оберіть з випадного списку HTTP-метод *`GET`* для взаємодії з Фабрикою даних.
++
+image:registry-develop:bp-modeling/bp/element-temp/universal-delegate/connect-to-data-factory-delegate-10.png[]
+
+* Розгорніть блок *Path* та вкажіть шлях до ресурсу у Фабриці даних, тобто назву ендпоінту, до якого необхідно звернутися:
+
+** Активуйте позначку `Local Variable Assignment` -> `ON`. Це дозволить створити локальну змінну для ендпоінту.
+** У полі `Variable Assignment Type` оберіть з випадного списку тип призначення змінної -- `String or Expression`.
+** У полі `Variable Assignment Value` вкажіть ендпоінт. Наприклад, `/ownership/${response.value.responseBody.prop('id).value()}`.
++
+[NOTE]
+====
+Назву ендпоінту необхідно вказувати через косу риску (`/`) як префікс.
+
+Обов'язково необхідно передати ідентифікатор сутності. ID можна передати декількома способами. Наприклад:
+
+* через змінну як `${response.value.responseBody.prop('id).value()}`;
+* через змінну як `/${id}`;
+* через функцію `submission()` як `${submission('taskId').formData.prop('id').value()}`
+* через константне значення UUID напряму -- `/b45b90c0-c53d-4fd3-aa82-02e8e7392345`.
+====
++
+image:registry-develop:bp-modeling/bp/element-temp/universal-delegate/connect-to-data-factory-delegate-11.png[]
+
+* Цей випадок не вимагає додаткових request-параметрів, окрім параметрів шляху (path params), а отже блоки *Request parameters* та *Payload* залиште порожніми.
+
+* Розгорніть блок *X-Access-Token* та вкажіть введіть токен доступу до ресурсу:
+
+** Активуйте позначку `Local Variable Assignment` -> `ON`. Це дозволить створити локальну змінну для токена доступу.
+** У полі `Variable Assignment Type` оберіть з випадного списку тип призначення змінної -- `String or Expression`.
+** У полі `Variable Assignment Value` введіть токен доступу. Наприклад, `${completer('taskId').accessToken}`.
++
+[TIP]
+====
+Токен доступу береться з АБО ініціатора (наприклад, `$initiator().accessToken}`), АБО виконавця останньої користувацької задачі (наприклад, `${completer('taskDefinitionId').accessToken}`).
+====
++
+image:registry-develop:bp-modeling/bp/element-temp/universal-delegate/connect-to-data-factory-delegate-12.png[]
+
+* Розгорніть блок *Result variable* вкажіть назву змінної процесу, до якої необхідно записати результат (за замовчуванням -- `response`):
+
+** Активуйте позначку `Local Variable Assignment` -> `ON`.
+** У полі `Variable Assignment Type` оберіть з випадного списку тип призначення змінної -- `String or Expression`.
+** У полі `Variable Assignment Value` введіть назву результівної змінної (за замовчуванням -- `response`).
++
+[NOTE]
+====
+У відповідь на GET-запит сервіс повертає ресурс за його ID.
+
+.Приклад тіла відповіді згідно з REST API реєстру
+=====
+[source,json]
+----
+{
+  "ownershipId": "b45b90c0-c53d-4fd3-aa82-02e8e7392345",
+  "code": "string",
+  "name": "string"
+}
+----
+=====
+====
++
+image:registry-develop:bp-modeling/bp/element-temp/universal-delegate/connect-to-data-factory-delegate-13.png[]
+
+Пошук даних за критеріями ::
+
+Цей випадок описує приклад отримання списку ресурсів через запит до ендпоінту, що згенерований на базі відповідного представлення (Search Condition) у Фабриці даних.
++
+Для налаштування шаблону делегата в Camunda Modeler, необхідно виконати наступні кроки:
+
+. Створіть *Service Task*.
+
+. На панелі налаштувань справа натисніть кнопку `Open Catalog`, оберіть відповідний шаблон *Connect to data factory* зі списку та натисніть `Apply` для підтвердження.
++
+image:registry-develop:bp-modeling/bp/element-temp/universal-delegate/connect-to-data-factory-delegate-1.png[]
+
+. Сконфігуруйте обраний шаблон:
+
+* У полі `Name` вкажіть назву задачі. Наприклад, `Пошук даних за критеріями (GET)`.
+
+* Розгорніть блок *Method* у секції *Custom Fields* та оберіть з випадного списку HTTP-метод *`GET`* для взаємодії з Фабрикою даних.
++
+image:registry-develop:bp-modeling/bp/element-temp/universal-delegate/connect-to-data-factory-delegate-14.png[]
+
+* Розгорніть блок *Path* та вкажіть шлях до ресурсу у Фабриці даних, тобто назву ендпоінту, до якого необхідно звернутися:
+
+** Активуйте позначку `Local Variable Assignment` -> `ON`. Це дозволить створити локальну змінну для ендпоінту.
+** У полі `Variable Assignment Type` оберіть з випадного списку тип призначення змінної -- `String or Expression`.
+** У полі `Variable Assignment Value` вкажіть ресурс. Наприклад, `/staff-equal-constant-code`.
++
+[NOTE]
+====
+* Назва ресурсу відповідає назві ендпоінту для Search Condition у Фабриці даних.
+* Назву ресурсу необхідно вказувати через косу риску (`/`) як префікс.
+====
++
+image:registry-develop:bp-modeling/bp/element-temp/universal-delegate/connect-to-data-factory-delegate-15.png[]
+
+* Цей випадок вимагає налаштування додаткових параметрів запита -- query-параметрів. Розгорніть блок *Request parameters* та вкажіть query-параметри як пари ключ-значення (Map).
+
+** Активуйте позначку `Local Variable Assignment` -> `ON`. Це дозволить створити локальну змінну ендпоінту для Search Condition.
+** У полі `Variable Assignment Type` оберіть з випадного списку тип призначення змінної -- `Map`.
+** У полі `Variable Assignment Value` введіть ключ пошуку -- `constantCode` та його значення -- `${submission('formId').formData.prop('staffStatusCode').value()}`.
++
+[NOTE]
+====
+У нашому випадку значення ключа пошуку `constantCode` передається через функцію `submission()` (_детальніше про використання JUEL-функцій у бізнес-процесах -- за xref:bp-modeling/bp/modeling-facilitation/modelling-with-juel-functions.adoc[посиланням]._). Інші параметри є опціональними.
+
+.Приклад query-параметрів запита у форматі JSON згідно з REST API реєстру
+=====
+[source, json]
+----
+{
+"offset": 0,
+"constantCode": "string",
+"limit": 0
+}
+----
+=====
+====
++
+image:registry-develop:bp-modeling/bp/element-temp/universal-delegate/connect-to-data-factory-delegate-16.png[]
+
+* Розгорніть блок *X-Access-Token* та вкажіть введіть токен доступу до ресурсу:
+
+** Активуйте позначку `Local Variable Assignment` -> `ON`. Це дозволить створити локальну змінну для токена доступу.
+** У полі `Variable Assignment Type` оберіть з випадного списку тип призначення змінної -- `String or Expression`.
+** У полі `Variable Assignment Value` введіть токен доступу. Наприклад, `${completer('taskId').accessToken}`.
++
+[TIP]
+====
+Токен доступу береться з АБО ініціатора (наприклад, `$initiator().accessToken}`), АБО виконавця останньої користувацької задачі (наприклад, `${completer('taskDefinitionId').accessToken}`).
+====
++
+image:registry-develop:bp-modeling/bp/element-temp/universal-delegate/connect-to-data-factory-delegate-17.png[]
+
+* Розгорніть блок *Result variable* вкажіть назву змінної процесу, до якої необхідно записати результат (за замовчуванням -- `response`):
+
+** Активуйте позначку `Local Variable Assignment` -> `ON`.
+** У полі `Variable Assignment Type` оберіть з випадного списку тип призначення змінної -- `String or Expression`.
+** У полі `Variable Assignment Value` введіть назву результівної змінної (за замовчуванням -- `response`).
++
+[NOTE]
+====
+У відповідь на GET-запит сервіс повертає масив об'єктів/ресурсів за критеріями пошуку.
+
+.Приклад тіла відповіді від сервісу згідно з REST API реєстру
+=====
+[source,json]
+----
+[
+  {
+    "staffStatusId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "constantCode": "string",
+    "name": "string"
+  }
+]
+----
+=====
+====
++
+image:registry-develop:bp-modeling/bp/element-temp/universal-delegate/connect-to-data-factory-delegate-18.png[]
+
+[#connect-to-df-put]
+== Налаштування взаємодії з PUT-ендпоінтом
+
+HTTP-метод `PUT` використовується для оновлення сутності/ресурсу в базі даних реєстру. Використовується для зміни наявного ресурсу за вказаним ID.
+
+[NOTE]
+====
+Принцип налаштування делегата для оновлення сутності є ідентичним до xref:#connect-to-df-post[] за декількома винятками:
+
+* Розгорніть блок *Method* у секції *Custom Fields* та оберіть з випадного списку HTTP-метод *`PUT`* для взаємодії з Фабрикою даних.
++
+image:bp-modeling/bp/element-temp/universal-delegate/connect-to-data-factory-delegate-19.png[]
+
+* У блоці *Path* вкажіть ендпоінт `/ownership/${response.value.responseBody.prop('id).value()}` як локальну зміну із зазначенням ідентифікатора ресурсу, який необхідно оновити.
++
+image:bp-modeling/bp/element-temp/universal-delegate/connect-to-data-factory-delegate-20.png[]
+
++
+TIP: У нашому випадку ми передаємо значення id як змінну `${response.value.responseBody.prop('id).value()}` (_детальніше про опції передачі id ви можете переглянути у розділі xref:#connect-to-df-get[]_).
+
+* У блоці `Result variable` до результівної змінної зберігається такий код відповіді:
+
+.Код відповіді та його опис згідно з REST API реєстру
+=====
+[source,http]
+----
+204 OK
+----
+=====
+====
+
+== Налаштування взаємодії з DELETE-ендпоінтом
+
+HTTP-метод `DELETE` використовується для видалення сутності/ресурсу в базі даних реєстру. Використовується для видалення ресурсу за вказаним ID.
+
+[NOTE]
+====
+Принцип налаштування делегата для видалення сутності є ідентичним до xref:#connect-to-df-put[] за двома винятками:
+
+* У блоці *Method* вкажіть метод `DELETE` як локальну змінну.
++
+image:bp-modeling/bp/element-temp/universal-delegate/connect-to-data-factory-delegate-21.png[]
+* Видалення сутності не потребує визначення параметрів тіла запита, а тому залиште блок *Payload* порожнім.
++
+image:bp-modeling/bp/element-temp/universal-delegate/connect-to-data-factory-delegate-21-1.png[]
+====
+
+== Налаштування взаємодії з PATCH-ендпоінтом
+
+HTTP-метод `PATCH` використовується для часткового оновлення сутності/ресурсу в базі даних реєстру. Використовується для модифікації конкретних параметрів ресурсу за вказаним ID.
+
+[NOTE]
+====
+Принцип налаштування делегата для часткового оновлення сутності є ідентичним до xref:#connect-to-df-put[] за одним винятком:
+
+* Розгорніть блок *Method* у секції *Custom Fields* та оберіть з випадного списку HTTP-метод *`PATCH`* для взаємодії з Фабрикою даних.
+
++
+image:bp-modeling/bp/element-temp/universal-delegate/connect-to-data-factory-delegate-22.png[]
+====
+

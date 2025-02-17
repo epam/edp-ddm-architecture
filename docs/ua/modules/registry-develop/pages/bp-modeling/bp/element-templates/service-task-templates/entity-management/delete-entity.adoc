@@ -1,0 +1,140 @@
+= Видалення сутності з бази даних: _Delete entity from data factory_
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+== Загальна інформація
+
+Інтеграційне розширення *Delete entity from data factory* дозволяє налаштовувати завдання для видалення запису з бази даних у бізнес-процесі. Це розширення допомагає автоматизувати процеси видалення даних, забезпечуючи належне оброблення запитів та передачу даних між процесами. Розширення додає різні властивості до завдання типу *Service Task*.
+
+.Короткі відомості про делегат
+|===
+|Назва |Пояснення
+
+|Бізнес-назва інтеграційного розширення
+|*Delete entity from data factory*
+
+|Службова назва інтеграційного розширення
+|`${dataFactoryConnectorDeleteDelegate}`
+
+|Назва файлу у бібліотеці розширень
+|*_dataFactoryConnectorDeleteDelegate.json_*
+|===
+
+Розширення *Delete entity from data factory* використовується, коли необхідно видалити ресурс з бази даних за вказаним ID.
+
+== Перед початком
+
+include::partial$admonitions/install-element-templates.adoc[]
+
+== Налаштування
+
+Делегат *Delete entity from data factory* призначений для використання у завданнях типу *Service Task* бізнес-процесу. Він дозволяє налаштувати видалення записів з передачею необхідних параметрів.
+
+=== Налаштування завдання
+
+. Створіть завдання типу *Service Task* у вашому бізнес-процесі.
+. Назвіть завдання, наприклад, `Видалити запис у фабриці даних`.
+. Застосуйте шаблон делегата, обравши *Delete entity from data factory* зі списку в налаштуваннях завдання.
++
+image:bp-modeling/bp/element-temp/service-task/entity-management/delete-entity/delete-entity-1.png[]
+
+=== Налаштування делегата
+
+Виконайте наступні налаштування:
+
+Resource ::
+У полі *Resource* вкажіть назву ендпоінту / таблицю, з якої потрібно видалити запис. Наприклад, `delegation-authorized-person`.
++
+NOTE: На рівні API, цей ендпоінт виглядатиме наступним чином: `/delegation-authorized-person/{id}`, де `{id}` -- це параметр шляху, що вказує на ID ресурсу, який потрібно видалити.
+
+Resource id ::
+У полі *Resource id* вкажіть шлях до ID ресурсу, який потрібно видалити. Наприклад:
++
+[source,groovy]
+----
+${submission('UserTask_ShowAuthorizedPersons').formData.prop('editGrid').elements().get(0).prop('id').value()}
+----
++
+[NOTE]
+====
+ID ресурсу отримується з даних форми завдання `UserTask_ShowAuthorizedPersons`. У цьому прикладі береться перший елемент з `editGrid` і з нього отримується значення поля `id`.
+====
+
+X-Access-Token ::
+У полі *X-Access-Token* вкажіть токен доступу користувача, під яким виконується операція. Цей токен забезпечує повноваження виконавця задачі при видаленні даних.
+
+* Наприклад, вкажіть токен ініціатора процесу через JUEL-функцію `initiator()`, використавши метод `accessToken`:
++
+[source,groovy]
+----
+${initiator().accessToken}
+----
+
+* Альтернативно, ви можете вказати токен виконавця останнього користувацького завдання. Для цього ви можете використати JUEL-функцію `completer()`, передавши ID попередньої задачі та використавши метод `accessToken`. Наприклад:
++
+[source,groovy]
+----
+${completer('UserTask_SignRemovingAuthorizedPerson').accessToken}
+----
++
+** `completer()` — назва JUEL-функції.
+** `'UserTask_SignRemovingAuthorizedPerson'` — ID попередньої задачі користувача.
+** `accessToken` — метод, який передає JWT-токен користувача.
+
+X-Digital-Signature source ::
+У полі *X-Digital-Signature source* вкажіть джерело цифрового підпису. Це поле вказує на Ceph-документ із цифровим підписом даних КЕП на стороні користувача (_див. детальніше про підпис КЕП у делегатах xref:bp-modeling/bp/element-templates/user-task-templates/officer-sign-task.adoc[] та xref:bp-modeling/bp/element-templates/user-task-templates/citizen-sign-task.adoc[]_). Функція `sign_submission()` та метод `signatureDocumentId` дозволяють отримати підписані дані з UI-форми та передати ID Ceph-документа. Наприклад:
++
+----
+${sign_submission('UserTask_SignRemovingAuthorizedPerson').signatureDocumentId}
+----
+
+* `sign_submission` -- назва JUEL-функції.
+* `'UserTask_SignRemovingAuthorizedPerson'` -- ID завдання користувача, із даними, на які накладено КЕП.
+* `signatureDocumentId` -- метод, який дозволяє отримати ID Ceph-документа, в якому зберігаються підписані КЕП дані.
+
+X-Digital-Signature-Derived source ::
+* У полі *X-Digital-Signature-Derived source* вкажіть джерело системного цифрового підпису (цифрової печатки). Це поле вказує на Ceph-документ із системним цифровим підписом (цифровою печаткою), накладеним на дані. Наприклад, `${sysSignResult}`.
++
+[TIP]
+====
+Значення ключа/ідентифікатора системного підпису можна отримати після підпису даних за допомогою делегата xref:bp-modeling/bp/element-templates/service-task-templates/signature/system-signature-by-dso-service.adoc[]. Результат виконання операції підписання даних системним ключем буде збережено до вказаної змінної, наприклад, `sysSignResult`. Надалі ви зможете використати змінну в іншому місці процесу, зокрема під час збереження даних до БД або для генерування витягу тощо.
+====
+
+* (_Альтернативно_) Скористайтеся наступним виразом для отримання системного підпису:
++
+[source,groovy]
+----
+${execution.getVariable("secure-sys-var-ref-task-form-data-{taskDefinitionId}")}
+----
++
+де `taskDefinitionId` -- ID задачі, звідки потрібно отримати змінну.
+
+Result variable ::
+У полі *Result variable* задайте ім'я для змінної, в якій буде зберігатися відповідь від операції створення сутності, наприклад, `removeResponse`.
+
+include::registry-develop:partial$snippets/element-templates/delegate-204-ok-response.adoc[]
+
+== Приклад
+
+Ось приклад, який показує, як відповідний делегат використовується у бізнес-процесі:
+
+.Приклад. Налаштування делегата Delete entity from data factory
+image::bp-modeling/bp/element-temp/service-task/entity-management/delete-entity/delete-entity-2.png[]
+
+[TIP]
+====
+[%collapsible]
+.Де можна знайти приклад бізнес-процесу?
+=====
+include::partial$snippets/demo-reg-reference-examples-ua.adoc[]
+
+*Delete entity from data factory* -- делегат, який використовується у деяких бізнес-процесах, що потребують видалення записів у БД.
+
+Ви можете використати один із прикладів процесів за пошуком по ключовим словам — *_reference-authorization-management_*.
+
+У Кабінеті користувача бізнес-процес буде доступний у розділі *Доступні послуги*.
+=====
+====
+
+== Пов'язані сторінки
+
+* xref:bp-modeling/bp/element-templates/service-task-templates/entity-management/create-entity.adoc[]

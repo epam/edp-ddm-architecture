@@ -1,0 +1,166 @@
+= Створення сутностей у фабриці даних масивом: _Batch creation of entities in data factory_
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+include::platform:ROOT:partial$admonitions/language-ua.adoc[]
+
+CAUTION: Використовуйте розширену версію цього делегата: xref:registry-develop:bp-modeling/bp/element-templates/service-task-templates/entity-management/batch-creation-entities-v2.adoc[].
+
+Цей документ надає інструкції щодо завантаження даних до БД масивом.
+
+== Загальна інформація
+
+Інтеграційне розширення *Batch creation of entities in data factory* надає змогу створювати сутності масивом через REST API, що сприяє оптимізації взаємодії з базою даних.
+
+.Короткі відомості про делегат
+|===
+|Назва |Пояснення
+
+|Бізнес-назва інтеграційного розширення
+|*Batch creation of entities in data factory*
+
+|Службова назва інтеграційного розширення
+|`${dataFactoryConnectorBatchCreateDelegate}`
+
+|Назва файлу в бібліотеці розширень
+|*_dataFactoryConnectorBatchCreateDelegate.json_*
+|===
+
+== Перед початком
+
+include::partial$admonitions/install-element-templates.adoc[]
+
+== Налаштування делегата
+
+Делегат *Create Keycloak officer user* призначений для використання у сервісних завданнях (Service Task) бізнес-процесу. Він дозволяє завантажити сутності до бази даних масивом як *LIST*.
+
+[NOTE]
+====
+Максимальна кількість записів для завантаження даних масивом як *`LIST`* через цей делегат -- 50.
+====
+
+=== Налаштування сервісного завдання
+
+. Створіть завдання типу *Service Task* у вашому бізнес-процесі.
+. Назвіть завдання, наприклад, `Групове завантаження даних до БД`.
+. Застосуйте шаблон делегата, обравши відповідний зі списку в налаштуваннях завдання.
++
+image:registry-develop:bp-modeling/bp/element-temp/service-task/batch-creation/v1/batch-creation-v1-01.png[]
+
+=== Налаштування делегата
+
+У розділі *Custom properties* налаштуйте параметри завантаження:
+
+. У полі *Resource* вкажіть ресурс, тобто ендпоінт таблиці для зберігання даних, наприклад, `staff`.
+. У полі *Payload* введіть дані для створення в форматі тіла запита, наприклад, `${dataPayload}`.
++
+[NOTE]
+====
+Попередньо сформуйте *Payload* у скрипт-задачі процесу. Скрипт може виглядати наступним чином:
+
+[source,groovy]
+----
+// Завантаження даних персоналу з відповіді форми
+def personnelGrid = submission('signPersonnelFormActivity').formData.prop('personnelGrid').elements()
+
+// Перебір кожного об'єкта персоналу в списку
+for (var personnel : personnelGrid) {
+  // Якщо є файл сертифікату гігієніста і він не порожній, зберегти перший файл, інакше встановити null
+  if (personnel.hasProp('hygienistCertificateFile') && !personnel.prop('hygienistCertificateFile').isNull() && !personnel.prop('hygienistCertificateFile').elements().isEmpty()) {
+    def hygienistCertificateFile = personnel.prop('hygienistCertificateFile').elements().first()
+    personnel.prop('hygienistCertificateFile', hygienistCertificateFile)
+  } else {
+    personnel.prop('hygienistCertificateFile', null as String)
+  }
+
+  // Аналогічна перевірка та обробка для файлу з наказами
+  if (personnel.hasProp('ordersFile') && !personnel.prop('ordersFile').isNull() && !personnel.prop('ordersFile').elements().isEmpty()) {
+    def ordersFile = personnel.prop('ordersFile').elements().first()
+    personnel.prop('ordersFile', ordersFile)
+  } else {
+    personnel.prop('ordersFile', null as String)
+  }
+
+  // Аналогічна перевірка та обробка для файлу найму персоналу
+  if (personnel.hasProp('hireStaffFile') && !personnel.prop('hireStaffFile').isNull() && !personnel.prop('hireStaffFile').elements().isEmpty()) {
+    def hireStaffFile = personnel.prop('hireStaffFile').elements().first()
+    personnel.prop('hireStaffFile', hireStaffFile)
+  } else {
+    personnel.prop('hireStaffFile', null as String)
+  }
+}
+
+// Видалення змінної dataPayload для очищення або уникнення конфлікту даних
+execution.removeVariable('dataPayload')
+// Створення нової тимчасової змінної з оновленими даними персоналу
+set_transient_variable('dataPayload', S(personnelGrid.toString()))
+----
+
+Пояснення: ::
+
+Цей скрипт працює з інформацією про персонал, яка була зібрана через UI-форму. Ось що він робить:
+
+. *Завантажує список працівників* із форми.
+. *Для кожного працівника перевіряє наявність трьох видів файлів*: сертифікату гігієніста, файлу з наказами, та файлу про наймання на роботу.
+. *Якщо файл існує*, записує перший файл зі списку в відповідне поле.
+. *Якщо файл відсутній*, ставить відповідне поле порожнім.
+. *Видаляє старі дані* змінної `dataPayload`.
+. *Створює нову змінну* `dataPayload` із оновленою інформацією про працівників.
+
+====
+
+. У полі *X-Access-Token source* вкажіть токен доступу для авторизації, наприклад, `${completer('signPersonnelFormActivity').accessToken}`.
+. У полі *X-Digital-Signature source* вкажіть джерело цифрового підпису, наприклад, `${sign_submission('signPersonnelFormActivity').signatureDocumentId}`.
+. У полі *Result variable* вкажіть назву змінної, в яку потрібно записати результат. За замовчуванням -- `response`.
+
+.Приклад формування масиву даних (LIST)
+[source,groovy]
+----
+var data=
+'''
+[
+   {
+      "data":"test data",
+      "description":"some description"
+   },
+   {
+      "data2":"test data2",
+      "description2":"some description2"
+   }
+]
+'''
+
+execution.setVariable("jsonArray", S(data))
+----
+
+Пояснення: ::
+
+* Вказаний код створює рядок `data`, який містить JSON-масив із двома об'єктами. Кожний об'єкт містить пари ключ-значення -- дані, отримані з UI-форми.
+* Записує результат до змінної *`jsonArray`*, яка потім використовується при налаштуванні делегата.
+* Дані на форму можна завантажити як масив за допомогою компонента `*Edit Grid*` (_детальніше про моделювання форм -- за xref:registry-develop:bp-modeling/forms/components/edit-grid/edit-grid.adoc#save-data-array-edit-grid[посиланням]_).
+
+include::registry-develop:partial$snippets/element-templates/delegate-http-code-response.adoc[]
+
+== Приклад
+
+Нижче наведено приклад, який демонструє використання делегата *Batch creation of entities in data factory*:
+
+.Приклад. Внесення інформації про персонал масивом (LIST)
+image::registry-develop:bp-modeling/bp/element-temp/service-task/batch-creation/v1/batch-creation-v1-02.png[]
+
+[TIP]
+====
+[%collapsible]
+.Де можна знайти приклад бізнес-процесу?
+=====
+include::registry-develop:partial$snippets/demo-reg-reference-examples-ua.adoc[]
+
+Приклад BPMN-схеми процесу буде доступний у регламенті демо-реєстру за пошуком по ключовим словам -- *_feature-add-personnel_*. Назви форм ви можете знайти всередині відповідних користувацьких задач бізнес-процесу у полі *`Form key`*.
+=====
+====
+
+== Пов'язані сторінки
+
+* xref:registry-develop:bp-modeling/bp/element-templates/service-task-templates/entity-management/batch-creation-entities-v2.adoc[]
+* xref:bp-modeling/bp/element-templates/service-task-templates/entity-management/async-data-load-csv-delegate.adoc[]
+* xref:bp-modeling/bp/element-templates/service-task-templates/entity-management/create-entity.adoc[]
+* xref:bp-modeling/bp/element-templates/service-task-templates/entity-management/create-nested-entities.adoc[]

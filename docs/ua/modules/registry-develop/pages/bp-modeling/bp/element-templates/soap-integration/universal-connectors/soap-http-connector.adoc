@@ -1,0 +1,298 @@
+= Загальний SOAP HTTP-конектор: _SOAP http connector_
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+== Загальна інформація
+
+[CAUTION]
+====
+Конектор можна використати для інтеграції з будь-яким SOAP-сервісом. Не є делегатом.
+====
+
+Розширення *SOAP http connector* -- інтеграційний конектор  для виклику зовнішнього SOAP-сервісу, який налаштовується за допомогою шаблону *SOAP http connector* (_soapHttpConnector.json_).
+
+[#configure-soap-http-delegate]
+== Налаштування конектора
+
+Конектор конфігурується за допомогою спеціального шаблону-розширення для сервісної (системної) задачі бізнес-процесу.
+
+. Створіть *Service Task* (Сервісну задачу).
+
+. На панелі справа натисніть `*Select*`, оберіть та налаштуйте шаблон *SOAP http connector* зі списку:
+
+* У полі `*Name*` вкажіть назву задачі. `Наприклад, Пошук інформації за суб'єктом в ЄДР`.
+
+* У полі `*Url*` вкажіть адресу ресурсу (повний шлях до ендпоінту). Наприклад, `https://trembita-edr-registry-mock.apps.envone.dev.registry.eua.gov.ua/mockEDRService`.
+
+* У полі `*Headers*` вкажіть заголовки запита. Наприклад, *${requestHeaders}*.
+
+* У полі `*Payload*` вкажіть тіло запита. Наприклад, *`${requestPayload}`*.
+
+* У полі `*Result variable*` вкажіть змінну, до якої необхідно записати відповідь від сервісу. Наприклад, `*edrResponseBody*`.
+
++
+image:registry-develop:bp-modeling/ext-integration/connectors/soap-http/soap-http-1.png[]
+
+.Відповідь від API згідно з контрактом для сервісу ЄДР
+====
+[source,xml]
+----
+<soap11env:Envelope xmlns:soap11env="http://schemas.xmlsoap.org/soap/envelope/" xmlns:tns="http://nais.gov.ua/api/sevdeir/EDR" xmlns:xroad="http://x-road.eu/xsd/xroad.xsd" xmlns:id="http://x-road.eu/xsd/identifiers">
+   <soap11env:Header>
+        ...
+   </soap11env:Header>
+   <soap11env:Body>
+      <tns:SearchSubjectsResponse>
+         <tns:SubjectList>
+            <tns:SubjectInfo>
+               <tns:state>1</tns:state>
+               <tns:state_text>зареєстровано</tns:state_text>
+               <tns:name>Сидоренко Василь Леонідович</tns:name>
+               <tns:url>http://zqedr-api.nais.gov.ua/1.0/subjects/2222</tns:url>
+               <tns:code>2222</tns:code>
+               <tns:id>2222</tns:id>
+            </tns:SubjectInfo>
+         </tns:SubjectList>
+      </tns:SearchSubjectsResponse>
+   </soap11env:Body>
+</soap11env:Envelope>
+
+----
+
+[NOTE]
+Сервіс повертає відповідь у вигляді рядка, тобто об'єкта типу `*String*` у форматі XML.
+Надалі ви можете використати цю відповідь у xref:#soap-http-script-form-output[скрипті для виводу даних на UI-форму].
+====
+
+== Використання у бізнес-процесі на прикладі надсилання запита до сервісу ЄДР
+
+Розглянемо приклад використання розробленого інтеграційного конектора у бізнес-процесі, який має взаємодію із SOAP-сервісом ЄДР (_тут -- виконує пошук інформації про посадову особу за кодом ЄДРПОУ (атрибутом `edrpou`)_).
+
+[TIP]
+====
+Скористайтеся референтними прикладами бізнес-процесу та UI-форм для кращого розуміння деталей моделювання:
+
+* [*] Бізнес-процес: _link:{attachmentsdir}/bp-modeling/soap-connectors/soap-http-connector-edr.bpmn[soap-http-connector-edr.bpmn]_
+* [*] Форма введення даних: _link:{attachmentsdir}/bp-modeling/soap-connectors/soap-http-connector-edrpou-search-in-edr.json[soap-http-connector-edrpou-search-in-edr.json]_
+* [*] Форма перегляду результату: _link:{attachmentsdir}/bp-modeling/soap-connectors/soap-http-connector-edrpou-edr-result-view.json[soap-http-connector-edrpou-edr-result-view.json]_
+====
+
+. Створіть бізнес-процес і додайте пул до панелі моделювання.
++
+image:registry-develop:bp-modeling/ext-integration/connectors/soap-http/soap-http-2.png[]
+
+. Створіть стартову задачу для ініціювання процесу.
++
+[WARNING]
+====
+Для того, щоб використовувати змінну `*initiator*` у бізнес-процесі, необхідно визначити її на стартовій події як `*initiator*` у полі `*Start initiator*`.
+
+image:registry-develop:bp-modeling/ext-integration/connectors/soap-http/soap-http-2-1.png[]
+
+====
+
+=== Користувацька задача введення даних для пошуку в іншому реєстрі
+
+Далі змоделюйте користувацьку задачу (*User Task*), оберіть шаблон *User Form* (користувацька UI-форма) та виконайте налаштування.
+
+. Введіть назву задачі. Наприклад, `Ввести ЄДРПОУ для пошуку`.
+. У полі `*ID*` введіть ідентифікатор задачі (`activity_id`). Його ви можете використовувати надалі у бізнес-процесі відповідно до вашої логіки. Наприклад, `*searchEdrpouCodeOfficer*`.
+. У полі `*Form key*` введіть службову назву UI-форми вводу даних. Наприклад, `*soap-http-connector-edrpou-search-in-edr*`.
+. У полі `Assignee` введіть токен ініціатора процесу -- `${initiator}`.
+
+image:registry-develop:bp-modeling/ext-integration/connectors/soap-http/soap-http-3.png[]
+
+Приклад UI-форми на інтерфейсі користувача може виглядати так: ::
++
+image:registry-develop:bp-modeling/ext-integration/connectors/soap-http/soap-http-5.png[]
+
+[#request-soap-http-connector]
+=== Скрипт для виконання запита через SOAP-конектор
+
+Далі сформуйте Groovy-скрипт, в якому необхідно визначити параметри, а саме _заголовки_ та _тіло_ запита, які будуть використані SOAP-конектором для отримання даних в іншому реєстрі.
+
+. Створіть скрипт-задачу (*Script Task*).
+. Введіть назву. Наприклад, `Підготувати дані для запита`.
+. Відкрийте візуальний редактор скриптів та напишіть необхідний скрипт.
++
+image:registry-develop:bp-modeling/ext-integration/connectors/soap-http/soap-http-4.png[]
+
+Загалом скрипт може виглядати так: ::
++
+image:registry-develop:bp-modeling/ext-integration/connectors/soap-http/soap-http-4-1.png[]
+
+* 3.1. Отримуємо код ЄДРПОУ, який ввели на першій формі:
++
+[source,groovy]
+----
+def edrpou = submission('searchEdrpouCodeOfficer').formData.prop('edrpou').value()
+----
+
+* 3.2. Готуємо заголовки запита:
++
+[source,groovy]
+----
+def requestHeaders = [:]
+requestHeaders['SOAPAction'] = 'SearchSubjects'
+requestHeaders['Content-Type'] = 'text/xml;charset=UTF-8;'
+----
++
+NOTE: Підставте відповідне значення для свого запита замість `'SearchSubjects'`.
+
+* 3.3. Зберігаємо заголовки до транзитної змінної процесу `*requestHeaders*`. Значення цієї змінної ми використаємо як вхідний параметр запита у налаштуваннях SOAP-конектора.
++
+[source,groovy]
+----
+set_transient_variable('requestHeaders', requestHeaders)
+----
+
+* 3.4. Формуємо тіло SOAP-запита до API-сервісу ЄДР згідно з контрактом:
++
+.Тіло SOAP-запита
+[%collapsible]
+====
+[source,groovy]
+----
+def requestPayload = """
+<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/">
+  <SOAP-ENV:Header>
+    <ns3:id xmlns:ns2="http://nais.gov.ua/api/sevdeir/EDR"
+      xmlns:ns3="http://x-road.eu/xsd/xroad.xsd" xmlns:ns4="http://x-road.eu/xsd/identifiers">
+      a90606bb-242b-4937-a707-c860e2e2f8db
+    </ns3:id>
+    <ns3:userId xmlns:ns2="http://nais.gov.ua/api/sevdeir/EDR"
+      xmlns:ns3="http://x-road.eu/xsd/xroad.xsd" xmlns:ns4="http://x-road.eu/xsd/identifiers">
+      MDTUDDM
+    </ns3:userId>
+    <ns3:protocolVersion xmlns:ns2="http://nais.gov.ua/api/sevdeir/EDR"
+      xmlns:ns3="http://x-road.eu/xsd/xroad.xsd" xmlns:ns4="http://x-road.eu/xsd/identifiers">4.0
+    </ns3:protocolVersion>
+    <ns2:AuthorizationToken xmlns:ns2="http://nais.gov.ua/api/sevdeir/EDR"
+      xmlns:ns3="http://x-road.eu/xsd/xroad.xsd" xmlns:ns4="http://x-road.eu/xsd/identifiers">
+      1dc9f1f9b1e5be4d37c2b68993af243923ea7620
+    </ns2:AuthorizationToken>
+    <ns3:client xmlns:ns2="http://nais.gov.ua/api/sevdeir/EDR"
+      xmlns:ns3="http://x-road.eu/xsd/xroad.xsd" xmlns:ns4="http://x-road.eu/xsd/identifiers"
+      ns4:objectType="SUBSYSTEM">
+      <ns4:xRoadInstance>SEVDEIR-TEST</ns4:xRoadInstance>
+      <ns4:memberClass>GOV</ns4:memberClass>
+      <ns4:memberCode>43395033</ns4:memberCode>
+      <ns4:subsystemCode>IDGOV_TEST_01</ns4:subsystemCode>
+    </ns3:client>
+    <ns3:service xmlns:ns2="http://nais.gov.ua/api/sevdeir/EDR"
+      xmlns:ns3="http://x-road.eu/xsd/xroad.xsd" xmlns:ns4="http://x-road.eu/xsd/identifiers"
+      ns4:objectType="SERVICE">
+      <ns4:xRoadInstance>SEVDEIR-TEST</ns4:xRoadInstance>
+      <ns4:memberClass>GOV</ns4:memberClass>
+      <ns4:memberCode>00015622</ns4:memberCode>
+      <ns4:subsystemCode>2_MJU_EDR_prod</ns4:subsystemCode>
+      <ns4:serviceCode>SearchSubjects</ns4:serviceCode>
+    </ns3:service>
+  </SOAP-ENV:Header>
+  <SOAP-ENV:Body>
+    <ns2:SearchSubjects xmlns:ns2="http://nais.gov.ua/api/sevdeir/EDR"
+      xmlns:ns3="http://x-road.eu/xsd/xroad.xsd" xmlns:ns4="http://x-road.eu/xsd/identifiers">
+      <ns2:code>${edrpou}</ns2:code>
+    </ns2:SearchSubjects>
+  </SOAP-ENV:Body>
+</SOAP-ENV:Envelope>
+"""
+----
+====
++
+[TIP]
+====
+Підставляємо змінну *`${edrpou}`* у тіло запита:
+
+[source,xml]
+----
+<SOAP-ENV:Body>
+    <ns2:SearchSubjects xmlns:ns2="http://nais.gov.ua/api/sevdeir/EDR"
+      xmlns:ns3="http://x-road.eu/xsd/xroad.xsd" xmlns:ns4="http://x-road.eu/xsd/identifiers">
+      <ns2:code>${edrpou}</ns2:code>
+    </ns2:SearchSubjects>
+</SOAP-ENV:Body>
+
+----
+====
+* 3.5. Зберігаємо тіло запита до транзитної змінної процесу `*requestPayload*`. Значення цієї змінної ми використаємо як вхідний параметр запита у налаштуваннях SOAP-конектора.
++
+[source,groovy]
+----
+set_transient_variable('requestPayload', requestPayload as String)
+----
++
+NOTE: `*requestPayload*` необхідно передати як рядок (*`as String`*).
+
+Використовуйте параметри, збережені до змінних у скрипті, в рамках сервісної задачі та налаштуванні SOAP-конектора.
+
+=== Сервісна задача для відправлення пошукового запита до іншого реєстру
+
+Далі необхідно створити сервісну задачу, застосувати та налаштувати шаблон для *SOAP-http-конектора*.
+
+TIP: Див. детальніше у розділі xref:#configure-soap-http-delegate[].
+
+[#soap-http-script-form-output]
+=== Скрипт для виводу даних на UI-форму користувача
+
+Далі необхідно передати дані на UI-форму, отримані в іншому реєстрі за допомогою SOAP-http-конектора. Для цього спочатку сформуйте відповідний скрипт, який зможе це зробити.
+
+. Створіть скрипт-задачу (*Script Task*).
+. Введіть назву. Наприклад, `Підготовка отриманих даних для виведення на форму`.
+. Відкрийте візуальний редактор скриптів та напишіть необхідний скрипт.
++
+image:registry-develop:bp-modeling/ext-integration/connectors/soap-http/soap-http-6.png[]
+
+Загалом скрипт може виглядати так: ::
++
+image:registry-develop:bp-modeling/ext-integration/connectors/soap-http/soap-http-6-1.png[]
+
+* 3.1. Формуємо JSON-об'єкт з параметрами *`state`*, `*name*`, `*code*`, `*id*`, щоб передати їх на форму.
+
+* 3.2. Зберігаємо об'єкт до змінної *`payload`*, яку ми й використаємо як вхідний параметр для передачі даних на форму.
++
+._Скрипт для виводу даних на UI-форму користувача_
+[%collapsible]
+====
+[source,groovy]
+----
+def payload = [:]
+payload['state'] = getValueByPropertyName("state_text")
+payload['name'] = getValueByPropertyName("name")
+payload['code'] = getValueByPropertyName("code")
+payload['id'] = getValueByPropertyName("id")
+set_transient_variable('payload', S(payload, 'application/json'))
+
+def getValueByPropertyName(String propName) {
+    return S(edrResponseBody, 'application/xml').childElement("Body")
+            .childElement("http://nais.gov.ua/api/sevdeir/EDR", "SearchSubjectsResponse")
+            .childElement("SubjectList")
+            .childElement("SubjectInfo")
+            .childElement(propName)
+            .textContent()
+}
+----
+====
++
+NOTE: Функція *`S(edrResponseBody, 'application/xml')`* повертає об'єкт відповідно до специфікації https://javadoc.io/static/org.camunda.spin/camunda-spin-core/1.6.3/org/camunda/spin/xml/SpinXmlElement.html[SpinXmlElement].
+
+=== Користувацька задача передачі даних на UI-форму
+
+Насамкінець необхідно вивести отримані в іншому реєстрі та опрацьовані скриптом дані на UI-форму користувача.
+
+Змоделюйте користувацьку задачу (*User Task*), оберіть шаблон *User Form* (користувацька UI-форма) та виконайте налаштування.
+
+. Введіть назву задачі. Наприклад, `Переглянути дані з ЄДР`.
+. У полі `*ID*` введіть ідентифікатор задачі (`activity_id`). Наприклад, `*writeResultForm*`.
+. У полі `*Form key*` введіть службову назву UI-форми перегляду отриманих даних. Наприклад, `*soap-http-connector-edrpou-edr-result-view*`.
+. У полі `Assignee` введіть токен ініціатора процесу -- `${initiator}`.
+. У полі `*Form data pre-population*` вкажіть як змінну об'єкт із параметрами, які необхідно передати на форму, -- `*${payload}*`.
++
+TIP: Змінна формується у задачі xref:#soap-http-script-form-output[].
+
+image:registry-develop:bp-modeling/ext-integration/connectors/soap-http/soap-http-7.png[]
+
+Приклад UI-форми на інтерфейсі користувача може виглядати так: ::
++
+image:registry-develop:bp-modeling/ext-integration/connectors/soap-http/soap-http-8.png[]
+
+Змоделюйте задачу завершення процесу та збережіть зміни.
