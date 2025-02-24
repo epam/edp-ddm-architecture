@@ -1,60 +1,51 @@
-:sectnums:
-:sectanchors:
-//== Резервне копіювання та відновлення БД реєстру
 = Backing up and restoring registry databases
-//TODO: Is it the correct translation of the title?
-:toclevels: 5
-:experimental:
-:sectnums:
-:sectnumlevels: 5
-:sectanchors:
-:sectlinks:
-:partnums:
+include::platform:ROOT:partial$templates/document-attributes/default-set-en.adoc[]
 
-//Postgres Operator від Crunchy Data (PGO), який використовується для управління БД реєстру,включає в себе pgBackRest - рішення для резервного копіювання та відновлення з відкритим кодом. PGO робить зручним виконання багатьох поширених дій, необхідних протягом життєвого циклу бази даних, зокрема:
-The Postgres Operator by Crunchy Data (PGO), used for managing registry databases, includes pgBackRest, an open-source solution for backup and restoring. PGO facilitates the execution of many common tasks required throughout the lifecycle of a database, including:
+== Overview
 
-//* Налаштування розкладів автоматичного резервного копіювання та політик збереження
-* Configuring schedules for automatic backup and retention policies.
-//* Резервне копіювання даних у декілька місць
-* Backing up data to multiple locations.
-//**  Підтримка резервного сховища в Kubernetes, AWS S3 (або S3-сумісних системах, таких як MinIO), Google Cloud Storage (GCS) і Azure Blob Storage
-** Supporting backup storage in Kubernetes, AWS S3 (or S3-compatible systems like MinIO), Google Cloud Storage (GCS), and Azure Blob Storage.
-//* Одноразове створення резервних копій
-* Performing one-time backups
-//* Виконання «відновлення на певний момент часу» (PITR)
-* Performing point-in-time recovery (PITR).
-//* Клонування даних у новий екземпляр БД
-* Cloning data to a new database instance.
-//* та інше.
-* And more
+The platform enables reliable backup and restore processes for the registry databases,
+ensuring data protection against loss, supporting disaster recovery, and maintaining business continuity.
 
-//== Налаштування резервного копіювання
-[#_configuring_backup]
-== Configuring backup
-//За замовчанням операційний та аналітичний кластери Postgres налаштовані таким чином, що вони постійно архівують журнал попереднього запису (WAL) та роблять повну резеврну копію раз на добу. Політикою збереження налаштовано зберігання однієї повної копії, таким чином після створення нової копії pgBackRest очистить попередню копію та пов’язані з нею файли WAL.
-By default, the Postgres operational and analytical clusters are configured to continuously archive write-ahead logs (WAL) and create a full backup once a day.The retention policy is set to keep one full backup, so when a new backup is created, pgBackRest cleans up the previous backup and its associated WAL files.
+To achieve these capabilities,
+the platform uses the *Postgres Operator* by *Crunchy Data (PGO)* in combination with *pgBackRest*,
+an open-source, powerful backup and restore tool for PostgreSQL databases.
 
-//pgBackRest надає різні типи резервного копіювання, налаштувань політики збереження та розкладу резервного копіювання, які надають можливість налаштувати систему у відповідності з цільовими показниками точки відновлення (RPO), цільовим часом відновлення (RTO) та вимогами до викорастання простору.
-pgBackRest provides various types of backups, retention policy configurations, and backup schedule options to customize the system according to desired recovery point objectives (RPO), recovery time objectives (RTO), and space utilization requirements.
+*PGO* simplifies and automates many tasks related to back up and restore, including:
 
-//=== Управління розкладом резервного копіювання
-=== Managing backup schedules
-//Розклад можна налаштувати для всіх трьох типів резервних копій:
-Schedules can be configured for all three types of backups:
+* [*] Configuring automated backup schedules and retention policies
+* [*] Storing backups across multiple locations: Kubernetes, AWS S3 (and S3-compatible services like MinIO), Google Cloud Storage (GCS), and Azure Blob Storage
+* [*] Executing on-demand backups
+* [*] Supporting Point-In-Time Recovery (PITR)
+* [*] Cloning databases into new instances
 
-//* `full`: резервна копія всього кластера Postgres. Це найбільший з усіх типів резервного копіювання.
-* `full`: backup of the entire Postgres cluster. This is the largest among all types of backups.
-//* `differential`: резервна копія всіх даних з часу останньої повної резервної копії.
-* `differential` backup of all data since the last full backup.
-//* `incremental`: резервна копія всіх даних з моменту останнього повного, диференціального або інкрементного резервного копіювання.
-* `incremental`: backup of all data since the last full, differential, or incremental backup.
+== Backup configuration
 
-//Розклади резервного копіювання зберігаються в розділі `spec.backups.pgbackrest.repos.schedules`. Кожне значення в цьому розділі приймає рядок у форматі cron, який визначає розклад резервного копіювання.
-Backup schedules are stored in the `spec.backups.pgbackrest.repos.schedules` section. Each value in this section takes a string in cron format that defines the backup schedule.
+Challenge ::
 
-//Скажімо, політика резервного копіювання полягає в створенні повної резервної копії щотижня в неділю о 1 годині ночі та створенні інкрементних резервних копій о 1 годині ночі щодня, крім неділі. Конфігурація до нашої специфікації повинна виглядати подібно до:
-For example, the backup policy consists of creating a full backup every week on Sunday at 1 AM and creating incremental backups every day at 1 AM, except on Sundays. The configuration should look similar to:
+By default,
+both the operational and analytical Postgres clusters are configured
+to continuously archive Write-Ahead Logs (*WAL*) and create full backups daily.
+The current retention policy keeps only one full backup—when a new backup is created,
+*pgBackRest* automatically deletes the previous one along with its associated WAL files.
+
+Solution ::
+
+*pgBackRest* allows configuring various backup types, retention policies, and backup schedules to meet Recovery Point Objective (*RPO*), Recovery Time Objective (*RTO*), and efficient storage usage.
+
+=== Configuring backup schedules
+
+You can set schedules for the following backup types:
+
+* `full`: A complete backup of the entire Postgres cluster. This is the largest backup type.
+* `differential`: Backs up changes since the last full backup.
+* `incremental`: Backs up changes since the last full, differential, or incremental backup.
+
+{empty}
+
+Example: ::
+
+To create a full backup every Sunday at 1:00 AM and incremental backups every other day at 1:00 AM:
++
 [source,yaml]
 ----
 spec:
@@ -66,25 +57,35 @@ spec:
           full: "0 1 * * 0"
           incremental: "0 1 * * 1-6"
 ----
-//Щоб керувати запланованим резервним копіюванням, PGO створить кілька Kubernetes CronJobs, які виконуватимуть резервне копіювання в указані періоди. Резервні копії використовуватимуть конфігурацію, яку ви вказали.
-To manage scheduled backups, PGO will create several Kubernetes CronJobs that perform backups at the specified intervals. The backups will use the configuration you provided.
 
-//=== Управління політиками збереження резервних копій
+NOTE: Schedules are defined in the `spec.backups.pgbackrest.repos.schedules` section using *cron* format.
+
+*PGO* will generate corresponding *Kubernetes CronJobs* to automate the backup process.
+
 === Managing backup retention policies
 
-//PGO дозволяє встановити політики збереження резервних копій для повних і диференціальних резервних копій. Коли термін дії повної резервної копії закінчується, pgBackRest очистить усі пов’язані з нею резервні копії та файли WAL. Наприклад, якщо у вас є повна резервна копія з чотирма пов’язаними інкрементними резервними копіями, коли закінчується термін дії повної резервної копії, термін дії всіх її інкрементних резервних копій також закінчується.
-PGO allows you to set backup retention policies for full and differential backups. When the retention period of a full backup expires, pgBackRest will clean up all associated backups and WAL files. For example, if you have a full backup with four associated incremental backups, when the retention period of the full backup expires, the retention period of all its incremental backups also expires.
+*PGO* allows flexible control over backup retention policies for full and differential backups, ensuring a balance between historical backup availability and efficient disk usage.
 
-//Існує два типа політик `repo1-retention-full-type` які можна встановити:
-There are two types of `repo1-retention-full-type` policies that can be set:
+==== Retention logic
 
-//* `count`: на основі кількісті резервних копій, які ви хочете зберегти. Це значення за замовчанням.
-* `count`: based on the number of backups you want to retain. This is the default value.
-//* `time`: на основі часу в днях. Повні резервні копії, старші за `repo-retention-full`, буде видалено зі сховища, якщо є принаймні одна резервна копія, яка дорівнює або перевищує параметр `repo-retention-full`
-* `time`: based on the time in days. Full backups older than `repo-retention-full` will be removed from the repository if there is at least one backup that equals or exceeds the `repo-retention-full` parameter
+When a full backup expires,
+*pgBackRest* automatically deletes it along with its associated incremental and differential backups and corresponding *WAL* files.
 
-//Наприклад, ми хочемо зберігати повні резервні копії протягом 14 днів. Найзручніший спосіб зробити це через розділ `spec.backups.pgbackrest.global`:
-For example, if we want to retain full backups for 14 days, the most convenient way to do this is through the `spec.backups.pgbackrest.global` section:
+Example: ::
+
+If you have a full backup with four incremental backups,
+all incremental backups will be deleted when the full backup expires.
+
+==== Retention policy types
+
+There are two types of retention policies for full backups (`repo1-retention-full-type`):
+
+* `count` — Keeps a specified number of the most recent full backups. (_Default value_)
+* `time` — Retains backups for a specified number of days.
+
+==== Configuration sample
+
+To keep full backups for 14 days, add the following to `spec.backups.pgbackrest.global`:
 
 [source,yaml]
 ----
@@ -96,108 +97,227 @@ spec:
         repo1-retention-full-type: time
 ----
 
-//В такому випадку якщо ми маємо 2 резервні копії: одну 12-денну і другу 15-денну, жодна резервна копія не буде видалена тому що видалення 15-денної копії залишить лише 12-денну копію, що порушило б політику зберегання згідно з якою ми повинні мати принаймні одну резервну копію 14-денної давності, перш ніж видаляти старішу копію.
-In this case, if we have 2 backups: one 12-day-old and another 15-day-old, no backups will be deleted because deleting the 15-day-old backup would leave only the 12-day-old backup, which would violate the retention policy of having at least one backup of 14-day age before removing older backups.
+[NOTE]
+====
+If you have two backups—one 12 days old and another 15 days old—neither will be deleted.
+Deleting the 15-day-old backup would leave only the 12-day-old backup,
+violating the policy that requires at least one 14-day-old backup to be retained.
+====
 
-//Може бути так, що добовий об'єм WAL логів дуже значний і збереження простору у сховищі резервних копій важливіше за можливість виконувати відновлення на момент часу (PITR) на значну глибину. Для налаштування зберігання WAL логів для певного числа резервних копій pgBackRest має наступні параметри:
-It may be the case that the daily volume of WAL logs is significant, and saving storage space in the backup repository is more important than the ability to perform point-in-time recovery (PITR) to a significant depth. To configure the retention of WAL logs for a certain number of backups, pgBackRest has the following parameters:
+=== Managing WAL archiving
 
-//* `repo1-retention-archive` - Кількість резервних копій для яких буде збережено WAL
-* `repo1-retention-archive`: The number of backups for which WAL will be retained.
+When *WAL* log volume is significant,
+you can optimize storage by limiting the number of retained WAL logs without compromising recovery capabilities.
 
-//* `repo1-retention-archive-type` - Тип резервної копії для збереження WAL `(incr,diff,full)`. Якщо встановлено значення `full`, pgBackRest зберігатиме WAL для кількості повних резервних копій, визначених `repo-retention-archive`. Якщо встановлено значення diff , pgBackRest зберігатиме архівні журнали для кількості повних і диференціальних резервних копій, визначених `repo-retention-archive`. Якщо встановлено значення `incr`, pgBackRest зберігатиме журнали архіву для кількості повних, диференціальних і інкрементних резервних копій, визначених `repo-retention-archive`.
-* `repo1-retention-archive-type`: The type of backup for retaining WAL `(incr, diff, full)`. If set to `full`, pgBackRest will retain WAL for the number of full backups defined by repo-retention-archive. If set to `diff`, pgBackRest will retain archive logs for the number of full and differential backups defined by repo-retention-archive. If set to `incr`, pgBackRest will retain archive logs for the number of full, differential, and incremental backups defined by repo-retention-archive.
+*pgBackRest* provides the following parameters to manage WAL archiving:
 
-//=== Одноразове створення резервної копії
-//TODO: Not sure if this is the right translation. Other options include disposable backup.
-=== Creating a one-time backup
+* `repo1-retention-archive` — Number of backups to retain WAL logs for.
+* `repo1-retention-archive-type` — Backup types for which WAL logs are retained. Supported values:
+* `full` — Retain WAL only for full backups.
+* `diff` — Retain WAL for full and differential backups.
+* `incr` — Retain WAL for full, differential, and incremental backups.
 
-//По-перше, вам потрібно налаштувати розділ `spec.backups.pgbackrest.manual`, щоб мати можливість зробити одноразову резервну копію. В ньому міститься інформація про тип резервної копії, яку ви хочете зробити, та будь-які інші параметри конфігурації pgBackRest.
-First, you need to configure the `spec.backups.pgbackrest.manual` section to be able to perform a one-time backup. It contains information about the type of backup you want to create and any other pgBackRest configuration parameters.
+==== Examples
 
-//Налаштуємо custom resource для одноразового створення повної резервної копії:
-Let's configure a custom resource for creating a one-time full backup:
+. *Space optimization:* To minimize WAL log retention, configure WAL archiving only for full backups:
++
+[source,yaml]
+----
+repo1-retention-archive: "2"
+repo1-retention-archive-type: full
+----
+
+. *Flexible recovery:* To support Point-In-Time Recovery (PITR), use:
++
+[source,yaml]
+----
+repo1-retention-archive: "5"
+repo1-retention-archive-type: incr
+----
+
+=== One-time backup creation
+
+*Postgres Operator (PGO)* allows creating one-time backups using *pgBackRest*. This process involves two main steps:
+
+. Configuring backup parameters.
+. Initiating the backup through an annotation.
+
+[step-1]
+==== Step 1: Configure backup parameters
+
+First, configure the `spec.backups.pgbackrest.manual` section to define the parameters for the one-time backup.
+Specify the backup type and any additional *pgBackRest* options.
+
+.Example: Configuring a full backup
 [source,yaml]
 ----
 spec:
   backups:
     pgbackrest:
       manual:
-        repoName: repo1
+        repoName: repo1 # <1>
         options:
-         - --type=full
+          - --type=full # <2>
 ----
 
-//Це ще не запускає резервне копіювання – ви повинні додати анотацію `postgres-operator.crunchydata.com/pgbackrest-backup` до свого custom resource. Найкращий спосіб налаштувати цю анотацію — за допомогою позначки часу, щоб ви знали, коли ви ініціалізували резервну копію.
-This doesn't initiate the backup yet - you need to add the `postgres-operator.crunchydata.com/pgbackrest-backup` annotation to your custom resource. The best way to configure this annotation is by using a timestamp label, so you know when you initiated the backup.
+*Parameter explanation:*
 
-//Наприклад, для operational кластера  ми можемо виконати таку команду, щоб запустити одноразове резервне копіювання:
-For example, for an operational cluster, you can execute the following command to initiate a one-time backup:
+<1> `repoName` — The name of the repository where the backup will be stored.
+<2> `--type=full` — Indicates a full backup.
+
+[NOTE]
+====
+This configuration *only prepares* the backup parameters *but does not initiate* the backup process.
+====
+
+[step-2]
+==== Step 2: Launch the backup
+
+To start the backup,
+add the annotation `postgres-operator.crunchydata.com/pgbackrest-backup` to your **PostgresCluster** resource.
+Include a timestamp in the annotation to indicate when the backup was initiated.
+
+.Example: Launching a backup for the operational cluster
 [source,bash]
 ----
-kubectl annotate -n postgres-operator postgrescluster operational \
+kubectl annotate -n <registry-name> postgrescluster operational \
   postgres-operator.crunchydata.com/pgbackrest-backup="$(date)"
 ----
-//PGO виявить цю анотацію та створить нове одноразове завдання резервного копіювання!
-PGO will detect this annotation and create a new disposable backup task!
 
-//Якщо ви збираєтеся робити одноразові резервні копії з подібними параметрами в майбутньому, ви можете залишити їх у специфікації; просто оновіть анотацію до іншого значення під час наступного резервного копіювання.
-If you plan to make one-time backups with similar parameters in the future, you can leave them in the specification; simply update the annotation to a different value during the next backup.
+NOTE: Replace `<registry-name>` with your registry/namespace name.
 
-//Щоб повторно запустити наведену вище команду, вам потрібно буде додати помітку `--overwrite`, щоб можна було оновити значення анотації, тобто.
-To re-execute the above command, you will need to add the `--overwrite` flag to update the annotation value, like in the below example:
+PGO will detect the annotation and initiate the one-time backup based on the configured parameters.
+
+[repeat-backup-launch]
+==== Repeating a backup
+
+If you need to rerun the backup with the same parameters, update the annotation with the `--overwrite` flag.
+
+.Example: Rerunning the backup
 [source,bash]
 ----
-kubectl annotate -n postgres-operator postgrescluster operational --overwrite \
+kubectl annotate -n <registry-name> postgrescluster operational --overwrite \
   postgres-operator.crunchydata.com/pgbackrest-backup="$(date)"
 ----
-== Restoring
 
-//=== Відновлення на момент часу чи на конкретну резервну копію
-=== Point-in-Time Recovery (PITR) or restoring a backup copy
-//Для того щоб відновити стан БД на потрібну дату і час в першу чергу в секцію `spec.backups.pgbackrest` потрібно додати наступне:
-To restore the database to a specific date and time, you need to add the following to the `spec.backups.pgbackrest` section:
+[recommendations]
+==== Recommendations
+
+* Save commonly used backup configurations in the `manual` section for easy reuse.
+* Use timestamped annotations to track backup initiation times.
+* For large clusters, schedule full backups during off-peak hours to minimize a system load.
+
+== Restoring backups
+
+=== Restore to a specific point in time or backup
+
+*pgBackRest* supports two main approaches for restoring a PostgreSQL database:
+
+. **Point-in-Time Recovery (PITR)** — Restore the database to its exact state at a specific date and time.
+. **Restore from a Specific Backup** — Restore directly from a chosen backup without applying WAL logs.
+
+==== Point-in-time recovery (PITR)
+
+To restore the database to a specific point in time:
+
+. *Configure the restore options:*
+Add the following configuration under `spec.backups.pgbackrest`:
++
 [source,yaml]
 ----
 spec:
-  backups:
-    pgbackrest:
-      restore:
-        enabled: true
-        repoName: repo1
-        options:
-        - --type=time
-        - --target="2022-06-09 14:15:11-04"
+ backups:
+   pgbackrest:
+     restore:
+       enabled: true
+       repoName: repo1
+       options:
+         - --type=time # <1>
+         - --target="2022-06-09 14:15:11" # <2>
 ----
-//де `--target` цільовий час відновлення PITR. Прикладом цілі відновлення є `2022-06-09 14:15:11-04`.
-where `--target` is the target time for PITR. An example of a restoring target is `2022-06-09 14:15:11-04`.
++
+*Parameter explanation:*
++
+--
+<1> `--type=time` — Indicates a point-in-time recovery (PITR).
+<2> `--target` — Specifies the target date and time for recovery (`YYYY-MM-DD HH:MM:SS`).
+--
++
+[NOTE]
+====
+The restore time must be provided in **UTC**.
+====
 
-//Щоб відновити базу на конкретну резервну копію, в секцію `spec.backups.pgbackrest` треба додати наступне:
-To restore the database to a specific backup, you need to add the following to the `spec.backups.pgbackrest section`:
+. *Initiate the restore process:* Start the recovery by adding an annotation to the *PostgresCluster* resource:
++
+[source,bash]
+----
+kubectl annotate -n <registry-name> postgrescluster operational --overwrite \
+ postgres-operator.crunchydata.com/pgbackrest-restore="$(date)"
+----
++
+[NOTE]
+====
+Replace `<registry-name>` with your actual registry or namespace name.
+====
+
+[IMPORTANT]
+====
+- *Data loss warning:* Any data created *after* the specified recovery time (`--target="2022-06-09 14:15:11"`) up to the moment the restore starts will be *lost*.
+- Make sure this data loss is acceptable before initiating PITR.
+====
+
+==== Restore from a specific backup
+
+This method allows restoring directly from a chosen backup without applying WAL logs.
+
+. *Configure Restore Options*:
+Update the `spec.backups.pgbackrest` section as follows:
++
 [source,yaml]
 ----
 spec:
-  backups:
-    pgbackrest:
-      restore:
-        enabled: true
-        repoName: repo1
-        options:
-        - --type=immediate
-        - --set=20220602-073427F_20220602-073507I
+ backups:
+   pgbackrest:
+     restore:
+       enabled: true
+       repoName: repo1
+       options:
+         - --type=immediate # <1>
+         - --set=20220602-073427F_20220602-073507I # <2>
 ----
-//де `--set` назва цільової резервної копії. Список доступних резервних копій можно переглянути в бакеті s3 резервного сховища, або виконавши команду pgbackrest info --stanza=db в консолі пода БД.
-where `--set` is the name of the target backup. You can view the list of available backups in the S3 backup storage bucket or by executing the command `pgbackrest info --stanza=db` in the database console.
++
+*Parameter explanation:*
++
+--
+<1> `--type=immediate` — Directly restores from the specified backup.
+<2> `--set` — The identifier of the backup you wish to restore.
+--
 
-//Тепер, щоб ініціювати відновлення, ви повинні додати анотацію `postgres-operator.crunchydata.com/pgbackrest-restore` наступним чином:
-Now, to initiate the restoring process, you need to add the annotation `postgres-operator.crunchydata.com/pgbackrest-restore` as follows:
+. *Find available backups*:
+To get a list of backups, use one of the following methods:
+
+* Using *pgBackRest* CLI:
++
 [source,bash]
 ----
-kubectl annotate -n postgres-operator postgrescluster operational --overwrite \
-  postgres-operator.crunchydata.com/pgbackrest-restore=id1
+pgbackrest info --stanza=db
 ----
-//Після завершення відновлення додане налаштування можна вимкнути:
-Once the restoring process is complete, you can disable the added configuration:
+
+* Check the contents of the S3 bucket where the backups are stored.
+
+. *Initiate the restore process:*
+Start the restore by adding the annotation:
++
+[source,bash]
+----
+kubectl annotate -n <registry-name> postgrescluster operational --overwrite \
+ postgres-operator.crunchydata.com/pgbackrest-restore="$(date)"
+----
+
+==== Completing the restore process
+
+After the restore is complete, *disable* the restore mode to prevent further unintended restores.
 
 [source,yaml]
 ----
@@ -208,120 +328,297 @@ spec:
         enabled: false
 ----
 
+==== Additional notes
+
 [IMPORTANT]
 ====
-//Всі ці операції потрібно провести як на операційній так і на аналітичній базі данних.
-All these operations need to be performed on both the operational and analytical databases.
-//Для відновлення відповідності данних між операційною та аналітичною БД виконайте <<Узгодження данних на аналітичному кластері>>
-To synchronize data between the operational and analytical databases, perform  <<Synchronize data on the analytical cluster>>.
+- Perform the restore steps on both the *operational* and **analytical** databases to maintain consistency.
+- After restoring, follow the steps in <<Synchronizing data on the analytical cluster>> to ensure both databases are fully aligned.
 ====
 
-//=== Клонування з резервної копії
 === Cloning from a backup
 
-//Для клонування БД з резервної копії треба додати в маніфест, який створює новий экземпляр БД, секцію `spec.dataSource`.
-To clone a database from a backup, you need to add the `spec.dataSource` section to the manifest that creates a new database instance.
-//Для відновлення на момент часу секція буде виглядати подібно до:
-To restore to a specific point in time, the section will look similar to the below example:
+**pgBackRest** allows you to clone a database from an existing backup, enabling the creation of a new PostgreSQL instance either from a specific point in time or from a specific backup set.
+
+==== Cloning to a specific point in time (PITR)
+
+To create a new PostgreSQL instance restored to a specific point in time,
+add the `spec.dataSource` section to the manifest of the new database instance.
+
+.Example configuration for PITR
 [source,yaml]
 ----
-spec:
-  dataSource:
-    pgbackrest:
-      stanza: db
-      configuration:
-      - secret:
-          name: s3-conf
-      global:
-        repo1-path: "/postgres-backup/source_system/operational"
-        repo1-s3-uri-style: path
-        repo1-storage-verify-tls: n
-        repo1-storage-port: "9000"
-      options:
-      - --type=time
-      - --target="2022-06-09 14:15:11-04"
-      repo:
-        name: repo1
-        s3:
-          bucket: "bucketName"
-          endpoint: "endpoint"
-          region: "us-east-1"
+spec:                                     # <1>
+  dataSource:                             # <2>
+    pgbackrest:                           # <3>
+      stanza: db                          # <4>
+      configuration:                      # <5>
+        - secret:                         # <6>
+            name: s3-conf                 # <7>
+      global:                             # <8>
+        repo1-path: "/postgres-backup/source_system/operational"  # <9>
+        repo1-s3-uri-style: path                              # <10>
+        repo1-storage-verify-tls: n                          # <11>
+        repo1-storage-port: "9000"                           # <12>
+      options:                                              # <13>
+        - --type=time                                       # <14>
+        - --target="2022-06-09 14:15:11-04"                 # <15>
+      repo:                                                 # <16>
+        name: repo1                                         # <17>
+        s3:                                                 # <18>
+          bucket: "bucketName"                              # <19>
+          endpoint: "endpoint"                              # <20>
+          region: "us-east-1"                               # <21>
 ----
-//Щоб відновити базу на конкретний бекап в секції `spec.dataSource.pgbackrest.options` треба змінити тип відновлення та задати ім’я резервної копії:
-To restore the database from a specific backup, in the `spec.dataSource.pgbackrest.options` section you need to change the restoring type and add the name of the backup copy:
+
+*Parameter explanation:*
+
+<1> `spec` — Root section of the Kubernetes manifest.
+<2> `dataSource` — Specifies the data source for the restore process.
+<3> `pgbackrest` — Configures pgBackRest as the data source.
+<4> `stanza` — The pgBackRest configuration name for the database.
+<5> `configuration` — Contains connection details to access backup storage.
+<6> `secret` — Kubernetes Secret object for storing credentials.
+<7> `name` — Name of the secret holding S3 access credentials (`s3-conf`).
+<8> `global` — Global settings for connecting to the backup repository.
+<9> `repo1-path` — Path to the backup directory in the repository.
+<10> `repo1-s3-uri-style` — URI style for S3 connections (`path` or `virtual`).
+<11> `repo1-storage-verify-tls` — Disables TLS verification (`n` for no).
+<12> `repo1-storage-port` — Port for connecting to the storage service.
+<13> `options` — Options passed to pgBackRest during the restore.
+<14> `--type=time` — Indicates a PITR restore.
+<15> `--target` — Target date and time for the PITR (`YYYY-MM-DD HH:MM:SS`).
+<16> `repo` — Specifies the backup repository.
+<17> `name` — Name of the repository (`repo1`).
+<18> `s3` — S3 configuration for the backup repository.
+<19> `bucket` — S3 bucket name where backups are stored.
+<20> `endpoint` — URL endpoint for the S3-compatible storage.
+<21> `region` — S3 region (e.g., `us-east-1`).
+
+[NOTE]
+====
+The `--target` time must include the correct time zone offset (e.g., `-04` for UTC-4).
+====
+
+==== Cloning from a specific backup
+
+To restore a new instance from a specific backup (without WAL logs), update the `options` section as follows:
+
 [source,yaml]
 ----
-      options:
-      - --type=immediate      
-      - --set=20220602-073427F_20220602-073507I
+options:
+  - --type=immediate
+  - --set=20220602-073427F_20220602-073507I
 ----
+
+*Parameter explanation:*
+
+- `--type=immediate` — Restores directly from a specific backup.
+- `--set` — Identifier of the backup set to be restored.
+
+You can list available backups using:
+
+. *pgBackRest CLI:*
++
+[source,bash]
+----
+pgbackrest info --stanza=db
+----
+
+. *S3 Bucket:*
+Browse the S3 bucket where backups are stored.
+
+==== Completing the cloning process
+
+Once the manifest is applied and the process begins,
+*PGO* will automatically restore the database to a new instance based on the specified parameters.
+
 [IMPORTANT]
 ====
-//Всі ці операції потрібно провести як на операційній так і на аналітичній базі данних.
-All of these operations need to be performed on both the operational and analytical databases.
-
-//Для відновлення відповідності данних між операційною та аналітичною БД виконайте <<Узгодження данних на аналітичному кластері>>
-To restore data consistency between the operational and analytical databases, perform the following: <<Synchronize data on the analytical cluster>>
+- Perform cloning for both the *operational* and *analytical* databases to maintain consistency.
+- After cloning, validate data consistency between the databases by following the steps in <<Synchronizing data on the analytical cluster>>.
 ====
-//=== Узгодження данних на аналітичному кластері
-=== Synchronize data on the analytical cluster
 
-//Оскільки операційна та аналітична баз реплікуються у асинхронному режимі, їх резервні копії не синхронізовані. Тому навіть при відновленні на той самий момент часу не може бути гарантована узгодженість данних між цими базами. Щоб привести відновлені бази в узгоджений стан потрібно виконати наступні кроки на базі `registry` аналітичного экземпляра:
-Since the operational and analytical databases are asynchronously replicated, their backups are not synchronized. Therefore, even when restoring to the same point in time, data consistency between these databases cannot be guaranteed. To bring the restored databases into a synchronized state, perform the following steps on the `registry` database of the analytical instance:
+==== Best practices
 
-//    * Зупинити підписку: [source,sql]`ALTER SUBSCRIPTION operational_sub DISABLE;`
-    * Disable the subscription: [source,sql]`ALTER SUBSCRIPTION operational_sub DISABLE`;
-//    * Очистити всі таблиці, які входять до підписки: [source,sql]`SELECT 'TRUNCATE' ||' '||srrelid::regclass ||' '||'CASCADE;' FROM pg_subscription_rel \gexec`
-    * Truncate all tables included in the subscription: [source,sql]`SELECT 'TRUNCATE' ||' '||srrelid::regclass ||' '||'CASCADE;' FROM pg_subscription_rel \gexec`;
-//    * Видалити підписку: `DROP SUBSCRIPTION operational_sub;`
-    * Drop the subscription: `DROP SUBSCRIPTION operational_sub`;
-//    * Створити підписку: `create subscription operational_sub connection 'host=OperationalHost user=postgres dbname=registry password=XXXXXX' PUBLICATION analytical_pub WITH(create_slot=false,slot_name=operational_sub);`
-    * Create the subscription: `create subscription operational_sub connection 'host=OperationalHost user=postgres dbname=registry password=XXXXXX' PUBLICATION analytical_pub WITH(create_slot=false,slot_name=operational_sub)`;
+- Use **PITR** cloning to restore the database to a specific point in time for recovery scenarios.
+- Use **immediate restore** when you need an exact replica of a specific backup set.
+- Regularly verify your S3 credentials and repository configurations to avoid issues during cloning.
 
-//Після того як закінчиться первинна синхронізація таблиць на аналітичному кластері логічная реплікація включиться автоматично і надалі операційний і аналітичний кластер будуть в узгодженому стані.
-Once the initial table synchronization on the analytical cluster is completed, logical replication will automatically be enabled, and the operational and analytical clusters will be in a synchronized state.
+=== Synchronizing data on the analytical cluster
 
-//== Безперервне відновлення на Standby-кластері
-== Continuous restoring on the standby cluster
-//Удосконалені стратегії високої доступності та аварійного відновлення передбачають розподіл кластерів баз даних між центрами обробки даних, щоб максимально збільшити час безвідмовної роботи. PGO надає способи розгортання кластерів postgres, які можуть охоплювати кілька кластерів Kubernetes за допомогою зовнішньої системи зберігання даних.
-Advanced high availability and disaster recovery strategies involve distributing database clusters across multiple data centers to maximize uptime. PGO provides ways to deploy PostgreSQL clusters that can span multiple Kubernetes clusters using an external storage system.
+Problem ::
 
-//=== Створення Standby-кластера
+The operational and analytical PostgreSQL databases replicate asynchronously.
+As a result, their backups might not be consistent, even if both databases are restored to the same point in time.
+This can lead to discrepancies between the two databases.
+
+Solution ::
+
+To ensure data consistency between the operational and analytical databases after a restore,
+you must manually synchronize the analytical cluster with the operational cluster.
+
+==== Steps to synchronize data
+
+Perform the following steps on the *`registry`* database in the *analytical cluster*
+to synchronize it with the operational database:
+
+. *Disable the current subscription:*
+Temporarily disable the logical replication subscription to prevent new data from syncing during the process.
++
+[source,sql]
+----
+ALTER SUBSCRIPTION operational_sub DISABLE;
+----
+
+. *Truncate all subscribed tables:*
+Clear all tables that are part of the subscription to ensure no conflicting data remains.
++
+[source,sql]
+----
+SELECT 'TRUNCATE ' || srrelid::regclass || ' CASCADE;' FROM pg_subscription_rel \gexec
+----
++
+This command generates and executes `TRUNCATE` statements for all subscribed tables,
+using `CASCADE` to remove dependent data.
+
+. *Drop the existing subscription**
+After truncating the tables, drop the current subscription to prepare for a fresh sync.
++
+[source,sql]
+----
+DROP SUBSCRIPTION operational_sub;
+----
+
+. *Create a new subscription*
+Re-establish the subscription to start a fresh logical replication process from the operational cluster.
++
+[source,sql]
+----
+CREATE SUBSCRIPTION operational_sub
+CONNECTION 'host=OperationalHost user=postgres dbname=registry password=XXXXXX'
+PUBLICATION analytical_pub
+WITH (create_slot=false, slot_name=operational_sub);
+----
+
+*Parameter explanation:*
+
+- `host=OperationalHost` — The hostname or IP of the operational database.
+- `user=postgres` — The username for the connection.
+- `dbname=registry` — The name of the database.
+- `password=XXXXXX` — Password for the connection.
+- `PUBLICATION analytical_pub` — The publication to subscribe to.
+- `WITH (create_slot=false, slot_name=operational_sub)` — Uses an existing replication slot.
+
+*What happens next?*
+
+- Once the new subscription is created, **initial table synchronization** begins.
+- After the initial sync is complete, **logical replication** will automatically start, and the analytical database will stay up to date with the operational cluster.
+
+[NOTE]
+====
+The time required for the initial synchronization depends on the size of the data in the operational database.
+====
+
+==== Recommendations
+
+- *Avoid changes* in the analytical database during the synchronization process to prevent data conflicts.
+- *Monitor PostgreSQL logs* for any errors or warnings during the replication process.
+- *Verify data consistency* after synchronization by comparing key tables between the operational and analytical databases.
+
+== Continuous recovery on a standby cluster
+
+Advanced high availability (*HA*) and disaster recovery (*DR*) strategies often involve
+deploying standby clusters that continuously recover from the primary database.
+These standby clusters act as passive replicas, consistently updated through streaming replication or WAL archiving.
+In the event of a primary cluster failure, the standby can be promoted to minimize downtime and data loss.
+
+The **Postgres Operator (PGO)** simplifies the deployment and management of standby clusters across multiple Kubernetes environments
+while using shared backup repositories like S3-compatible storage.
+
 === Creating a standby cluster
 
-//Репозиторій резервних копій основного кластера має бути доступний для standby кластера.
-The backup repository of the primary cluster needs to be accessible to the standby cluster.
-//При створенні standby кластера необхідно додати в маніфест `standby.enabled` встановлений у `true` та параметри s3 репозиторія резервних копій основного кластера:
-When creating a standby cluster, you need to add the following to the manifest with `standby.enabled` set to true and the backup s3 repository parameters for the primary cluster:
+A **standby cluster** continuously restores from backups and WAL logs from the primary cluster’s repository.
+To configure a standby cluster, ensure it has access to the primary cluster’s backup repository.
+
+==== Requirements
+
+. *Access to the backup repository:*
+The standby cluster must connect to the same S3 bucket (or other compatible storage)
+used by the primary for backups and WAL logs.
+
+. *Configured pgBackRest:*
+The standby cluster uses pgBackRest to continuously restore and apply WAL logs.
+
+==== Standby cluster configuration
+
+To set up a standby cluster, include the following configuration in your cluster manifest:
+
 [source,yaml]
 ----
 spec:
   backups:
     pgbackrest:
-      image: registry.developers.crunchydata.com/crunchydata/crunchy-pgbackrest:ubi8-2.40-1
+      image: registry.developers.crunchydata.com/crunchydata/crunchy-pgbackrest:ubi8-2.40-1  # <1>
       repos:
-      - name: repo1
-        s3:
-          bucket: "bucket"
-          endpoint: "primary.endpoint"
-          region: "ca-central-1"
+        - name: repo1                                                                       # <2>
+          s3:
+            bucket: "bucket"                                                                # <3>
+            endpoint: "primary.endpoint"                                                    # <4>
+            region: "ca-central-1"                                                          # <5>
   standby:
-    enabled: true
-    repoName: repo1
+    enabled: true                                                                           # <6>
+    repoName: repo1                                                                         # <7>
 ----
-//=== Підвищення (promote) Standby-кластера
-=== Promoting the standby cluster
-//Перед підвищенням standby кластера нам потрібно переконатися, що ми випадково не створимо сценарій "розщепленого мозку". "Розщеплення мозку" може статися, якщо два основні екземпляри намагаються записати в одне сховище. Якщо основний кластер все ще активний, переконайтеся, що ви вимкнули його, перш ніж намагатися підвищити standby кластер.
-Before promoting the standby cluster, we need to ensure that we don't accidentally create a "split-brain" scenario where two primary instances try to write to the same storage. If the primary cluster is still active, make sure you have shut it down before attempting to promote the standby cluster.
 
-//Коли основний кластер стане неактивним, ми можемо підвищити standby кластер, видаливши або вимкнувши його розділ `spec.standby`:
-When the primary cluster becomes inactive, we can promote the standby cluster by removing or disabling its `spec.standby` section:
+*Parameter explanation:*
+
+<1> **`image`** — The pgBackRest container image used for backup/restore.
+<2> **`repos`** — List of backup repositories.
+<3> **`bucket`** — Name of the S3 bucket for storing backups and WAL logs.
+<4> **`endpoint`** — URL or IP of the S3-compatible storage.
+<5> **`region`** — S3 bucket region.
+<6> **`standby.enabled`** — Enables standby mode (`true`).
+<7> **`repoName`** — Name of the repository from which the standby will restore.
+
+=== Promoting the standby cluster
+
+*Promoting* a standby cluster converts it into a primary cluster capable of accepting read/write operations. This process is crucial during failover scenarios when the original primary is no longer available.
+
+==== Preventing split-brain scenarios
+
+[IMPORTANT]
+====
+Before promoting the standby, ensure the original primary cluster is *fully offline*.
+Having two active primaries writing to the same data source can result in a *split-brain* scenario,
+leading to data inconsistencies or loss.
+====
+
+==== Promotion process
+
+. *Disable the standby mode:*
+To promote the standby, disable the standby mode by updating the manifest:
++
 [source,yaml]
 ----
 spec:
-  standby:
-    enabled: false
+ standby:
+   enabled: false
 ----
-//Ця зміна запускає підвищення Standby кластера до основного, і кластер починає приймати записи.
-This change triggers the promotion of the standby cluster to the primary status, and the cluster starts accepting writes.
 
+. After disabling the standby mode, the following happens:
+
+- The standby stops recovering from the backup repository.
+- It becomes a writable primary cluster.
+- New WAL logs and backups will now be generated from this new primary.
+
+==== Post-promotion steps
+
+- *Verify cluster health:*
+Confirm the newly promoted primary is operational and accepting connections.
+
+- *Reconfigure backup and replication:*
+Ensure that backups are running from the new primary and, if necessary, set up a new standby cluster for HA.
+
+- *Monitor for issues:*
+Check PostgreSQL and PGO logs to verify that the promotion was completed successfully without errors.
