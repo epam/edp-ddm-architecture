@@ -1,0 +1,201 @@
+= Migrating registry database instance disks from _ceph-rbd_ to cloud storage disk types
+include::platform:ROOT:partial$templates/document-attributes/default-set-en.adoc[]
+
+This guide describes the process of replacing disks for the operational and analytical instances of the registry database from the default `ceph-rbd` storage class to native cloud provider disks, such as `gp3` (AWS) or `thin`, `thin-csi` (vSphere).
+
+== Main disk types
+
+The table below lists the supported disk types for migration:
+
+.Disk types
+[cols="1,3", options="header"]
+|===
+|Disk Type |Description
+
+|`gp3`
+|AWS native disk with flexible volume expansion and configurable performance parameters (IOPS, throughput).
+
+|`thin-csi`
+|vSphere native disk with support for flexible volume expansion.
+
+|`thin`
+|vSphere native disk without support for flexible volume expansion.
+|===
+
+== Replacement process overview
+
+The replacement process involves recreating the `PostgresCluster` resources for both `analytical` and `operational` instances with updated disks in a new storage class (`gp3`, `thin`, or `thin-csi`). The databases are then restored from existing backups using standard PostgreSQL tools.
+
+[#algorithm]
+== Replacement algorithm
+
+[step-1]
+=== Step 1: Preparation for migration
+
+. *Check instance logs:*
+Ensure that there are no errors in the logs of the `analytical` and `operational` pods, especially related to replication to the analytical instance.
+
+. *Verify backup availability:*
+
+* Ensure that MinIO contains up-to-date full backups for both `analytical` and `operational` instances, created automatically according to the schedule.
+* By default, backups are created once a day.
+
+[step-2]
+=== Step 2: Closing external access
+
+*Restrict registry access:*
+Close external access to the registry (user portals, `bp-web-service-gateway`, and so on).
+
+[step-3]
+=== Step 3: Pre-migration backup
+
+. *Create a full registry backup:*
+Use Velero to back up the registry. Access the central Jenkins, find your registry folder, and run the *Create-registry-backup* pipeline.
+
+. Wait for the build to complete successfully.
+
+. *Adjust backup retention settings:*
+In the `PostgresCluster` configuration, change the `repo1-retention-full` parameter to `'5'` or higher.
++
+.Backup configuration example
+[source,yaml]
+----
+global:
+  log-level-file: detail
+  repo1-path: /postgres-backup/smt-dev/operational
+  repo1-retention-full: '5'  # <1>
+  repo1-retention-full-type: count
+  repo1-s3-uri-style: path
+  repo1-storage-port: '443'
+  repo1-storage-verify-tls: 'n'
+  start-fast: 'y'
+----
++
+*Parameter explanation:*
++
+<1> **`repo1-retention-full: '5'`** — Specifies the number of retained full backups. In this case, the system will keep the latest *five* backups.
+
+. *Create new full backups of instances:*
+Use standard PostgreSQL tools to create new full backups for `analytical` and `operational` instances.
+
+TIP: For detailed instructions on creating a one-time backup:
+xref:admin:backup-restore/postgres-backup-restore.adoc#one-time-backup[One-time backup creation].
+
+[step-4]
+=== Step 4: Preparing configurations
+
+. *Save current configurations:*
+
+* Save the YAML files for `PostgresCluster` resources (`analytical` and `operational`).
+* Save the `postgres` user passwords from the `operational-pguser-postgres` and `analytical-pguser-postgres` secrets.
+
+. *Update configuration for new disks.* Modify the following fields in the saved resource files:
++
+.Updating Configuration for New Disks
+[source,yaml]
+----
+instances:
+  - dataVolumeClaimSpec:
+      accessModes:
+        - ReadWriteOnce
+      resources:
+        requests:
+          storage: 21Gi  # <1>
+      storageClassName: thin  # <2>
+----
++
+*Parameter explanation:*
++
+--
+<1> **`storage: 21Gi`** — Volume size for the new instance disk. Adjust this value as needed.
+
+<2> **`storageClassName: thin`** — Specifies the storage class for the new disk. In this example, `thin` (vSphere) is used. Other options include `thin-csi` (vSphere) or `gp3` (AWS).
+--
+
+. *Remove the following fields:* `metadata`, `finalizers`, `status`.
+
+IMPORTANT: *Ensure to remove annotations* related to full backups added in Step 3.
+
+[step-5]
+=== Step 5: Verifying backups
+
+*Check backup status:*
+
+* Wait at least 15–20 minutes after backup creation.
+* Verify the *PostgreSQLDetails* Grafana dashboard to ensure the latest backups are marked
+icon:check-circle[] `"successful"`.
+
+NOTE: Ensure that the latest backups are recent and created just moments before verification.
+
+[step-6]
+=== Step 6: Recreating the `operational` instance
+
+. *Create a new instance:*
+
+* Delete the current `operational` resource.
+* Create a new resource using the updated configuration from Step 4.
+
+. *Verify component restoration:*
+
+* Ensure that all components of the `operational` resource are restored.
+* Verify the new disk is attached to the correct storage class.
+* Restore the user password. Insert the saved `postgres` password from Step 4 into the newly created `operational-pguser-postgres` secret.
+
+[step-7]
+=== Step 7: Restoring the `operational` database
+
+*Restore the database:* Use standard PostgreSQL tools to restore the database from the created backup.
+
+TIP: Detailed restoration guide:
+xref:admin:backup-restore/postgres-backup-restore.adoc#restore-to-target-time-or-backup[Restore to target time or backup]
+
+[NOTE]
+====
+Use either point-in-time recovery or restore from a specific backup.
+
+If using *point-in-time recovery*, it’s recommended to select a time 10–15 minutes before the backup creation time from Step 3 to ensure data completeness.
+====
+
+[step-8]
+=== Step 8: Recreating and restoring the `analytical` instance
+
+Repeat Steps 6 and 7 for the `analytical` instance.
+
+[step-9]
+=== Step 9: Post-migration verification
+
+*Check instance logs:*
+
+* Ensure there are no errors in the `analytical` and `operational` pod logs.
+* Verify that replication to the analytical instance is functioning correctly.
+
+[step-10]
+=== Step 10: Updating `registry-postgres` component code
+
+*Update `registry-postgres` component settings in your registry.*
+
+Modify the code to reflect the new disk types and sizes:
+
+- For `thin` (vSphere) — hardcode the values.
+- For `thin-csi` (vSphere) and `gp3` (AWS) — use `values.yaml`.
+
+NOTE: It’s recommended to make these changes in a new branch and update the registry’s `helmfile.yaml`.
+
+[step-11]
+=== Step 11: Running pipelines
+
+*Run registry pipelines:*
+
+* Execute the *MASTER-Build* pipeline in the Platform’s central Jenkins.
+* _(Optionally)_ After a successful *MASTER-Build*, run the registry’s Jenkins pipeline to publish the regulation.
+
+[step-12]
+=== Step 12: Finalizing the migration
+
+. *Check pipeline results:* Ensure all pipelines completed successfully.
+
+. *Reopen external registry access:* Restore access for users.
+
+== Conclusion
+
+After completing all steps, both `operational` and `analytical` instances should operate with new disks in the appropriate storage classes, with all data restored from backups.
