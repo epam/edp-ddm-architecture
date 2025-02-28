@@ -1,0 +1,371 @@
+[#deploy-additional-recources-for-okd]
+= Розгортання додаткових ресурсів для інсталяції OKD-кластера в AWS
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+include::platform:ROOT:partial$admonitions/language-ua.adoc[]
+
+Для вдалого встановлення кластера та платформи, потрібно підняти наступні ресурси в AWS. На малюнку нижче зображена схема інфраструктури із ними. Це зроблено для спрощення інсталяції платформи та уникнення небажаних помилок, які можуть бути пов’язані з встановленням з локального комп'ютера.
+
+image:installation/aws/installation-aws-1.svg[image,width=468,height=375]
+
+== Опис додаткових ресурсів
+
+Більш докладний опис додаткових ресурсів зі схеми зображено нижче:
+
+* *S3-кошик* -- використовується для зберігання стану Terraform;
+* *DynamoDB table* -- використовується для збереження інформації про блокування стану Terraform;
+* *NAT Gateway* -- використовується для забезпечення приватного сервера доступом до інтернету;
+* *Bastion* -- використовується як проміжний сервер для забезпечення безпечного та обмеженого доступу до сервера у приватній мережі. Надалі, через цей bastion буде створено SSH-тунель до deployer-node;
+* *Deployer-node* -- сервер у приватній мережі, через який буде відбуватися інсталяція кластера та Платформи.
+
+Розгорнути ці ресурси можна за допомогою підготовленого Terraform-коду у наступних кроках.
+
+=== Рекомендовані налаштування bastion
+
+У таблиці нижче наведено рекомендовані налаштування для bastion.
+
+.Налаштування bastion
+[width="100%",cols="6%,33%,61%",options="header",]
+|===
+
+|*№* |*Опція налаштування* |*Значення*
+
+|1 |Instance type |t2.nano
+|2 |vCPUs |1
+|3 |RAM |0.5 GiB
+|4 |CPU Credits/hr |3
+|5 |Platform |Ubuntu
+|6 |AMI name |ubuntu-bionic-18.04-amd64-server-20210224
+|7 |Volume |8 Gb
+
+|===
+
+=== Рекомендовані налаштування deployer-node
+
+У таблиці нижче наведено рекомендовані налаштування для deployer-node.
+
+.Налаштування deployer-node
+[width="100%",cols="6%,33%,61%",options="header",]
+|===
+
+|*№* |*Опція налаштування* |*Значення*
+|1 |Instance type |t2.medium
+|2 |vCPUs |2
+|3 |RAM |4 GiB
+|4 |CPU Credits/hr |24
+|5 |Platform |Ubuntu
+|6 |AMI name |ubuntu-bionic-18.04-amd64-server-20210224
+|7 |Volume |150 Gb
+
+|===
+
+== Додаткові налаштування
+
+=== Встановлення необхідних інструментів
+
+Для подальших дій потрібно встановити необхідні інструменти на локальний комп'ютер:
+
+* unzip;
+* https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html[aws cli v2];
+* https://docs.docker.com/engine/install/[terraform v1.6.6].
+
+Перевірити правильність встановлення інструментів можна за допомогою наступних команд:
+
+.Перевірка встановлення інструментів
+====
+
+.Перевірка unzip
+----
+$ unzip -v
+----
+
+.Перевірка aws cli
+----
+$ aws --version
+----
+
+.Перевірка terraform
+----
+$ terraform version
+----
+
+====
+
+=== Налаштування AWS CLI
+
+За допомогою AWS CLI автентифікуйтесь в обліковому записі AWS. Для цього виконайте наступну команду:
+
+.*Автентифікація в обліковому записі AWS*
+[source,bash]
+----
+$ aws configure
+AWS Access Key ID [None]: ********************
+AWS Secret Access Key [None]: ***************************************
+Default region name [None]: eu-central-1
+Default output format [None]: json
+----
+
+TIP: Докладніше процес автентифікація в обліковому записі AWS за допомогою AWS CLI описано в офіційній документації на сайті AWS: https://docs.aws.amazon.com/cli/latest/userguide/cli-authentication-user.html#cli-authentication-user-configure.title[Configure the AWS CLI].
+
+=== Налаштування AWS cross account
+
+Перед запуском Terraform-код його необхідно завантажити. Для цього треба отримати доступ до AWS S3 бакету, в якому він знаходиться. Це можливо лише за умови, що створена спеціальна IAM-роль. Це можна зробити, виконавши наступні кроки:
+
+. Створіть AWS IAM-роль.
++
+[source,bash]
+----
+$ aws iam create-role \
+      --role-name UserCrossAccountRole \
+      --description "Role for uploading terraform files from AWS S3" \
+      --assume-role-policy-document '{
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Action": "sts:AssumeRole",
+                    "Effect": "Allow",
+                    "Principal": {
+                        "AWS": "arn:aws:iam::<YourAccountId>:root"
+                    }
+                }
+            ]
+          }'
+----
++
+[NOTE]
+====
+* *`<YourAccountId>`* -- додайте сюди ID від облікового запису AWS.
+====
+
+. Створіть AWS IAM-політику.
++
+[source,bash]
+----
+$ aws iam create-policy \
+      --policy-name UserCrossAccountPolicy \
+      --policy-document '{
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Action": "sts:AssumeRole",
+                    "Effect": "Allow",
+                    "Resource": "arn:aws:iam::764324427262:role/CustomCrossAccountRole"
+                }
+            ]
+          }'
+----
+
+. Приєднайте політику до ролі.
++
+[source,bash]
+----
+$ aws iam attach-role-policy \
+      --role-name UserCrossAccountRole \
+      --policy-arn arn:aws:iam::<YourAccountId>:policy/UserCrossAccountPolicy
+----
++
+[NOTE]
+====
+* *`<YourAccountId>`* -- додайте сюди ID від облікового запису AWS.
+====
+
+. Додайте до файлу `config` необхідні значення для ролі.
++
+[source,bash]
+----
+$ cat <<EOT >> ~/.aws/config
+[profile user-cross-account-role]
+role_arn = arn:aws:iam::764324427262:role/CustomCrossAccountRole
+source_profile = default
+EOT
+----
+
+. Для доступу до файлів із зовнішнього облікового запису AWS, зверніться до команди підтримки. Вам потрібно, щоб вони додали ID вашого AWS облікового запису до списку довірених (trust relationship) для ролі `CustomCrossAccountRole` у їхньому обліковому записі AWS.
+
+=== Завантаження Terraform-коду
+
+. Завантажте архів з Terraform-кодом.
++
+[source,bash]
+----
+$ aws s3 cp s3://mdtu-ddm-platform-installer/terraform/terraform.zip terraform.zip  --profile user-cross-account-role
+----
+
+. Розпакуйте Terraform-код в окрему директорію.
++
+[source,bash]
+----
+$ unzip terraform.zip -d ~/terraform
+----
+
+== Опис Terraform-коду
+
+Як приклад автоматизації процесу було реалізовано Terraform-код, який можна підлаштувати під свої параметри та використати для розгортання інфраструктури.
+
+=== Початковий Terraform-код
+
+Це Terraform-код, який створить ресурси для подальших кроків. До таких ресурсів відносяться:
+
+* S3 Bucket;
+* DynamoDB Table.
+
+Початковий код. Опис Terraform-файлів: ::
+
+* `main.tf` -- основний конфігураційний Terraform файл. Він містить модулі для створення:
+** S3-бакета;
+** таблиці DynamoDB.
+* `providers.tf` -- використовується для визначення версії Terraform, необхідних плагінів та параметрів провайдера AWS;
+* `variables.tf` -- використовується для опису всіх змінних, які використовуються в конфігурації Terraform;
+* `terraform.tfvars` -- містить значення для конкретних змінних, які визначені у конфігураційних файлах Terraform. За потреби змініть значення для наступних параметрів на необхідні:
+** `region` -- ця змінна використовується для визначення регіону AWS, в якому будуть створюватися ресурси;
+** `tags` -- ця змінна, використовується для додавання тегів (міток) для ресурсів.
+
+=== Основний Terraform-код
+
+Основний Terraform-код, розгортає усі необхідні ресурси. Опис шаблонів наведено нижче.
+
+.Основний код. Опис Terraform файлів
+* `main.tf` -- основний конфігураційний Terraform файл. Він містить модулі для створення:
+** `VPC`;
+** `ec2_bastion`;
+** `ec2_instance`;
+** `key_pair`.
+* `providers.tf` -- використовується для визначення версії Terraform, необхідних плагінів та параметрів провайдера AWS. Обов'язково змініть значення для наступних параметрів на необхідні:
+** `bucket` -- ця змінна містить ім’я S3-бакета. Змініть <ACCOUNT_ID> на ID від облікового запису AWS.
+* `iam-node-role.tf` -- використовується для створення спеціальної IAM-ролі із необхідними дозволами. Це дасть змогу налаштувати AWS cross account resource access та завантажити Docker-образ для контейнера та Інсталера;
+* `elastic-ip.tf` – використовується для створення ресурсу AWS Elastic IP (EIP) за допомогою Terraform;
+* `security-groups.tf` - створюються Security Groups, які дозволяють SSH-з'єднання (TCP порт 22) для bastion та deployer-node;
+* `ssh-key.tf` - містить код для створення SSH приватного ключа та збереження ключа у файл та налаштування його прав доступу;
+* `files/user_data.sh.tpl` - шаблон скрипту, який буде виконуватися при створенні або оновленні EC2 інстансу в середовищі AWS. Цей скрипт зробить наступне для deployer-node:
+** встановить Docker;
+** встановить Unzip;
+** встановить AWS CLI v2;
+** додатково налаштує AWS cross account resource access.
+* `variables.tf` -- використовується для опису всіх змінних, які використовуються в конфігурації Terraform;
+* `terraform.tfvars` -- містить значення для конкретних змінних, які визначені у конфігураційних файлах Terraform. За потреби змініть значення для наступних параметрів на необхідні:
+** `region` -- ця змінна використовується для визначення регіону AWS, в якому будуть створюватися ресурси;
+** `platform_name` -- ця змінна використовується для додавання назви для кластера та ресурсів AWS;
+** `ingress_cidr_blocks` -- для підключення через SSH до deployer-node потрібно додати сюди необхідну IP адресу;
+** `prefix_list_ids` -- якщо потрібно відкрити для підключення декілька адрес, то потрібно створити префікс prefix-list та використовувати в цьому параметрі його ID;
+** `tags` -- ця змінна, використовується для додавання тегів (міток) для ресурсів.
+
+== Запуск Terraform-коду
+
+Після виконаних змін у минулих кроках, Terraform-код тепер готовий до запуску.
+
+=== Запуск початкового Terraform-коду
+. Послідовно виконуйте наступні команди для того, щоб увійти до директорії з початковим Terraform-кодом та ініціалізувати робочу Terraform-директорію.
++
+[source,bash]
+----
+$ cd ~/terraform/initCode
+
+$ terraform init
+----
+
+. Використайте наступну команду для застосування змін, визначених у конфігураційних файлах та створення ресурсів.
++
+[source,bash]
+----
+$ terraform apply -auto-approve
+----
+
+. Дочекайтеся створення ресурсів.
+
+=== Запуск основного Terraform-коду
+. Послідовно виконуйте наступні команди для того, щоб увійти до директорії з основним Terraform-кодом та ініціалізувати робочу Terraform-директорію.
++
+[source,bash]
+----
+$ cd ~/terraform/mainCode
+
+$ terraform init
+----
+
+. Використайте наступну команду для застосування змін, визначених у конфігураційних файлах та створення ресурсів.
++
+[source,bash]
+----
+$ terraform apply -auto-approve
+----
+
+. Дочекайтеся створення ресурсів.
+
+== Підключення до deployer-node
+
+Щоб під'єднатися з локального комп'ютера до deployer-node, потрібно створити SSH-тунель. Це потрібно зробити наступною командою:
+
+.Створення SSH-тунелю
+====
+----
+$ ssh -i <SSH_KEY> -L 1256:<NODE_PRIVATE_IP>:22 -N -f ubuntu@<BASTION_PUBLIC_IP>
+----
+====
+
+Після створення SSH-тунелю, можна підключатися до deployer-node. Це потрібно зробити наступною командою:
+
+.Підключення через SSH
+====
+----
+$ ssh -i <SSH_KEY> ubuntu@localhost -p 1256
+----
+====
+
+[IMPORTANT]
+====
+Мета deployer-node ::
+
+З deployer-node потрібно виконувати усі подальші кроки, а саме інсталяцію кластера та встановлення платформи.
+====
+
+== Запуск контейнера openshift-install
+
+Щоб використовувати docker image контейнера *`openshift-install`* для встановлення кластера, потрібно виконати кроки, подані нижче.
+
+. Авторизуйтеся в AWS ECR.
++
+[source,bash]
+----
+$ sudo aws ecr get-login-password --profile cross-account-role --region eu-central-1 | docker login --username AWS --password-stdin 764324427262.dkr.ecr.eu-central-1.amazonaws.com
+----
+
+. Завантажте docker-образ (docker image).
++
+[source,bash]
+----
+$ docker pull 764324427262.dkr.ecr.eu-central-1.amazonaws.com/openshift-install:v3
+----
+
+. Додайте тег до завантаженого docker-образу.
++
+[source,bash]
+----
+$ docker tag 764324427262.dkr.ecr.eu-central-1.amazonaws.com/openshift-install:v3 openshift-install:v3
+----
+
+. Створіть нову директорію, в якій зберігатимуться усі дані кластера:
++
+[source,bash]
+----
+$ mkdir ~/openshift-cluster
+----
+
+. Перейдіть до створеної директорії.
++
+[source,bash]
+----
+$ cd ~/openshift-cluster
+----
+
+. Запустіть контейнер *`openshift-install`*.
++
+[source,bash]
+----
+$ sudo docker run --rm -it --name openshift-install-v3 \
+    --user root:$(id -g) \
+    --net host \
+    -v $(pwd):/tmp/openshift-cluster \
+    --env AWS_ACCESS_KEY_ID=<КЛЮЧ_ДОСТУПУ> \
+    --env AWS_SECRET_ACCESS_KEY=<СЕКРЕТНИЙ_КЛЮЧ_ДОСТУПУ> \
+    openshift-install:v3 bash
+----

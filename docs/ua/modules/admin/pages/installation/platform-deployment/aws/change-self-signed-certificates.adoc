@@ -1,0 +1,79 @@
+= Заміна самопідписаних сертифікатів на довірені сертифікати
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+include::platform:ROOT:partial$admonitions/language-ua.adoc[]
+
+Для заміни самопідписаних (self-signed) сертифікатів на довірені (trusted), необхідно спочатку отримати ці сертифікати.
+
+У цьому пункті розглянуто отримання безплатних сертифікатів https://letsencrypt.org/[Let’s Encrypt] та їх встановлення на сервер.
+
+Отримання сертифікатів Let’s Encrypt здійснено за допомогою утиліти https://github.com/acmesh-official/acme.sh[acme.sh].
+
+TIP: Для отримання деталей використання Let’s Encrypt на базі ACME-протоколу, зверніться до https://letsencrypt.org/docs/client-options/[офіційного джерела].
+
+Для заміни сертифікатів потрібно виконати наступні дії: ::
++
+. Задайте змінну середовища. Змінна повинна вказувати на файл *_kubeconfig_*.
++
+[source,bash]
+----
+$ export KUBECONFIG=cluster-state/auth/kubeconfig
+----
+
+. Створіть файл *_letsencrypt.sh_* та вставте у нього скрипт, який наведено нижче:
++
+._Скрипт для заміни сертифікатів_
+[%collapsible]
+====
+[source,bash]
+----
+#!/bin/bash
+yum install -y openssl
+mkdir -p certificates
+export CERT_HOME=./certificates
+export CURDIR=$(pwd)
+cd $CERT_HOME
+
+# Клонування утиліти acme.sh із репозиторію GitHub
+git clone https://github.com/neilpang/acme.sh
+sed -i "2i AWS_ACCESS_KEY_ID=\"${AWS_ACCESS_KEY_ID}\"" ./acme.sh/dnsapi/dns_aws.sh
+sed -i "3i AWS_SECRET_ACCESS_KEY=\"${AWS_SECRET_ACCESS_KEY}\"" ./acme.sh/dnsapi/dns_aws.sh
+cd $CURDIR
+# Отримання API Endpoint URL
+export LE_API="$(oc whoami --show-server | cut -f 2 -d ':' | cut -f 3 -d '/' | sed 's/-api././')"
+#  Отримання Wildcard Domain
+export LE_WILDCARD="$(oc get ingresscontroller default -n openshift-ingress-operator -o jsonpath='{.status.domain}')"
+${CERT_HOME}/acme.sh/acme.sh --register-account -m user_${RANDOM}@example.com
+${CERT_HOME}/acme.sh/acme.sh --issue -d ${LE_API} -d *.${LE_WILDCARD} --dns dns_aws
+export CERTDIR=$CERT_HOME/certificates
+mkdir -p ${CERTDIR}
+
+# Перенесення сертифікатів із шляху acme.sh за замовчуванням (default path) до більш зручної директорії, за допомогою --install-cert - ключа
+${CERT_HOME}/acme.sh/acme.sh --install-cert -d ${LE_API} -d *.${LE_WILDCARD} --cert-file ${CERTDIR}/cert.pem --key-file ${CERTDIR}/key.pem --fullchain-file ${CERTDIR}/fullchain.pem --ca-file ${CERTDIR}/ca.cer
+# Створення секрету
+oc create secret tls router-certs --cert=${CERTDIR}/fullchain.pem --key=${CERTDIR}/key.pem -n openshift-ingress
+# Оновлення Custom Resource для Router
+oc patch ingresscontroller default -n openshift-ingress-operator --type=merge --patch='{"spec": { "defaultCertificate": { "name": "router-certs" }}}'
+----
+====
+
+. Зробіть цей скрипт таким, що можливо виконати.
++
+[source,bash]
+----
+$ chmod +x ./letsencrypt.sh
+----
+
+. Виконайте цей скрипт.
++
+[source,bash]
+----
+$ bash -x ./letsencrypt.sh
+----
+
+. Вийдіть із контейнера після виконання скрипту. Це можна зробити за допомогою команди, яка знаходиться нижче. Контейнер видалиться автоматично.
++
+.Вихід із контейнера
+----
+$ exit
+----

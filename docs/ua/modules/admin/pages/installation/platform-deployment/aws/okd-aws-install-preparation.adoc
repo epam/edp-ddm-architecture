@@ -1,0 +1,177 @@
+[#okd-aws-install-preparation]
+= Підготовка до встановлення OKD-кластера в AWS
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+include::platform:ROOT:partial$admonitions/language-ua.adoc[]
+
+У версії `4.12` OpenShift Container Platform можливо встановити кастомізований кластер на інфраструктуру, яка передбачена програмою встановлення на Amazon Web Services (AWS).
+
+[NOTE]
+====
+Версія OKD ::
+
+Рекомендована версія OKD -- *`4.12.0-0.okd-2023-04-16-041331`*.
+====
+
+Для того, щоб встановити кластер потрібно виконати наступні кроки:
+
+. Знаходячись у контейнері, перейдіть до директорії *_/tmp/openshift-cluster_*.
++
+[source,bash]
+----
+$ cd /tmp/openshift-cluster
+----
+
+. Виконайте дії, які описані в офіційній документації на сайті OKD https://docs.openshift.com/container-platform/4.12/installing/installing_aws/installing-aws-customizations.html[Installing a cluster on AWS with customizations], до кроку *Obtaining an AWS Marketplace image*: https://docs.openshift.com/container-platform/4.12/installing/installing_aws/installing-aws-customizations.html#installation-aws-marketplace-subscribe_installing-aws-customizations[Obtaining an AWS Marketplace image]. +
+
+. Завантажте OKD інсталер з офіційного GitHub-репозиторію.
++
+[source,bash]
+----
+$ wget https://github.com/okd-project/okd/releases/download/4.12.0-0.okd-2023-04-16-041331/openshift-install-linux-4.12.0-0.okd-2023-04-16-041331.tar.gz
+----
+
+. Розархівуйте програму встановлення із завантаженого архіву.
++
+[source,bash]
+----
+$ tar xvfz openshift-install-linux-4.12.0-0.okd-2023-04-16-041331.tar.gz
+----
++
+[CAUTION]
+Щоб налаштувати встановлення, потрібно створити файл *_install-config.yaml_* і внести до нього необхідні параметри перед тим, як встановити кластер.
+
+. Створіть нову директорію для конфігураційних файлів кластеру та файл install-config.yaml. Для цього виконайте послідовно наступні команди:
++
+[source,bash]
+----
+$ mkdir /tmp/openshift-cluster/cluster-state
+
+$ touch /tmp/openshift-cluster/cluster-state/install-config.yaml
+----
++
+Після створення файлу потрібно заповнити його необхідними параметрами. Створений конфігураційний файл включає тільки необхідні параметри для мінімального розгортання кластера. Для кастомізації налаштувань можна звернутись до офіційної документації на сайті OKD: https://docs.openshift.com/container-platform/4.12/installing/installing_aws/installing-aws-customizations.html#installation-initializing_installing-aws-customizations[Creating the installation configuration file].
++
+Рекомендовані параметри для файлу *_install-config.yaml_*: ::
++
+[%collapsible]
+.*_install-config.yaml_*
+====
+[source,yaml]
+----
+apiVersion: v1
+baseDomain: <BASE_DOMAIN> <1>
+compute:
+  - architecture: amd64
+    hyperthreading: Enabled
+    name: worker
+    platform:
+      aws:
+        zones:
+          - eu-central-1c
+        rootVolume:
+          size: 80
+          type: gp3
+        metadataService:
+          authentication: Required
+        type: r5.2xlarge
+        amiID: ami-06dac8f4521e7ec39
+    replicas: 3
+controlPlane:
+  architecture: amd64
+  hyperthreading: Enabled
+  name: master
+  platform:
+    aws:
+      zones:
+        - eu-central-1c
+      rootVolume:
+        size: 80
+        type: gp3
+      type: r5.2xlarge
+      amiID: ami-06dac8f4521e7ec39
+  replicas: 3
+metadata:
+  name: <CLUSTER_NAME> <2>
+networking:
+  clusterNetwork:
+    - cidr: 10.128.0.0/14
+      hostPrefix: 23
+  machineNetwork:
+    - cidr: 10.0.0.0/16
+  networkType: OVNKubernetes
+platform:
+  aws:
+    region: eu-central-1
+    userTags:
+      'user:tag': <CLUSTER_NAME> <2>
+publish: External
+pullSecret: <PULL_SECRET> <4>
+sshKey: <SSHKEY> <3>
+----
+
+<1> `<BASE_DOMAIN`> -- домен, який було створено та налаштовано у підрозділах xref:#setup-route-53[] та xref:#setup-external-domain[];
+
+<2> `<CLUSTER_NAME>` -- ім'я майбутнього OKD-кластера;
+
+<3> `<SSHKEY>` -- ключ або ключі SSH для автентифікації доступу до машин кластера. Можна використати той самий ключ, що був створений під час встановлення OKD-кластера, або будь-який інший;
++
+TIP: Докладніше описано в офіційній документації на сайті OKD: https://docs.openshift.com/container-platform/4.12/installing/installing_aws/installing-aws-customizations.html#installation-configuration-parameters-optional_installing-aws-customizations[Optional configuration parameters].
+
+<4> <PULL_SECRET> -- секрет, який було створено у п. xref:#create-additional-accounts[]. Потрібно отримати цей секрет із Red Hat OpenShift Cluster Manager.
++
+TIP: Докладніше про це описано в п. 5 офіційної документації на сайті OKD: https://docs.openshift.com/container-platform/4.12/installing/installing_aws/installing-aws-customizations.html#installation-obtaining-installer_installing-aws-customizations[Obtaining the installation program].
++
+До отриманого секрету також потрібно додати секрет для під'єднання до облікового запису Red Hat, а також секрет від акаунта Docker Hub. Об'єднаний секрет буде виглядати наступним чином:
++
+._Приклад об'єднаного секрету (*pull secret*)_
+[%collapsible]
+=====
+[source,json]
+----
+{
+   "auths":{
+      "cloud.openshift.com":{
+         "auth":"b3Blb=",
+         "email":"test@example.com"
+      },
+      "quay.io":{
+         "auth":"b3Blb=",
+         "email":"test@example.com"
+      },
+      "registry.connect.redhat.com":{
+         "username":"test",
+         "password":"test",
+         "auth":"b3Blb=",
+         "email":"test@example.com"
+      },
+      "registry.redhat.io":{
+         "username":"test",
+         "password":"test",
+         "auth":"b3Blb=",
+         "email":"test@example.com"
+      },
+      "index.docker.io/v2/":{
+         "username":"test",
+         "password":"test",
+         "auth":"b3Blb=",
+         "email":"test@example.com"
+      }
+   }
+}
+----
+=====
++
+Для зручності запису цього секрету в файл *_install-config.yaml_* потрібно записати його в один рядок. Фінальний секрет буде виглядати наступним чином:
++
+._Приклад *pull secret* в один рядок_
+[%collapsible]
+=====
+----
+'{"auths":{"cloud.openshift.com":{"auth":"b3Blb=","email":"test@example.com"},"quay.io":{"auth":"b3Blb=","email":"test@example.com"},"registry.connect.redhat.com":{"username":"test","password":"test","auth":"b3Blb=","email":"test@example.com"},"registry.redhat.io":{"username":"test","password":"test","auth":"b3Blb=","email":"test@example.com"},"index.docker.io/v2/":{"username":"test","password":"test","auth":"b3Blb=","email":"test@example.com"}}}'
+----
+=====
+
+====
++
+WARNING: Після запуску процесу розгортання кластера, Інсталер видаляє *install-config.yaml*, тому рекомендовано виконати резервування цього файлу, якщо є потреба розгортання кількох кластерів.

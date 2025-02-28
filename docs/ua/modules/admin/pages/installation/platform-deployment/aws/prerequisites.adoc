@@ -1,0 +1,215 @@
+= Розгортання Платформи в AWS-середовищі: Передумови
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+include::platform:ROOT:partial$admonitions/language-ua.adoc[]
+
+Перед розгортанням і налаштуванням платформи потрібно обов'язково виконати наступні дії.
+
+[#preconditions-first-stage]
+== Необхідні елементи початкового етапу
+
+Перед початком будь-яких дій потрібно мати в наявності набір ресурсів, які обов'язкові для подальших кроків:
+
+Документація: ::
+
+* [*] Розділ xref:release-notes:release-notes/release-notes.adoc[]
+* [*] Документ xref:update/overview.adoc[]. Він потрібний лише для процедури оновлення Платформи.
+
+Сертифікати цифрового підпису (digital-signature-ops сертифікати): ::
+
+* [*] *_Key-6.dat_* -- приватний ключ організації (_лише для файлового ключа_);
+* [*] *_allowed-key.yaml_* -- перелік усіх виданих ключів. Спочатку це лише первинний _Key-6.dat_. При зміні ключа, туди додається інформація про новий ключ, не видаляючи старий;
+* [*] *_CAs.json_* -- перелік всіх АЦСК, береться з сайту https://iit.com.ua/downloads[ІІТ];
+* [*] *_CACertificates.p7b_* - публічний ключ, береться з сайту https://iit.com.ua/downloads[ІІТ].
+
+Файли конфігурації для файлового та апаратного ключів: ::
+
+* 3 файли, заповнені значеннями -- для файлового носія (_див. закріплені приклади_):
+
+* [*] _link:{attachmentsdir}/aws-deployment/sign.key.device-type[sign.key.device-type]_ -- вкажіть тип носія для ключа (файловий);
+* [*] _link:{attachmentsdir}/aws-deployment/sign.key.file.issuer[ sign.key.file.issuer]_ -- вкажіть АЦСК, що видав ключ (замініть у файлі значення на своє);
+* [*] _link:{attachmentsdir}/aws-deployment/sign.key.file.password[sign.key.file.password]_ -- вкажіть пароль до файлового ключа (замініть у файлі значення на своє).
++
+4 файли із порожніми значеннями -- для апаратного носія (_створіть 4 порожні файли із відповідними назвами_):
+
+* [*] *_sign.key.hardware.device_* -- тип носія для ключа (апаратний);
+* [*] *_sign.key.hardware.password_* --  пароль апаратного ключа;
+* [*] *_sign.key.hardware.type_* -- тип ключа;
+* [*] *_osplm.ini_* -- INI-конфігурація.
+
++
+TIP: Детальніше про особливості завантаження/оновлення ключів та сертифікатів цифрового підпису ви можете переглянути на сторінці xref:control-plane/system-keys/control-plane-platform-keys.adoc[].
+
+== Створення облікового запису AWS
+
+Перед встановленням OpenShift Container Platform на Amazon Web Services (AWS), необхідно створити обліковий запис AWS.
+
+Це можна зробити, користуючись офіційною документацією на сайті AWS: https://aws.amazon.com/premiumsupport/knowledge-center/create-and-activate-aws-account/[How do I create and activate a new AWS account?]
+
+== Налаштування облікового запису AWS
+
+Перш ніж встановити OpenShift Container Platform, потрібно налаштувати обліковий запис Amazon Web Services (AWS).
+
+[#setup-route-53]
+=== Налаштування Route 53
+
+Щоб встановити OpenShift Container Platform, потрібно зареєструвати домен. Це можна зробити у сервісі *Route 53*, або ж використати будь-який інший реєстратор доменних імен.
+
+Також обліковий запис Amazon Web Services (AWS), який використовується, повинен мати виділену публічну зону хостингу в сервісі Route 53.
+
+TIP: Докладніше описано в офіційній документації на сайті OKD: https://docs.openshift.com/container-platform/4.12/installing/installing_aws/installing-aws-account.html#installation-aws-route53_installing-aws-account[Configuring Route 53].
+
+[#setup-external-domain]
+=== Налаштування зовнішнього домену
+
+Якщо для створення домену було використано _не_ AWS Route 53, а зовнішній реєстратор доменних імен, то необхідно виконати делегування домену. Для цього виконайте наступні дії:
+
+* Перейдіть у створений обліковий запис AWS та створіть публічну зону хостингу у сервісі *Route 53* (як було описано у п. xref:#setup-route-53[]). Назвати її необхідно так само як і зовнішній створений домен.
+* Увійдіть до створеної публічної зони хостингу та перегляньте запис із типом *`NS`* (*Name Servers* -- це сервери імен, які відповідають на DNS-запити для домену). У значенні будуть вказані сервери імен. Необхідно зберегти назви цих серверів для подальшого використання у наступних кроках.
+* Перейдіть до зовнішнього реєстратора доменних імен, в якому було створено домен.
+* Відкрийте налаштування цього домену та знайдіть налаштування, що стосуються NS-серверів;
+* Відредагуйте NS-сервери відповідно до NS-серверів, які взято із публічної зони хостингу з облікового запису AWS.
+
+=== Ліміти облікового запису AWS
+
+Кластер OpenShift Container Platform використовує ряд компонентів Amazon Web Services (AWS), і стандартні _обмеження послуг_ впливають на можливість встановлення кластера.
+
+Перелік компонентів AWS, обмеження яких можуть вплинути на можливість встановлення та запуску кластера OpenShift Container Platform, наведено у документації на сайті OKD: https://docs.openshift.com/container-platform/4.12/installing/installing_aws/installing-aws-account.html#installation-aws-limits_installing-aws-account[AWS account limits].
+
+NOTE: Також обов'язково потрібно збільшити обмеження CPU для *_on-demand_* віртуальних машин в обліковому записі Amazon Web Services (AWS). Необхідні для цього дії описані в офіційній документації на сайті AWS: https://aws.amazon.com/premiumsupport/knowledge-center/ec2-on-demand-instance-vcpu-increase/[How do I request an EC2 vCPU limit increase for my On-Demand Instance?]
+
+=== Створення користувача IAM
+
+. Перед встановленням OpenShift Container Platform, створіть _користувача **IAM**_, користуючись офіційною документацією на сайті AWS: https://docs.aws.amazon.com/IAM/latest/UserGuide/id_users_create.html[Creating an IAM user in your AWS account].
+
+. Окрім цього виконайте наступні важливі вимоги:
+
+* Видаліть будь-які обмеження *Service control policies (SCPs*) з облікового запису AWS.
++
+NOTE: Під час створення кластера, також створюється асоційований постачальник ідентичностей AWS OpenID Connect (OIDC). Ця конфігурація постачальника OIDC базується на відкритому ключі, який знаходиться в регіоні AWS *`us-east-1`*. Клієнти з AWS SCP повинні дозволити використання регіону AWS *`us-east-1`* навіть якщо кластер буде розгорнуто в іншому регіоні. Без правильного налаштування цих політик, одразу можуть виникнути помилки з дозволами, оскільки інсталятор OKD перевіряє правильність їх налаштування.
++
+TIP: Детальну інформацію можна отримати в офіційний документації, у пункті *1.1. DEPLOYMENT PREREQUISITES* документа https://access.redhat.com/documentation/en-us/red_hat_openshift_service_on_aws/4/pdf/prepare_your_environment/red_hat_openshift_service_on_aws-4-prepare_your_environment-en-us.pdf[Red Hat OpenShift Service on AWS 4. Prepare your environment].
+
+* Правильно налаштуйте *_permissions boundary_* у створеного IAM-користувача.
++
+Нижче наведено приклад політики permissions boundary. Можна використати її, або зовсім видалити будь-які permissions boundary.
++
+[%collapsible]
+._Приклад. Налаштування політики *permissions boundary_*
+====
+[source,json]
+----
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "NotAction": [
+                "iam:*"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "iam:Get*",
+                "iam:List*",
+                "iam:Tag*",
+                "iam:Untag*",
+                "iam:GenerateServiceLastAccessedDetails",
+                "iam:GenerateCredentialReport",
+                "iam:SimulateCustomPolicy",
+                "iam:SimulatePrincipalPolicy",
+                "iam:UploadSSHPublicKey",
+                "iam:UpdateServerCertificate",
+                "iam:CreateInstanceProfile",
+                "iam:CreatePolicy",
+                "iam:DeletePolicy",
+                "iam:CreatePolicyVersion",
+                "iam:DeletePolicyVersion",
+                "iam:SetDefaultPolicyVersion",
+                "iam:CreateServiceLinkedRole",
+                "iam:DeleteServiceLinkedRole",
+                "iam:CreateInstanceProfile",
+                "iam:AddRoleToInstanceProfile",
+                "iam:DeleteInstanceProfile",
+                "iam:RemoveRoleFromInstanceProfile",
+                "iam:UpdateRole",
+                "iam:UpdateRoleDescription",
+                "iam:DeleteRole",
+                "iam:PassRole",
+                "iam:DetachRolePolicy",
+                "iam:DeleteRolePolicy",
+                "iam:UpdateAssumeRolePolicy",
+                "iam:CreateGroup",
+                "iam:UpdateGroup",
+                "iam:AddUserToGroup",
+                "iam:RemoveUserFromGroup",
+                "iam:PutGroupPolicy",
+                "iam:DetachGroupPolicy",
+                "iam:DetachUserPolicy",
+                "iam:DeleteGroupPolicy",
+                "iam:DeleteGroup",
+                "iam:DeleteUserPolicy",
+                "iam:AttachUserPolicy",
+                "iam:AttachGroupPolicy",
+                "iam:PutUserPolicy",
+                "iam:DeleteUser",
+                "iam:CreateRole",
+                "iam:AttachRolePolicy",
+                "iam:PutRolePermissionsBoundary",
+                "iam:PutRolePolicy"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "iam:CreateAccessKey",
+                "iam:DeleteAccessKey",
+                "iam:UpdateAccessKey",
+                "iam:CreateLoginProfile",
+                "iam:DeleteLoginProfile",
+                "iam:UpdateLoginProfile",
+                "iam:ChangePassword",
+                "iam:CreateVirtualMFADevice",
+                "iam:EnableMFADevice",
+                "iam:ResyncMFADevice",
+                "iam:DeleteVirtualMFADevice",
+                "iam:DeactivateMFADevice",
+                "iam:CreateServiceSpecificCredential",
+                "iam:UpdateServiceSpecificCredential",
+                "iam:ResetServiceSpecificCredential",
+                "iam:DeleteServiceSpecificCredential"
+            ],
+            "Resource": "*"
+        }
+    ]
+}
+----
+====
+
+TIP: Докладніше процес створення IAM-користувача описано в офіційній документації на сайті OKD: https://docs.openshift.com/container-platform/4.12/installing/installing_aws/installing-aws-account.html#installation-aws-iam-user_installing-aws-account[Creating an IAM user].
+
+=== Необхідні дозволи AWS для користувача IAM
+
+Для розгортання всіх компонентів кластера OpenShift Container Platform користувачеві IAM потрібні дозволи, які необхідно прикріпити до цього користувача. +
+Приклад таких дозволів наведено у наступній документації на сайті OKD: https://docs.openshift.com/container-platform/4.12/installing/installing_aws/installing-aws-account.html#installation-aws-permissions_installing-aws-account[Required AWS permissions for the IAM user].
+
+[#create-additional-accounts]
+== Створення додаткових облікових записів
+
+Перед встановленням OpenShift Container Platform на Amazon Web Services (AWS), необхідно створити обліковий запис Docker Hub та Red Hat. +
+Це необхідно зробити для формування *`docker pull secret`*, який буде використовуватись пізніше.
+
+=== Створення облікового запису Docker Hub
+
+* Деякі сервіси використовують images, які знаходяться у репозиторіях на Docker Hub. Для того, щоб мати можливість їх використовувати, потрібно створити акаунт, користуючись офіційною документацією на сайті Docker: https://docs.docker.com/docker-id/[Docker ID accounts].
+
+* Окрім цього, виникнуть проблеми із лімітом на кількість завантажень images на день. Це призведе до того, що сервіси не зможуть запуститися. Щоб цього уникнути, необхідно оновити підписку до рівня Pro. Це допоможе змінити обмеження на кількість пулів із 200 docker-образів/6 годин до 5000 docker-образів/день. Це можливо зробити користуючись офіційною документацією на сайті Docker: https://docs.docker.com/subscription/upgrade/[Upgrade your subscription].
+
+=== Створення облікового запису Red Hat
+
+Для того, щоб завантажити необхідні images для встановлення OpenShift Container Platform, необхідно створити Red Hat Account. Докладніше про те, як це зробити, описано в офіційній документації: https://access.redhat.com/articles/5832311[Red Hat Login ID and Account].
+
+Це необхідно для того, щоб завантажити сформований pull secret пізніше (докладніше описано у розділі xref:installation/platform-deployment/aws/okd-aws-install-preparation.adoc[]). Він дозволить пройти автентифікацію та завантажити образи контейнерів для компонентів OpenShift Container Platform.

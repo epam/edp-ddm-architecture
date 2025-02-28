@@ -1,0 +1,142 @@
+= Типові помилки під час розгортання платформи
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+include::platform:ROOT:partial$admonitions/language-ua.adoc[]
+
+Ця секція надає інформацію про типові помилки, які можуть виникнути під час розгортання платформи з нуля, та методи їх вирішення.
+
+== Помилка із bootstrap-машиною під час розгортання OKD кластера
+
+[bootstrap-machine-issue-description]
+=== Опис проблеми
+
+Під час розгортання кластера виникає наступна помилка:
+
+.Помилка із bootstrap віртуальною машиною
+----
+level=error msg=Attempted to gather ClusterOperator status after installation failure: listing ClusterOperator objects: Get "https://api.<CLUSTER_URL>:6443/apis/config.openshift.io/v1/clusteroperators": dial tcp <CLUSTER_IP>:6443: connect: connection refused
+level=error msg=Bootstrap failed to complete: Get "https://api.<CLUSTER_URL>:6443/version": dial tcp <CLUSTER_IP>:6443: connect: connection refused
+level=error msg=Failed waiting for Kubernetes API. This error usually happens when there is a problem on the bootstrap host that prevents creating a temporary control plane.
+----
+
+Ця помилка пов'язана із віртуальною машиною bootstrap і зазвичай трапляється, коли на хості bootstrap є проблема, яка перешкоджає створенню тимчасової Control Plane.
+
+[bootstrap-machine-issue-resolving]
+=== Розв'язання проблеми
+
+. Запустіть команду для видалення кластера, залишивши той самий параметр *`--dir`*.
++
+.Видалення OKD-кластера
+----
+$ ./openshift-install destroy cluster --dir /tmp/openshift-cluster/cluster-state --log-level info
+----
+
+. Дочекайтеся видалення кластера та ще раз запустіть команду для його встановлення.
++
+.Повторне встановлення кластера
+----
+$ ./openshift-install create cluster --dir /tmp/openshift-cluster/cluster-state --log-level=info
+----
+
+== Помилка із Vault-токеном під час розгортання Платформи
+
+[vault-token-issue-description]
+=== Опис проблеми
+
+Під час розгортання Платформи, на етапі встановлення Vault, може трапитися помилка, коли змінна `vault_root_token` повертає порожнє значення:
+
+image:installation/aws/installation-aws-5.png[image,width=468,height=113]
+
+Ця помилка пов'язана із тим, що Vault не запустився успішно, або були пропущенні деякі кроки інсталяції платформи.
+
+[vault-token-issue-resolving]
+=== Розв'язання
+
+. Відкрийте обліковий запис AWS. Знайдіть віртуальну машину *`platform-vault-<CLUSTER_NAME>`*.
+. Перейдіть на віртуальну машину, використовуючи EC2 Instance Connect або SSH.
+. Перевірте статус Vault. Параметр *`Initialized`* має бути у значенні `*true*`.
++
+.Отримати статус Vault
+----
+$ vault status
+----
++
+image:installation/aws/installation-aws-6.png[image,width=468,height=182]
+
+. Якщо статус інший, то перезавантажте Vault.
++
+.Рестарт vault
+----
+$ systemctl restart vault
+----
+
+. Якщо ця помилка сталася під час оновлення Платформи, то перевірте, чи було перенесено ключ від Vault з минулого релізу, як описано у п. xref:#platform-update-vault[].
+. Спробуйте ще раз запустити процес оновлення Платформи, як описано у xref:update-platform-installer[].
+
+== Помилка із Minio SSL-сертифікатом під час розгортання Платформи
+
+[minio-ssl-certificate-issue-description]
+=== Опис проблеми
+
+Під час розгортання Платформи, на етапі встановлення Minio, може трапитися наступна помилка:
+
+image:installation/aws/installation-aws-7.png[image,width=468,height=174]
+
+[minio-ssl-certificate-issue-resolving]
+=== Розв'язання
+
+. Увійдіть до директорії з Інсталером та запустіть контейнер для встановлення Платформи наступною командою:
++
+.Запуск контейнера
+[source,bash]
+----
+$ cd ~/installer/installer-<VERSION>
+$ sudo docker run -it --rm \
+    --name control-plane-installer-<VERSION> \
+    --user root:$(id -g) \
+    --net host \
+    -v $(pwd):/tmp/installer \
+    --env KUBECONFIG=/tmp/installer/kubeconfig \
+    --env PLATFORM_DEPLOYMENT_MODE=<DEPLOYMENT_MODE> control-plane-installer:<VERSION> bash
+----
+
+. Перейдіть до необхідної директорії та задайте змінні середовища.
++
+.Вказання змінних середовища
+[source,bash]
+----
+$ cd /tmp/installer/terraform/minio/aws
+$ export AWS_ACCESS_KEY_ID=$(oc get secret/aws-creds -n kube-system -o jsonpath='{.data.aws_access_key_id}' | base64 -d)
+$ export AWS_SECRET_ACCESS_KEY=$(oc get secret/aws-creds -n kube-system -o jsonpath='{.data.aws_secret_access_key}' | base64 -d)
+$ export CLUSTER_NAME=$(oc get node -l node-role.kubernetes.io/master -o 'jsonpath={.items[0].metadata.annotations.machine\.openshift\.io/machine}' | sed -r 's#.*/(.*)-master.*#\1#')
+$ export clusterNameShort="${CLUSTER_NAME::-6}"
+$ export baseDomain=$(oc get dns cluster --no-headers -o jsonpath='{.spec.baseDomain}')
+$ export route53HostedZone="${baseDomain/${clusterNameShort}./}"
+----
+
+. Видаліть Minio за допомогою Terraform.
++
+.Видалення Minio
+[source,bash]
+----
+$ terraform init
+$ terraform destroy -var cluster_name="${clusterNameShort}" -var baseDomain="${route53HostedZone}" -auto-approve
+----
+
+. Дочекайтеся видалення Minio. Вийдіть із контейнера та спробуйте ще раз запустити процес встановлення Платформи, як описано у п. xref:#deploy-platform-installer-scratch[], якщо ви розгортаєте платформу з нуля, або п. xref:#update-platform-installer[], якщо ви оновлюєте платформу.
+
+== Помилка при відправленні образів до Nexus під час розгортання Платформи
+
+[send-images-to-nexus-issue-description]
+=== Опис проблеми
+
+Під час розгортання Платформи, на етапі відправлення образів до Nexus, може трапитися наступна помилка:
+
+image:installation/aws/installation-aws-8.png[image,width=468,height=228]
+
+Ця помилка пов'язана зі *skopeo*. Цей інструмент надсилає образи до Nexus. Якщо образ не зміг завантажитися за 10 хвилин, то skopeo починає повертати помилку через тайм-аут.
+
+[send-images-to-nexus-issue-resolving]
+=== Розв'язання
+
+Виконувати встановлення Платформи із deployer-node, як описано в розділі xref:#deploy-additional-recources-for-okd[].
