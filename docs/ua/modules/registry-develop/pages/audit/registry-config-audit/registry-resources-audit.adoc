@@ -1,0 +1,532 @@
+= Аудит конфігурації ресурсів реєстру
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+Цей документ містить рекомендації та правила конфігурації реєстру для забезпечення стабільності, масштабованості та продуктивності.
+
+*Предмет аудиту* -- налаштування ресурсів реєстру.
+
+[#_rs_01]
+== RS-01. Ресурси для контейнерів
+
+=== Загальні відомості
+
+Опис ::
+
+Щоб Kubernetes-кластер працював стабільно, необхідно правильно налаштувати ресурси для кожного контейнера -- *пам'ять і CPU*.
+Це запобігатиме надмірному використанню ресурсів окремими контейнерами та забезпечить ефективний розподіл ресурсів між сервісами.
+
+Рекомендації ::
+
+* Встановлюйте однакові значення *Request* і *Limit* для пам'яті контейнерів в OKD/Kubernetes.
+Це запобігає ситуаціям, коли контейнер споживає більше ресурсів, ніж передбачено, і негативно впливає на стабільність віртуальної машини.
+
+* Використовуйте *_НЕ_ більше 3 реплік* одного сервісу.
+Особливо для Java-застосунків ефективнішим є вертикальне масштабування -- збільшення ресурсів для однієї репліки, а не створення додаткових.
+Кожна додаткова репліка значно збільшує витрати пам'яті та знижує ефективність використання ресурсів.
+
+Вплив ::
+
+* Якщо не встановити ліміти пам'яті для контейнерів, то при різкому зростанні споживання пам'яті контейнер може перевищити доступні ресурси.
+Це може знизити продуктивність або спричинити аварійне завершення роботи інших контейнерів на ноді.
+
+* Використання понад 3 реплік для сервісу із Java-застосунками призведе до суттєвого збільшення споживання пам'яті через значне використання ресурсів кожною реплікою.
+Це неефективно розподілить ресурси, що погіршить загальну продуктивність системи.
+
+=== Предмет аудиту
+
+*Предмет аудиту* -- ресурси контейнерів, які працюють (*running*) у реєстрі.
+До аудиту включені лише контейнери, які споживають понад 100 МБ пам'яті.
+Не враховані такі, що споживають менше, а також ті, що стосуються одноразових пайплайнів (Job).
+Контейнери відсортовано за пріоритетом відповідно до фактичного обсягу споживання пам'яті, від найбільшого до найменшого.
+
+Нижче наведено таблицю з переліком підсистем реєстру та відповідних їм сервісів.
+
+.Перелік сервісів реєстру
+[options="header", cols="2,3"]
+|===
+^|Підсистема реєстру ^|Сервіси
+
+| xref:arch:architecture/registry/operational/bpms/overview.adoc[Підсистема виконання бізнес-процесів]
+a|
+* `bpms`
+* `process-history-service-persistence-deployment`
+* `digital-document-service`
+* `form-schema-provider-deployment`
+* `process-history-service-api-deployment`
+* `user-process-management`
+* `user-task-management`
+* `form-submission-validation`
+
+| xref:arch:architecture/registry/operational/registry-management/overview.adoc[Підсистема управління даними реєстру]
+a|
+* `registry-rest-api-deployment`
+* `registry-kafka-api-deployment`
+
+| xref:arch:architecture/registry/operational/nonrelational-data-storage/overview.adoc[Підсистема управління нереляційними базами даних]
+a|
+* `rfr-redis-sentinel`
+
+| xref:arch:architecture/registry/operational/messaging/overview.adoc[Підсистема асинхронного обміну повідомленнями]
+a|
+* `kafka-cluster-kafka`
+* `kafka-cluster-entity-operator`
+* `kafka-cluster-zookeeper`
+
+| xref:arch:architecture/registry/operational/relational-data-storage/overview.adoc[Підсистема управління реляційними базами даних]
+a|
+* `operational-instance`
+* `analytical-instance`
+* `operational-pool`
+
+| xref:arch:architecture/registry/operational/excerpts/overview.adoc[Підсистема формування витягів реєстру]
+a|
+* `excerpt-service-api-deployment`
+* `excerpt-worker-csv-deployment`
+* `excerpt-worker-deployment`
+* `excerpt-worker-docx-deployment`
+
+| xref:arch:architecture/registry/operational/external-integrations/overview.adoc[Підсистема зовнішніх інтеграцій]
+a|
+* `bp-webservice-gateway`
+* `platform-gateway-deployment`
+* `registry-rest-api-ext-deployment`
+* `registry-rest-api-public-deployment`
+* `registry-soap-api-deployment`
+
+| xref:arch:architecture/registry/operational/reporting/overview.adoc[Підсистема аналітичної звітності реєстру]
+a|
+* `redash-viewer`
+* `redash-viewer-adhocworker`
+* `redash-viewer-scheduler`
+
+| xref:arch:architecture/registry/operational/ext-api-management/overview.adoc[Підсистема управління зовнішнім трафіком операційної зони реєстру]
+a|
+* `kong-kong`
+* `istio-ingressgateway`
+
+| xref:arch:architecture/registry/operational/audit/overview.adoc[Підсистема журналювання подій аудиту]
+a|
+* `kafka-connect-cluster-connect`
+* `kafka-schema-registry`
+
+| xref:arch:architecture/registry/operational/digital-signatures/overview.adoc[Підсистема цифрових підписів]
+a|
+* `digital-signature-ops`
+
+| xref:arch:architecture/registry/operational/notifications/overview.adoc[Підсистема нотифікацій користувачів]
+a|
+* `ddm-notification-service`
+
+| xref:arch:architecture/registry/operational/user-settings/overview.adoc[Підсистема управління налаштуваннями користувачів]
+a|
+* `user-settings-service-api-deployment`
+
+| xref:arch:architecture/registry/operational/geo/overview.adoc[Підсистема управління геоданими]
+a|
+* `geo-server`
+
+| xref:arch:architecture/registry/operational/secret-management/overview.adoc[Підсистема управління секретами та шифруванням]
+a|
+* `hashicorp-vault`
+
+| xref:arch:architecture/registry/administrative/regulation-management/overview.adoc[Підсистема моделювання регламенту реєстру]
+a|
+* `ddm-language-server`
+* `report-exporter-deployment`
+* `registry-regulation-management-deployment`
+* `gerrit`
+
+| xref:arch:architecture/registry/administrative/operational-maintenance/overview.adoc[Підсистема обслуговування операційної зони реєстру]
+a|
+* `business-process-administration-portal`
+* `pgadmin-deployment`
+
+| xref:arch:architecture/registry/administrative/regulation-publication/overview.adoc[Підсистема розгортання регламенту реєстру]
+a|
+* `jenkins`
+* `nexus`
+
+| xref:arch:architecture/registry/administrative/ext-api-management/overview.adoc[Підсистема управління зовнішнім трафіком адміністративної зони реєстру]
+a|
+* `kong-admin-tools-kong-admin-tools`
+
+|===
+
+[#_rs_02]
+== RS-02. Розмір і кількість віртуальних машин
+
+=== Загальні відомості
+
+Опис ::
+
+Ефективне управління розміром і кількістю віртуальних машин є ключовим фактором для забезпечення стабільності та
+відмовостійкості OKD/Kubernetes-кластера.
+Ефективний розподіл ресурсів допомагає уникнути перевантаження окремих машин і полегшує подальше масштабування.
+
+Рекомендації ::
+
+* Загальний обсяг пам’яті, виділеної на всі сервіси (з урахуванням Requests і Limits), не повинен перевищувати 80% від обсягу пам'яті віртуальних машин, на яких ці сервіси будуть запущені. Це дозволить уникнути ризиків вичерпання ресурсів та забезпечить резерв для стабільної роботи.
+
+* Щоб забезпечити відмовостійкість, додавайте ще одну додаткову віртуальну машину (+1) до загальної кількості необхідних машин. Це допоможе швидко відновити роботу у випадку збою однієї машини або при необхідності масштабування.
+
+* Надавайте пріоритет вертикальному масштабуванню (збільшенню ресурсів на одній машині), оскільки це ефективніше використовує ресурси та дозволяє уникнути додаткових витрат пам'яті й CPU, пов'язаних з розподілом навантаження між більшою кількістю віртуальних машин.
+
+* Високонавантажені сервіси, що активно споживають ресурси, рекомендується розміщувати на окремих віртуальних машинах. Це допоможе уникнути конфліктів з іншими сервісами та підвищить стабільність роботи.
+
+=== Предмет аудиту
+
+*Предмет аудиту* -- віртуальні машини, виділені для реєстру, а також сервіси з високим навантаженням, що можуть потребувати окремих (ексклюзивних) нод.
+
+Нижче наведено перелік сервісів, які є кандидатами на виділення окремих віртуальних машин.
+
+.Перелік сервісів-кандидатів на ексклюзивні віртуальні машини
+[options="header", cols="1,2"]
+|===
+^| Підсистема реєстру ^| Сервіси
+
+| xref:arch:architecture/registry/operational/relational-data-storage/overview.adoc[Підсистема управління реляційними базами даних]
+a|
+* `operational-instance`
+* `analytical-instance`
+
+| xref:arch:architecture/registry/operational/messaging/overview.adoc[Підсистема асинхронного обміну повідомленнями]
+a|
+* `kafka-cluster-kafka`
+
+| xref:arch:architecture/registry/operational/nonrelational-data-storage/overview.adoc[Підсистема управління нереляційними базами даних]
+a|
+* `rfr-redis-sentinel`
+
+|===
+
+[#_rs_03]
+== RS-03. Ресурси для Java-застосунків
+
+=== Загальні відомості
+
+Опис ::
+Java-застосунки мають особливі вимоги до налаштування пам'яті та ресурсів через специфіку роботи JVM (Java Virtual Machine).
+Правильне налаштування ресурсів є критично необхідним для стабільної роботи та високої продуктивності Java-застосунків у контейнерах.
+
+Рекомендації ::
+
+* Використовуйте вертикальне масштабування Java-застосунків (збільшення ресурсів одного інстансу), а не горизонтальне. Це дозволить ефективніше використовувати ресурси та уникнути додаткових витрат на управління декількома інстансами.
+
+* Завжди явно налаштовуйте розмір Java heap memory. Встановлюйте початковий (`-Xms`) і максимальний (`-Xmx`) розмір пам'яті. Якщо цього не зробити, JVM автоматично виділить на heap memory 25% від ресурсів віртуальної машини.
+
+* Встановлюйте однакові значення для початкового та максимального розмірів heap (`-Xms` = `-Xmx`). Це запобігає зміні розміру виділеної пам'яті під час роботи застосунку.
+
+* Обмежуйте кількість доступних процесорів за допомогою параметра `-XX:ActiveProcessorCount`. Це забезпечить ефективний контроль над ресурсами CPU.
+
+* Розмір heap memory рекомендовано розраховувати за формулою:
++
+----
+Heap = min(RAM × 0.75, RAM – 0.5 GB)
+----
+де RAM -- загальний обсяг пам'яті, виділений контейнеру.
++
+*Приклади розрахунку heap memory*:
++
+--
+* Для контейнера з 1 GB RAM: heap = 500 MB
+* Для контейнера з 4 GB RAM: heap = 3 GB
+--
+
+Вплив ::
+
+Неправильно налаштований розмір heap memory може спричинити:
+
+* часті паузи для garbage collection;
+* помилки типу `OutOfMemoryError`;
+* нестабільну роботу застосунку;
+* неефективне використання пам'яті.
+
+=== Предмет аудиту
+
+*Предмет аудиту* -- Java-застосунки, запущені у реєстрі.
+Застосунки відсортовані за пріоритетом залежно від фактичного споживання пам’яті (від найбільшого до найменшого).
+
+.Перелік Java-застосунків реєстру
+[options="header", cols="1,2"]
+|===
+^| Підсистема реєстру ^| Java-застосунки
+
+| xref:arch:architecture/registry/operational/bpms/overview.adoc[Підсистема виконання бізнес-процесів]
+a|
+* `bpms`
+* `process-history-service-persistence-deployment`
+* `digital-document-service`
+* `form-schema-provider-deployment`
+* `process-history-service-api-deployment`
+* `user-process-management`
+* `user-task-management`
+
+| xref:arch:architecture/registry/operational/registry-management/overview.adoc[Підсистема управління даними реєстру]
+a|
+* `registry-rest-api-deployment`
+* `registry-kafka-api-deployment`
+
+| xref:arch:architecture/registry/operational/messaging/overview.adoc[Підсистема асинхронного обміну повідомленнями]
+a|
+* `kafka-cluster-kafka`
+* `kafka-cluster-entity-operator`
+* `kafka-cluster-zookeeper`
+
+| xref:arch:architecture/registry/operational/excerpts/overview.adoc[Підсистема формування витягів реєстру]
+a|
+* `excerpt-service-api-deployment`
+* `excerpt-worker-csv-deployment`
+* `excerpt-worker-deployment`
+* `excerpt-worker-docx-deployment`
+
+| xref:arch:architecture/registry/operational/external-integrations/overview.adoc[Підсистема зовнішніх інтеграцій]
+a|
+* `bp-webservice-gateway`
+* `platform-gateway-deployment`
+* `registry-rest-api-ext-deployment`
+* `registry-rest-api-public-deployment`
+* `registry-soap-api-deployment`
+
+| xref:arch:architecture/registry/operational/audit/overview.adoc[Підсистема журналювання подій аудиту]
+a|
+* `kafka-connect-cluster-connect`
+* `kafka-schema-registry`
+
+| xref:arch:architecture/registry/operational/digital-signatures/overview.adoc[Підсистема цифрових підписів]
+a|
+* `digital-signature-ops`
+
+| xref:arch:architecture/registry/operational/notifications/overview.adoc[Підсистема нотифікацій користувачів]
+a|
+* `ddm-notification-service`
+
+| xref:arch:architecture/registry/operational/user-settings/overview.adoc[Підсистема управління налаштуваннями користувачів]
+a|
+* `user-settings-service-api-deployment`
+
+| xref:arch:architecture/registry/operational/geo/overview.adoc[Підсистема управління геоданими]
+a|
+* `geo-server`
+
+| xref:arch:architecture/registry/administrative/regulation-management/overview.adoc[Підсистема моделювання регламенту реєстру]
+a|
+* `ddm-language-server`
+* `report-exporter-deployment`
+* `registry-regulation-management-deployment`
+* `gerrit`
+
+| xref:arch:architecture/registry/administrative/operational-maintenance/overview.adoc[Підсистема обслуговування операційної зони реєстру]
+a|
+* `business-process-administration-portal`
+
+| xref:arch:architecture/registry/administrative/regulation-publication/overview.adoc[Підсистема розгортання регламенту реєстру]
+a|
+* `jenkins`
+* `nexus`
+
+|===
+
+[#_rs_04]
+== RS-04. База даних
+
+=== Загальні відомості
+
+Опис ::
+
+Правильне налаштування бази даних є критично важливим для стабільної роботи реєстру.
+Це передбачає оптимізацію підключень, ресурсів, сховища та конфігурації відповідно до потреб реєстру.
+Особливу увагу слід приділити ефективному керуванню пулом підключень (connection pool) і налаштуванням PostgreSQL для досягнення максимальної продуктивності.
+
+Рекомендації ::
+
+* Загальна кількість підключень клієнтів (connection pool) має бути меншою за максимальну кількість підключень, дозволену базою даних.
+Рекомендований буфер між цими значеннями -- 10%.
+Це допоможе уникнути ситуацій, коли підключення вичерпуються, що може призвести до відмови в обслуговуванні.
+
+* За умови очікуваного високого навантаження базу даних слід розгорнути на окремій віртуальній машині. Це забезпечить ізоляцію ресурсів та покращить продуктивність.
+
+* Розмір сховища бази даних (`storage`) необхідно визначати відповідно до очікуваного обсягу даних і прогнозованих темпів їх зростання.
+
+* Розраховуючи розмір connection pool, враховуйте:
+
+** кількість одночасних користувачів;
+** характер запитів;
+** тривалість транзакцій;
+** пікові навантаження.
+
+* Налаштуйте параметри PostgreSQL залежно від виділених ресурсів:
+
+** максимальний розмір WAL (Write-Ahead Logging);
+** обсяг shared buffers;
+** обсяг effective cache size.
+
+* Для підвищення продуктивності операцій вводу-виводу (I/O) рекомендовано використовувати нативні (`thin`) диски.
+
+=== Предмет аудиту
+
+*Предмет аудиту* -- конфігурація бази даних реєстру та її клієнтів.
+
+Нижче наведено перелік клієнтів, які використовують базу даних.
+
+.Перелік клієнтів бази даних
+[options="header", cols="1,2"]
+|===
+^| Підсистема реєстру ^| Клієнти бази даних
+
+| xref:arch:architecture/registry/operational/bpms/overview.adoc[Підсистема виконання бізнес-процесів]
+a|
+* `bpms`
+* `process-history-service-persistence-deployment`
+* `process-history-service-api-deployment`
+
+| xref:arch:architecture/registry/operational/registry-management/overview.adoc[Підсистема управління даними реєстру]
+a|
+* `registry-rest-api-deployment`
+* `registry-kafka-api-deployment`
+
+| xref:arch:architecture/registry/operational/excerpts/overview.adoc[Підсистема формування витягів реєстру]
+a|
+* `excerpt-service-api-deployment`
+* `excerpt-worker-csv-deployment`
+* `excerpt-worker-deployment`
+* `excerpt-worker-docx-deployment`
+
+| xref:arch:architecture/registry/operational/external-integrations/overview.adoc[Підсистема зовнішніх інтеграцій]
+a|
+* `registry-rest-api-ext-deployment`
+* `registry-rest-api-public-deployment`
+
+| xref:arch:architecture/registry/operational/reporting/overview.adoc[Підсистема аналітичної звітності реєстру]
+a|
+* `redash-viewer`
+* `redash-viewer-adhocworker`
+* `redash-viewer-scheduler`
+
+| xref:arch:architecture/registry/operational/audit/overview.adoc[Підсистема журналювання подій аудиту]
+a|
+* `kafka-connect-cluster-connect`
+
+| xref:arch:architecture/registry/operational/notifications/overview.adoc[Підсистема нотифікацій користувачів]
+a|
+* `ddm-notification-service`
+
+| xref:arch:architecture/registry/operational/user-settings/overview.adoc[Підсистема управління налаштуваннями користувачів]
+a|
+* `user-settings-service-api-deployment`
+
+| xref:arch:architecture/registry/operational/geo/overview.adoc[Підсистема управління геоданими]
+a|
+* `geo-server`
+
+| xref:arch:architecture/registry/administrative/regulation-management/overview.adoc[Підсистема моделювання регламенту реєстру]
+a|
+* `registry-regulation-management-deployment`
+
+| xref:arch:architecture/registry/administrative/operational-maintenance/overview.adoc[Підсистема обслуговування операційної зони реєстру]
+a|
+* `business-process-administration-portal`
+* `pgadmin-deployment`
+
+|===
+
+[#_rs_05]
+== RS-05. Service Mesh (Istio)
+
+=== Загальні відомості
+
+* Встановлюйте однакові значення Request і Limit для пам'яті контейнерів Istio sidecar.
+* Налаштовуйте ресурси для Istio sidecar відповідно до профілю навантаження.
+
+=== Предмет аудиту
+
+*Предмет аудиту* -- сервіси, які входять до складу Istio Service Mesh. Нижче наведено перелік цих сервісів.
+
+.Сервіси, що використовують Istio Service Mesh
+[options="header", cols="1,2"]
+|===
+^| Підсистема реєстру ^| Сервіси
+
+| xref:arch:architecture/registry/operational/bpms/overview.adoc[Підсистема виконання бізнес-процесів]
+a|
+* `bpms`
+* `process-history-service-persistence-deployment`
+* `digital-document-service`
+* `form-schema-provider-deployment`
+* `process-history-service-api-deployment`
+* `user-process-management`
+* `user-task-management`
+* `form-submission-validation`
+
+| xref:arch:architecture/registry/operational/registry-management/overview.adoc[Підсистема управління даними реєстру]
+a|
+* `registry-rest-api-deployment`
+* `registry-kafka-api-deployment`
+
+| xref:arch:architecture/registry/operational/nonrelational-data-storage/overview.adoc[Підсистема управління нереляційними базами даних]
+a|
+* `rfr-redis-sentinel`
+
+| xref:arch:architecture/registry/operational/excerpts/overview.adoc[Підсистема формування витягів реєстру]
+a|
+* `excerpt-service-api-deployment`
+* `excerpt-worker-csv-deployment`
+* `excerpt-worker-deployment`
+* `excerpt-worker-docx-deployment`
+
+| xref:arch:architecture/registry/operational/external-integrations/overview.adoc[Підсистема зовнішніх інтеграцій]
+a|
+* `bp-webservice-gateway`
+* `platform-gateway-deployment`
+* `registry-rest-api-ext-deployment`
+* `registry-rest-api-public-deployment`
+* `registry-soap-api-deployment`
+
+| xref:arch:architecture/registry/operational/ext-api-management/overview.adoc[Підсистема управління зовнішнім трафіком операційної зони реєстру]
+a|
+* `kong-kong`
+* `istio-ingressgateway`
+
+| xref:arch:architecture/registry/operational/digital-signatures/overview.adoc[Підсистема цифрових підписів]
+a|
+* `digital-signature-ops`
+
+| xref:arch:architecture/registry/operational/notifications/overview.adoc[Підсистема нотифікацій користувачів]
+a|
+* `ddm-notification-service`
+
+| xref:arch:architecture/registry/operational/user-settings/overview.adoc[Підсистема управління налаштуваннями користувачів]
+a|
+* `user-settings-service-api-deployment`
+
+| xref:arch:architecture/registry/operational/geo/overview.adoc[Підсистема управління геоданими]
+a|
+* `geo-server`
+
+| xref:arch:architecture/registry/administrative/regulation-management/overview.adoc[Підсистема моделювання регламенту реєстру]
+a|
+* `ddm-language-server`
+* `report-exporter-deployment`
+* `registry-regulation-management-deployment`
+
+| xref:arch:architecture/registry/administrative/ext-api-management/overview.adoc[Підсистема управління зовнішнім трафіком адміністративної зони реєстру]
+a|
+* `kong-admin-tools-kong-admin-tools`
+
+|===
+
+[#_rs_06]
+== RS-06. Kafka
+
+=== Загальні відомості
+
+* Використовуйте щонайменше 3 брокери Kafka у кластері.
+* Розраховуйте розмір сховища (`storage`) Kafka з огляду на специфічні потреби реєстру.
+* Для topic-ів, що містять історичні події (`bpm-history-process`, `bpm-history-task`), налаштовуйте принаймні 15 партицій.
+* Фактор паралелізму сервісу обробки історичних подій (`process-history-service-persistence`) повинен бути не менше ніж 15.
+Цей параметр визначається кількістю реплік сервісу та налаштуванням `_data-platform.kafka.consumer.concurrency` (Config Map).
+
+=== Предмет аудиту
+
+*Предмет аудиту* -- конфігурація Kafka та Сервіс фіксації історичних подій бізнес-процесів.
+
+
