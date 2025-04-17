@@ -1,0 +1,204 @@
+= Обслуговування Ceph-кластера та суміжних процесів
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+//TODO: ADD AFTER REVIEW
+//include::platform:ROOT:partial$admonitions/language-ua.adoc[]
+
+Платформа реєстрів містить компонент *`openshift-storage`*, що розгортає та керує Ceph-кластером за допомогою *`rook-operator`*. У цьому документі зібрано перевірені рекомендації щодо обслуговування Ceph-кластера та пов'язаних процесів для забезпечення стабільної роботи та цілісності даних.
+
+[#manual-deep-scrub]
+== Ручний запуск та управління процесами Deep Scrubbing
+
+Після встановлення Платформи рекомендовано xref:admin:file-system/ceph-scrubbing.adoc#disable-deep-scrub[вимкнути автоматичний запуск deep scrubbing] для уникнення впливу на продуктивність у пікові години. Однак періодичне виконання глибокого скрабування є критично важливим для контролю цілісності об'єктів. Цей розділ описує, як повторно активувати deep scrubbing, керувати ним вручну та оптимізувати його виконання.
+
+NOTE: Рекомендовано запускати deep scrubbing у період із вечора п'ятниці до ранку понеділка, коли навантаження на кластер зазвичай є мінімальним. Для цього не обов'язково виділяти окреме вікно обслуговування, якщо сканування не впливає на критичні сервіси.
+
+[#deep-scrub-enable]
+=== Розблокування та запуск deep scrubbing
+
+Щоб запустити deep scrubbing вручну, спершу необхідно прибрати прапорці `nodeep-scrub` з усіх пулів, а потім ініціювати відповідні команди для ceph cli з поду `rook-operator` в OKD-проєкті `openshift-storage`.
+
+.Зняття прапорців nodeep-scrub з усіх пулів
+[source,bash]
+----
+for pool in $(ceph --conf=/var/lib/rook/openshift-storage/openshift-storage.config osd pool ls); do
+  ceph --conf=/var/lib/rook/openshift-storage/openshift-storage.config osd pool set "$pool" nodeep-scrub false
+done
+----
+
+.Перевірка наявності прапорців
+[source,bash]
+----
+ceph --conf=/var/lib/rook/openshift-storage/openshift-storage.config osd pool ls detail
+----
+
+.Запуск deep scrubbing на всіх OSD (рекомендовано)
+[source,bash]
+----
+ceph osd --conf=/var/lib/rook/openshift-storage/openshift-storage.config deep-scrub all
+----
+
+.Альтернативні варіанти запуску deep скрабування PGs
+[source,bash]
+----
+# Для конкретного OSD
+ceph osd --conf=/var/lib/rook/openshift-storage/openshift-storage.config deep-scrub 0
+
+# Для всіх пулів
+for pool in $(ceph --conf=/var/lib/rook/openshift-storage/openshift-storage.config osd pool ls); do
+  ceph --conf=/var/lib/rook/openshift-storage/openshift-storage.config osd pool deep-scrub "$pool"
+done
+----
+
+[#deep-scrub-speedup]
+=== Прискорення deep scrubbing при накопиченні черги
+
+У випадках великої кількості PG, які очікують на deep scrubbing, можна прискорити процес:
+
+* Тимчасово підвищивши кількість паралельних скрабувань.
++
+*_АБО_*
+
+* Розширити вікно обслуговування, запускаючи deep скрабування вручну на ніч у будні дні.
+
+Збільште кількість процесів скрабування на одному OSD в один момент часу, *але не більше 4*.
+
+.Підвищення кількості процесів до 4
+[source,bash]
+----
+ceph config --conf=/var/lib/rook/openshift-storage/openshift-storage.config set osd osd_max_scrubs 4
+----
+
+[NOTE]
+====
+Після завершення операції рекомендовано повернути значення `osd_max_scrubs` до `1`.
+
+➡️ Детальніше про це описано у розділі xref:admin:file-system/ceph-scrubbing.adoc#max-concurrent-scrubs[Налаштування паралельних процесів scrubbing].
+====
+
+image::file-system/ceph-scrubbing/ceph-scrubbing-2.png[]
+
+[#scrubbing-monitoring]
+== Моніторинг статусу Scrubbing
+
+Цей розділ описує, як перевірити статус скрабування у кластері, відстежувати виконання deep scrubbing та переглядати журналізовану інформацію за PG. Це допомагає своєчасно виявляти проблеми та контролювати цілісність даних.
+
+[#grafana-monitoring]
+=== Моніторинг через вебінтерфейс Grafana
+
+Для зручного спостереження за станом scrubbing і продуктивністю OSD можна скористатися *Grafana Dashboard*, зокрема дашбордом *Ceph & PostgreSQL Deep Scrubbing Dashboard*.
+
+Цей дашборд візуалізує:
+
+* Кількість PG у процесі deep scrubbing -- за часовою шкалою;
+
+* Затримки читання/запису на рівні OSD (OSD Read & Write Latency);
+
+* Поточний стан кластера -- панель Cluster Healthy Status.
+
+.Grafana Dashboard. Ceph Deep Scrubbing Metrics
+image::file-system/ceph-cluster-maintenance/ceph-cluster-maintenance-1.png[]
+
+[ceph-cli-monitoring]
+=== Перегляд статусу через Ceph CLI
+
+Ви також можете відстежувати процес скрабування за допомогою Ceph CLI. Нижче подано перелік корисних команд:
+
+.Перегляд загального стану кластера
+[source,bash]
+----
+ceph -s --conf=/var/lib/rook/openshift-storage/openshift-storage.config
+----
+
+.Статус по Placement Groups
+[source,bash]
+----
+ceph --conf=/var/lib/rook/openshift-storage/openshift-storage.config pg stat
+----
+
+.Пошук активних scrubbing-процесів
+[source,bash]
+----
+ceph pg --conf=/var/lib/rook/openshift-storage/openshift-storage.config dump pgs | grep -E 'scrub|deep'
+----
+
+.Детальний запит по PG
+[source,bash]
+----
+ceph pg 19.11 query --conf=/var/lib/rook/openshift-storage/openshift-storage.config
+----
+
+.Мітки останнього deep scrubbing по PG
+[source,bash]
+----
+ceph --conf=/var/lib/rook/openshift-storage/openshift-storage.config pg dump pgs | awk '{print $1, $23}' | sort -k2 | column -t
+----
+
+[#scrubbing-stop]
+== Зупинка процесу Deep Scrubbing
+
+Іноді виникає необхідність терміново зупинити або пригальмувати deep scrubbing -- наприклад, через пікове навантаження або критичні транзакції в інших сервісах. Цей розділ описує безпечні способи зниження або повної зупинки процесу.
+
+[#scrubbing-soft-stop]
+=== М'яка зупинка (soft stop)
+
+Рекомендований підхід -- зменшити кількість одночасних процесів скрабування (`osd_max_scrubs`), дозволивши поточним завершитись без запуску нових. Мінімальне значення = `1`.
+
+.Зменшення значення Max Scrubs
+[source,bash]
+----
+ceph config --conf=/var/lib/rook/openshift-storage/openshift-storage.config set osd osd_max_scrubs 1
+----
+
+[#scrubbing-force-stop]
+=== Примусова зупинка (force stop)
+
+У разі критичної потреби зупинити процес *deep scrubbing* негайно -- наприклад, через деградацію продуктивності або блокування IO -- допускається перезапуск OSD, на яких знаходяться PG у статусі `scrubbing+deep`. Цей метод є **жорстким втручанням** і повинен використовуватися *лише у виняткових випадках*.
+
+. Визначте PG, для яких виконується deep scrubbing.
++
+[source,bash]
+----
+ceph pg --conf=/var/lib/rook/openshift-storage/openshift-storage.config dump pgs | grep -E 'scrub|deep'
+----
++
+.Приклад результату у виводі команди
+
+``
+19.11         554                   0         0          0        0    72797490            0           0  854       854  active+clean+scrubbing+deep 2025-04-03T07:03:00.295292+0000     2326'7347    2326:18658  [0,2,1]           0  [0,2,1]               0     2263'7328  2025-04-03T07:03:00.295251+0000        2136'4471  2025-03-31T07:38:49.421946+0000              0
+``
++
+.Пояснення ключових полів у виводі команди `ceph pg dump pgs`
+[cols="30,70", options="header"]
+|===
+^| Значення поля ^| Опис
+
+| `19.11` | **PG ID** -- унікальний ідентифікатор Placement Group у форматі `pool_id.pg_num`.
+
+| `active+clean+scrubbing+deep` | **Статус PG** — вказує, що PG активна, цілісна (`clean`) і наразі перебуває в процесі глибокого скрабування (`scrubbing+deep`).
+
+| `[0,2,1]` | **Acting Set** -- список OSD, які обслуговують дану PG. Перший у списку — це **primary OSD**.
+
+| `0` | **Primary OSD index** -- позиція в Acting Set, яка визначає, який саме OSD є primary. Наприклад, якщо Acting Set — `[0,2,1]` і індекс -- `0`, то primary -- це `OSD 0`.
+
+| `2025-04-03T07:03:00.295251+0000` | *deep_scrub_stamp* -- дата та час останнього виконання deep scrubbing для PG.
+
+|===
+
+. Видаліть відповідний pod OSD через *OpenShift UI* або *CLI*.
++
+[source,bash]
+----
+oc delete pod rook-ceph-osd-0-example -n openshift-storage
+----
+
+CAUTION: Перезапуск pod призведе до зупинки поточних скрабінг-процесів на відповідному OSD та ініціює *recovery/rebalancing* PG. Використовуйте лише за відсутності альтернатив.
+
+[#related-pages]
+== Пов'язані сторінки
+
+* xref:file-system/ceph-scrubbing.adoc[]
+* xref:file-system/ceph-osd-scaling-and-rebalancing.adoc[]
+
+
+
