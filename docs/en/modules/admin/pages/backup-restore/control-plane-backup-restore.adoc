@@ -1,99 +1,117 @@
-= Manually backing up and restoring the registry
+= Manually back up and restore a registry instance
 include::platform:ROOT:partial$templates/document-attributes/default-set-en.adoc[]
 
 include::platform:ROOT:partial$admonitions/language-en.adoc[]
 
-== Backing up registry
+After successfully deploying a registry and its regulations, the Platform administrator can manually create a backup.
+The system stores this backup in a secure S3-compatible *MinIO* storage outside the OpenShift cluster to improve safety.
+
+You can later restore the registry from this backup if needed.
+
+[#create-registry-backup]
+== Creating a registry backup
 
 include::partial$templates/snippets/backup-restore-planning-en.adoc[]
 
-After a successful deployment of the registry and regulations, the Platform administrator can create a backup of the registry, which will be stored in a secure backup repository—*MinIO*.
+To create a registry backup:
 
-To back up a registry this, follow these steps: ::
-
-. Log in to the **Control Plane** using the previously created login and password.
-
-. Go to the **Registries** section and select the registry for backup.
-
-. Open the **Configuration** section at the xref:admin:registry-management/control-plane-edit-registry.adoc#sections[Registry information] tab, click on the link under *CI* to open Jenkins, navigate to the *All* tab, and find the job named *Create-registry-backup-`<registry-name>`* where `<registry-name>` means the name for your registry (_see the image below_).
+. Sign in to the *Control Plane* using your login and password.
+. Go to the *Registries* section and select the registry you want to back up.
+. In the *Configuration* section on the xref:admin:registry-management/control-plane-edit-registry.adoc#sections[registry configuration page],
+click the Jenkins link in the *CI* field.
+Then, on the *All* tab, find the pipeline named *Create-registry-backup-`<registry-name>`*,
+where `<registry-name>` is your registry’s name.
 +
-TIP: For more details on Jenkins jobs, see xref:admin:registry-management/control-plane-edit-registry.adoc#registry-deploy-status[Checking registry deployment details]
+TIP: To learn more about pipelines,
+see
+xref:admin:registry-management/control-plane-edit-registry.adoc#registry-deploy-status[Monitoring the deployment of changes].
 +
 image:backup-restore/registry/control-plane-create-backup-job.png[]
 
-. Open the job and click *`Build with Parameters`* to launch the *Create-registry-backup* pipeline.
+. Open the folder and click *Build with parameters* to launch the *Create-registry-backup* pipeline.
 +
 image:backup-restore/registry/control-plane-create-backup-01.png[]
 
-. Click *`Build`*.
+. Click *Build*.
 +
 image:backup-restore/registry/control-plane-create-backup-02.png[]
 +
 image:backup-restore/registry/control-plane-create-backup-03.png[]
 +
-If the job is successfully executed, a backup of the registry with its regulations is created and uploaded to the corresponding backup repository directory.
+When the job completes successfully,
+it creates a backup of the registry and its regulations
+and uploads it to the corresponding MinIO backup directory.
 
 [WARNING]
 ====
-Backup replication of S3 buckets::
+Replicating Ceph OBC data::
 
-After the backup creation pipeline has run, it establishes bucket replication pipelines. These pipelines are scheduled to run at 19:30 (UTC) by default. If you need to launch the pipeline earlier, you can manually modify this schedule:
+The *Create-registry-backup* pipeline runs two processes in parallel:
+it creates a registry backup and starts replication of Ceph Object Bucket Claims data.
+By default, the system starts replication at `19:30 UTC`.
 
-. Log into OKD.
-. In the top-right corner, click Copy login command > Display Token.
-. In the *Log in with this token* field, copy the token to log into OpenShift through the terminal. It might look like this:
+To change the replication time, update the schedule in the configuration:
+
+. Open the *OpenShift* cluster web console.
+. In the top-right corner, click menu:Copy login command[Display Token].
+. Copy the login token from the *Log in with this token* field. It might look like this:
 +
-.Example of oc login
+.Example oc login
 [source,bash]
 ----
-oc login --token=sha256~gQa0bxg_aaabbbcccd_D88470E-aabBcQuCn9keIM4I --server=https://api.envone.dev.registry.eua.gov.ua:1234
+oc login --token=sha256~gQa0bxg_aaabbbcccd_D88470E-aabBcQuCn9keIM4I --server=https://api.env.dev.registry.eua.gov.ua:1234
 ----
 
-. Open the *OpenShift CLI* and execute the copied command.
-+
-[TIP]
-For more information about *OpenShift CLI*, refer to the guide xref:registry-develop:study-project/index.adoc#preconditions-setup[Getting Started Preparations].
+. Open the *OpenShift CLI* and run the login command.
 
-. Start the replication backups of the S3 buckets with the schedule desired by the user. To do this, run the following command:
+. To change the replication schedule, run the following command:
 +
 [source,bash]
 ----
-namespace="abc-02";schedule='19 12 * * *'; for cronJob in `oc get cronjob -n velero -o custom-columns="NAME:.metadata.name" --no-headers | grep "${namespace}"`;do oc -n velero patch cronjob/$cronJob -p '{"spec":{"schedule":"'$schedule'"}}'; echo 1;done
+namespace="abc-02"; schedule='19 12 * * *'; for cronJob in `oc get cronjob -n velero -o custom-columns="NAME:.metadata.name" --no-headers | grep "${namespace}"`; do oc -n velero patch cronjob/$cronJob -p '{"spec":{"schedule":"'$schedule'"}}'; echo 1; done
 ----
 +
-NOTE: Replace the value `namespace="abc-02"` with the name of your registry. For example, `namespace="test-registry"`.
+NOTE: Replace `namespace="abc-02"` with your actual registry namespace.
+For example: `namespace="test-registry"`.
 
-TIP: Also, familiarize yourself with the settings for automatic setup of S3 bucket replications on the page xref:admin:backup-restore/backup-schedule-registry-components.adoc[].
+➡️ To learn more about replication, see xref:admin:backup-restore/backup-schedule-registry-components.adoc[].
 ====
 
-== Restoring registry
+[#restore-registry]
+== Restoring a registry
 
-To restore a registry from the created backup, follow these steps: ::
+To restore a registry from a backup:
 
-. Log in to the **Control Plane** using the previously created login and password.
-
-. Go to the **Registries** section and select the Registry that needs to be restored.
-
-. Go to the **Configuration** section, click on the link under **CI** to open Jenkins, navigate to the *All* tab, and find the  *Restore-registry-`<registry-name>`* job, where `<registry-name>` means the name for your registry (_see the image below_).
+. Sign in to the *Control Plane* using your login and password.
+. Go to the *Registries* section and select the registry you want to restore.
+. In the *Configuration* section on the xref:admin:registry-management/control-plane-edit-registry.adoc#sections[registry configuration page],
+click the Jenkins link in the *CI* field.
+Then, on the *All* tab, find the pipeline named *Restore-registry-`<registry-name>`*,
+where `<registry-name>` is your registry’s name.
 +
 image:backup-restore/registry/control-plane-create-restore.png[]
 
-. Open the job and click *`Build with Parameters`* to launch the *Restore-registry* pipeline.
+. Open the folder and click *Build with parameters* to launch the *Restore-registry* pipeline.
 +
 image:backup-restore/registry/control-plane-create-restore-01.png[]
 
-. Click `Build`.
+. Click *Build*.
 +
 image:backup-restore/registry/control-plane-create-restore-02.png[]
 
-. Next, in the parameter input step, select the backup version to restore. To do this, go to the *Console Output* section on the left panel and click *`Input Requested`*.
+. When prompted to select a backup version, open the *Console Output* from the left panel and click *Input requested*.
 +
 image:backup-restore/registry/control-plane-create-restore-03.png[]
 
-. Select the backup version from the list and click *`Proceed`*.
+. Select the desired backup version from the list and click *Proceed*.
 +
 image:backup-restore/registry/control-plane-create-restore-04.png[]
 +
-If the *Restore-registry* pipeline is successfully executed, the registry will be restored to the selected backup version.
+If the *Restore-registry* pipeline completes successfully,
+the system restores the registry using the selected backup version.
 +
 image:backup-restore/registry/control-plane-create-restore-05.png[]
+
+== Related pages
+
+* xref:admin:backup-restore/backup-schedule-registry-components.adoc[]
