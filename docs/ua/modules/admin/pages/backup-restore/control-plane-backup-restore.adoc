@@ -1,97 +1,106 @@
-= Резервне копіювання та відновлення екземпляра реєстру
+= Створення резервних копій та відновлення екземпляра реєстру вручну
 include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
 
 include::platform:ROOT:partial$admonitions/language-ua.adoc[]
 
+Після успішного розгортання реєстру та регламенту адміністратор Платформи може вручну створити резервну копію (backup) реєстру.
+Ця копія зберігається у захищеному сховищі *MinIO*, яке розгорнуто поза межами OpenShift-кластера для додаткової безпеки.
+
+За потреби ви можете відновити реєстр (restore) із цієї резервної копії.
+
 [#create-registry-backup]
-== Створення резервної копії реєстру (backup)
+== Створення резервної копії реєстру
 
 include::partial$templates/snippets/backup-restore-planning-ua.adoc[]
 
-Після успішного розгортання реєстру та регламентів адміністратор Платформи має можливість створити резервну копію реєстру, яка зберігатиметься у захищеному сховищі бекапів -- *MinIO*.
+Виконайте наступні кроки, щоб створити бекап реєстру:
 
-Виконайте наступні кроки, щоб створити бекап реєстру: ::
-
-. Увійдіть до *Control Plane*, використовуючи створені попередньо створені логін та пароль.
-. Перейдіть до розділу _Реєстри_ та оберіть реєстр для резервного копіювання.
-. Відкрийте секцію _Конфігурація_ на сторінці xref:admin:registry-management/control-plane-edit-registry.adoc#sections[Перегляд конфігурації створеного реєстру], натисніть посилання до Jenkins (**CI**) Платформи та на вкладці *All* знайдіть пайплайн із назвою *Create-registry-backup-`<registry-name>`*, де `<registry-name>` назва реєстру (_див. зображення нижче)_.
+. Увійдіть до *Control Plane*, використовуючи створені попередньо логін і пароль.
+. Перейдіть до розділу *Реєстри* та оберіть реєстр для резервного копіювання.
+. Відкрийте секцію *Конфігурація* на сторінці xref:admin:registry-management/control-plane-edit-registry.adoc#sections[Перегляд конфігурації створеного реєстру], натисніть посилання до Jenkins Платформи (поле *CI*) та на вкладці *All* знайдіть пайплайн із назвою *Create-registry-backup-`<registry-name>`*, де `<registry-name>` -- назва вашого реєстру.
 +
 TIP: Детальніше про пайплайни -- див. xref:admin:registry-management/control-plane-edit-registry.adoc#registry-deploy-status[Перевірка відомостей про розгортання реєстру].
 +
 image:backup-restore/registry/control-plane-create-backup-job.png[]
 
-. Відкрийте папку та натисніть *`Build with parameters`*, щоб запустити пайплайн *Create-registry-backup*.
+. Відкрийте папку та натисніть *Build with parameters*, щоб запустити пайплайн *Create-registry-backup*.
 +
 image:backup-restore/registry/control-plane-create-backup-01.png[]
 
-. Натисніть *`Build`*.
+. Натисніть *Build*.
 +
 image:backup-restore/registry/control-plane-create-backup-02.png[]
 +
 image:backup-restore/registry/control-plane-create-backup-03.png[]
 +
-У разі успішного виконання job, створюється резервна копія реєстру з регламентом та завантажується до відповідної директорії сховища бекапів.
+У разі успішного виконання job, створюється резервна копія реєстру з регламентом та завантажується до відповідної директорії сховища бекапів MinIO.
 
 [WARNING]
 ====
-Резервне копіювання реплікацій S3-бакетів::
+Реплікація даних об'єктних бакетів Ceph::
 
-Після того, як пайплайн створення резервної копії відпрацював, він створює пайплайни реплікацій бакетів. Час запуску таких пайплайнів за замовчуванням стоїть 19:30 (UTC). Тому якщо потрібно запустити пайплайн раніше, можна змінити цей розклад вручну:
+Пайплайн *Create-registry-backup* одночасно запускає два процеси: створення резервної копії реєстру та реплікацію об'єктних бакетів Ceph OBC.
++
+За замовчуванням реплікація виконується о `19:30 UTC`.
+Якщо потрібно змінити цей час, ви можете вручну оновити розклад у конфігурації:
 
-. Виконайте вхід в OKD.
-. У верхньому правому куті натисніть Copy login command > Display Token.
+. Відкрийте вебінтерфейс керування кластером *OpenShift*.
+. У верхньому правому куті натисніть menu:Copy login command[Display Token].
 . У полі *Log in with this token* скопіюйте токен для входу в OpenShift через термінал. Він може виглядати так:
 +
 .Приклад oc login
 [source,bash]
 ----
-oc login --token=sha256~gQa0bxg_aaabbbcccd_D88470E-aabBcQuCn9keIM4I --server=https://api.envone.dev.registry.eua.gov.ua:1234
+oc login --token=sha256~gQa0bxg_aaabbbcccd_D88470E-aabBcQuCn9keIM4I --server=https://api.env.dev.registry.eua.gov.ua:1234
 ----
 
 . Відкрийте *OpenShift CLI* та виконайте скопійований рядок.
-+
-[TIP]
-Детальніше про *OpenShift CLI* читайте в інструкції xref:registry-develop:study-project/index.adoc#preconditions-setup[Що необхідно для початку роботи].
 
-. Запустіть створення бекапів реплікацій S3-бакетів з тим розкладом, який потрібний користувачу. Для цього виконайте наступну команду:
+. Запустіть процес реплікації з тим розкладом, який потрібний користувачу.
+Для цього виконайте наступну команду:
 +
 [source,bash]
 ----
 namespace="abc-02";schedule='19 12 * * *'; for cronJob in `oc get cronjob -n velero -o custom-columns="NAME:.metadata.name" --no-headers | grep "${namespace}"`;do oc -n velero patch cronjob/$cronJob -p '{"spec":{"schedule":"'$schedule'"}}'; echo 1;done
 ----
 +
-NOTE: Замініть значення `namespace="abc-02"` назвою вашого реєстру. Наприклад, `namespace="test-registry"`.
+NOTE: Замініть значення `namespace="abc-02"` назвою вашого реєстру.
+Наприклад, `namespace="test-registry"`.
 
-TIP: Ознайомтеся також із налаштуванням автоматичного налаштування реплікацій S3-бакетів на сторінці xref:admin:backup-restore/backup-schedule-registry-components.adoc[].
+➡️ Детальніше про механізм реплікації див. xref:admin:backup-restore/backup-schedule-registry-components.adoc[].
 ====
 
 [#restore-registry]
-== Відновлення реєстру (Restore)
+== Відновлення реєстру
 
-Виконайте наступні кроки, щоб відновити реєстр зі створеної резервної копії: ::
+Виконайте наступні кроки, щоб відновити реєстр зі створеної резервної копії:
 
-. Увійдіть до **Control Plane**, використовуючи створені попередньо логін та пароль.
-. Перейдіть до розділу _Реєстри_ та оберіть реєстр, який необхідно відновити.
-. Перейдіть до Jenkins (*CI*) Платформи та на вкладці *All* знайдіть пайплайн *Restore-registry-`<registry-name>`*, де `<registry-name>` -- назва реєстру (_див. зображення нижче_).
+. Увійдіть до *Control Plane*, використовуючи створені попередньо логін і пароль.
+. Перейдіть до розділу *Реєстри* та оберіть реєстр, який необхідно відновити.
+. Відкрийте секцію *Конфігурація* на сторінці xref:admin:registry-management/control-plane-edit-registry.adoc#sections[Перегляд конфігурації створеного реєстру], натисніть посилання до Jenkins Платформи (поле *CI*) та на вкладці *All* знайдіть пайплайн із назвою *Restore-registry-`<registry-name>`*, де `<registry-name>` -- назва вашого реєстру.
 +
 image:backup-restore/registry/control-plane-create-restore.png[]
 
-. Відкрийте папку та натисніть *`Build with parameters`*, щоб запустити пайплайн *Restore-registry*.
+. Відкрийте папку та натисніть *Build with parameters*, щоб запустити пайплайн *Restore-registry*.
 +
 image:backup-restore/registry/control-plane-create-restore-01.png[]
 
-. Натисніть *`Build`*.
+. Натисніть *Build*.
 +
 image:backup-restore/registry/control-plane-create-restore-02.png[]
 
-. Далі, на кроці введення параметрів, оберіть версію резервної копії для відновлення. Для цього перейдіть до виводу консолі (Секція *Console Output* на панелі зліва) та натисніть *`Input Requested`*.
+. На кроці введення параметрів, оберіть версію резервної копії для відновлення. Для цього відкрийте *Console Output* на панелі ліворуч та натисніть *Input requested*.
 +
 image:backup-restore/registry/control-plane-create-restore-03.png[]
 
-. Оберіть версію резервної копії зі списку та натисніть *`Proceed`*.
+. Оберіть версію резервної копії зі списку та натисніть *Proceed*.
 +
 image:backup-restore/registry/control-plane-create-restore-04.png[]
 +
-У разі успішного виконання job `Restore-registry-backup-test`, реєстр буде відновлено до стану обраної версії резервної копії.
+У разі успішного виконання пайплайну *Restore-registry*, реєстр буде відновлено до стану обраної версії резервної копії.
 +
 image:backup-restore/registry/control-plane-create-restore-05.png[]
+
+== Пов'язані сторінки
+
+* xref:admin:backup-restore/backup-schedule-registry-components.adoc[]

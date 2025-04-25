@@ -1,109 +1,323 @@
-= Setting up the registry components backup schedule and retention time
+= Managing the registry backup schedule
 include::platform:ROOT:partial$templates/document-attributes/default-set-en.adoc[]
 
 include::platform:ROOT:partial$admonitions/language-en.adoc[]
 
-== General description
+[#overview]
+== Overview
 
-The platform provides the ability to [.underline]#manage the schedule for creating backup copies of registry components and the time span for storing such copies in the backup repository#.
+The Platform allows you
+to configure a schedule for creating backups of registry components
+and define how long these backups are stored in the S3-compatible storage.
 
-Backup copies of components are created using the *`velero`* tool and stored in a secure *`minio`* backup repository located outside the Platform cluster.
+The Platform uses *Velero* to back up Kubernetes resources, such as PVCs, deployments, configurations, and secrets.
+Velero stores backups in a separate *MinIO* storage
+deployed *outside* the OpenShift cluster to isolate critical data from potential failures or in-cluster incidents.
+
+Data stored in *Ceph Object Bucket Claims (OBC)* isn't included in Velero backups.
+To preserve this data, the Platform supports a separate *replication mechanism*.
+Replication automatically copies the contents of OBC buckets to a designated storage.
+By default, the data is replicated to MinIO,
+but you can specify another S3-compatible storage, such as Amazon S3 or Google Cloud Storage.
+
+.Backup and replication flow on the Platform
+image::admin:backup-restore/backup-schedule-registry-components/backup-schedule-registry-components-001.svg[]
 
 [NOTE]
 ====
-The backup schedule is configured in the https://uk.wikipedia.org/wiki/Cron[*unix-cron*] format on the *Control Plane* administrative panel interface.
+You can configure backup and replication schedules
+using the https://uk.wikipedia.org/wiki/Cron[*cron*] format in the *Control Plane* interface.
 
-The retention period for backup copies must be greater than or equal to one unit, be a whole number, and not contain special characters.
+Backup retention should be defined in days.
+The value must be an integer and not less than `1`.
+
+Backups and replication use separate schedules.
+See details in the sections below.
 ====
 
-The values are stored in the registry configuration *_deploy-templates/values.yaml_* file.
+The Platform saves all configured schedules to the *`deploy-templates/values.yaml`* file during the *MASTER-Build* pipeline run,
+which updates the registry configuration.
 
-The corresponding parameters are applied through the *`Create-registry-backup-<registry-name>`* Jenkins pipeline.
+The *Create-registry-backup* Jenkins pipeline runs both backup and replication processes based on the schedules
+you define in Control Plane.
+
+This pipeline launches two independent processes: _creating a backup using Velero_ and _replicating data from Ceph OBC_.
+Each process uses its own schedule, but both run under the same pipeline.
+
+Velero backs up Kubernetes resources and stores them in MinIO.
+Ceph OBC replication copies data to the configured S3-compatible storage.
+You can manage the execution time for each process separately.
 
 [#schedule-setup]
-== Setting up a schedule
+== Configuring the backup schedule
 
 include::partial$templates/snippets/backup-restore-planning-en.adoc[]
 
-. Log in to the *Control Plane* console as the Registry administrator.
-+
-image:admin:infrastructure/cluster-mgmt/update-cluster-mgmt-01.png[]
+[#registry-components-backup-schedule]
+=== Setting the backup schedule and retention period
 
-. Go to the [.underline]#Registries# section and select the required one.
+Follow these steps to configure the schedule:
+
+. Sign in to the *Control Plane* as a registry administrator.
+. Go to the *Registries* section and select the registry you want to configure.
 +
 image:admin:infrastructure/cluster-mgmt/change-key/change-key-01.png[]
 
-. Click the `Edit` button located in the upper right corner.
+. Click *Edit* in the top-right corner.
 +
-NOTE: You can also set up a backup schedule and retention time while creating a registry. However, it is not mandatory.
+[NOTE]
+====
+You can also set up the backup schedule and retention period
+when you xref:admin:registry-management/control-plane-create-registry.adoc[create a registry],
+but it's optional.
+====
 +
 image:admin:infrastructure/cluster-mgmt/change-key/change-key-02.png[]
 
-. Go to the [.underline]#Backup# section. Here you can set the schedule for creating backup copies and the retention period. Turn the toggle on and configure the schedule for creating automatic backup copies.
+. Open the *Backup* section. Here, you can set up the backup schedule and how long backups are stored. Toggle the switch to enable automatic backups and configure the schedule.
 +
-TIP: By default, the *Set automatic backup copy* toggle is turned off for new registries.
+[NOTE]
+====
+By default, automatic backups are disabled for new registries.
+====
 +
 image:admin:backup-restore/backup-schedule-registry-components/backup-schedule-registry-components-01.png[]
 +
 [NOTE]
 ====
-The backup schedule is configured in the https://uk.wikipedia.org/wiki/Cron[*unix-cron*] format and is defined based on [.underline]#Kyiv time#.
+Configure the backup schedule using the https://uk.wikipedia.org/wiki/Cron[*unix-cron*] format.
+The schedule uses *Kyiv time*.
 
-By default, the `*Europe/Kiev*` time zone is set in the _values.yaml_ configuration and at the Jenkins pod level as an environment variable.
+By default,
+the time zone `Europe/Kiev` is set in the `values.yaml` configuration file
+and applied as an environment variable in the Jenkins pod.
+This setting defines the local time context for scheduled operations such as backups and replications.
 
-The https://24timezones.com/%D0%9A%D0%B8%D1%97%D0%B2/%D1%87%D0%B0%D1%81[offset] of +2 hours (`UTC+2`) in winter and +3 hours (`UTC+3`) in summer is taken into account.
+If you're working on a global deployment with a different time zone requirement, contact your Platform administrator.
+They can help update the time zone configuration to match your environment's location and compliance needs.
 
-Use the https://crontab.guru/[] resource, a simple and convenient cron expression editor, to better understand the logic of schedule settings.
+Use https://crontab.guru/[] — a simple and helpful editor for cron expressions.
 ====
 
-* In the `Schedule` field, enter, for example, the following value: `5 11 * * MON-FRI`. Use space as a separator.
+* In the *Schedule* field, enter a value such as: `5 10 * * MON-FRI`.
+Use spaces to separate parts.
 +
-This means that a backup copy for the registry environment will be created every day from Monday to Friday at 10:05 according to Kyiv time.
+This setting means the Platform will create a registry backup every weekday at 10:05 AM Kyiv time.
 +
-TIP: After entering the backup schedule, a hint appears on the interface showing the time of the next 3 backup creation runs.
+[TIP]
+====
+After you set the backup schedule, the interface displays a hint showing the next three scheduled backup runs:
+____
+Upcoming backup runs (Kyiv time):
 
-* In the `Retention time (days)` field, enter, for example, the following value: `5`. This means that the backup will be stored in the repository for 5 days.
+* 09.06.2023 10:05:00
+* 10.06.2023 10:05:00
+* 11.06.2023 10:05:00
+____
+====
+
+* In the *Retention period (days)* field, enter a value such as `5`. This means the system will store each backup for five days.
 +
-NOTE: The value can only be a positive number and should not be set to less than 1 day. It is recommended to set the retention time longer than the period between creating copies.
+[NOTE]
+====
+The retention period must be an integer and not less than `1`.
+To avoid data loss, make sure the retention period is longer than the interval between backups.
+====
 +
 image:admin:backup-restore/backup-schedule-registry-components/backup-schedule-registry-components-02.png[]
 
-. Click kbd:[CONFIRM] to save the changes.
-+
-As a result, a request for update with the status `New` will be generated.
+. Proceed to xref:#replication-ceph-obc[configure Ceph OBC replication], or keep the default settings and click *Confirm* at the bottom of the page.
 
-. Go back to the `Registries` section, scroll down the page, and find the `Requests for update` section.
+[#replication-ceph-obc]
+=== Ceph OBC data replication
+
+==== How replication works
+
+The Platform uses two types of storage:
+
+- *MinIO* – stores backups created by Velero.
+- *Ceph OBC (Object Bucket Claims)* – stores registry working data such as business process execution history, temporary files, and more.
+
+*Velero* is a tool that enables backup, restore, migration, and disaster recovery for Platform components. It allows you to back up the state of the OpenShift environment (e.g., configurations, deployments, secrets, PVCs) and store it in an S3-compatible storage like MinIO or Amazon S3.
+
+It's important to note that *Velero does not cover Ceph OBC buckets*.
+To protect this data from loss and store it in a separate location,
+the Platform uses a dedicated *object bucket replication mechanism*.
+
+Ceph OBC replication automatically copies the contents of registry object buckets to another S3-compatible storage based on settings
+defined by the administrator in Control Plane.
+
+Depending on your configuration, two scenarios are possible:
+
+* *Default configuration*: Ceph OBC data is automatically replicated to the Platform's MinIO bucket, which also stores Velero backups.
+
+* *Custom configuration* (*replication configured via Control Plane*): Ceph OBC data is replicated to any S3-compatible storage specified by the administrator (e.g., Amazon S3, Google Cloud Storage). In this case, the administrator configures the endpoint, access credentials, and replication schedule.
+
+This functionality provides *flexibility and adaptability*,
+allowing you to align OBC data replication with the needs of your environment or business continuity policies.
+
+==== How backup and replication work together
+
+Backup and replication setup in Control Plane works as follows:
+
+. The registry administrator enables backup and sets the schedule (using a cron expression).
+
+. The system creates the *Create-registry-backup* Jenkins pipeline, which executes two parallel processes:
+
+- Creates a backup of the registry using *Velero*, including all PVCs and Kubernetes resources in YAML format, stored in a MinIO bucket.
+- Replicates Ceph OBC buckets to the target storage — MinIO by default, or a custom destination if configured.
+
+. If you change the *replication storage target*, it only affects Ceph OBC replication. Velero backups always remain stored in MinIO.
+
+This provides a *two-part backup model*:
+
+- Kubernetes resource backup via Velero.
+- Separate Ceph OBC data replication to a backup storage.
+
+==== Configuring the replication schedule
+
+. Sign in to the *Control Plane* as a registry administrator.
+
+. Go to the *Registries* section and select the registry you want to configure.
++
+image:admin:infrastructure/cluster-mgmt/change-key/change-key-01.png[]
+
+. Click *Edit* in the top-right corner.
++
+image:admin:infrastructure/cluster-mgmt/change-key/change-key-02.png[]
+
+. Open the menu:Backup[Replication] section and configure the replication schedule.
++
+image:admin:backup-restore/backup-schedule-registry-components/backup-schedule-registry-components-10.png[]
++
+[NOTE]
+====
+The replication schedule uses the https://uk.wikipedia.org/wiki/Cron[*unix-cron*] format and is based on *UTC*.
+
+The time zone is defined in the `values.yaml` configuration and also set as an environment variable in the Jenkins pod.
+
+Use https://crontab.guru/[] to easily edit and understand cron expressions.
+====
+
+* In the *Schedule* field, enter a value like `25 12 * * *`.
+Use spaces to separate fields.
+This means Ceph OBC data will be replicated every day at 12:25 UTC.
+
+* If you don't provide a custom schedule, the system uses the default: `30 17 * * * *` (UTC).
++
+[TIP]
+====
+After you define the replication schedule, the interface shows a hint with the next three execution times:
+____
+Next scheduled object replication (UTC):
+
+* 09.06.2023 12:25:00
+* 10.06.2023 12:25:00
+* 11.06.2023 12:25:00
+____
+====
+
+. Configure the replication storage target.
++
+NOTE: If you don't provide custom values, the system uses default values defined during registry deployment.
+
+.. To set custom storage values, click *Set custom values* and complete the form:
++
+.Example configuration for Amazon S3
+[cols="1,3", options="header"]
+|===
+| Field | Description
+
+| *Bucket name*
+| The name must be unique within your S3 environment.
+Length: 3–63 characters.
+
+Allowed characters: `"a-z"`, `"0-9"`, `"."`, `"-"`.
+
+*Example:* `my-s3-bucket-123`
+
+| *Endpoint*
+a| The URL to connect to the S3-compatible storage.
+
+**Example:** `https://endpoint.com`
+
+For Amazon S3:
+
+- Global: `https://s3.amazonaws.com`
+- Regional: `https://s3.<region>.amazonaws.com`, where `<region>` is the region ID (e.g., `us-west-2`).
+
+| *Login*
+| Access credentials provided by your S3 provider.
+
+For Amazon S3: *AWS Access Key ID*.
+
+**Example:** `AKIAIOSFODNN7EXAMPLE`
+
+| *Password*
+| Secret credentials provided by your S3 provider.
+
+For Amazon S3: *AWS Secret Access Key*.
+
+**Example:** `wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY`
+
+|===
+
+.. Click *Confirm* to save your custom values, or *Cancel* to discard changes.
++
+image:admin:backup-restore/backup-schedule-registry-components/backup-schedule-registry-components-9.png[]
+
+. On the *Backup* page, click *Confirm* again to apply the changes and submit a request to update the registry configuration.
++
+image:admin:backup-restore/backup-schedule-registry-components/backup-schedule-registry-components-11.png[]
+
+[#apply-schedule-configuration]
+=== Applying the schedule configuration
+
+Once you configure the backup schedule (as described in the previous sections),
+the system creates an update request with the status `New` and type `Edit registry`.
+
+. In the menu:Registries[Change requests] section, find the relevant request.
 +
 image:registry-management/cp-submit-mr/cp-submit-mr-1.png[]
 
-. Open the generated request by clicking the view icon  -- 👁.
-+
-NOTE: The proposed changes will be applied to the *_deploy-templates/values.yaml_* configuration file upon confirmation.
+. Click the view icon 👁 to open the request.
 
-. In the new window, compare the two versions of the changes, make sure the data you entered is correct, and click kbd:[Confirm]. You can also reject the changes to the configuration immediately by clicking kbd:[Reject].
+. In the new window, compare the two versions of the configuration,
+verify that your changes are correct, and click *Confirm*.
+Alternatively, you can reject the configuration changes by clicking *Reject*.
 +
-TIP: The comparison window allows you to conveniently check the two versions of the changes: the current one (on the left) and the new one (on the right).
+[NOTE]
+====
+Once confirmed,
+the system applies the changes to the `deploy-templates/values.yaml` configuration file in the registry repository.
+====
 +
 image:admin:backup-restore/backup-schedule-registry-components/backup-schedule-registry-components-12.png[]
 +
 image:registry-management/cp-submit-mr/cp-submit-mr-3.png[]
 +
-As a result, the request will change the state to  `confirmed`. At the specified time, the *`Create-registry-backup-<registry-name>`* Jenkins pipeline will be triggered. It applies the parameters of the specified configuration and creates backups in the backup repository.
+After confirmation, the request status changes to `Confirmed`.
 
-. Wait until the code build is completed. This may take a few minutes.
+. Wait for the build process to complete. This may take a few minutes.
 
-== Checking the created backups
+When the Platform successfully applies the configuration,
+the *Create-registry-backup* Jenkins pipeline will start at the scheduled time.
+It will use the set parameters to create backups and replicate data to the designated storage locations.
 
-At the specified date and time, backups should be created according to the schedule specified in the configuration (_see --xref:#schedule-setup[]_)
+[#create-check-backups]
+== Creating and verifying backups
 
-You can check this as follows: ::
+At the configured date and time, the system creates backups automatically according to the defined schedule.
+
+To verify the status of a registry backup:
+
+. In the menu:Control Plane[Registries > Quick links], find the *Registry admin zone* and open the *Regulations deployment service (Jenkins)*.
 +
+image:registry-management/quick-links/quick-links-3.png[]
 
-. In the registry information, open the [.underline]#Registry components# section and navigate to *Jenkins*.
-+
-image:admin:backup-restore/backup-schedule-registry-components/backup-schedule-registry-components-1.png[]
-
-. Go to the folder with the corresponding registry and select the *`Create-registry-backup-<registry-name>`* pipeline. If the pipeline is highlighted in green, the build can be considered successful.
+. Go to the folder for the desired registry and select the pipeline *Create-registry-backup-`<registry-name>`*,
+where `<registry-name>` is the name of your registry.
+If the pipeline is highlighted in green, the build was successful.
 +
 image:admin:backup-restore/backup-schedule-registry-components/backup-schedule-registry-components-2.png[]
 
@@ -111,21 +325,28 @@ image:admin:backup-restore/backup-schedule-registry-components/backup-schedule-r
 +
 image:admin:backup-restore/backup-schedule-registry-components/backup-schedule-registry-components-3.png[]
 
-. Go to the console output (`*Console Output*`) to view the technical log of the pipeline execution.
+. Open *Console Output* to view the pipeline execution logs.
 +
 image:admin:backup-restore/backup-schedule-registry-components/backup-schedule-registry-components-4.png[]
 
-. Scroll down the page and make sure that the registry backup has been created.
+. Scroll down to the bottom of the page and check that the registry backup was created.
+You should see the following output:
 +
-.Console Output. Successful creation of registry backup
-====
+.Console Output – Successful backup message
 ----
 [INFO] Velero backup - external-1-2023-02-17-17-07-36 done with Completed status
 ----
-
-This expression indicates that a backup has been created for the registry with a specific name (_here_ - `external-1`), the date and time of backup creation, and the successful completion status.
-====
+This message indicates
+that the backup for the registry named `external-1` was created with a timestamp and a successful completion status.
 +
 image:admin:backup-restore/backup-schedule-registry-components/backup-schedule-registry-components-5.png[]
+
 +
-IMPORTANT: After the retention period expires, the backup system deletes outdated backup copies.
+[IMPORTANT]
+====
+After the retention period expires, the system automatically deletes outdated backups.
+====
+
+== Related pages
+
+* xref:admin:backup-restore/control-plane-backup-restore.adoc[]
