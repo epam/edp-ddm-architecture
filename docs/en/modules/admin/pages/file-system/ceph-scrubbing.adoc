@@ -1,0 +1,271 @@
+= Initial configuration for Scrubbing and Deep Scrubbing in a Ceph cluster
+include::platform:ROOT:partial$templates/document-attributes/default-set-en.adoc[]
+
+include::platform:ROOT:partial$admonitions/language-en.adoc[]
+
+After installing the Platform on an *OKD cluster*, it is recommended to configure the *scrubbing* and *deep scrubbing* processes in the Ceph cluster to ensure data integrity and system stability.
+
+[IMPORTANT]
+====
+These settings are intended for **production environments** and should be applied immediately after Platform installation.
+====
+
+[#scrubbing-overview]
+== Overview
+
+*Scrubbing* and *deep scrubbing* are background processes in Ceph that verify data and detect corrupted or inconsistent objects:
+
+- *Scrubbing* checks checksums within *Placement Groups (PG)* and detects metadata issues.
+- *Deep scrubbing* performs a deeper check by comparing actual object data with their hashes.
+- Scrubbing runs automatically, but you can configure it manually to optimize performance.
+
+[#why-scrubbing-matters]
+== Why scrubbing matters
+
+Scrubbing can create a load that affects cluster performance. To minimize this:
+
+- Schedule regular scrubbing during off-peak hours.
+- Run *deep scrubbing* manually or during defined low-load windows.
+- Limit resource usage to avoid performance degradation.
+
+[#recommended-initial-settings]
+== Recommended initial settings
+
+After deploying the Platform on the OKD cluster, complete the following  recommended actions in the Ceph cluster:
+
+[%interactive]
+* [ ] ① Configure general scrubbing parameters.
+* [ ] ② Disable automatic deep scrubbing.
+* [ ] ③ Schedule regular scrubbing.
+
+Each step is explained below.
+
+[#scrubbing-general-settings]
+=== Configuring general scrubbing parameters
+
+[#scrub-priority]
+==== Setting scrubbing process priority
+
+Lower the priority of manual scrubbing to *ensure user requests are always prioritized*. For example, set the value to `10`.
+
+.Parameter: Requested Scrub Priority
+[source,bash]
+----
+osd_requested_scrub_priority 10
+----
+
+To set this value in the *Ceph Dashboard UI*:
+
+. Open *Ceph Dashboard UI*.
+. Go to menu:Cluster[OSDs > Cluster-wide configuration].
+. Select *PG scrub* and expand the *Advanced* section.
+. Set the value for *Requested Scrub Priority*.
+
++
+.Ceph Dashboard UI: Requested Scrub Priority
+image::admin:file-system/ceph-scrubbing/ceph-scrubbing-1.png[]
+
+Or use *Ceph CLI* from the `rook-operator` pod in the `openshift-storage` project:
+
+.Example: Set Requested Scrub Priority via CLI
+[source,bash]
+----
+ceph config --conf=/var/lib/rook/openshift-storage/openshift-storage.config set osd osd_requested_scrub_priority 10
+----
+
+[#max-concurrent-scrubs]
+==== Configuring concurrent scrubbing processes
+
+Allow *only one scrubbing process per OSD* by setting `osd_max_scrubs = 1`.
+
+This parameter defines *how many concurrent scrubbing processes* can run *on a single OSD*. This helps to:
+
+* reduce disk and CPU load;
+* prevent degraded performance for client requests;
+* ensure cluster stability in production environments.
+
+TIP: *OSD (Object Storage Daemon)* is a key Ceph component that stores data, processes read/write requests, and performs scrubbing. Each OSD works independently, and data integrity checks (scrubs) are local operations.
+
+[NOTE]
+====
+If your cluster contains *a large number of PGs (Placement Groups)* that have missed scrubbing ("overdue"), you may *temporarily increase `osd_max_scrubs` to `4`*.
+
+This will speed up overdue scrubbing but *may increase the load*.
+
+❗ Revert to `1` once scrubbing completes.
+
+➡️ See PG states: https://docs.ceph.com/en/latest/rados/operations/pg-states/[Placement Group States].
+====
+
+To change the value in the *Ceph Dashboard UI*:
+
+. Open the *Ceph Dashboard UI*.
+. Navigate to menu:Cluster[OSDs > Cluster-wide configuration].
+. Select *PG scrub* and set *Max Scrubs*.
+
++
+.Ceph Dashboard UI: Max Scrubs
+image::admin:file-system/ceph-scrubbing/ceph-scrubbing-2.png[]
+
+Or use *Ceph CLI* from the `rook-operator` pod in the `openshift-storage` project:
+
+.Example: Set Max Scrubs via CLI
+[source,bash]
+----
+ceph config --conf=/var/lib/rook/openshift-storage/openshift-storage.config set osd osd_max_scrubs 1
+----
+
+[#disable-deep-scrub]
+=== Disabling automatic deep scrubbing
+
+Ceph runs *deep scrubbing* automatically by default. It ensures data integrity by checking actual object content but uses more resources than regular scrubbing because it checks *object contents*, not just metadata.
+
+[CAUTION]
+====
+In production, run *deep scrubbing manually* during maintenance windows or low-load periods. This prevents:
+
+- excessive disk usage on OSDs;
+- degraded performance of other Platform services;
+- risk to critical operations.
+
+Learn more: xref:file-system/ceph-cluster-maintenance.adoc#manual-deep-scrub[Manual deep scrubbing].
+====
+
+[#disable-auto-deep-scrub]
+==== How to disable automatic deep scrubbing
+
+To block automatic deep scrubbing, apply the *`nodeep-scrub`* flag at the pool level:
+
+. Locate the `ceph.conf` file path used by your cluster (example below specifies it explicitly).
+
+. Run this command to *apply the `nodeep-scrub` flag to all pools*:
++
+[source,bash]
+----
+for pool in $(ceph --conf=/var/lib/rook/openshift-storage/openshift-storage.config osd pool ls); do
+  ceph --conf=/var/lib/rook/openshift-storage/openshift-storage.config osd pool set "$pool" nodeep-scrub true
+done
+----
++
+TIP: The `osd pool ls` command lists all pools in the cluster. The loop applies the `nodeep-scrub` flag to each.
+
+[#nodeep-scrub-check]
+==== How to verify the flag is set
+
+Check that `nodeep-scrub` is set:
+
+[source,bash]
+----
+ceph --conf=/var/lib/rook/openshift-storage/openshift-storage.config osd pool ls detail
+----
+
+Look for `flags` in the output; it should include `nodeep-scrub`.
+
+[IMPORTANT]
+====
+❗ *Run deep scrubbing manually at least once every few weeks*, depending on your SLA and data criticality.
+
+Schedule it during *low-load periods* — e.g., weeknights or weekends.
+No formal maintenance window is required if there's no impact on critical services.
+
+📌 *Avoid PG backlog*, where Placement Groups go unchecked for too long.
+In large clusters, run daily with limited concurrency (`osd_max_scrubs`); smaller clusters may only need weekly runs.
+====
+
+[#scrub-schedule]
+=== Configuring the regular scrubbing schedule
+
+Run scrubbing *nightly from 12 am to 6 am UTC*, limiting to one concurrent process per OSD (`osd_max_scrubs = 1`). This mode allows regular integrity checks with minimal cluster impact (_see <<max-concurrent-scrubs>>_).
+
+Scrubbing is enabled by default. Use UTC time to schedule it precisely in your environment.
+
+[#setup-schedule-ceph-dashboard]
+==== How to configure the schedule via Ceph Dashboard
+
+. Open the *Ceph Dashboard UI*.
+. Navigate to menu:Cluster[OSDs > Cluster-wide configuration].
+. Select the *PG scrub* section and configure the parameters listed below.
++
+TIP: These parameters define the exact time window to run automatic scrubbing. Values are in UTC. Adjust for local time (e.g., Kyiv — UTC+2/3).
++
+.Ceph Dashboard UI: PG scrub schedule settings
+[cols="1,1,3", options="header"]
+|===
+^| Parameter ^| Value ^| Description
+
+| `osd_scrub_begin_hour` | `22`
+| Start hour (UTC) of the scrubbing window.
+
+22 UTC = 00:00 (12 am) Kyiv time. Scrubbing starts no earlier than midnight local time.
+
+| `osd_scrub_end_hour` | `4`
+| End hour of the scrubbing window (UTC).
+
+4 UTC = 06:00 Kyiv time. All auto scrubbing stops after 6 am.
+
+| `osd_scrub_begin_week_day` | `0`
+| Start day of the scrubbing window.
+
+`0` = Sunday (Ceph day numbering: `0` = Sunday, ..., `6` = Saturday).
+If `begin` and `end` are both `0`, scrubbing is allowed daily.
+
+| `osd_scrub_end_week_day` | `0`
+| End day of the scrubbing window.
+
+Also `0` = Sunday. The setting `begin_week_day = end_week_day = 0` enables scrubbing every day.
+|===
++
+[TIP]
+====
+📌 *Ceph weekday logic:*
+
+* `begin_week_day = 0`, `end_week_day = 0` means "Sunday through Sunday". All days are allowed.
+
+* Set `begin_week_day = 1`, `end_week_day = 5` to restrict scrubbing to weekdays.
+====
+
+. Click *Edit PG scrub options* to apply changes.
++
+.Ceph Dashboard UI: PG scrub schedule
+image::admin:file-system/ceph-scrubbing/ceph-scrubbing-3.png[]
+
+[#setup-schedule-ceph-cli]
+==== How to configure the schedule via Ceph CLI
+
+You can also use *Ceph CLI* from the `rook-operator` pod in the `openshift-storage` project. Run these commands:
+
+. Set the scrub start and end times (UTC).
++
+[source,bash]
+----
+ceph config set osd --conf=/var/lib/rook/openshift-storage/openshift-storage.config osd_scrub_begin_hour 22
+
+ceph config set osd --conf=/var/lib/rook/openshift-storage/openshift-storage.config osd_scrub_end_hour 4
+----
+
+. Set the weekday range (0 = Sunday; allow daily runs).
++
+----
+ceph config set osd --conf=/var/lib/rook/openshift-storage/openshift-storage.config osd_scrub_begin_week_day 0
+
+ceph config set osd --conf=/var/lib/rook/openshift-storage/openshift-storage.config osd_scrub_end_week_day 0
+----
+
+. Check the applied values (replace `<parameter>` accordingly):
++
+[source,bash]
+----
+ceph config get osd --conf=/var/lib/rook/openshift-storage/openshift-storage.config <parameter>
+----
++
+.Example: Check scrub start hour
+[source,bash]
+----
+ceph config get osd --conf=/var/lib/rook/openshift-storage/openshift-storage.config osd_scrub_begin_hour
+----
+
+[#related-pages]
+== Related pages
+
+* xref:file-system/ceph-cluster-maintenance.adoc[]
+* xref:file-system/ceph-osd-scaling-and-rebalancing.adoc[]

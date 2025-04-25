@@ -1,0 +1,201 @@
+= Ceph cluster maintenance and related operations
+include::platform:ROOT:partial$templates/document-attributes/default-set-en.adoc[]
+
+include::platform:ROOT:partial$admonitions/language-en.adoc[]
+
+The Platform uses the *`rook-operator`* to deploy and manage the *`openshift-storage`* Ceph cluster. This document provides best-practice recommendations for maintaining the Ceph cluster and related operations to ensure system stability and data integrity.
+
+[#manual-deep-scrub]
+== Manual deep scrubbing
+
+Disable xref:admin:file-system/ceph-scrubbing.adoc#disable-deep-scrub[automatic deep scrubbing] after deploying the Platform to avoid performance impact during peak hours. However, periodically running deep scrubbing is critical for verifying object integrity. Learn how to re-enable deep scrubbing, trigger it manually, and run it efficiently.
+
+[IMPORTANT]
+====
+❗ *Run deep scrubbing manually at least once every few weeks*, depending on your SLA and data criticality.
+
+Schedule it during *low-load periods* — e.g., weeknights or weekends.
+No formal maintenance window is required if there's no impact on critical services.
+
+📌 *Avoid PG backlog*, where Placement Groups go unchecked for too long.
+In large clusters, run daily with limited concurrency (`osd_max_scrubs`); smaller clusters may only need weekly runs.
+====
+
+[#deep-scrub-enable]
+=== Enabling deep scrubbing
+
+To start deep scrubbing manually, first remove the `nodeep-scrub` flags from all pools and then initiate the necessary Ceph CLI commands from the `rook-operator` pod in the `openshift-storage` project.
+
+.Remove `nodeep-scrub` flags from all pools
+[source,bash]
+----
+for pool in $(ceph --conf=/var/lib/rook/openshift-storage/openshift-storage.config osd pool ls); do
+  ceph --conf=/var/lib/rook/openshift-storage/openshift-storage.config osd pool set "$pool" nodeep-scrub false
+done
+----
+
+.Verify that flags have been removed
+[source,bash]
+----
+ceph --conf=/var/lib/rook/openshift-storage/openshift-storage.config osd pool ls detail
+----
+
+.Run deep scrubbing on all OSDs (recommended)
+[source,bash]
+----
+ceph osd --conf=/var/lib/rook/openshift-storage/openshift-storage.config deep-scrub all
+----
+
+.Alternative methods for initiating deep scrubbing on PGs
+[source,bash]
+----
+# For a specific OSD
+ceph osd --conf=/var/lib/rook/openshift-storage/openshift-storage.config deep-scrub 0
+
+# For all pools
+for pool in $(ceph --conf=/var/lib/rook/openshift-storage/openshift-storage.config osd pool ls); do
+  ceph --conf=/var/lib/rook/openshift-storage/openshift-storage.config osd pool deep-scrub "$pool"
+done
+----
+
+[#deep-scrub-speedup]
+=== Speeding up deep scrubbing when backlog exists
+
+If many PGs are waiting for deep scrubbing, you can speed up the process by:
+
+* Temporarily increasing the number of concurrent scrubbing processes, *up to 4*.
++
+*_OR_*
+
+* Extending the maintenance window and running deep scrubbing manually during weeknights.
+
+.Increase `osd_max_scrubs` to 4
+[source,bash]
+----
+ceph config --conf=/var/lib/rook/openshift-storage/openshift-storage.config set osd osd_max_scrubs 4
+----
+
+[NOTE]
+====
+After the operation, revert `osd_max_scrubs` back to `1`.
+
+➡️ See more in xref:admin:file-system/ceph-scrubbing.adoc#max-concurrent-scrubs[Concurrent scrubbing settings].
+====
+
+image::file-system/ceph-scrubbing/ceph-scrubbing-2.png[]
+
+[#scrubbing-monitoring]
+== Monitoring scrubbing status
+
+Use this section to monitor the health and performance of the scrubbing process. You'll learn how to check cluster-wide scrubbing status, track deep scrubbing execution, and review Placement Group logs. These steps help you detect issues early and maintain data consistency.
+
+[#grafana-monitoring]
+=== Monitoring via Grafana Web Interface
+
+Use the *Grafana Dashboard* — specifically the *Ceph & PostgreSQL Deep Scrubbing Dashboard* — to visualize scrubbing activities and OSD performance.
+
+The dashboard shows:
+
+* Number of PGs undergoing deep scrubbing over time.
+* OSD read/write latency.
+* Current cluster health status.
+
+.Grafana Dashboard: Ceph deep scrubbing metrics
+image::file-system/ceph-cluster-maintenance/ceph-cluster-maintenance-1.png[]
+
+[#ceph-cli-monitoring]
+=== Monitoring via Ceph CLI
+
+Use the following commands to track scrubbing progress from the command line:
+
+.Check overall cluster status
+[source,bash]
+----
+ceph -s --conf=/var/lib/rook/openshift-storage/openshift-storage.config
+----
+
+.Check Placement Group (PG) stats
+[source,bash]
+----
+ceph --conf=/var/lib/rook/openshift-storage/openshift-storage.config pg stat
+----
+
+.Find active scrubbing processes
+[source,bash]
+----
+ceph pg --conf=/var/lib/rook/openshift-storage/openshift-storage.config dump pgs | grep -E 'scrub|deep'
+----
+
+.Query specific PG details
+[source,bash]
+----
+ceph pg 19.11 query --conf=/var/lib/rook/openshift-storage/openshift-storage.config
+----
+
+.View timestamp of last deep scrub per PG
+[source,bash]
+----
+ceph --conf=/var/lib/rook/openshift-storage/openshift-storage.config pg dump pgs | awk '{print $1, $23}' | sort -k2 | column -t
+----
+
+[#scrubbing-stop]
+== Stopping deep scrubbing
+
+Sometimes it's necessary to stop or slow down deep scrubbing — for example, during peak usage or critical transactions. This section describes safe ways to reduce or completely halt the process.
+
+[#scrubbing-soft-stop]
+=== Soft stop
+
+The *recommended method* is to reduce the number of concurrent scrubbing processes (`osd_max_scrubs`) and allow ongoing scrubs to complete naturally. The minimum safe value is `1`.
+
+.Reduce `osd_max_scrubs` to 1
+[source,bash]
+----
+ceph config --conf=/var/lib/rook/openshift-storage/openshift-storage.config set osd osd_max_scrubs 1
+----
+
+[#scrubbing-force-stop]
+=== Force stop
+
+In extreme cases — such as severe performance degradation or blocked I/O — you can stop *deep scrubbing* immediately by restarting OSDs with PGs in the `scrubbing+deep` state. Use this approach *only when absolutely necessary*.
+
+. Identify PGs currently undergoing deep scrubbing:
++
+[source,bash]
+----
+ceph pg --conf=/var/lib/rook/openshift-storage/openshift-storage.config dump pgs | grep -E 'scrub|deep'
+----
+
++
+.Example output
+``
+19.11         554                   0         0          0        0    72797490            0           0  854       854  active+clean+scrubbing+deep 2025-04-03T07:03:00.295292+0000     2326'7347    2326:18658  [0,2,1]           0  [0,2,1]               0     2263'7328  2025-04-03T07:03:00.295251+0000        2136'4471  2025-03-31T07:38:49.421946+0000              0
+``
+
++
+.Field reference for `ceph pg dump pgs` output
+[cols="30,70", options="header"]
+|===
+^| Field ^| Description
+
+| `19.11` | *PG ID* — unique Placement Group identifier in `pool_id.pg_num` format.
+| `active+clean+scrubbing+deep` | *PG Status* — shows PG is active, clean, and currently being deep scrubbed.
+| `[0,2,1]` | *Acting Set* — list of OSDs serving the PG; first is the *primary OSD*.
+| `0` | *Primary OSD index* — index in the Acting Set indicating which OSD is primary.
+| `2025-04-03T07:03:00.295251+0000` | *deep_scrub_stamp* — timestamp of the last deep scrub for the PG.
+|===
+
+. Delete the relevant OSD pod using *OpenShift UI* or *CLI*:
++
+[source,bash]
+----
+oc delete pod rook-ceph-osd-0-example -n openshift-storage
+----
+
+CAUTION: Restarting the pod stops active scrubbing on that OSD and triggers PG recovery/rebalancing. Use this option only if no alternatives exist.
+
+[#related-pages]
+== Related pages
+
+* xref:file-system/ceph-scrubbing.adoc[]
+* xref:file-system/ceph-osd-scaling-and-rebalancing.adoc[]

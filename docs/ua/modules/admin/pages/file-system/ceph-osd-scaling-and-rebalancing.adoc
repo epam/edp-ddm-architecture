@@ -1,0 +1,158 @@
+= Розширення кількості OSD та налаштування ребалансування в Ceph
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+include::platform:ROOT:partial$admonitions/language-ua.adoc[]
+
+Цей документ охоплює сценарії масштабування Ceph-кластера шляхом додавання нових OSD (Object Storage Daemon) та оптимізацію процесу ребалансування для запобігання деградації продуктивності системи.
+
+NOTE: Рекомендовано налаштувати Grafana-алерт на спрацювання при заповненні понад 75% дискового простору, щоб завчасно масштабувати кластер.
+
+[#osd-scaling]
+== Розширення кількості OSD
+
+У разі нестачі дискового простору у Ceph-кластері необхідно додати нові PVC та відповідно розширити кількість *OSD (Object Storage Daemon)* шляхом оновлення ресурсу *`StorageCluster CR`*.
+
+[#add-new-osd]
+=== Додавання нових OSD через StorageCluster CR
+
+. Перейдіть до редагування ресурсу `StorageCluster CR` у просторі імен `openshift-storage`.
++
+.Редагування ресурсу `StorageCluster CR`
+[source,bash]
+----
+oc edit StorageCluster -n openshift-storage ocs-storagecluster
+----
+
+. Знайдіть секцію `storage.storageClassDeviceSets` та змініть конфігурацію, щоб додати нові OSD. Для цього збільште параметр count на +1 групу OSD або більше, враховуючи залежність на кількість реплік (`replica`) та розмір сховища (`storage`). У прикладі нижче додається одна група з трьома репліками розміром `512Gi`.
++
+.Ресурс StorageCluster. Конфігурація storage.storageClassDeviceSets
+[source,yaml]
+----
+storage:
+  storageClassDeviceSets:
+    - name: ocs-deviceset-gp3-csi
+      count: 2  # було 1 — збільшуємо на +1 <1>
+      replica: 3 # <2>
+      resources:
+        limits:
+          cpu: "4"
+          memory: 16Gi
+        requests:
+          cpu: "2"
+          memory: 8Gi
+      volumeClaimTemplates:
+        - metadata:
+            name: data
+          spec:
+            resources:
+              requests:
+                storage: 512Gi # <3>
+            storageClassName: gp3-csi
+            volumeMode: Block
+            accessModes:
+              - ReadWriteOnce
+----
+
+<1> `count` -- кількість груп OSD, що буде розгорнута. Збільшення count на +1 додає нову групу з OSD, відповідно до вказаної кількості реплік.
+
+<2> `replica` -- кількість OSD у кожній групі. Наприклад, `replica: 3` означає, що кожна група складається з трьох OSD.
+
+<3> `storage` -- розмір кожного PVC у складі OSD. У прикладі використовується `512Gi` для кожної репліки.
+
+CAUTION: Перед масштабуванням обов'язково перевірте актуальні значення *Capacity* наявних PVC. *Усі нові OSD повинні мати такий самий розмір*, щоб уникнути дисбалансу в Ceph-кластері.
+
+image::file-system/ceph-osd-scaling-and-rebalancing/ceph-osd-scaling-and-rebalancing-1.png[]
+
+=== Перевірка результату
+
+Перевірте результат за допомогою наступних команд:
+
+. Перевірте статус Ceph-кластера:
++
+[source,bash]
+----
+ceph -s --conf=/var/lib/rook/openshift-storage/openshift-storage.config
+----
++
+Ця команда виводить загальний стан Ceph-кластера, включно з кількістю OSD, станом моніторів, PG та станом реплікації.
+
+. Переконайтеся, що нові OSD додано:
++
+[source,bash]
+----
+ceph osd tree --conf=/var/lib/rook/openshift-storage/openshift-storage.config
+----
++
+Ця команда показує ієрархію OSD у кластері. Тут можна побачити нові OSD, що були додані, а також їхній статус та приналежність до хостів.
+
+[#ceph-rebalancing]
+== Налаштування та оптимізація ребалансування
+
+Після додавання або видалення OSD у Ceph автоматично запускається процес *ребалансування (rebalancing)* -- перенесення об'єктів між OSD для рівномірного розподілу навантаження.
+
+Цей процес може бути *ресурсомістким* і вплинути на загальну продуктивність кластера. Нижче наведено параметри для налаштування цього процесу -- для сценаріїв зменшення навантаження, або пришвидшення.
+
+[#rebalancing-throttling]
+=== Зменшення навантаження при ребалансуванні
+
+Цей варіант підходить для сценаріїв, коли важливо зберегти стабільну продуктивність під час робочого часу.
+
+. Обмежте кількість паралельних потоків (`backfills`).
++
+[source,bash]
+----
+ceph config set osd osd_max_backfills 1 --conf=/var/lib/rook/openshift-storage/openshift-storage.config
+
+ceph config set osd osd_recovery_max_active 1 --conf=/var/lib/rook/openshift-storage/openshift-storage.config
+----
++
+Ці параметри зменшують кількість одночасних потоків перенесення даних (`backfills`/`recovery`), що знижує навантаження на OSD під час ребалансування.
+
+. Зменште швидкість бекапів шляхом додавання пауз між ними.
++
+[source,bash]
+----
+ceph config set osd osd_recovery_sleep 0.1 --conf=/var/lib/rook/openshift-storage/openshift-storage.config
+----
++
+Цей параметр додає паузу (`sleep`) у 0.1 секунди між операціями `recovery`, зменшуючи навантаження на диск і CPU.
+
+[#rebalancing-speedup]
+=== Прискорення ребалансування (рекомендовано у вікно обслуговування)
+
+У періоди мінімального навантаження (наприклад, уночі або на вихідних) можна прискорити процес розподілу, дозволивши більше одночасних потоків `backfills`.
+
+[source,bash]
+----
+ceph config set osd osd_max_backfills 4 --conf=/var/lib/rook/openshift-storage/openshift-storage.config
+
+ceph config set osd osd_recovery_max_active 4 --conf=/var/lib/rook/openshift-storage/openshift-storage.config
+----
+
+Ці параметри дозволяють запускати більше паралельних потоків `backfills` і `recovery`, прискорюючи ребалансування даних. Застосовуйте лише у періоди низького навантаження, наприклад уночі або під час вікна обслуговування.
+
+[#rebalancing-monitoring]
+=== Моніторинг процесу ребалансування
+
+Використовуйте наведені нижче команди для контролю прогресу ребалансування та поточного стану PG.
+
+[source,bash]
+----
+ceph -s --conf=/var/lib/rook/openshift-storage/openshift-storage.config
+----
+
+Виводить поточний стан Ceph, включаючи статус `recovery`, `backfill`, `degraded` PG тощо.
+
+----
+ceph pg stat --conf=/var/lib/rook/openshift-storage/openshift-storage.config
+----
+
+Показує деталізовану статистику по Placement Groups, включаючи статуси `active`, `clean`, `backfilling`, `recovering`.
+
+NOTE: Якщо після масштабування або видалення OSD кластер довго перебуває у стані `degraded`, перевірте наявність неактивних PG або дискових помилок у логах Ceph.
+
+[#related-pages]
+== Пов'язані сторінки
+
+* xref:file-system/ceph-scrubbing.adoc[]
+* xref:file-system/ceph-cluster-maintenance.adoc[]

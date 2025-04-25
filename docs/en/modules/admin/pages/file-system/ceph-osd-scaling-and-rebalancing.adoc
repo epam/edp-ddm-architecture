@@ -1,0 +1,160 @@
+= Ceph OSD scaling and rebalancing
+include::platform:ROOT:partial$templates/document-attributes/default-set-en.adoc[]
+
+include::platform:ROOT:partial$admonitions/language-en.adoc[]
+
+This guide covers how to scale a Ceph cluster by adding new OSDs (Object Storage Daemons) and optimize the rebalancing process to prevent performance degradation.
+
+[NOTE]
+====
+Set up a Grafana alert to trigger when disk usage exceeds 75%. This gives you time to scale the cluster before storage runs out.
+====
+
+[#osd-scaling]
+== Scaling OSDs
+
+When your Ceph cluster is running low on storage, add new PVCs and increase the number of *OSDs* by updating the *`StorageCluster CR`* resource.
+
+[#add-new-osd]
+=== Adding OSDs via StorageCluster CR
+
+. Edit the `StorageCluster` resource in the `openshift-storage` namespace:
++
+[source,bash]
+----
+oc edit StorageCluster -n openshift-storage ocs-storagecluster
+----
+
+. Locate the `storage.storageClassDeviceSets` section and increase the `count` value to add more OSD groups. Ensure the number of `replica` and `storage` size per OSD group matches your requirements.
+
+.Example: Adding one new group with 3 replicas of 512Gi each
+[source,yaml]
+----
+storage:
+  storageClassDeviceSets:
+    - name: ocs-deviceset-gp3-csi
+      count: 2  # was 1 — add one more group <1>
+      replica: 3 # <2>
+      resources:
+        limits:
+          cpu: "4"
+          memory: 16Gi
+        requests:
+          cpu: "2"
+          memory: 8Gi
+      volumeClaimTemplates:
+        - metadata:
+            name: data
+          spec:
+            resources:
+              requests:
+                storage: 512Gi # <3>
+            storageClassName: gp3-csi
+            volumeMode: Block
+            accessModes:
+              - ReadWriteOnce
+----
+
+<1> `count` — number of OSD groups to deploy. Increasing by 1 adds a new group based on the given replica count.
+
+<2> `replica` — number of OSDs in each group. For example, `replica: 3` deploys three OSDs per group.
+
+<3> `storage` — PVC size for each OSD. Here, each replica is allocated `512Gi`.
+
+[CAUTION]
+====
+Before scaling, check the *Capacity* of existing PVCs. *New OSDs must match the existing size* to avoid imbalance.
+====
+
+image::file-system/ceph-osd-scaling-and-rebalancing/ceph-osd-scaling-and-rebalancing-1.png[]
+
+=== Verifying the result
+
+Run the following commands to verify that the cluster has scaled:
+
+. Check Ceph cluster status:
++
+[source,bash]
+----
+ceph -s --conf=/var/lib/rook/openshift-storage/openshift-storage.config
+----
+This command shows the overall cluster state, including OSD count, monitor health, PG states, and replication status.
+
+. Check the OSD tree to confirm new OSDs were added:
++
+[source,bash]
+----
+ceph osd tree --conf=/var/lib/rook/openshift-storage/openshift-storage.config
+----
+This command displays the cluster OSD hierarchy, including host associations and status.
+
+[#ceph-rebalancing]
+== Configuring and optimizing rebalancing
+
+After adding or removing OSDs, Ceph automatically triggers *rebalancing* — redistributing objects across OSDs to maintain balanced storage usage.
+
+This process can be resource-intensive and may affect cluster performance. Use the parameters below to either throttle or accelerate the process, depending on your needs.
+
+[#rebalancing-throttling]
+=== Throttling rebalancing
+
+Use this option when maintaining stable performance during business hours is the priority.
+
+. Limit the number of parallel backfill threads:
++
+[source,bash]
+----
+ceph config set osd osd_max_backfills 1 --conf=/var/lib/rook/openshift-storage/openshift-storage.config
+
+ceph config set osd osd_recovery_max_active 1 --conf=/var/lib/rook/openshift-storage/openshift-storage.config
+----
+These settings reduce concurrent `backfill` and `recovery` operations to minimize impact on disk and CPU.
+
+. Add delay between `recovery` actions:
++
+[source,bash]
+----
+ceph config set osd osd_recovery_sleep 0.1 --conf=/var/lib/rook/openshift-storage/openshift-storage.config
+----
+This introduces a `0.1s` delay between `recovery` actions to reduce a disk and CPU load.
+
+[#rebalancing-speedup]
+=== Speeding up rebalancing (Recommended during maintenance windows)
+
+During low-traffic periods (e.g., overnight or weekends), you can speed up rebalancing by allowing more parallel operations:
+
+[source,bash]
+----
+ceph config set osd osd_max_backfills 4 --conf=/var/lib/rook/openshift-storage/openshift-storage.config
+
+ceph config set osd osd_recovery_max_active 4 --conf=/var/lib/rook/openshift-storage/openshift-storage.config
+----
+These settings increase the number of simultaneous `backfill` and `recovery` operations. Use only during scheduled maintenance windows.
+
+[#rebalancing-monitoring]
+=== Monitoring Rebalancing Progress
+
+Use these commands to monitor rebalancing activity and Placement Group status:
+
+[source,bash]
+----
+ceph -s --conf=/var/lib/rook/openshift-storage/openshift-storage.config
+----
+Displays current cluster status, including `recovery`, `backfill`, and `degraded` PGs.
+
+[source,bash]
+----
+ceph pg stat --conf=/var/lib/rook/openshift-storage/openshift-storage.config
+----
+Shows detailed PG statistics and their current state (`active`, `clean`, `backfilling`, `recovering`).
+
+[NOTE]
+====
+If the cluster remains in a `degraded` state for an extended time after scaling or OSD removal, check for inactive PGs or disk-related errors in the Ceph logs.
+====
+
+[#related-pages]
+== Related pages
+
+* xref:file-system/ceph-scrubbing.adoc[]
+* xref:file-system/ceph-cluster-maintenance.adoc[]
