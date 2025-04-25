@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
-    <title>Setting up the registry components backup schedule and retention time :: Platform for deployment and maintenance of state electronic registers</title>
+    <title>Managing the registry backup schedule :: Platform for deployment and maintenance of state electronic registers</title>
     <meta name="generator" content="Antora 3.1.1">
     <link rel="stylesheet" href="../../../../_/css/site.css">
   </head>
@@ -2312,13 +2312,26 @@
   <div class="toc-menu"></div>
 </aside>
             <article class="doc">
-<h1 class="page">Setting up the registry components backup schedule and retention time</h1>
+<h1 class="page">Managing the registry backup schedule</h1>
 <div id="toc" class="toc">
 <div id="toctitle">On this page:</div>
 <ul class="sectlevel1">
-<li><a href="#_general_description">1. General description</a></li>
-<li><a href="#schedule-setup">2. Setting up a schedule</a></li>
-<li><a href="#_checking_the_created_backups">3. Checking the created backups</a></li>
+<li><a href="#overview">1. Overview</a></li>
+<li><a href="#schedule-setup">2. Configuring the backup schedule</a>
+<ul class="sectlevel2">
+<li><a href="#registry-components-backup-schedule">2.1. Setting the backup schedule and retention period</a></li>
+<li><a href="#replication-ceph-obc">2.2. Ceph OBC data replication</a>
+<ul class="sectlevel3">
+<li><a href="#_how_replication_works">2.2.1. How replication works</a></li>
+<li><a href="#_how_backup_and_replication_work_together">2.2.2. How backup and replication work together</a></li>
+<li><a href="#_configuring_the_replication_schedule">2.2.3. Configuring the replication schedule</a></li>
+</ul>
+</li>
+<li><a href="#apply-schedule-configuration">2.3. Applying the schedule configuration</a></li>
+</ul>
+</li>
+<li><a href="#create-check-backups">3. Creating and verifying backups</a></li>
+<li><a href="#_related_pages">4. Related pages</a></li>
 </ul>
 </div>
 <div id="preamble">
@@ -2338,13 +2351,30 @@
 </div>
 </div>
 <div class="sect1">
-<h2 id="_general_description"><a class="anchor" href="#_general_description"></a><a class="link" href="#_general_description">1. General description</a></h2>
+<h2 id="overview"><a class="anchor" href="#overview"></a><a class="link" href="#overview">1. Overview</a></h2>
 <div class="sectionbody">
 <div class="paragraph">
-<p>The platform provides the ability to <span class="underline">manage the schedule for creating backup copies of registry components and the time span for storing such copies in the backup repository</span>.</p>
+<p>The Platform allows you
+to configure a schedule for creating backups of registry components
+and define how long these backups are stored in the S3-compatible storage.</p>
 </div>
 <div class="paragraph">
-<p>Backup copies of components are created using the <strong><code>velero</code></strong> tool and stored in a secure <strong><code>minio</code></strong> backup repository located outside the Platform cluster.</p>
+<p>The Platform uses <strong>Velero</strong> to back up Kubernetes resources, such as PVCs, deployments, configurations, and secrets.
+Velero stores backups in a separate <strong>MinIO</strong> storage
+deployed <strong>outside</strong> the OpenShift cluster to isolate critical data from potential failures or in-cluster incidents.</p>
+</div>
+<div class="paragraph">
+<p>Data stored in <strong>Ceph Object Bucket Claims (OBC)</strong> isn&#8217;t included in Velero backups.
+To preserve this data, the Platform supports a separate <strong>replication mechanism</strong>.
+Replication automatically copies the contents of OBC buckets to a designated storage.
+By default, the data is replicated to MinIO,
+but you can specify another S3-compatible storage, such as Amazon S3 or Google Cloud Storage.</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="../_images/backup-restore/backup-schedule-registry-components/backup-schedule-registry-components-001.svg" alt="backup schedule registry components 001">
+</div>
+<div class="title">Figure 1. Backup and replication flow on the Platform</div>
 </div>
 <div class="admonitionblock note">
 <table>
@@ -2354,25 +2384,42 @@
 </td>
 <td class="content">
 <div class="paragraph">
-<p>The backup schedule is configured in the <a href="https://uk.wikipedia.org/wiki/Cron"><strong>unix-cron</strong></a> format on the <strong>Control Plane</strong> administrative panel interface.</p>
+<p>You can configure backup and replication schedules
+using the <a href="https://uk.wikipedia.org/wiki/Cron"><strong>cron</strong></a> format in the <strong>Control Plane</strong> interface.</p>
 </div>
 <div class="paragraph">
-<p>The retention period for backup copies must be greater than or equal to one unit, be a whole number, and not contain special characters.</p>
+<p>Backup retention should be defined in days.
+The value must be an integer and not less than <code>1</code>.</p>
+</div>
+<div class="paragraph">
+<p>Backups and replication use separate schedules.
+See details in the sections below.</p>
 </div>
 </td>
 </tr>
 </table>
 </div>
 <div class="paragraph">
-<p>The values are stored in the registry configuration <strong><em>deploy-templates/values.yaml</em></strong> file.</p>
+<p>The Platform saves all configured schedules to the <strong><code>deploy-templates/values.yaml</code></strong> file during the <strong>MASTER-Build</strong> pipeline run,
+which updates the registry configuration.</p>
 </div>
 <div class="paragraph">
-<p>The corresponding parameters are applied through the <strong><code>Create-registry-backup-&lt;registry-name&gt;</code></strong> Jenkins pipeline.</p>
+<p>The <strong>Create-registry-backup</strong> Jenkins pipeline runs both backup and replication processes based on the schedules
+you define in Control Plane.</p>
+</div>
+<div class="paragraph">
+<p>This pipeline launches two independent processes: <em>creating a backup using Velero</em> and <em>replicating data from Ceph OBC</em>.
+Each process uses its own schedule, but both run under the same pipeline.</p>
+</div>
+<div class="paragraph">
+<p>Velero backs up Kubernetes resources and stores them in MinIO.
+Ceph OBC replication copies data to the configured S3-compatible storage.
+You can manage the execution time for each process separately.</p>
 </div>
 </div>
 </div>
 <div class="sect1">
-<h2 id="schedule-setup"><a class="anchor" href="#schedule-setup"></a><a class="link" href="#schedule-setup">2. Setting up a schedule</a></h2>
+<h2 id="schedule-setup"><a class="anchor" href="#schedule-setup"></a><a class="link" href="#schedule-setup">2. Configuring the backup schedule</a></h2>
 <div class="sectionbody">
 <div class="admonitionblock note">
 <table>
@@ -2381,27 +2428,30 @@
 <i class="fa icon-note" title="Note"></i>
 </td>
 <td class="content">
-It&#8217;s vital to schedule backups when your system is least busy. We recommend doing this at night. This way, everything will proceed smoothly and without any inconveniences.
+Schedule backups during periods of lowest system load.
+We recommend running them at night to avoid failures and prevent any impact on users.
 </td>
 </tr>
 </table>
 </div>
+<div class="sect2">
+<h3 id="registry-components-backup-schedule"><a class="anchor" href="#registry-components-backup-schedule"></a><a class="link" href="#registry-components-backup-schedule">2.1. Setting the backup schedule and retention period</a></h3>
+<div class="paragraph">
+<p>Follow these steps to configure the schedule:</p>
+</div>
 <div class="olist arabic">
 <ol class="arabic">
 <li>
-<p>Log in to the <strong>Control Plane</strong> console as the Registry administrator.</p>
-<div class="paragraph">
-<p><span class="image"><img src="../_images/infrastructure/cluster-mgmt/update-cluster-mgmt-01.png" alt="update cluster mgmt 01"></span></p>
-</div>
+<p>Sign in to the <strong>Control Plane</strong> as a registry administrator.</p>
 </li>
 <li>
-<p>Go to the <span class="underline">Registries</span> section and select the required one.</p>
+<p>Go to the <strong>Registries</strong> section and select the registry you want to configure.</p>
 <div class="paragraph">
 <p><span class="image"><img src="../_images/infrastructure/cluster-mgmt/change-key/change-key-01.png" alt="change key 01"></span></p>
 </div>
 </li>
 <li>
-<p>Click the <code>Edit</code> button located in the upper right corner.</p>
+<p>Click <strong>Edit</strong> in the top-right corner.</p>
 <div class="admonitionblock note">
 <table>
 <tr>
@@ -2409,7 +2459,11 @@ It&#8217;s vital to schedule backups when your system is least busy. We recommen
 <i class="fa icon-note" title="Note"></i>
 </td>
 <td class="content">
-You can also set up a backup schedule and retention time while creating a registry. However, it is not mandatory.
+<div class="paragraph">
+<p>You can also set up the backup schedule and retention period
+when you <a href="../registry-management/control-plane-create-registry.html" class="xref page">create a registry</a>,
+but it&#8217;s optional.</p>
+</div>
 </td>
 </tr>
 </table>
@@ -2419,15 +2473,17 @@ You can also set up a backup schedule and retention time while creating a regist
 </div>
 </li>
 <li>
-<p>Go to the <span class="underline">Backup</span> section. Here you can set the schedule for creating backup copies and the retention period. Turn the toggle on and configure the schedule for creating automatic backup copies.</p>
-<div class="admonitionblock tip">
+<p>Open the <strong>Backup</strong> section. Here, you can set up the backup schedule and how long backups are stored. Toggle the switch to enable automatic backups and configure the schedule.</p>
+<div class="admonitionblock note">
 <table>
 <tr>
 <td class="icon">
-<i class="fa icon-tip" title="Tip"></i>
+<i class="fa icon-note" title="Note"></i>
 </td>
 <td class="content">
-By default, the <strong>Set automatic backup copy</strong> toggle is turned off for new registries.
+<div class="paragraph">
+<p>By default, automatic backups are disabled for new registries.</p>
+</div>
 </td>
 </tr>
 </table>
@@ -2443,16 +2499,21 @@ By default, the <strong>Set automatic backup copy</strong> toggle is turned off 
 </td>
 <td class="content">
 <div class="paragraph">
-<p>The backup schedule is configured in the <a href="https://uk.wikipedia.org/wiki/Cron"><strong>unix-cron</strong></a> format and is defined based on <span class="underline">Kyiv time</span>.</p>
+<p>Configure the backup schedule using the <a href="https://uk.wikipedia.org/wiki/Cron"><strong>unix-cron</strong></a> format.
+The schedule uses <strong>Kyiv time</strong>.</p>
 </div>
 <div class="paragraph">
-<p>By default, the <code><strong>Europe/Kiev</strong></code> time zone is set in the <em>values.yaml</em> configuration and at the Jenkins pod level as an environment variable.</p>
+<p>By default,
+the time zone <code>Europe/Kiev</code> is set in the <code>values.yaml</code> configuration file
+and applied as an environment variable in the Jenkins pod.
+This setting defines the local time context for scheduled operations such as backups and replications.</p>
 </div>
 <div class="paragraph">
-<p>The <a href="https://24timezones.com/%D0%9A%D0%B8%D1%97%D0%B2/%D1%87%D0%B0%D1%81">offset</a> of +2 hours (<code>UTC+2</code>) in winter and +3 hours (<code>UTC+3</code>) in summer is taken into account.</p>
+<p>If you&#8217;re working on a global deployment with a different time zone requirement, contact your Platform administrator.
+They can help update the time zone configuration to match your environment&#8217;s location and compliance needs.</p>
 </div>
 <div class="paragraph">
-<p>Use the <a href="https://crontab.guru/" class="bare">https://crontab.guru/</a> resource, a simple and convenient cron expression editor, to better understand the logic of schedule settings.</p>
+<p>Use <a href="https://crontab.guru/" class="bare">https://crontab.guru/</a> — a simple and helpful editor for cron expressions.</p>
 </div>
 </td>
 </tr>
@@ -2461,9 +2522,10 @@ By default, the <strong>Set automatic backup copy</strong> toggle is turned off 
 <div class="ulist">
 <ul>
 <li>
-<p>In the <code>Schedule</code> field, enter, for example, the following value: <code>5 11 * * MON-FRI</code>. Use space as a separator.</p>
+<p>In the <strong>Schedule</strong> field, enter a value such as: <code>5 10 * * MON-FRI</code>.
+Use spaces to separate parts.</p>
 <div class="paragraph">
-<p>This means that a backup copy for the registry environment will be created every day from Monday to Friday at 10:05 according to Kyiv time.</p>
+<p>This setting means the Platform will create a registry backup every weekday at 10:05 AM Kyiv time.</p>
 </div>
 <div class="admonitionblock tip">
 <table>
@@ -2472,14 +2534,36 @@ By default, the <strong>Set automatic backup copy</strong> toggle is turned off 
 <i class="fa icon-tip" title="Tip"></i>
 </td>
 <td class="content">
-After entering the backup schedule, a hint appears on the interface showing the time of the next 3 backup creation runs.
+<div class="paragraph">
+<p>After you set the backup schedule, the interface displays a hint showing the next three scheduled backup runs:</p>
+</div>
+<div class="quoteblock">
+<blockquote>
+<div class="paragraph">
+<p>Upcoming backup runs (Kyiv time):</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>09.06.2023 10:05:00</p>
+</li>
+<li>
+<p>10.06.2023 10:05:00</p>
+</li>
+<li>
+<p>11.06.2023 10:05:00</p>
+</li>
+</ul>
+</div>
+</blockquote>
+</div>
 </td>
 </tr>
 </table>
 </div>
 </li>
 <li>
-<p>In the <code>Retention time (days)</code> field, enter, for example, the following value: <code>5</code>. This means that the backup will be stored in the repository for 5 days.</p>
+<p>In the <strong>Retention period (days)</strong> field, enter a value such as <code>5</code>. This means the system will store each backup for five days.</p>
 <div class="admonitionblock note">
 <table>
 <tr>
@@ -2487,7 +2571,10 @@ After entering the backup schedule, a hint appears on the interface showing the 
 <i class="fa icon-note" title="Note"></i>
 </td>
 <td class="content">
-The value can only be a positive number and should not be set to less than 1 day. It is recommended to set the retention time longer than the period between creating copies.
+<div class="paragraph">
+<p>The retention period must be an integer and not less than <code>1</code>.
+To avoid data loss, make sure the retention period is longer than the interval between backups.</p>
+</div>
 </td>
 </tr>
 </table>
@@ -2500,19 +2587,124 @@ The value can only be a positive number and should not be set to less than 1 day
 </div>
 </li>
 <li>
-<p>Click <kbd>CONFIRM</kbd> to save the changes.</p>
+<p>Proceed to <a href="#replication-ceph-obc">configure Ceph OBC replication</a>, or keep the default settings and click <strong>Confirm</strong> at the bottom of the page.</p>
+</li>
+</ol>
+</div>
+</div>
+<div class="sect2">
+<h3 id="replication-ceph-obc"><a class="anchor" href="#replication-ceph-obc"></a><a class="link" href="#replication-ceph-obc">2.2. Ceph OBC data replication</a></h3>
+<div class="sect3">
+<h4 id="_how_replication_works"><a class="anchor" href="#_how_replication_works"></a><a class="link" href="#_how_replication_works">2.2.1. How replication works</a></h4>
 <div class="paragraph">
-<p>As a result, a request for update with the status <code>New</code> will be generated.</p>
+<p>The Platform uses two types of storage:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>MinIO</strong> – stores backups created by Velero.</p>
+</li>
+<li>
+<p><strong>Ceph OBC (Object Bucket Claims)</strong> – stores registry working data such as business process execution history, temporary files, and more.</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p><strong>Velero</strong> is a tool that enables backup, restore, migration, and disaster recovery for Platform components. It allows you to back up the state of the OpenShift environment (e.g., configurations, deployments, secrets, PVCs) and store it in an S3-compatible storage like MinIO or Amazon S3.</p>
+</div>
+<div class="paragraph">
+<p>It&#8217;s important to note that <strong>Velero does not cover Ceph OBC buckets</strong>.
+To protect this data from loss and store it in a separate location,
+the Platform uses a dedicated <strong>object bucket replication mechanism</strong>.</p>
+</div>
+<div class="paragraph">
+<p>Ceph OBC replication automatically copies the contents of registry object buckets to another S3-compatible storage based on settings
+defined by the administrator in Control Plane.</p>
+</div>
+<div class="paragraph">
+<p>Depending on your configuration, two scenarios are possible:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Default configuration</strong>: Ceph OBC data is automatically replicated to the Platform&#8217;s MinIO bucket, which also stores Velero backups.</p>
+</li>
+<li>
+<p><strong>Custom configuration</strong> (<strong>replication configured via Control Plane</strong>): Ceph OBC data is replicated to any S3-compatible storage specified by the administrator (e.g., Amazon S3, Google Cloud Storage). In this case, the administrator configures the endpoint, access credentials, and replication schedule.</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>This functionality provides <strong>flexibility and adaptability</strong>,
+allowing you to align OBC data replication with the needs of your environment or business continuity policies.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_how_backup_and_replication_work_together"><a class="anchor" href="#_how_backup_and_replication_work_together"></a><a class="link" href="#_how_backup_and_replication_work_together">2.2.2. How backup and replication work together</a></h4>
+<div class="paragraph">
+<p>Backup and replication setup in Control Plane works as follows:</p>
+</div>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>The registry administrator enables backup and sets the schedule (using a cron expression).</p>
+</li>
+<li>
+<p>The system creates the <strong>Create-registry-backup</strong> Jenkins pipeline, which executes two parallel processes:</p>
+<div class="ulist">
+<ul>
+<li>
+<p>Creates a backup of the registry using <strong>Velero</strong>, including all PVCs and Kubernetes resources in YAML format, stored in a MinIO bucket.</p>
+</li>
+<li>
+<p>Replicates Ceph OBC buckets to the target storage — MinIO by default, or a custom destination if configured.</p>
+</li>
+</ul>
 </div>
 </li>
 <li>
-<p>Go back to the <code>Registries</code> section, scroll down the page, and find the <code>Requests for update</code> section.</p>
+<p>If you change the <strong>replication storage target</strong>, it only affects Ceph OBC replication. Velero backups always remain stored in MinIO.</p>
+</li>
+</ol>
+</div>
 <div class="paragraph">
-<p><span class="image"><img src="../_images/registry-management/cp-submit-mr/cp-submit-mr-1.png" alt="cp submit mr 1"></span></p>
+<p>This provides a <strong>two-part backup model</strong>:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>Kubernetes resource backup via Velero.</p>
+</li>
+<li>
+<p>Separate Ceph OBC data replication to a backup storage.</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_configuring_the_replication_schedule"><a class="anchor" href="#_configuring_the_replication_schedule"></a><a class="link" href="#_configuring_the_replication_schedule">2.2.3. Configuring the replication schedule</a></h4>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>Sign in to the <strong>Control Plane</strong> as a registry administrator.</p>
+</li>
+<li>
+<p>Go to the <strong>Registries</strong> section and select the registry you want to configure.</p>
+<div class="paragraph">
+<p><span class="image"><img src="../_images/infrastructure/cluster-mgmt/change-key/change-key-01.png" alt="change key 01"></span></p>
 </div>
 </li>
 <li>
-<p>Open the generated request by clicking the view icon &#8201;&#8212;&#8201;👁.</p>
+<p>Click <strong>Edit</strong> in the top-right corner.</p>
+<div class="paragraph">
+<p><span class="image"><img src="../_images/infrastructure/cluster-mgmt/change-key/change-key-02.png" alt="change key 02"></span></p>
+</div>
+</li>
+<li>
+<p>Open the <span class="menuseq"><b class="menu">Backup</b>&#160;<i class="fa fa-angle-right caret"></i> <b class="menuitem">Replication</b></span> section and configure the replication schedule.</p>
+<div class="paragraph">
+<p><span class="image"><img src="../_images/backup-restore/backup-schedule-registry-components/backup-schedule-registry-components-10.png" alt="backup schedule registry components 10"></span></p>
+</div>
 <div class="admonitionblock note">
 <table>
 <tr>
@@ -2520,14 +2712,28 @@ The value can only be a positive number and should not be set to less than 1 day
 <i class="fa icon-note" title="Note"></i>
 </td>
 <td class="content">
-The proposed changes will be applied to the <strong><em>deploy-templates/values.yaml</em></strong> configuration file upon confirmation.
+<div class="paragraph">
+<p>The replication schedule uses the <a href="https://uk.wikipedia.org/wiki/Cron"><strong>unix-cron</strong></a> format and is based on <strong>UTC</strong>.</p>
+</div>
+<div class="paragraph">
+<p>The time zone is defined in the <code>values.yaml</code> configuration and also set as an environment variable in the Jenkins pod.</p>
+</div>
+<div class="paragraph">
+<p>Use <a href="https://crontab.guru/" class="bare">https://crontab.guru/</a> to easily edit and understand cron expressions.</p>
+</div>
 </td>
 </tr>
 </table>
 </div>
+<div class="ulist">
+<ul>
+<li>
+<p>In the <strong>Schedule</strong> field, enter a value like <code>25 12 * * *</code>.
+Use spaces to separate fields.
+This means Ceph OBC data will be replicated every day at 12:25 UTC.</p>
 </li>
 <li>
-<p>In the new window, compare the two versions of the changes, make sure the data you entered is correct, and click <kbd>Confirm</kbd>. You can also reject the changes to the configuration immediately by clicking <kbd>Reject</kbd>.</p>
+<p>If you don&#8217;t provide a custom schedule, the system uses the default: <code>30 17 * * * *</code> (UTC).</p>
 <div class="admonitionblock tip">
 <table>
 <tr>
@@ -2535,7 +2741,163 @@ The proposed changes will be applied to the <strong><em>deploy-templates/values.
 <i class="fa icon-tip" title="Tip"></i>
 </td>
 <td class="content">
-The comparison window allows you to conveniently check the two versions of the changes: the current one (on the left) and the new one (on the right).
+<div class="paragraph">
+<p>After you define the replication schedule, the interface shows a hint with the next three execution times:</p>
+</div>
+<div class="quoteblock">
+<blockquote>
+<div class="paragraph">
+<p>Next scheduled object replication (UTC):</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>09.06.2023 12:25:00</p>
+</li>
+<li>
+<p>10.06.2023 12:25:00</p>
+</li>
+<li>
+<p>11.06.2023 12:25:00</p>
+</li>
+</ul>
+</div>
+</blockquote>
+</div>
+</td>
+</tr>
+</table>
+</div>
+</li>
+</ul>
+</div>
+</li>
+<li>
+<p>Configure the replication storage target.</p>
+<div class="admonitionblock note">
+<table>
+<tr>
+<td class="icon">
+<i class="fa icon-note" title="Note"></i>
+</td>
+<td class="content">
+If you don&#8217;t provide custom values, the system uses default values defined during registry deployment.
+</td>
+</tr>
+</table>
+</div>
+<div class="olist loweralpha">
+<ol class="loweralpha" type="a">
+<li>
+<p>To set custom storage values, click <strong>Set custom values</strong> and complete the form:</p>
+<table class="tableblock frame-all grid-all stretch">
+<caption class="title">Table 1. Example configuration for Amazon S3</caption>
+<colgroup>
+<col style="width: 25%;">
+<col style="width: 75%;">
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Field</th>
+<th class="tableblock halign-left valign-top">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><strong>Bucket name</strong></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">The name must be unique within your S3 environment.
+Length: 3–63 characters.</p>
+<p class="tableblock">Allowed characters: <code>"a-z"</code>, <code>"0-9"</code>, <code>"."</code>, <code>"-"</code>.</p>
+<p class="tableblock"><strong>Example:</strong> <code>my-s3-bucket-123</code></p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><strong>Endpoint</strong></p></td>
+<td class="tableblock halign-left valign-top"><div class="content"><div class="paragraph">
+<p>The URL to connect to the S3-compatible storage.</p>
+</div>
+<div class="paragraph">
+<p><strong>Example:</strong> <code><a href="https://endpoint.com" class="bare">https://endpoint.com</a></code></p>
+</div>
+<div class="paragraph">
+<p>For Amazon S3:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>Global: <code><a href="https://s3.amazonaws.com" class="bare">https://s3.amazonaws.com</a></code></p>
+</li>
+<li>
+<p>Regional: <code><a href="https://s3.&lt;region&gt;.amazonaws.com" class="bare">https://s3.&lt;region&gt;.amazonaws.com</a></code>, where <code>&lt;region&gt;</code> is the region ID (e.g., <code>us-west-2</code>).</p>
+</li>
+</ul>
+</div></div></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><strong>Login</strong></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Access credentials provided by your S3 provider.</p>
+<p class="tableblock">For Amazon S3: <strong>AWS Access Key ID</strong>.</p>
+<p class="tableblock"><strong>Example:</strong> <code>AKIAIOSFODNN7EXAMPLE</code></p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><strong>Password</strong></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Secret credentials provided by your S3 provider.</p>
+<p class="tableblock">For Amazon S3: <strong>AWS Secret Access Key</strong>.</p>
+<p class="tableblock"><strong>Example:</strong> <code>wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY</code></p></td>
+</tr>
+</tbody>
+</table>
+</li>
+<li>
+<p>Click <strong>Confirm</strong> to save your custom values, or <strong>Cancel</strong> to discard changes.</p>
+<div class="paragraph">
+<p><span class="image"><img src="../_images/backup-restore/backup-schedule-registry-components/backup-schedule-registry-components-9.png" alt="backup schedule registry components 9"></span></p>
+</div>
+</li>
+</ol>
+</div>
+</li>
+<li>
+<p>On the <strong>Backup</strong> page, click <strong>Confirm</strong> again to apply the changes and submit a request to update the registry configuration.</p>
+<div class="paragraph">
+<p><span class="image"><img src="../_images/backup-restore/backup-schedule-registry-components/backup-schedule-registry-components-11.png" alt="backup schedule registry components 11"></span></p>
+</div>
+</li>
+</ol>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="apply-schedule-configuration"><a class="anchor" href="#apply-schedule-configuration"></a><a class="link" href="#apply-schedule-configuration">2.3. Applying the schedule configuration</a></h3>
+<div class="paragraph">
+<p>Once you configure the backup schedule (as described in the previous sections),
+the system creates an update request with the status <code>New</code> and type <code>Edit registry</code>.</p>
+</div>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>In the <span class="menuseq"><b class="menu">Registries</b>&#160;<i class="fa fa-angle-right caret"></i> <b class="menuitem">Change requests</b></span> section, find the relevant request.</p>
+<div class="paragraph">
+<p><span class="image"><img src="../_images/registry-management/cp-submit-mr/cp-submit-mr-1.png" alt="cp submit mr 1"></span></p>
+</div>
+</li>
+<li>
+<p>Click the view icon 👁 to open the request.</p>
+</li>
+<li>
+<p>In the new window, compare the two versions of the configuration,
+verify that your changes are correct, and click <strong>Confirm</strong>.
+Alternatively, you can reject the configuration changes by clicking <strong>Reject</strong>.</p>
+<div class="admonitionblock note">
+<table>
+<tr>
+<td class="icon">
+<i class="fa icon-note" title="Note"></i>
+</td>
+<td class="content">
+<div class="paragraph">
+<p>Once confirmed,
+the system applies the changes to the <code>deploy-templates/values.yaml</code> configuration file in the registry repository.</p>
+</div>
 </td>
 </tr>
 </table>
@@ -2547,36 +2909,43 @@ The comparison window allows you to conveniently check the two versions of the c
 <p><span class="image"><img src="../_images/registry-management/cp-submit-mr/cp-submit-mr-3.png" alt="cp submit mr 3"></span></p>
 </div>
 <div class="paragraph">
-<p>As a result, the request will change the state to  <code>confirmed</code>. At the specified time, the <strong><code>Create-registry-backup-&lt;registry-name&gt;</code></strong> Jenkins pipeline will be triggered. It applies the parameters of the specified configuration and creates backups in the backup repository.</p>
+<p>After confirmation, the request status changes to <code>Confirmed</code>.</p>
 </div>
 </li>
 <li>
-<p>Wait until the code build is completed. This may take a few minutes.</p>
+<p>Wait for the build process to complete. This may take a few minutes.</p>
 </li>
 </ol>
+</div>
+<div class="paragraph">
+<p>When the Platform successfully applies the configuration,
+the <strong>Create-registry-backup</strong> Jenkins pipeline will start at the scheduled time.
+It will use the set parameters to create backups and replicate data to the designated storage locations.</p>
+</div>
 </div>
 </div>
 </div>
 <div class="sect1">
-<h2 id="_checking_the_created_backups"><a class="anchor" href="#_checking_the_created_backups"></a><a class="link" href="#_checking_the_created_backups">3. Checking the created backups</a></h2>
+<h2 id="create-check-backups"><a class="anchor" href="#create-check-backups"></a><a class="link" href="#create-check-backups">3. Creating and verifying backups</a></h2>
 <div class="sectionbody">
 <div class="paragraph">
-<p>At the specified date and time, backups should be created according to the schedule specified in the configuration (<em>see --<a href="#schedule-setup">Setting up a schedule</a></em>)</p>
+<p>At the configured date and time, the system creates backups automatically according to the defined schedule.</p>
 </div>
-<div class="dlist">
-<dl>
-<dt class="hdlist1">You can check this as follows: </dt>
-<dd>
+<div class="paragraph">
+<p>To verify the status of a registry backup:</p>
+</div>
 <div class="olist arabic">
 <ol class="arabic">
 <li>
-<p>In the registry information, open the <span class="underline">Registry components</span> section and navigate to <strong>Jenkins</strong>.</p>
+<p>In the <span class="menuseq"><b class="menu">Control Plane</b>&#160;<i class="fa fa-angle-right caret"></i> <b class="submenu">Registries</b>&#160;<i class="fa fa-angle-right caret"></i> <b class="menuitem">Quick links</b></span>, find the <strong>Registry admin zone</strong> and open the <strong>Regulations deployment service (Jenkins)</strong>.</p>
 <div class="paragraph">
-<p><span class="image"><img src="../_images/backup-restore/backup-schedule-registry-components/backup-schedule-registry-components-1.png" alt="backup schedule registry components 1"></span></p>
+<p><span class="image"><img src="../_images/registry-management/quick-links/quick-links-3.png" alt="quick links 3"></span></p>
 </div>
 </li>
 <li>
-<p>Go to the folder with the corresponding registry and select the <strong><code>Create-registry-backup-&lt;registry-name&gt;</code></strong> pipeline. If the pipeline is highlighted in green, the build can be considered successful.</p>
+<p>Go to the folder for the desired registry and select the pipeline <strong>Create-registry-backup-<code>&lt;registry-name&gt;</code></strong>,
+where <code>&lt;registry-name&gt;</code> is the name of your registry.
+If the pipeline is highlighted in green, the build was successful.</p>
 <div class="paragraph">
 <p><span class="image"><img src="../_images/backup-restore/backup-schedule-registry-components/backup-schedule-registry-components-2.png" alt="backup schedule registry components 2"></span></p>
 </div>
@@ -2588,25 +2957,23 @@ The comparison window allows you to conveniently check the two versions of the c
 </div>
 </li>
 <li>
-<p>Go to the console output (<code><strong>Console Output</strong></code>) to view the technical log of the pipeline execution.</p>
+<p>Open <strong>Console Output</strong> to view the pipeline execution logs.</p>
 <div class="paragraph">
 <p><span class="image"><img src="../_images/backup-restore/backup-schedule-registry-components/backup-schedule-registry-components-4.png" alt="backup schedule registry components 4"></span></p>
 </div>
 </li>
 <li>
-<p>Scroll down the page and make sure that the registry backup has been created.</p>
-<div class="exampleblock">
-<div class="title">Example 1. Console Output. Successful creation of registry backup</div>
-<div class="content">
+<p>Scroll down to the bottom of the page and check that the registry backup was created.
+You should see the following output:</p>
 <div class="listingblock">
+<div class="title">Console Output – Successful backup message</div>
 <div class="content">
 <pre>[INFO] Velero backup - external-1-2023-02-17-17-07-36 done with Completed status</pre>
 </div>
 </div>
 <div class="paragraph">
-<p>This expression indicates that a backup has been created for the registry with a specific name (<em>here</em> - <code>external-1</code>), the date and time of backup creation, and the successful completion status.</p>
-</div>
-</div>
+<p>This message indicates
+that the backup for the registry named <code>external-1</code> was created with a timestamp and a successful completion status.</p>
 </div>
 <div class="paragraph">
 <p><span class="image"><img src="../_images/backup-restore/backup-schedule-registry-components/backup-schedule-registry-components-5.png" alt="backup schedule registry components 5"></span></p>
@@ -2618,7 +2985,9 @@ The comparison window allows you to conveniently check the two versions of the c
 <i class="fa icon-important" title="Important"></i>
 </td>
 <td class="content">
-After the retention period expires, the backup system deletes outdated backup copies.
+<div class="paragraph">
+<p>After the retention period expires, the system automatically deletes outdated backups.</p>
+</div>
 </td>
 </tr>
 </table>
@@ -2626,8 +2995,17 @@ After the retention period expires, the backup system deletes outdated backup co
 </li>
 </ol>
 </div>
-</dd>
-</dl>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_related_pages"><a class="anchor" href="#_related_pages"></a><a class="link" href="#_related_pages">4. Related pages</a></h2>
+<div class="sectionbody">
+<div class="ulist">
+<ul>
+<li>
+<p><a href="control-plane-backup-restore.html" class="xref page">Manually back up and restore a registry instance</a></p>
+</li>
+</ul>
 </div>
 </div>
 </div>
