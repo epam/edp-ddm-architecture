@@ -469,7 +469,7 @@ data:
    bucket_acl = authenticated-read" > ~/.config/rclone/rclone.conf
    # Append only bucket - data bucket strategy (by label) - copy / other sync
 
-   rclone_command="rclone copy --no-traverse --metadata --transfers='100' --checkers='100' --buffer-size=64M --multi-thread-streams=4 --progress"
+   rclone_command="rclone copy --no-traverse --metadata --transfers='8' --checkers='16' --buffer-size=32M --progress"
 {{- if eq .Values.registryBackup.obc.action "replication" }}
    if [[ -z $(rclone lsd ${BACKUP_BUCKET}:${BACKUP_BUCKET}/obc-backups/${REGISTRY_NAMESPACE} | grep ${OBJECT_BUCKET_CLAIM}) ]]; then
      echo "[INFO] Destination folder empty, copy full bucket to destination"
@@ -481,7 +481,7 @@ data:
    $rclone_command rook:${bucket} ${BACKUP_BUCKET}:/${BACKUP_BUCKET}/obc-backups/${REGISTRY_NAMESPACE}/${OBJECT_BUCKET_CLAIM}/
 
 {{- else }}
-   $rclone_command sync ${BACKUP_BUCKET}:/${BACKUP_BUCKET}/obc-backups/${REGISTRY_NAMESPACE}/${OBJECT_BUCKET_CLAIM} rook:${bucket}
+   $rclone_command ${BACKUP_BUCKET}:/${BACKUP_BUCKET}/obc-backups/${REGISTRY_NAMESPACE}/${OBJECT_BUCKET_CLAIM} rook:${bucket}
 {{- end }}
 ```
 +
@@ -502,21 +502,40 @@ data:
 src/com/epam/edp/customStages/impl/registrytenanttemplate/RestoreRegistry.groovy
 ```
 +
-Знайти рядок:
+Знайти ряд:
 +
 ```groovy
-script.sh "velero create restore ${restoreNamePattern}-obc --from-backup ${script.env.BACKUP_NAME} --include-resources=objectbucketclaims --wait"
+deployHelper.deployOBCBackupRestoreHelm(
+        "${veleroNamespace}",
+        "${backupManagementDir}/bucket-replication",
+        "s3-restore-${script.env.NAMESPACE}",
+        parametersMap,
+        "${context.workDir}/${context.helmValuesPath}",
+        true
+)
 ```
-Видалити прапорець `--wait`.
++
+Видалити прапорець та замініть їх на:
++
+```groovy
+deployHelper.deployOBCBackupRestoreHelm(
+        "${veleroNamespace}",
+        "${backupManagementDir}/bucket-replication",
+        "s3-restore-${script.env.NAMESPACE}",
+        parametersMap,
+        "${context.workDir}/${context.helmValuesPath}",
+        false
+)
+```
 
-3. **Зберегти зміни у Gerrit:**
+. **Зберегти зміни у Gerrit:**
 * Перейти в репозиторій `edp-library-stages-fork` у Gerrit.
 * Виконати необхідні правки в файлі, створивши новий change.
 * Після цього підтвердити зміни:
 - Проставити позначки *(Code-Review +2)*.
 - Виконати злиття змін за допомогою кнопки `Submit`.
 
-4. **Перевірити оновлення:**
+. **Перевірити оновлення:**
 * Переконатися, що зміни в репозиторії збережені.
 * У Jenkins pipeline `Restore-registry*` підтвердити, що застосовано нову версію репозиторію `edp-library-stages-fork`.
 
