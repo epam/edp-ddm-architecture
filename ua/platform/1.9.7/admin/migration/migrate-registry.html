@@ -4628,7 +4628,7 @@ data:
    bucket_acl = authenticated-read" &gt; ~/.config/rclone/rclone.conf
    # Append only bucket - data bucket strategy (by label) - copy / other sync
 
-   rclone_command="rclone copy --no-traverse --metadata --transfers='100' --checkers='100' --buffer-size=64M --multi-thread-streams=4 --progress"
+   rclone_command="rclone copy --no-traverse --metadata --transfers='8' --checkers='16' --buffer-size=32M --progress"
 {{- if eq .Values.registryBackup.obc.action "replication" }}
    if [[ -z $(rclone lsd ${BACKUP_BUCKET}:${BACKUP_BUCKET}/obc-backups/${REGISTRY_NAMESPACE} | grep ${OBJECT_BUCKET_CLAIM}) ]]; then
      echo "[INFO] Destination folder empty, copy full bucket to destination"
@@ -4640,7 +4640,7 @@ data:
    $rclone_command rook:${bucket} ${BACKUP_BUCKET}:/${BACKUP_BUCKET}/obc-backups/${REGISTRY_NAMESPACE}/${OBJECT_BUCKET_CLAIM}/
 
 {{- else }}
-   $rclone_command sync ${BACKUP_BUCKET}:/${BACKUP_BUCKET}/obc-backups/${REGISTRY_NAMESPACE}/${OBJECT_BUCKET_CLAIM} rook:${bucket}
+   $rclone_command ${BACKUP_BUCKET}:/${BACKUP_BUCKET}/obc-backups/${REGISTRY_NAMESPACE}/${OBJECT_BUCKET_CLAIM} rook:${bucket}
 {{- end }}</code></pre>
 </div>
 </div>
@@ -4683,18 +4683,40 @@ data:
 </div>
 </div>
 <div class="paragraph">
-<p>Знайти рядок:</p>
+<p>Знайти ряд:</p>
 </div>
 <div class="listingblock">
 <div class="content">
-<pre class="highlightjs highlight"><code class="language-groovy hljs" data-lang="groovy">script.sh "velero create restore ${restoreNamePattern}-obc --from-backup ${script.env.BACKUP_NAME} --include-resources=objectbucketclaims --wait"</code></pre>
+<pre class="highlightjs highlight"><code class="language-groovy hljs" data-lang="groovy">deployHelper.deployOBCBackupRestoreHelm(
+        "${veleroNamespace}",
+        "${backupManagementDir}/bucket-replication",
+        "s3-restore-${script.env.NAMESPACE}",
+        parametersMap,
+        "${context.workDir}/${context.helmValuesPath}",
+        true
+)</code></pre>
 </div>
 </div>
 <div class="paragraph">
-<p>Видалити прапорець <code>--wait</code>.</p>
+<p>Видалити прапорець та замініть їх на:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-groovy hljs" data-lang="groovy">deployHelper.deployOBCBackupRestoreHelm(
+        "${veleroNamespace}",
+        "${backupManagementDir}/bucket-replication",
+        "s3-restore-${script.env.NAMESPACE}",
+        parametersMap,
+        "${context.workDir}/${context.helmValuesPath}",
+        false
+)</code></pre>
+</div>
 </div>
 </li>
 </ul>
+</div>
+</li>
+</ol>
 </div>
 </li>
 <li>
@@ -4732,14 +4754,14 @@ data:
 </li>
 <li>
 <p>У Jenkins pipeline <code>Restore-registry*</code> підтвердити, що застосовано нову версію репозиторію <code>edp-library-stages-fork</code>.</p>
-</li>
-</ul>
-</div>
-</li>
+<div class="olist arabic">
+<ol class="arabic">
 <li>
 <p><strong>Змініть файл і змерджіть зміни:</strong></p>
-<div class="ulist">
-<ul>
+</li>
+</ol>
+</div>
+</li>
 <li>
 <p>Виконайте заміну файлу <strong><code>bucket-replication/templates/configmap.yaml</code></strong> у відповідній гілці репозиторію <strong>backup-management</strong>.</p>
 </li>
@@ -4753,9 +4775,6 @@ data:
 <p>Натисніть <strong>Submit</strong> для злиття змін.</p>
 </li>
 </ul>
-</div>
-</li>
-</ol>
 </div>
 </li>
 </ol>
