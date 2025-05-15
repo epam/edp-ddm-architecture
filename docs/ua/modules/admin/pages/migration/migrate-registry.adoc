@@ -277,6 +277,21 @@ export BACKUP_NAME="<назва резервної копії>"
 +
 TIP: Приклад назви резервної копії: `*abc-02-2023-04-18-19-03-14*`.
 +
+.Експорт значення шифрування резервних копій в MinIO на кластері SRC
+----
+export MINIO_SRC_SSE="true"/"false"
+----
++
+TIP: За замовчуванням це значення дорівнює - "false". Приклад значення при увімкненому шифруванні резервної копії на кластері SRC: `*"true"*`.
+
++
+.Експорт значення шифрування резервних копій в MinIO на кластері DEST
+----
+export MINIO_DEST_SSE="true"/"false"
+----
++
+TIP: За замовчуванням це значення дорівнює - "false". Приклад значення при увімкненому шифруванні резервної копії на кластері DEST: `*"true"*`.
+
 [WARNING]
 ====
 У випадку, коли реєстр попередньо був мігрований на кластер SRC, а не розгорнутий на цій Платформі, виконайте додатковий *`export`*:
@@ -440,53 +455,66 @@ metadata:
    {{- include "bucket-replication.labels" . | nindent 4 }}
 data:
  bucket-replication.sh: |
-   #!/usr/bin/env bash
+    #!/usr/bin/env bash
 
-   rook_s3_endpoint=$(oc get cephobjectstore/mdtuddm -n openshift-storage -o=jsonpath='{.status.info.endpoint}')
-   bucket=$(oc get objectbucketclaim/"${OBJECT_BUCKET_CLAIM}" -n ${REGISTRY_NAMESPACE} -o=jsonpath="{.spec.bucketName}")
-   access_key_rook=$(oc get secret/"${OBJECT_BUCKET_CLAIM}" -n "${REGISTRY_NAMESPACE}" -o jsonpath='{.data.AWS_ACCESS_KEY_ID}' | base64 -d)
-   access_secret_key_rook=$(oc get secret/"${OBJECT_BUCKET_CLAIM}" -n "${REGISTRY_NAMESPACE}" -o jsonpath='{.data.AWS_SECRET_ACCESS_KEY}' | base64 -d)
+    rook_s3_endpoint=$(oc get cephobjectstore/mdtuddm -n openshift-storage -o=jsonpath='{.status.info.endpoint}')
+    bucket=$(oc get objectbucketclaim/"${OBJECT_BUCKET_CLAIM}" -n ${REGISTRY_NAMESPACE} -o=jsonpath="{.spec.bucketName}")
+    access_key_rook=$(oc get secret/"${OBJECT_BUCKET_CLAIM}" -n "${REGISTRY_NAMESPACE}" -o jsonpath='{.data.AWS_ACCESS_KEY_ID}' | base64 -d)
+    access_secret_key_rook=$(oc get secret/"${OBJECT_BUCKET_CLAIM}" -n "${REGISTRY_NAMESPACE}" -o jsonpath='{.data.AWS_SECRET_ACCESS_KEY}' | base64 -d)
 
-   mkdir -p ~/.config/rclone
-   echo "
-   ["${BACKUP_BUCKET}"]
-   type = s3
-   provider = Other
-   endpoint = ${S3_ENDPOINT}
-   env_auth = true
-   region = eu-central-1
-   acl = private
-   bucket_acl = private
+    mkdir -p ~/.config/rclone
+    echo "
+    ["${BACKUP_BUCKET}"]
+    type = s3
+    provider = Other
+    endpoint = ${S3_ENDPOINT}
+    {{- if .Values.global.registryBackup.obc.sse }}
+    server_side_encryption = aws:kms
+    {{- end }}
+    env_auth = true
+    region = ${S3_REGION}
 
-   [rook]
-   type = s3
-   provider = Ceph
-   env_auth = false
-   access_key_id = ${access_key_rook}
-   secret_access_key = ${access_secret_key_rook}
-   endpoint = ${rook_s3_endpoint}
-   acl = bucket-owner-full-control
-   bucket_acl = authenticated-read" > ~/.config/rclone/rclone.conf
-   # Append only bucket - data bucket strategy (by label) - copy / other sync
+    [rook]
+    type = s3
+    provider = Ceph
+    env_auth = false
+    access_key_id = ${access_key_rook}
+    secret_access_key = ${access_secret_key_rook}
+    endpoint = ${rook_s3_endpoint}
+    acl = bucket-owner-full-control
+    bucket_acl = authenticated-read" > ~/.config/rclone/rclone.conf
+    # append only bucket - data bucket strategy (by label) - copy / other sync
+    rclone_command="rclone copy --progress --no-traverse --metadata --s3-no-check-bucket --transfers=16 --checkers=32 --buffer-size=32Mi"
 
-   rclone_command="rclone copy --no-traverse --metadata --transfers='8' --checkers='16' --buffer-size=32M --progress"
 {{- if eq .Values.registryBackup.obc.action "replication" }}
-   if [[ -z $(rclone lsd ${BACKUP_BUCKET}:${BACKUP_BUCKET}/obc-backups/${REGISTRY_NAMESPACE} | grep ${OBJECT_BUCKET_CLAIM}) ]]; then
-     echo "[INFO] Destination folder empty, copy full bucket to destination"
-   else
-     echo "[INFO] Destination folder exists, copy bucket data for ${MAX_AGE}"
-     rclone_command="${rclone_command} --max-age ${MAX_AGE}"
-   fi
 
-   $rclone_command rook:${bucket} ${BACKUP_BUCKET}:/${BACKUP_BUCKET}/obc-backups/${REGISTRY_NAMESPACE}/${OBJECT_BUCKET_CLAIM}/
+    if [[ -z $(rclone lsd ${BACKUP_BUCKET}:${BACKUP_BUCKET}/obc-backups/${REGISTRY_NAMESPACE} | grep ${OBJECT_BUCKET_CLAIM}) ]]; then
+       echo "[INFO] Destination folder empty, copy full bucket to destination"
+    else
+       echo "[INFO] Destination folder exists, copy bucket data for ${MAX_AGE}"
+       rclone_command="${rclone_command} --max-age ${MAX_AGE}"
+    fi
+
+    $rclone_command rook:${bucket} ${BACKUP_BUCKET}:/${BACKUP_BUCKET}/obc-backups/${REGISTRY_NAMESPACE}/${OBJECT_BUCKET_CLAIM}/
 
 {{- else }}
-   $rclone_command ${BACKUP_BUCKET}:/${BACKUP_BUCKET}/obc-backups/${REGISTRY_NAMESPACE}/${OBJECT_BUCKET_CLAIM} rook:${bucket}
+    $rclone_command ${BACKUP_BUCKET}:/${BACKUP_BUCKET}/obc-backups/${REGISTRY_NAMESPACE}/${OBJECT_BUCKET_CLAIM} rook:${bucket}
 {{- end }}
 ```
 +
 Вставте цей код, замінивши поточний вказаний файл у відповідній версії backup-management.
++
+[NOTE]
+====
+У випадку коли на Minio DEST кластеру увімкнене шифрування, треба зробити додаткові зміни в *`bucket-replication/values.yaml`*. Зміни передбачають додавання значення для ключа *.global.registryBackup.obc.sse* зі значенням *true* наступним чином:
 
+```yaml
+global:
+  registryBackup:
+    obc:
+      sse: true
+```
+====
 
 . Оновити версію `edp-library-stages-fork`
 
