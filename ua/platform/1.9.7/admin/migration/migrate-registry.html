@@ -4281,6 +4281,45 @@
 </tr>
 </table>
 </div>
+<div class="listingblock">
+<div class="title">Експорт значення шифрування резервних копій в MinIO на кластері SRC</div>
+<div class="content">
+<pre>export MINIO_SRC_SSE="true"/"false"</pre>
+</div>
+</div>
+<div class="admonitionblock tip">
+<table>
+<tr>
+<td class="icon">
+<i class="fa icon-tip" title="ПІДКАЗКА"></i>
+</td>
+<td class="content">
+За замовчуванням це значення дорівнює - "false". Приклад значення при увімкненому шифруванні резервної копії на кластері SRC: <code><strong>"true"</strong></code>.
+</td>
+</tr>
+</table>
+</div>
+<div class="listingblock">
+<div class="title">Експорт значення шифрування резервних копій в MinIO на кластері DEST</div>
+<div class="content">
+<pre>export MINIO_DEST_SSE="true"/"false"</pre>
+</div>
+</div>
+<div class="admonitionblock tip">
+<table>
+<tr>
+<td class="icon">
+<i class="fa icon-tip" title="ПІДКАЗКА"></i>
+</td>
+<td class="content">
+За замовчуванням це значення дорівнює - "false". Приклад значення при увімкненому шифруванні резервної копії на кластері DEST: <code><strong>"true"</strong></code>.
+</td>
+</tr>
+</table>
+</div>
+</li>
+</ol>
+</div>
 <div class="admonitionblock warning">
 <table>
 <tr>
@@ -4315,7 +4354,8 @@
 </tr>
 </table>
 </div>
-</li>
+<div class="olist arabic">
+<ol class="arabic">
 <li>
 <p>Збережіть <a href="../_attachments/migrate-registry/registry-migration.zip">архів</a>, розархівуйте його в нову директорію наступною командою:</p>
 <div class="listingblock">
@@ -4599,53 +4639,77 @@ metadata:
    {{- include "bucket-replication.labels" . | nindent 4 }}
 data:
  bucket-replication.sh: |
-   #!/usr/bin/env bash
+    #!/usr/bin/env bash
 
-   rook_s3_endpoint=$(oc get cephobjectstore/mdtuddm -n openshift-storage -o=jsonpath='{.status.info.endpoint}')
-   bucket=$(oc get objectbucketclaim/"${OBJECT_BUCKET_CLAIM}" -n ${REGISTRY_NAMESPACE} -o=jsonpath="{.spec.bucketName}")
-   access_key_rook=$(oc get secret/"${OBJECT_BUCKET_CLAIM}" -n "${REGISTRY_NAMESPACE}" -o jsonpath='{.data.AWS_ACCESS_KEY_ID}' | base64 -d)
-   access_secret_key_rook=$(oc get secret/"${OBJECT_BUCKET_CLAIM}" -n "${REGISTRY_NAMESPACE}" -o jsonpath='{.data.AWS_SECRET_ACCESS_KEY}' | base64 -d)
+    rook_s3_endpoint=$(oc get cephobjectstore/mdtuddm -n openshift-storage -o=jsonpath='{.status.info.endpoint}')
+    bucket=$(oc get objectbucketclaim/"${OBJECT_BUCKET_CLAIM}" -n ${REGISTRY_NAMESPACE} -o=jsonpath="{.spec.bucketName}")
+    access_key_rook=$(oc get secret/"${OBJECT_BUCKET_CLAIM}" -n "${REGISTRY_NAMESPACE}" -o jsonpath='{.data.AWS_ACCESS_KEY_ID}' | base64 -d)
+    access_secret_key_rook=$(oc get secret/"${OBJECT_BUCKET_CLAIM}" -n "${REGISTRY_NAMESPACE}" -o jsonpath='{.data.AWS_SECRET_ACCESS_KEY}' | base64 -d)
 
-   mkdir -p ~/.config/rclone
-   echo "
-   ["${BACKUP_BUCKET}"]
-   type = s3
-   provider = Other
-   endpoint = ${S3_ENDPOINT}
-   env_auth = true
-   region = eu-central-1
-   acl = private
-   bucket_acl = private
+    mkdir -p ~/.config/rclone
+    echo "
+    ["${BACKUP_BUCKET}"]
+    type = s3
+    provider = Other
+    endpoint = ${S3_ENDPOINT}
+    {{- if .Values.global.registryBackup.obc.sse }}
+    server_side_encryption = aws:kms
+    {{- end }}
+    env_auth = true
+    region = ${S3_REGION}
 
-   [rook]
-   type = s3
-   provider = Ceph
-   env_auth = false
-   access_key_id = ${access_key_rook}
-   secret_access_key = ${access_secret_key_rook}
-   endpoint = ${rook_s3_endpoint}
-   acl = bucket-owner-full-control
-   bucket_acl = authenticated-read" &gt; ~/.config/rclone/rclone.conf
-   # Append only bucket - data bucket strategy (by label) - copy / other sync
+    [rook]
+    type = s3
+    provider = Ceph
+    env_auth = false
+    access_key_id = ${access_key_rook}
+    secret_access_key = ${access_secret_key_rook}
+    endpoint = ${rook_s3_endpoint}
+    acl = bucket-owner-full-control
+    bucket_acl = authenticated-read" &gt; ~/.config/rclone/rclone.conf
+    # append only bucket - data bucket strategy (by label) - copy / other sync
+    rclone_command="rclone copy --progress --no-traverse --metadata --s3-no-check-bucket --transfers=16 --checkers=32 --buffer-size=32Mi"
 
-   rclone_command="rclone copy --no-traverse --metadata --transfers='8' --checkers='16' --buffer-size=32M --progress"
 {{- if eq .Values.registryBackup.obc.action "replication" }}
-   if [[ -z $(rclone lsd ${BACKUP_BUCKET}:${BACKUP_BUCKET}/obc-backups/${REGISTRY_NAMESPACE} | grep ${OBJECT_BUCKET_CLAIM}) ]]; then
-     echo "[INFO] Destination folder empty, copy full bucket to destination"
-   else
-     echo "[INFO] Destination folder exists, copy bucket data for ${MAX_AGE}"
-     rclone_command="${rclone_command} --max-age ${MAX_AGE}"
-   fi
 
-   $rclone_command rook:${bucket} ${BACKUP_BUCKET}:/${BACKUP_BUCKET}/obc-backups/${REGISTRY_NAMESPACE}/${OBJECT_BUCKET_CLAIM}/
+    if [[ -z $(rclone lsd ${BACKUP_BUCKET}:${BACKUP_BUCKET}/obc-backups/${REGISTRY_NAMESPACE} | grep ${OBJECT_BUCKET_CLAIM}) ]]; then
+       echo "[INFO] Destination folder empty, copy full bucket to destination"
+    else
+       echo "[INFO] Destination folder exists, copy bucket data for ${MAX_AGE}"
+       rclone_command="${rclone_command} --max-age ${MAX_AGE}"
+    fi
+
+    $rclone_command rook:${bucket} ${BACKUP_BUCKET}:/${BACKUP_BUCKET}/obc-backups/${REGISTRY_NAMESPACE}/${OBJECT_BUCKET_CLAIM}/
 
 {{- else }}
-   $rclone_command ${BACKUP_BUCKET}:/${BACKUP_BUCKET}/obc-backups/${REGISTRY_NAMESPACE}/${OBJECT_BUCKET_CLAIM} rook:${bucket}
+    $rclone_command ${BACKUP_BUCKET}:/${BACKUP_BUCKET}/obc-backups/${REGISTRY_NAMESPACE}/${OBJECT_BUCKET_CLAIM} rook:${bucket}
 {{- end }}</code></pre>
 </div>
 </div>
 <div class="paragraph">
 <p>Вставте цей код, замінивши поточний вказаний файл у відповідній версії backup-management.</p>
+</div>
+<div class="admonitionblock note">
+<table>
+<tr>
+<td class="icon">
+<i class="fa icon-note" title="ПРИМІТКА"></i>
+</td>
+<td class="content">
+<div class="paragraph">
+<p>У випадку коли на Minio DEST кластеру увімкнене шифрування, треба зробити додаткові зміни в <strong><code>bucket-replication/values.yaml</code></strong>. Зміни передбачають додавання значення для ключа <strong>.global.registryBackup.obc.sse</strong> зі значенням <strong>true</strong> наступним чином:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-yaml hljs" data-lang="yaml">global:
+  registryBackup:
+    obc:
+      sse: true</code></pre>
+</div>
+</div>
+</td>
+</tr>
+</table>
 </div>
 </li>
 </ol>
