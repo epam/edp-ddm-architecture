@@ -449,14 +449,14 @@ NOTE: Дочекайтеся створення директорії `<назв�
 apiVersion: v1
 kind: ConfigMap
 metadata:
- name: {{ include "bucket-replication.fullname" . }}
- namespace: {{ .Release.Namespace }}
- labels:
-   {{- include "bucket-replication.labels" . | nindent 4 }}
+  name: {{ include "bucket-replication.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "bucket-replication.labels" . | nindent 4 }}
 data:
- bucket-replication.sh: |
+  bucket-replication.sh: |
     #!/usr/bin/env bash
-
+    set -e
     rook_s3_endpoint=$(oc get cephobjectstore/mdtuddm -n openshift-storage -o=jsonpath='{.status.info.endpoint}')
     bucket=$(oc get objectbucketclaim/"${OBJECT_BUCKET_CLAIM}" -n ${REGISTRY_NAMESPACE} -o=jsonpath="{.spec.bucketName}")
     access_key_rook=$(oc get secret/"${OBJECT_BUCKET_CLAIM}" -n "${REGISTRY_NAMESPACE}" -o jsonpath='{.data.AWS_ACCESS_KEY_ID}' | base64 -d)
@@ -468,10 +468,10 @@ data:
     type = s3
     provider = Other
     endpoint = ${S3_ENDPOINT}
+    env_auth = true
     {{- if .Values.global.registryBackup.obc.sse }}
     server_side_encryption = aws:kms
     {{- end }}
-    env_auth = true
     region = ${S3_REGION}
 
     [rook]
@@ -486,9 +486,14 @@ data:
     # append only bucket - data bucket strategy (by label) - copy / other sync
     rclone_command="rclone copy --progress --no-traverse --metadata --s3-no-check-bucket --transfers=16 --checkers=32 --buffer-size=32Mi"
 
+{{- if .Values.global.registryBackup.obc.extraArgs }}
+    additional_args="{{ .Values.global.registryBackup.obc.extraArgs | join " " }}"
+    rclone_command="${rclone_command} ${additional_args}"
+{{- end }}
+
 {{- if eq .Values.registryBackup.obc.action "replication" }}
 
-    if [[ -z $(rclone lsd ${BACKUP_BUCKET}:${BACKUP_BUCKET}/obc-backups/${REGISTRY_NAMESPACE} | grep ${OBJECT_BUCKET_CLAIM}) ]]; then
+    if [[ -z $(rclone lsd ${additional_args} ${BACKUP_BUCKET}:${BACKUP_BUCKET}/obc-backups/${REGISTRY_NAMESPACE}  | grep ${OBJECT_BUCKET_CLAIM}) ]]; then
        echo "[INFO] Destination folder empty, copy full bucket to destination"
     else
        echo "[INFO] Destination folder exists, copy bucket data for ${MAX_AGE}"
@@ -496,7 +501,6 @@ data:
     fi
 
     $rclone_command rook:${bucket} ${BACKUP_BUCKET}:/${BACKUP_BUCKET}/obc-backups/${REGISTRY_NAMESPACE}/${OBJECT_BUCKET_CLAIM}/
-
 {{- else }}
     $rclone_command ${BACKUP_BUCKET}:/${BACKUP_BUCKET}/obc-backups/${REGISTRY_NAMESPACE}/${OBJECT_BUCKET_CLAIM} rook:${bucket}
 {{- end }}
