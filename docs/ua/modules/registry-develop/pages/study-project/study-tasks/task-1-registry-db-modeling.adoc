@@ -95,7 +95,8 @@ StaffStatus ||--o{ Staff : "staff_status_id"
 ====
 В ході виконання поточного завдання уся необхідна інформація, приклади, файли надаються.
 
-Однак ви можете одразу клонувати репозиторій вашого проєкту із регламентом, використовуючи xref:registry-admin/regulations-deploy/registry-admin-deploy-regulation.adoc[покрокову інструкцію]. У регламенті всі `.xml`-файли для моделювання даних уже створені, зокрема:
+Однак ви можете одразу клонувати репозиторій вашого проєкту із регламентом, використовуючи покрокову інструкцію xref:registry-admin/regulations-deploy/registry-admin-deploy-regulation.adoc[Операції з регламентом в Gerrit] або повнішу інструкцію xref:registry-admin/cp-deploy-consent-data.adoc[Розгортання демо-реєстру із референтними прикладами].
+У регламенті всі `.xml`-файли для моделювання даних уже створені, зокрема:
 
 * `createTables.xml` -- тут створюються таблиці відповідно до логічної моделі даних.
 * `main-liquibase.xml` -- файл є основним для розгортання моделі даних реєстру. Він містить посилання на інші `.xml`-файли.
@@ -155,7 +156,9 @@ StaffStatus ||--o{ Staff : "staff_status_id"
 
 .. Додайте changeSet для типу `type_subject_type` всередині тега `<databaseChangeLog>`:
 +
-У цьому блоці коду створюється кастомний тип `type_subject_type` як enum-список, що використовується для визначення типу суб’єкта. `changeSet` включає метадані, такі як автор і унікальний ідентифікатор, які відстежують цю зміну. Значення enum включають переклади для кожного значення, що дозволяє використовувати їх у локалізованих інтерфейсах.
+У цьому блоці коду створюється кастомний тип `type_subject_type` як enum-список, що використовується для визначення типу суб'єкта.
+ChangeSet включає метадані, такі як автор і унікальний ідентифікатор, які відстежують цю зміну.
+Значення enum включають переклади для кожного значення, що дозволяє використовувати їх у локалізованих інтерфейсах.
 +
 [source,xml]
 ----
@@ -377,7 +380,7 @@ _Бажано, але не обов'язково_, всередині тегу `
 * xref:registry-develop:data-modeling/data/physical-model/liquibase-changes-management-sys-ext.adoc[]
 ====
 
-4. Додаємо тег `column`::
+4. Додайте тег `column`::
 На цьому кроці необхідно визначити стовпці таблиці.
 +
 Для кожного поля, що було визначено для таблиці «Лабораторія» у xref:physical-data-model-actions-plan[плані розробки фізичної моделі даних], всередині тегу `<createTable>` додайте тег `<column>`, зазначивши назву стовпця та тип даних, що зберігатимуться.
@@ -1131,7 +1134,7 @@ SELECT laboratory.edrpou,
 //TODO: ASK - Схоже, що це SC взагалі ніде не використовується у навчальних завданнях
 .Основні параметри критерію пошуку
 |===
-| Використовується бізнес-процесом | Внесення даних в кадровий склад / `feature-add-personnel.bpmn` ?????????????????
+| Використовується бізнес-процесом | Внесення даних в кадровий склад / `feature-add-personnel.bpmn`
 | Назва критерію пошуку            | `laboratory_start_with_edrpou_contains_name`
 | Пошук за полем                   | `edrpou`, тип пошуку: `startsWith`
 | Пошук за полем                   | `name`, тип пошуку: `contains`
@@ -1231,111 +1234,67 @@ SELECT s.staff_status_id,
 [#initial-data-load]
 == Первинне завантаження даних
 
-Для правильного наповнення та оперування даними реєстру, таблиці-довідники повинні містити дані. Їх _завантаження можливе до початку роботи самого реєстру_ через виклик спеціальної функції бази даних. Виклик функції можливий через відповідний Liquibase-тег – *`<sql>`*.
+Після створення структури бази даних потрібно завантажити початкові (довідникові) дані. Їх _завантаження можливе до початку роботи реєстру_.
+Це важливо для коректної роботи бізнес-процесів, які використовують ці довідники, наприклад, *Створення лабораторії*.
 
-[%collapsible]
-._Приклад XML-шаблону із набором змін для початкового завантаження даних_
-====
-[source,xml]
+Дані завантажуються з CSV-файлів до відповідних таблиць за допомогою функції `p_load_table_from_csv()` у Liquibase. Виклик функції можливий через відповідний Liquibase-тег – *`<sql>`*.
+
+=== Як це працює
+
+. CSV-файли розміщуються у папці `_data-model/data-load/`.
+. Liquibase копіює ці файли на сервер у каталог `/tmp/data-load/`.
+. У файлі `link:{attachmentsdir}/study-project/task-2/xml-temp/populateDictionaries.xml[populateDictionaries.xml]` додаються виклики функції `p_load_table_from_csv()` для кожного CSV-файлу.
+. Цей файл підключається у `main-liquibase.xml`.
+
+=== Приклад виклику функції
+
+[source,sql]
 ----
-<property name="dataLoadPath" value="/tmp/data-load/"/>
-<changeSet author="registry owner" id="load data to dictionaries">
-    <sql dbms="postgresql" endDelimiter=";" splitStatements="true" stripComments="true">
-        CALL p_load_table_from_csv('staff_status','${dataLoadPath}dict_status_spivrobitnyka.csv', array['code','name','constant_code'], array['name','constant_code']);
-        CALL p_load_table_from_csv('ownership','${dataLoadPath}dict_formy_vlasnosti.csv', array['code','name']);
-
-<!--
-Наступний приклад використання функції актуальний лише в рамках Реєстру атестованих лабораторій для первинного завантаження довідника КОАТУУ.
-Не передбачається подальше використання довідника КОАТУУ при розгортанні моделі даних.
-
-Приклад:
-
-        CALL p_load_table_from_csv(
-        'koatuu'
-        ,'${dataLoadPath}dict_koatuu.csv'
-        , array['code','category','name']
-        , array['code','category','name'
-        ,'level1::substring(code,1,2)||''00000000'''
-        ,'level2::substring(code,1,5)||''00000'''
-        ,'type::CASE WHEN code ~ ''[0-9]{2}0{8}'' AND code !~ ''(80|85)0{8}'' THEN ''О''
-        WHEN code ~ ''[0-9]{2}2[0-9]{2}0{5}'' AND code !~ ''[0-9]{2}20{7}'' THEN ''Р''
-        WHEN coalesce(category, ''Р'') != ''Р''
-        OR code IN (SELECT DISTINCT substring(code,1,5)||''00000'' FROM koatuu_csv k2 WHERE category = ''Р'') AND category IS NULL
-        OR code ~ ''(80|85)0{8}'' THEN ''НП''
-        ELSE NULL END']
-        );
--->
-    </sql>
-</changeSet>
-----
-====
-
-CAUTION: Для первинного завантаження довідника КОАТУУ функція *`CALL p_load_table_from_csv()`* використовується _ЛИШЕ_ в рамках Реєстру атестованих лабораторій. Не передбачається подальше використання довідника КОАТУУ при розгортанні моделі даних.
-
-Виконайте наступні кроки, щоб здійснити первинне завантаження: ::
-. Створіть файл _populateDictionaries.xml_ із того ж шаблону, що і _createTables.xml._
-+
-TIP: Використовуйте готовий файл _link:{attachmentsdir}/study-project/task-2/xml-temp/populateDictionaries.xml[populateDictionaries.xml]_ як приклад.
-
-. Додайте окремий тег `<changeSet>` із набором змін.
-. Всередині тегу `<changeSet>` додайте тег `<sql>` з атрибутом `dbms="postgresql"`.
-. Всередині тегу `<sql>` додайте виклики функції `p_load_table_from_csv()` для кожної таблиці довідника. +
-+
-.Вхідні параметри функції
-====
-[source,xml]
-----
-CALL p_load_table_from_csv('research','${dataLoadPath}dict_typy_doslidzhen.csv', array['code','research_type'], array['research_type']);
+CALL p_load_table_from_csv(
+  'subject',
+  '${dataLoadPath}dict_subject.csv',
+  array['subject_code','subject_type','subject_status','subject_name']
+);
 ----
 
 [TIP]
-=====
-де:
+====
+Задайте шлях до CSV-файлів через змінну:
 
-* `'staff_status'` = `'p_table_name'` -- назва таблиці в базі даних, до якої завантажуватимуться дані;
-* `${dataLoadPath}dict_typy_doslidzhen.csv` = `'p_file_name'` -- повний шлях до файлу з даними.
-* `array['code','name','constant_code']` = `p_table_columns` -- масив з переліком полів csv-файлу;
-* `array['name','constant_code']` = `p_target_table_columns` -- масив з переліком полів для завантаження до цільової таблиці.
-=====
-====
-+
-[CAUTION]
-====
-Назви полів, що зазначені у параметрі `p_table_columns`, можуть не відповідати назвам у файлі -- вони можуть бути використані у наступному параметрі `p_target_table_columns` для трансформації даних.
-====
-+
-[CAUTION]
-====
-Назви полів з параметра `p_target_table_columns` мають відповідати переліку з параметра `p_table_columns` (якщо поля таблиці повністю відповідають полям у файлі, цей параметр можна не вказувати).
+[source,xml]
+----
+<property name="dataLoadPath" value="/tmp/data-load/"/>
+----
 ====
 
-[NOTE]
-====
-Після внесення змін до моделі даних в Gerrit-репозиторії, всі файли з папки _data-model/data-load_ копіюються до папки _/tmp/data-load_ на сервері бази даних. Тому шлях до файлу повинен виглядати наступним чином: _/tmp/data-load/<назва файлу>.csv_, де:
+=== Де розміщувати файли
 
-* _<назва файлу>_ -- безпосередньо назва .csv-файлу з даними (*_див. приклад ХML-шаблону вище_*).
-====
+Розмістіть усі CSV-файли у папці `_data-model/data-load/`.
+Після того, як модель буде завантажена у Gerrit, система автоматично скопіює їх у `/tmp/data-load/` на сервері бази даних.
 
-_У результаті отримуємо 3 виклики функцій_, що завантажують дані до таблиць-довідників із наступних файлів:
+=== Список CSV-файлів для завантаження
 
 [options="header"]
 |===
-|*Довідник* |*Файл з даними*
-|КОАТУУ (_опціонально_) | _link:{attachmentsdir}/study-project/task-2/csv-dict/dict_koatuu_workshop.csv[dict_koatuu_workshop.csv]_
-|Тип Власності |_link:{attachmentsdir}/study-project/task-2/csv-dict/dict_formy_vlasnosti.csv[dict_formy_vlasnosti.csv]_
-|Статус Співробітника |_link:{attachmentsdir}/study-project/task-2/csv-dict/dict_status_spivrobitnyka.csv[dict_status_spivrobitnyka.csv]_
+|Довідник                |Файл з даними
+|КОАТУУ (опційно)        |`link:{attachmentsdir}/study-project/task-2/csv-dict/dict_koatuu_workshop.csv[dict_koatuu_workshop.csv]`
+|Тип власності           |`link:{attachmentsdir}/study-project/task-2/csv-dict/dict_formy_vlasnosti.csv[dict_formy_vlasnosti.csv]`
+|Статус співробітника    |`link:{attachmentsdir}/study-project/task-2/csv-dict/dict_status_spivrobitnyka.csv[dict_status_spivrobitnyka.csv]`
+|Суб'єкти (ФОП / юрособи)|`link:{attachmentsdir}/study-project/task-2/csv-dict/dict_subject.csv[dict_subject.csv]`
 |===
 
 == Застосування розробленої моделі до бази даних
 
-Платформа використовує файл *`main-liquibase.xml`* як основний для розгортання моделі даних реєстру.
+Платформа використовує *`main-liquibase.xml`* як основний файл для розгортання моделі даних реєстру.
 
-NOTE: Всі набори змін, що будуть включені до файлу _main-liquibase.xml_, застосуються в базі даних.
+NOTE: Всі changeSet-и, що будуть включені до файлу `main-liquibase.xml`, застосуються в базі даних.
 
-Для включення набору змін із файлів, створених протягом минулих кроків, використовується тег `*<include>*` з атрибутом `*file*`, що вказує шлях до XML-файлу. Поточною директорією для Liquibase є коренева папка Gerrit-репозиторію -- тому шлях до файлів має наступний вигляд: *_data-model/+++*.xml+++_*.
+Для включення changeSet-у із файлів, створених протягом попередніх кроків, використовується тег `*<include>*` з атрибутом `*file*`, що вказує шлях до XML-файлу.
+Поточною директорією для Liquibase є коренева папка Gerrit-репозиторію -- тому шлях до файлів має наступний вигляд: *_data-model/+++*.xml+++_*.
 
-Щоб застосувати розроблену модель, виконайте наступні кроки: ::
-. Створіть файл *_main-liquibase.xml_* із того ж шаблону, що і _createTables.xml_.
+Щоб застосувати створену модель, виконайте наступні кроки: ::
+
+. Створіть файл *`main-liquibase.xml`* із того ж шаблону, що і `createTables.xml`.
 +
 TIP: Використовуйте готовий шаблон `link:{attachmentsdir}/study-project/task-2/xml-temp/main-liquibase.xml[main-liquibase.xml]` із Gerrit-репозиторію як приклад.
 
@@ -1351,7 +1310,7 @@ TIP: Використовуйте готовий шаблон `link:{attachments
 ====
 Обов'язково додайте контекст для первинного завантаження даних.
 
-Щоб правильно розгорнути модель даних вашого реєстру, необхідно обов'язково вказати атрибут *`context="pub"`* в рамках тегу *`<include>`*. Наприклад, ви хочете включити до розгортання моделі файл, що містить процедури наповнення таблиць-довідників первинними даними, -- *_populateDictionaries.xml_*.
+Щоб правильно розгорнути модель даних вашого реєстру, необхідно обов'язково вказати атрибут *`context="pub"`* в рамках тегу *`<include>`*. Наприклад, ви хочете включити до розгортання моделі файл, що містить процедури наповнення таблиць-довідників первинними даними, -- *`populateDictionaries.xml`*.
 
 .Додавання контексту `context="pub"` для наповнення таблиць даними
 =====
@@ -1364,12 +1323,12 @@ TIP: Використовуйте готовий шаблон `link:{attachments
 Схема містить елемент *<include>*, який посилається на зовнішній файл *"populateDictionaries.xml"*. При цьому контекст *"pub"* вказує на те, що елементи, які містяться в цьому файлі, будуть використані в операційній базі даних реєстру.
 ====
 
-. Покладіть файли XML до папки *_data-model_* Gerrit-репозиторію.
-. Файли з даними скопіюйте до папки *_data-model/data-load_*.
+. Покладіть файли XML до папки *`data-model`* Gerrit-репозиторію.
+. Файли з даними скопіюйте до папки *`data-model/data-load`*.
 +
 [TIP]
 ====
-Усього маємо отримати _8 файлів_ для розгортання моделі даних та первинного наповнення БД:
+Усього маємо отримати *9 файлів* для розгортання моделі даних та первинного наповнення БД:
 
 5 файлів із шаблонами XML: ::
 ** `link:{attachmentsdir}/study-project/task-2/xml-temp/tablesSubjects.xml[tablesSubjects.xml]`
@@ -1378,16 +1337,21 @@ TIP: Використовуйте готовий шаблон `link:{attachments
 ** `link:{attachmentsdir}/study-project/task-2/xml-temp/populateDictionaries.xml[populateDictionaries.xml]`
 ** `link:{attachmentsdir}/study-project/task-2/xml-temp/main-liquibase.xml[main-liquibase.xml]`
 
-3 файли CSV із довідниками для первинного наповнення: ::
+4 файли CSV із довідниками для первинного наповнення: ::
 ** `link:{attachmentsdir}/study-project/task-2/csv-dict/dict_formy_vlasnosti.csv[dict_formy_vlasnosti.csv]`
 ** `link:{attachmentsdir}/study-project/task-2/csv-dict/dict_status_spivrobitnyka.csv[dict_status_spivrobitnyka.csv]`
 ** `link:{attachmentsdir}/study-project/task-2/csv-dict/dict_koatuu_workshop.csv[dict_koatuu_workshop.csv]`
+** `link:{attachmentsdir}/study-project/task-2/csv-dict/dict_subject.csv[dict_subject.csv]`
 
 ====
 
 . Застосуйте зміни до Gerrit відповідно до інструкції xref:registry-develop:registry-admin/regulations-deploy/registry-admin-deploy-regulation.adoc#merge-changes-gerrit[Внесення змін до віддаленого репозиторію в Gerrit].
 . Пройдіть процедуру рецензування коду вашого коміту (*Code Review*). У разі відсутності відповідних прав, зверніться до відповідальної особи.
 . Дочекайтеся виконання Jenkins-pipeline *MASTER-Build-registry-regulations*.
+
+== Очікуваний результат
+
+Після виконання всіх кроків і успішного проходження збірки регламенту, ваш реєстр міститиме змодельовану структуру бази даних, заповнену необхідними довідниками для подальшої роботи бізнес-процесів.
 
 == Корисна документація по роботі з Liquibase
 
