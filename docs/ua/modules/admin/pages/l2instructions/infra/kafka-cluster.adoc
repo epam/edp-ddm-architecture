@@ -1,0 +1,144 @@
+= Відновлення Kafka Cluster реєстру
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+== Загальний опис
+
+Ця інструкція описує кроки для виконання операцій із відновлення Kafka-кластера реєстру, а також для перевірок його роботи.
+
+== Виконання
+
+=== Закриття зовнішнього доступу до реєстру
+
+Переконайтесь, що доступ до реєстру закритий для кабінетів та відповідних Routes, котрі використовується зовнішніми системами, а також закрийте доступ до центральних пайплайнів Jenkins реєстру, таких як MASTER-Build-<registry-name>. Після закриття зачекайте 10 хвилин, щоб гарантувати завершення усіх поточних операцій.
+
+=== Вимкнення залежних від Kafka-кластера компонентів реєстру
+
+Вимкніть наступні компоненти (збережіть/запишіть окремо кількість под кожного компоненту для подальшого їх ввімкнення) у просторі імен реєстру (в подальшому всі операції будуть проводитись в просторі імен реєстру, якщо не вказано інше), зменшивши кількість под у відповідному Deployment до 0:
+
+- bpms
+- excerpt-service-api
+- excerpt-worker-csv
+- excerpt-worker
+- excerpt-worker-docx
+- registry-rest-api
+- registry-rest-api-ext
+- registry-rest-api-public
+- registry-kafka-api
+- process-history-service-persistence
+- user-settings-service-api
+
+=== Видалення реєстрового Kafka-кластера
+
+. Вимкнення центрального Kafka-operator
++
+Вимкніть strimzi-cluster-operator у просторі імен kafka-operator, зменшивши кількість под у відповідному Deployment до 0.
+
+. Вимкнення kafka-schema-registry та kafka-connect-cluster-connect
++
+Вимкніть kafka-schema-registry та kafka-connect-cluster-connect, зменшивши кількість под у відповідних Deployment до 0.
+
+. Збереження конфігурації
++
+Експортуйте поточну конфігурацію kafka-cluster з Kafka ресурсу, що знаходиться у просторі імен реєстру та видаліть із конфігурації параметри наступні параметри:
+
+- metadata.uid
+- metadata.creationTimestamp
+- metadata.generation
+- metadata.managedFields
+- status
+
+. Видалення Kafka-кластера
++
+Видаліть існуючий ресурс Kafka kafka-cluster.
+
+. Видалення дисків Kafka-кластера
++
+Видаліть PVC data-0-kafka-cluster-kafka-0 для відповідних под kafka-cluster-kafka та data-kafka-cluster-zookeeper-0 для відповідних под kafka-zookeeper.
++
+_Кількість дисків залежить від кількості встановлених реплік Kafka для цільового реєстру._
+
+. Видалення Kafka-топіків
++
+Видаліть усі KafkaTopic, використовуючи наступну команду:
++
+[source,bash]
+----
+kubectl delete kafkatopic --all -n <registry-name>
+----
+
+=== Відновлення реєстрового Kafka-кластера
+
+. Створення кластера зі збереженого конфігураційного файлу
++
+Створіть ресурс Kafka kafka-cluster реєстру на основі раніше збереженого конфігураційного файлу.
+
+. Увімкнення центрального Kafka-operator
++
+Увімкніть strimzi-cluster-operator у просторі імен kafka-operator, збільшивши кількість под у відповідному Deployment до 1.
+
+. Очікування готовності ресурсів
++
+Переконайтесь, що наступні створені ресурси StatefulSet (та їхні відповідні PVC) і Deployment готові:
+
+ kafka-cluster-zookeeper
+ kafka-cluster-kafka
+ kafka-cluster-entity-operator
++
+Перевірте відсутність помилок у відповідних подах та в kafka-connect-cluster-connect.
+
+. Увімкнення реєстрового kafka-schema-registry
++
+Увімкніть kafka-schema-registry, збільшивши кількість под у відповідному Deployment до 1. Зачекайте 5 хвилин для завершення ініціалізації.
+
+=== Увімкнення залежних від Kafka-кластера компонентів реєстру
+
+. Оновлення параметру у rest-api-properties
++
+В ConfigMap rest-api-properties реєстру, змініть значення у блоці data.config.yaml.data-platform.kafka.request-reply.timeout-in-seconds на 300
++
+image:admin:infral2/kafka-cluster-1.png[]
+
+. Процес ввімкнення залежних від Kafka-кластера компонентів
++
+Увімкніть компоненти з пункту 2, збільшивши кількість под у відповідному Deployment до 1. Дочекайтесь підняття даних компонентів та перевірте відсутність помилок в них. Якщо всі компоненти успішно запустились - збільшіть кількість под до того значення, що стояло перед початком робіт.
+
+. Відновлення параметру у rest-api-properties
++
+В ConfigMap rest-api-properties реєстру, змініть значення у блоці data.config.yaml.data-platform.kafka.request-reply.timeout-in-seconds на 60.
+
+=== Опціонально: Відновлення параметра KafkaTopic partitions
+
+Якщо в даному реєстрі були застосовані спеціальні значення параметра partitions для KafkaTopic - необхідно повернути це значення. Наприклад, для реєстрів МСЕК/EDU для KafkaTopic bpm-history-process та bpm-history-task необхідно встановити значення 15 в параметрі .spec.partitions
+
+image:admin:infral2/kafka-cluster-2.png[]
+
+Для перевірки змін - скористайтесь сервісом KafkaDrop (за шляхом OKD-console → Routes → kafka-ui) та перевірте відповідні KafkaTopic. За відсутності KafkaDrop - перейдіть до поди kafka-cluster-kafka-0 та виконайте наступну команду
+
+[source,bash]
+----
+./bin/kafka-topics.sh --bootstrap-server kafka-cluster-kafka-bootstrap:9092 --describe --topic <topic-name>
+----
+
+де <topic-name> - назва потрібного KafkaTopic.
+
+Приклад виконання зображено на рисунку нижче.
+
+image:admin:infral2/kafka-cluster-3.png[]
+
+=== Відкриття зовнішнього доступу до реєстру
+
+Переконайтесь, що доступ до реєстру відкритий для кабінетів та для відповідних Routes, котрі використовується зовнішніми системами, а також відновлено доступ до центральних пайплайнів Jenkins реєстру, таких як MASTER-Build-<registry-name>.
+
+== Перевірка застосування змін
+
+Щоб перевірити, чи відновлення Kafka-кластера було успішне - проведіть наступні дії:
+
+. Перевірте відсутність помилок в подах реєстру та центрального Kafka-оператора.
+
+. Перевірте наявність реєстрових KafkaTopics - після створення Kafka-кластеру та перезапуску залежних компонентів повинні створитись нові KafkaTopic's.
+
+
+
+
+
+

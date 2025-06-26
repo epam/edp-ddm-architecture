@@ -1,0 +1,43 @@
+= Розв'язання проблем з підсистемою логування (EFK)
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+Можливі проблеми:
+
+1."Зависання" подів elasticsearch та/або kibana
+
+Вирішення - перезавантаження под elasticsearch, kibana, logging-operator у проєкті openshift-logging. elasticsearch-operator у проєкті openshift-operators-redhat
+
+2.Перехід elasticsearch у read only стан.
+
+Як правило, трапляється при переповненні дисків elasticsearch
+
+Вирішення:
+
+- очистити диски шляхом видалення старих індексів. Для цього у терміналі любої поди elasticsearch виконати наступні команди:
+
+1) Пошук індексів:
+
+[source,bash]
+----
+curl -XGET -s --cacert /etc/elasticsearch/secret/admin-ca --cert /etc/elasticsearch/secret/admin-cert --key /etc/elasticsearch/secret/admin-key -H "Content-Type: application/json" https://localhost:9200/_cat/indices?h=h,s,i,id,p,r,dc,dd,ss,creation.date.string
+----
+
+2) Видалення індексу:
+
+[source,bash]
+----
+curl -s --cacert /etc/elasticsearch/secret/admin-ca --cert /etc/elasticsearch/secret/admin-cert --key /etc/elasticsearch/secret/admin-key -XDELETE -H "Content-Type: application/json" https://localhost:9200/<назва індексу>
+----
+
+Також цією командою можна видалити індекс користувача Kibana (за потреби).
+
+[WARNING]
+====
+Не виконувати видалення останього за часом індексу.
+====
+3)команда виведення elasticsearch з read only стану:
+
+[source,bash]
+----
+curl -s --cacert /etc/elasticsearch/secret/admin-ca --cert /etc/elasticsearch/secret/admin-cert --key /etc/elasticsearch/secret/admin-key -XPUT -H "Content-Type: application/json" https://localhost:9200/_all/_settings -d '{"index.blocks.read_only_allow_delete": null}'
+----
