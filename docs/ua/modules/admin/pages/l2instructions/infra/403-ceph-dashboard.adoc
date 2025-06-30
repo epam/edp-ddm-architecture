@@ -1,0 +1,57 @@
+= 403 помилка в CEPH Dashboard
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+Якщо ви бачите наступну помилку:
+
+image:admin:infral2/403-ceph-dashboard.png[]
+
+Є декілька варіантів її виправити:
+
+. Для нового оточення і нового дашборду
++
+У под rook-ceph-operator виконайте наступні команди:
++
+[source,bash]
+----
+//Подивитися список Object Store
+radosgw-admin --conf=/var/lib/rook/openshift-storage/openshift-storage.config realm list
+
+//Подивитися список користувачів dashboard і dashboard-admin
+radosgw-admin --conf=/var/lib/rook/openshift-storage/openshift-storage.config user list --rgw-realm <реалми із списку вище> | grep dashboard
+----
++
+Якщо таких користувачів немає, то створіть їх наступними командами в *кожному* Object Store:
++
+[source,bash]
+----
+radosgw-admin --conf=/var/lib/rook/openshift-storage/openshift-storage.config user create --display-name="dashboard-admin" --uid=dashboard-admin
+radosgw-admin --conf=/var/lib/rook/openshift-storage/openshift-storage.config user create --display-name="dashboard" --uid=dashboard
+----
++
+Після чого перезапустіть поди RGW, operator, MGR
++
+Якщо користувачі є, то скористайтеся варіантом 2
+
+. Якщо користувачі dashboard є:
++
+Зробіть логін в кластер та виконайте команду в проекті openshift-storage в ресурсі *storagecluster ocs-storagecluster* для того, щоб виключити Ceph Dashboard:
++
+[source,yaml]
+----
+cephDashboard:
+  enable: false
+  ssl: false
+----
++
+Після цього дочекайтеся видалення сервісу *rook-ceph-mgr-dashboard*
++
+Потім увімкніть його:
++
+[source,yaml]
+----
+cephDashboard:
+  enable: true
+  ssl: false
+----
++
+Після чого перезапустіть поди *rook-ceph-mds-ocs, rook-ceph-mgr, rook-ceph-rgw і rook-ceph-mon*
