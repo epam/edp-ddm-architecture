@@ -1,0 +1,35 @@
+Index: src/com/epam/digital/data/platform/pipelines/stages/impl/dataplatform/DeployProjects.groovy
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/com/epam/digital/data/platform/pipelines/stages/impl/dataplatform/DeployProjects.groovy b/src/com/epam/digital/data/platform/pipelines/stages/impl/dataplatform/DeployProjects.groovy
+--- a/src/com/epam/digital/data/platform/pipelines/stages/impl/dataplatform/DeployProjects.groovy	(revision 98df646968a9dd8a3b9cc42e505a5528099b0e17)
++++ b/src/com/epam/digital/data/platform/pipelines/stages/impl/dataplatform/DeployProjects.groovy	(revision 11e1453058c6c4d364cdb61d0d3ff59abbf42fbb)
+@@ -82,7 +82,7 @@
+                         context.logger.info("Parameters: ${parametersMap}")
+                     }
+ 
+-                    int replicas
++                    int replicas, livenessProbeFailureThreshold
+                     String fileParameters = ""
+                     String dataComponentNameNormalized = dataComponent.name.replace('-','').replace('api',"Api")
+                     if (platformValuesPath.global.registry?."${dataComponentNameNormalized}") {
+@@ -92,11 +92,17 @@
+                         context.script.writeYaml file: componentValuesFile, data: registryProperties, overwrite: true
+                         fileParameters = "-f ${componentValuesFile}"
+                         replicas = platformValuesPath.global.registry?."${dataComponentNameNormalized}"?.replicas?.toInteger()
++                        livenessProbeFailureThreshold = platformValuesPath.global.registry?."${dataComponentNameNormalized}"?.livenessProbe?.failureThreshold?.toInteger()
+                     }
+                     context.script.dir(dataComponent.getWorkDir()) {
+                         Helm.upgrade(context, dataComponent.fullName, dataComponent.DEPLOY_TEMPLATES_PATH, parametersMap,
+                                 fileParameters, context.namespace)
+                         context.script.sleep(30)
++                        if(livenessProbeFailureThreshold) {
++                            context.script.sh("""
++                                oc patch deployment registry-${dataComponent.name}-deployment --type=json -p='[{"op":"replace","path":"/spec/template/spec/containers/0/livenessProbe/failureThreshold","value":${livenessProbeFailureThreshold}}]'
++                            """)
++                        }
+                         context.script.sh("""
+                             oc delete hpa registry-${dataComponent.name} --ignore-not-found
+                             oc scale deployment registry-${dataComponent.name}-deployment --replicas=${replicas ?: 1}""")

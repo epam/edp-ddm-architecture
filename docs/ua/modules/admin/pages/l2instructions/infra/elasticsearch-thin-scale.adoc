@@ -1,0 +1,80 @@
+= Розширення дисків Elasticsearch у storage class "thin" vSphere
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+[WARNING]
+====
+Цю інструкцію **не можна використовувати**, якщо встановлено політику _*ZeroRedundancy*_
+(`spec.logStore.elasticsearch.redundancyPolicy: ZeroRedundancy`)
+====
+
+Якщо потрібно збільшити диски Elasticsearch, що використовують `storage class: thin`, то звичайне оновлення параметра `spec.logStore.elasticsearch.storage.size` у конфігурації ресурсу `ClusterLogging.instance` **не дасть результату**, оскільки цей тип сховища не підтримує динамічне розширення.
+
+Можна спостерігати помилку в параметрі `status.logStore.elasticsearchStatus[].cluster.clusterConditions[].message:` "Resizing the storage for a custom resource is not supported".
+
+*Процедура розширення:*
+
+. Перейдіть до простору імен `openshift-logging`.
+. Внесіть зміни у YAML-конфігурацію `ClusterLogging.instance`, задавши новий розмір диска у параметрі `spec.logStore.elasticsearch.storage.size`.
++
+*Приклад конфігурації:*
++
+[source, yaml]
+----
+spec:
+  logStore:
+    elasticsearch:
+      nodeCount: 3
+      nodeSelector:
+        platform/logging: 'true'
+      redundancyPolicy: MultipleRedundancy
+      storage:
+        size: 600G
+----
+
+. Перейдіть до розділу *PVC* та **видаліть диск з першим індексом**, наприклад:
++
+`elasticsearch-elasticsearch-cdm-esdk45rm-1`
++
+. Перейдіть до списку Pod-ів та **видаліть поду**, що відповідає видаленому PVC, наприклад:
++
+`elasticsearch-cdm-esdk45rm-1-556d99bc96-7vvsr`
++
+TIP: Перевірити правильність назви поди можна у її вкладці *Details → Volumes*:
+- Name: `elasticsearch-storage`
+- Type: ім’я видаленого PVC (наприклад: `elasticsearch-elasticsearch-cdm-esdk45rm-1`)
++
+. Поверніться до розділу *PVC* та перевірте наявність нового PVC з індексом `-1`.
+
+. Дочекайтесь реплікації даних — новий диск має вирівнятися за розміром із рештою (вони мають бути приблизно однаковими). Наприклад:
++
+image:admin:infral2/elasticsearch-thin.png[]
+
+. Повторіть кроки **3–6** для дисків з індексами `-2` та `-3`.
+
+[WARNING]
+====
+Якщо після розширення дисків під час виконання наступної команди в будь-якому pod Elasticsearch:
+
+[source, bash]
+----
+curl -XGET -s \
+  --cacert /etc/elasticsearch/secret/admin-ca \
+  --cert /etc/elasticsearch/secret/admin-cert \
+  --key /etc/elasticsearch/secret/admin-key \
+  -H "Content-Type: application/json" \
+  https://localhost:9200/_cat/indices?h=h,s,i,id,p,r,dc,dd,ss,creation.date.string
+----
+
+ви побачите індекси у стані `RED`, їх потрібно видалити вручну:
+
+[source, bash]
+----
+curl -s \
+  --cacert /etc/elasticsearch/secret/admin-ca \
+  --cert /etc/elasticsearch/secret/admin-cert \
+  --key /etc/elasticsearch/secret/admin-key \
+  -XDELETE \
+  -H "Content-Type: application/json" \
+  https://localhost:9200/<назва_індексу>
+----
+====
