@@ -1,0 +1,38 @@
+= Заповнений диск registry-regulation-management
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+Якщо Ви бачите в реєстрі аномальне заповнення диску registry-regulation-management-pvc (Openshift → Storage → PersistentVolumeClaims → registry-regulation-management-pvc), то можете їх очистити шляхом видалення неактуальних тимчасових БД:
+
+. Підключитись до operational-instance (Openshift → Workloads → Pods → operational-instance → Terminal) та отримати актуальні тимчасові БД:
++
+[source,bash]
+----
+psql
+
+SELECT datname FROM pg_database WHERE datname LIKE '%registry_dev%' ORDER BY datname ASC;
+----
++
+В результаті Ви отримаєте приблизний результат:
++
+image:admin:workwithdisksl2/reg-regul-data-1.png[]
+
+. Запишіть номери, які Ви отримали у попередньому кроці.
+
+. Під'єднайтесь до registry-regulation-management-deployment (Openshift → Workloads → Pods → registry-regulation-management-deployment → Terminal) та видалити директорії, що не будуть використовуватися, за шляхом `/var/lib/repos-data` :
++
+[WARNING]
+====
+Директорія *master* повинна залишитись без змін. Не прибирайте вираз *master* з команди нижче на видалення директорій.
+====
++
+В цьому виразі (прикладі) 30470|30581|30701 - це номери директорій, які Ви збираєтесь залишити. Номери директорій потрібно вказати, розділивши їх символом "|".
++
+[source,bash]
+----
+cd /var/lib/repos-data
+ls -d */ | grep -v -E "(30470|30581|30701|master)" | xargs -d '\n' rm -rf
+----
+
+. Зачекайте кілька хвилин та перевірте об'єм даних registry-regulation-management-pvc (Openshift → Storage → PersistentVolumeClaims → registry-regulation-management-pvc):
++
+image:admin:workwithdisksl2/reg-regul-data-2.png[]
