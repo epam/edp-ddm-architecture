@@ -1,0 +1,45 @@
+= Очищення бази даних Keycloak
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+При роботі Keycloak оператора створюються зайві записи в таблицях authenticator_config_entry та authenticator_config в базі даних keycloak-postgresql в просторі імен user-management.
+
+Для доступу до бази даних:
+
+- Скопіюйте значення з secret keycloak-postgresql;
+- Зайдіть в термінал поди keycloak-postgresql-0;
+- Виконайте вхід командою: `psql -U postgres keycloak`.
+
+Для очищення таблиць потрібно:
+
+. Перевірити кількість записів.
++
+[source,bash]
+----
+select count(*) from authenticator_config_entry e where not exists (select 1 from authentication_execution a where e.authenticator_id = a.auth_config);
+select count(*) from authenticator_config e where not exists (select 1 from authentication_execution a where e.id  = a.auth_config);
+----
++
+Якщо кількість більше ніж  100 000, рекомендується провести очищення.
+
+. Зробити бекапування наявних таблиць.
++
+[source,bash]
+----
+create table authenticator_config_backup as table authenticator_config;create table authenticator_config_entry_backup as table authenticator_config_entry;
+----
+
+. Видалити записи, для яких немає посилання на execution.
++
+[source,bash]
+----
+delete from authenticator_config_entry e where not exists (select 1 from authentication_execution a where e.authenticator_id = a.auth_config);
+delete from authenticator_config e where not exists (select 1 from authentication_execution a where e.id  = a.auth_config);
+----
+
+. Перевірити кількість записів.
++
+[source,bash]
+----
+select count(*) from authenticator_config_entry e where not exists (select 1 from authentication_execution a where e.authenticator_id = a.auth_config);
+select count(*) from authenticator_config e where not exists (select 1 from authentication_execution a where e.id  = a.auth_config);
+----

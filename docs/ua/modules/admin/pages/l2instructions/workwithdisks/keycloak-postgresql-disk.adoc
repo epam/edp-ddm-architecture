@@ -1,0 +1,61 @@
+= Розширення диска keycloak-postgresql
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+Якщо Вам потрібно розширити диск data-keycloak-postgresql-0, існує два підходи:
+
+. Expand через OKD.
+
+. Зміна значення в коді (у випадку, якщо *cluster-mgmt* пайплайн впав з помилкою на етапі розгортання чарту *keycloak-postgresql* через неможливість внесення змін до *StatefulSet keycloak-postgresql* або якщо значення розміру диска в helm чарті менше, ніж у наявного).
+
+== Expand через OKD
+
+Для цього перейдіть в Openshift → Project: user-management → Storage → PersistentVolumeClaims → data-keycloak-postgresql-0.
+
+В меню буде Expand PVC:
+image:admin:workwithdisksl2/keycloak-postgresql-disk-1.png[]
+
+Де можна буде вказати розмір і зберегти його, а через деякий час диск автоматично розшириться.
+image:admin:workwithdisksl2/keycloak-postgresql-disk-2.png[]
+
+== Зміна значення розміру диска через код
+
+[TIP]
+====
+Використовувати у випадку, якщо cluster-mgmt пайплайн впав з помилкою на етапі розгортання чарту keycloak-postgresql через неможливість внесення змін до StatefulSet keycloak-postgresql або якщо значення розміру диска в helm чарті менше, ніж у наявного.
+====
+
+. Перевірити наявність backup компоненту user-management. У разі відсутності - створити новий.
+
+. В ресурсі *StatefulSet keycloak* зменшіть кількість *под до 0* та дочекайтесь застосування змін.
++
+image:admin:workwithdisksl2/keycloak-postgresql-disk-3.png[]
++
+image:admin:workwithdisksl2/keycloak-postgresql-disk-4.png[]
+
+. Видаліть StatefulSet keycloak-postgresql.
++
+image:admin:workwithdisksl2/keycloak-postgresql-disk-5.png[]
++
+image:admin:workwithdisksl2/keycloak-postgresql-disk-6.png[]
+
+. В центральному Gerrit перейдіть до репозиторію components/infra/user-management та створіть нову гілку з коду ревізії робочої гілки компоненту (знайти необхідне значення можна в репозиторії cluster-mgmt в master гілці у файлі properties/cluster-mgmt.yaml в розділі releases/[name: user-management]/labels/branch/<робоча гілка компоненту>).
++
+image:admin:workwithdisksl2/keycloak-postgresql-disk-7.png[]
++
+image:admin:workwithdisksl2/keycloak-postgresql-disk-8.png[]
+
+. Внесіть зміни до необхідного розміру диску у файлі deploy-templates/keycloak-postgresql/values.yaml в розділі primary/persistence/size та підтвердіть злиття commit.
++
+image:admin:workwithdisksl2/keycloak-postgresql-disk-9.png[]
+
+. В центральному Gerrit перейдіть до репозиторію cluster-mgmt в master гілку та змініть гілку компоненту user-management на новостворену у файлі properties/cluster-mgmt.yaml в розділі releases/[name: user-management]/labels/branch/<робоча гілка компоненту> та підтвердіть злиття commit та дочекайтесь закінчення збірки пайплайну *cluster-mgmt*.
++
+image:admin:workwithdisksl2/keycloak-postgresql-disk-10.png[]
+
+. Перевірте наявність нового *StatefulSet keycloak-postgresql* та попередньої кількості под ресурсу *StatefulSet keycloak*.
++
+image:admin:workwithdisksl2/keycloak-postgresql-disk-11.png[]
+
+. Перевірте, що PVC *data-keycloak-postgresql-0* має вказаний Вами розмір.
++
+image:admin:workwithdisksl2/keycloak-postgresql-disk-12.png[]

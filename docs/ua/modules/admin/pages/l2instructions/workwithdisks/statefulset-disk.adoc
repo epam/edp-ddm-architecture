@@ -1,0 +1,102 @@
+= Розширення дисків компонентів з statefulSets (redis-sentinel, kafka-cluster-kafka, redash-postgresql)
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+== Redis-sentinel
+
+. Розширення дисків у консолі OKD.
++
+У відповідному проекті: *Openshift → Storage → PersistentVolumeClaims* зробіть Expand PVC для дисків redis-sentinel-data-rfr-redis-sentinel-0 до необхідного значення.
++
+image:admin:workwithdisksl2/statefulset-disk-1.png[]
+
+. Внесення змін в конфігурацію *RedisFailovers* redis-sentinel.
++
+Перейдіть за наступним шляхом *Openshift → Home → API Explorer → RedisFailovers → Instances → redis-sentinel → YAML* , щоб внести зміну в параметр `storage`:
++
+[source,yaml]
+----
+storage:
+  keepAfterDeletion: true
+  persistentVolumeClaim:
+    metadata:
+      name: redis-sentinel-data
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      resources:
+        requests:
+          storage: 5Gi
+----
+
+. Видалення поточного statefulSet rfr-redis-sentinel.
++
+Після внесення всіх змін видаліть поточний *statefulSet* rfr-redis-sentinel в просторі імен відповідного реєстру. Ви можете зробити це через інтерфейс OpenShift або використовуючи команду `oc` в терміналі:
++
+[source,bash]
+----
+oc delete statefulset rfr-redis-sentinel -n <namespace>
+----
++
+Після видалення старого statefulSet, новий буде автоматично створений з новим розміром диска. Переконайтеся, що новий statefulSet був успішно створений та що сервіс redis працює коректно.
+
+== Kafka-cluster-kafka
+
+. Розширення дисків в центральному gerrit.
++
+В центральному gerrit зробіть зміни в репозиторій реєстру в файл deploy-templates/values.yaml в блок kafkaOperator:
++
+[source,yaml]
+----
+    kafkaOperator:
+        storage:
+            kafka:
+                size: <required_size>
+----
+
+. Внесення змін в конфігурацію ресурсу Kafka kafka-cluster.
++
+Перейдіть за наступним шляхом *Openshift → Home → API Explorer → Kafka → kafka-cluster→ YAML*, щоб внести зміну в параметр `storage`:
++
+[source,yaml]
+----
+    storage:
+      type: jbod
+      volumes:
+        - class: ocs-storagecluster-ceph-rbd
+          deleteClaim: false
+          id: 0
+          size: <required_size>
+          type: persistent-claim
+----
+
+. Видалення поточного statefulSet kafka-cluster-kafka.
++
+Після внесення всіх змін видаліть поточний statefulSet kafka-cluster-kafka в просторі імен відповідного реєстру. Ви можете зробити це через інтерфейс OpenShift або використовуючи команду `oc` в терміналі:
++
+[source,bash]
+----
+oc delete statefulset kafka-cluster-kafka -n <namespace>
+----
++
+Після видалення старого statefulSet, новий буде автоматично створений з новим розміром диска. Переконайтеся, що новий statefulSet був успішно створений та що сервіс kafka працює коректно.
+
+== Redash-admin-postgresql, Redash-viewer-postgresql
+
+. Розширення дисків у консолі OKD
++
+У відповідному проекті: *Openshift → Storage → PersistentVolumeClaims* зробіть Expand PVC для дисків *Redash-admin-postgresql, Redash-viewer-postgresql*.
+
+. У файлі *values.gotmpl* відповідного реєстру додайте такий блок:
++
+[source,yaml]
+----
+postgresql:
+    persistence:
+        size: <required_size>
+----
+
+. Зробити видалення у відповідному проєкті statefulSet *Redash-admin-postgresql, Redash-viewer-postgresql*.
+
+. Запустити master-build відповідного реєстру у центральному Jenkins Платформи.
+
+NOTE: Розширення дисків Redash-admin-postgresql, Redash-viewer-postgresql можна проводити як разом (для цих компонентів), так і окремо.

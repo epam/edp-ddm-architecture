@@ -1,0 +1,126 @@
+= Погіршення швидкодії запитів у кабінетах користувачів при накопиченому великому обсягу даних в історичних таблицях
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+У процесі використання реєстрів із великим обсягом даних можуть виникати ситуації уповільнення запитів до історичних таблиць (bpm_history_process та bpm_history_task).
+
+Для пришвидшення запитів до історичних таблиць рекомендовано виконати їх індексацію.
+
+Застосування індексів можна виконати:
+
+. *За допомогою pgAdmin:*
++
+У pgAdmin відкрийте схему "public" та оберіть базу "process_history".
++
+Натисніть праву кнопку миші та виберіть «Query Tool» у контекстному меню.
+
+. *За допомогою терміналу  (у промисловому середовищі):*
++
+Виконання наступних дій можливе лише за наявності прав Адміністратора Платформи.
++
+Відкрийте термінал поди "operational-instance".
++
+Треба увійти до бази даних "process_history" під користувачем "postgres", виконавши команду:
++
+`sql -U postgres process_history`
+
+Виконайте наступні кроки:
+
+[WARNING]
+====
+*Виконання цих кроків потребує вікно обслуговування реєстру.*
+
+Для створення або видалення індексів у промисловому середовищі рекомендується використовувати атрибут CONCURRENTLY.
+
+Він дозволяє уникнути блокування бази даних, хоча операція може тривати довше.
+Запити з CONCURRENTLY потрібно виконувати окремо (один за одним).
+====
+
+. Видалити два наявні індекси, а саме:
++
+[source,sql]
+----
+DROP INDEX CONCURRENTLY IF EXISTS public.bpm_history_process__start_user_id__state__start_time__i;
+----
++
+[source,sql]
+----
+DROP INDEX CONCURRENTLY IF EXISTS public.bpm_history_process__start_user_id__state__end_time__i;
+----
+
+. Створити нові:
++
+[source,sql]
+----
+CREATE INDEX CONCURRENTLY IF NOT EXISTS bpm_hp__start_user_id__state__i
+    ON public.bpm_history_process USING btree
+    (start_user_id COLLATE pg_catalog."default" ASC NULLS LAST, state COLLATE pg_catalog."default" ASC NULLS LAST)
+    TABLESPACE pg_default;
+----
++
+[source,sql]
+----
+CREATE INDEX CONCURRENTLY IF NOT EXISTS bpm_hp__start_user_id__state_active__start_time__i
+    ON public.bpm_history_process USING btree
+    (start_user_id ASC, start_time ASC)
+    WHERE super_process_instance_id IS NULL AND state IN ('ACTIVE', 'SUSPENDED');
+----
++
+[source,sql]
+----
+CREATE INDEX CONCURRENTLY IF NOT EXISTS bpm_hp__start_user_id__state_active__end_time__i
+    ON public.bpm_history_process USING btree
+    (start_user_id ASC, end_time DESC)
+    WHERE super_process_instance_id IS NULL AND state IN ('ACTIVE', 'SUSPENDED');
+----
++
+[source,sql]
+----
+CREATE INDEX CONCURRENTLY IF NOT EXISTS bpm_hp__start_user_id__state_completed__start_time__i
+    ON public.bpm_history_process USING btree
+    (start_user_id ASC, start_time ASC)
+    WHERE super_process_instance_id IS NULL AND state IN ('EXTERNALLY_TERMINATED', 'COMPLETED');
+----
++
+[source,sql]
+----
+CREATE INDEX CONCURRENTLY IF NOT EXISTS bpm_hp__start_user_id__state_completed__end_time__i
+    ON public.bpm_history_process USING btree
+    (start_user_id ASC, end_time DESC)
+    WHERE super_process_instance_id IS NULL AND state IN ('EXTERNALLY_TERMINATED', 'COMPLETED');
+----
++
+[source,sql]
+----
+CREATE INDEX CONCURRENTLY IF NOT EXISTS bpm_ht__assignee__root_process_instance_id__i
+    ON public.bpm_history_task
+    USING btree (assignee, root_process_instance_id);
+----
+
+У результаті виконання запитів буде створено *п'ять* нових індексів для таблиці bpm_history_process та *один* індекс для таблиці bpm_history_task.
+
+Перевірити наявність індексів можна:
+
+. За допомогою pgAdmin:
++
+image:admin:dbal2/add-index-tables-1.png[]
++
+image:admin:dbal2/add-index-tables-2.png[]
+
+. За допомогою терміналу:
++
+[source,sql]
+----
+SELECT indexname FROM pg_indexes WHERE tablename = 'bpm_history_process' OR tablename = 'bpm_history_task';
+----
+
+Також потрібно оновити статистику бази даних, яку використовує планувальник запитів:
+
+[source,sql]
+----
+ANALYZE bpm_history_process;
+----
+
+[source,sql]
+----
+ANALYZE bpm_history_task;
+----

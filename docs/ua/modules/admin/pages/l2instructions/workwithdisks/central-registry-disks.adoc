@@ -1,0 +1,76 @@
+= Принципи розширення дисків центральних компонентів та компонентів реєстра
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+== Центральні компоненти
+
+[TIP]
+====
+Буде розглянуто на прикладі control-plane-nexus
+====
+
+Зміни відбуваються в гілку репозиторію nexus, яка вказана в репозиторії cluster-mgmt по шляху properties/cluster-mgmt.yaml (гілка master).
+
+В файлі deploy-templates/values.gotmpl знаходиться конфігурація розміру диска центрального nexus, де в блоці size можна вказати нове значення.
+
+[source,yaml]
+----
+nexus:
+  dockerRegistry:
+    dockerhub:
+      auth:
+        username: {{ env "dockerhub_username" }}
+        password: {{ env "dockerhub_password" }}
+  storage:
+    size: 200Gi - <target value>
+----
+Після застосування змін, в центральному jenkins пройде build cluster-mgmt, після чого в проєкт control-plane-nexus в *Storage → PersistentVolumeClaims* можна буде перевірити новий розмір диска.
+
+== Компоненти реєстра
+
+Для компонентів реєстра зміни в коді робляться в файлах - deploy-templates/values.gotmpl або deploy-templates/values.yaml
+
+[WARNING]
+====
+Зміни відбуваються в *master* гілку репозиторію реєстра.
+====
+
+. Розширення диска gerrit (в deploy-templates/values.gotmpl)
++
+[source,yaml]
+----
+gerrit:
+  name: gerrit
+  storage:
+    size: 15Gi - <target value>
+----
+
+. Розширення диска jenkins (в deploy-templates/values.gotmpl)
++
+[source,yaml]
+----
+jenkins:
+  storage:
+    size: 15Gi - <target value>
+----
+
+. Розширення диска nexus реєстра (в deploy-templates/values.gotmpl)
++
+[source,yaml]
+----
+nexus:
+  storage:
+    size: 150Gi - <target value>
+    class: ocs-storagecluster-ceph-rbd
+  edpMavenRepoUrl: {{ env "edpMavenRepoUrl" }}
+----
+
+. Розширення диска registry-regulation(в deploy-templates/values.gotmpl)
++
+[source,yaml]
+----
+registryRegulationManagement:
+  volume:
+    size: 10Gi - <target value>
+----
+
+Після застосування змін, в jenkins реєстра пройде build, після чого в проєкт реєстра в *Storage → PersistentVolumeClaims* можна буде перевірити розмір дисків.
