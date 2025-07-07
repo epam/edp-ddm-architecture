@@ -1,0 +1,47 @@
+= Зняти lock з бази даних Postgres
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+. Перевірте, що в под operational-instance чи є lock.
++
+[source,bash]
+----
+psql -U postgres
+\c registry
+select * from ddm_db_changelog_lock;
+----
+
+. Якщо lock зі значенням true, виконайте наступну команду:
++
+[source,sql]
+----
+UPDATE ddm_db_changelog_lock SET LOCKED=FALSE, LOCKGRANTED=null, LOCKEDBY=null where ID=1;
+
+або
+
+DELETE FROM ddm_db_changelog_lock;
+----
+
+. Перевірити, чи залишився lock командою з п-1.
+
+[WARNING]
+====
+*Блокування може стояти не тільки на БД registry.*
+
+Наприклад у базі даних *registry_template*.
+====
+
+Також якщо Ви бачите наступну помилку в operational-instance:
+
+`FATAL: lock file "postmaster.pid" is empty`
+
+Треба зайти в под *operational-instance* і видалити файл postmaster.pid:
+
+[source,bash]
+----
+psql -U postgres
+\c registry
+select * from ddm_db_changelog_lock;
+----
+
+Після цього перезапустити под *operational-instance*.
+

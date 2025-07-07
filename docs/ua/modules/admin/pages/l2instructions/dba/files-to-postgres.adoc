@@ -1,0 +1,41 @@
+= Завантаження великих CSV файлів в Postgres
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+. Для роботи з великим файлом треба спочатку його скопіювати в под *operational-instance* відповідного реєстру. Приклад команди:
++
+[source,bash]
+----
+kubectl cp -n <namespace> ./your_csv_file.csv operational-instance-<hash>:/pgdata/your_csv_file.csv
+----
+. Після цього перейдіть в pgadmin і зробіть вхід як користувач postgres, пароль знаходиться в secret *operational-pguser-postgres*.
++
+Змінити дані підключення можна в налаштуваннях БД:
++
+image:admin:dbal2/files-to-postgres-1.png[]
+
+. В query tool для бази registry створіть таблицю, яка відповідає структурі даних, що наявні в CSV файлі.
++
+Приклад:
++
+[source,sql]
+----
+CREATE TABLE test_doc (
+    test_doc_id TEXT,
+    test_doc_example1 TEXT,
+    test_doc_example2 VARCHAR(10),
+    PRIMARY KEY (test_doc_id)
+);
+----
+
+. Виконайте наступну команду в query tool для бази registry:
++
+[source,sql]
+----
+COPY <ім'я таблиці>
+FROM '/pgdata/your_csv_file.csv'
+DELIMITER ','
+CSV HEADER;
+----
+
+. Дочекайтесь завантаження даних.
+

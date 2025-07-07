@@ -1,0 +1,48 @@
+= Очищення data-load та тимчасових баз даних
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+Якщо відбувається аномальне заповнення диска operational-instance (Openshift → Storage → PersistentVolumeClaims → operational-instance), можна його очистити наступними способами:
+
+.  Запуск cleanup тимчасових таблиць версій кандидатів.
++
+Перевірити наявність тимчасових таблиць можна в под operational-instance реєстра:
++
+[source,sql]
+----
+SELECT datname FROM pg_database WHERE datname LIKE '%registry_dev%' ORDER BY datname ASC;
+----
++
+Приклад виводу:
++
+image:admin:dbal2/data-load-remove-1.png[]
++
+*Зафіксуйте* які бази даних *наявні* для того, щоб можна було знайти файли при очищенні в наступному пункті цієї інструкції.
++
+[WARNING]
+====
+Зверніть увагу, що відкриті версії кандидати не видаляться, актуальні версії можна знайти в *admin-portal* реєстра.
+====
++
+В Jenkins реєстра запустіть пайплайн *cleanup-of-version-candidate-db*.
++
+image:admin:dbal2/data-load-remove-2.png[]
+
+. Видалення папок data-load.
++
+Перевірити наявність папок в под *operational-instance* реєстра можна командою:
++
+[source,bash]
+----
+ls -a /pgdata
+----
++
+Приклад виводу:
++
+image:admin:dbal2/data-load-remove-3.png[]
++
+Виконайте наступну команду в под *operational-instance* реєстра для видалення папок, *але* також потрібно перевірити, що в Jenkins реєстра не виконується *Code-review пайплайн*:
++
+[source,bash]
+----
+rm -rf /pgdata/data-load-<номер_видаленої_бази>
+----
