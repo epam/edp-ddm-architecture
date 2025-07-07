@@ -1,0 +1,68 @@
+= Очищення таблиці query_results в базі даних postgres для под redash-viewer-postgresql-0
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+. Необхідно перевірити наявність вільного місця у pvc **data-redash-viewer-postgresql-0**, яке повинно бути більше втричі за зайняте. За необхідності збільшуємо.
+
+. Приєднуємося до под *redash-viewer-postgresql-0* та переходимо до вкладки термінал:
++
+[source,bash]
+----
+export PGPASSWORD=$POSTGRES_PASSWORD
+psql -Uredash
+----
++
+Після цього можна перевірити наявність та розміри необхідної таблиці query_results командою `\dt+`
++
+Приклад відповіді:
++
+[source,sql]
+----
+public | query_results             | table | redash | permanent   | heap          | 2187 MB    |
+----
+
+. Отримуємо дані по таблиці VACUUM ANALYZE:
++
+[source,sql]
+----
+vacuum ANALYZE query_results;
+----
+
+. Далі треба зробити насупний запит:
++
+[source,sql]
+----
+explain analyze select * from query_results;
+----
++
+Приклад відповіді:
++
+[source,sql]
+----
+QUERY PLAN
+-------------------------------------------------------------------------------------------------------------------
+Seq Scan on query_results  (cost=0.00..1204.19 rows=7619 width=1338) (actual time=0.048..3.422 rows=7513 loops=1)
+Planning Time: 0.243 ms
+Execution Time: 3.689 ms
+(3 rows)
+----
++
+Дані rows=7619 width=1338, де rows - це кількість рядків у таблиці, width - приблизний розмір рядка у байтах. Треба перемножити та отримуємо 97 Мб.
+
+. Запускаємо команду:
++
+[source,sql]
+----
+vacuum FULL query_results;
+----
++
+Після цього перевіряємо розмір таблиці:
++
+
+[source,sql]
+----
+\dt+ query_results
+----
+
+
+
+
