@@ -1,0 +1,139 @@
+= Налаштування локального запуску liquibase
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+Інструкція з налаштування liquibase локально для того, щоб перевіряти внесені зміни у схему локально перед злиттям у гілку.
+
+. Встановити необхідне програмне забезпечення: docker
+
+. Завантажити наступні jar:
++
+https://mvnrepository.com/artifact/org.postgresql/postgresql - останньої версії
+https://mvnrepository.com/artifact/org.liquibase/liquibase-core - версії 4.5.0
+
+. Створити контейнер з базою даних, виконавши команду в терміналі:
++
+[source,bash]
+----
+docker run --name db --rm -it -d -p 5432:5432 -e POSTGRES_PASSWORD=postgres -e POSTGRES_USER=postgres -e POSTGRES_DB=postgres postgis/postgis:15-3.3
+----
+
+. Завантажити registry-postgres репозиторій
++
+https://github.com/epam/edp-ddm-registry-postgres
++
+Закоментувати наступий рядок в `platform-db\changesets\postgres\00040_create-other-roles.sql`
++
+image:admin:dbal2/local-liquibase-1.png[]
++
+Закоментувати select запити в `platform-db\changesets\registry\00070_publication.sql`
++
+image:admin:dbal2/local-liquibase-2.png[]
++
+У файлі `platform-db.sh` замінити рядки в #DB секції на наступні:
++
+[source,bash]
+----
+export DB_NAME_OP="postgres"
+
+export DB_PASS_OP="postgres"
+
+export DB_NAME_AN="postgres"
+
+export DB_PASS_AN="postgres"
+
+export masterDBurl="jdbc:postgresql://${DB_IP}:5432"
+
+export replicaDBurl="jdbc:postgresql://${DB_IP}:5432"
+----
++
+image:admin:dbal2/local-liquibase-3.png[]
++
+Замінити текст в Dockerfile у корінній директорії проєкту на наступний:
++
+[source,bash]
+----
+FROM liquibase/liquibase:4.15.0
+USER root
+COPY platform-db ./platform-db
+WORKDIR platform-db
+RUN rm -f ./changesets/registry/00080_subscription.sql
+RUN chmod +x ./update.sh
+CMD ["/bin/bash", "./run_local.sh"]
+----
++
+Виконати наступну команду для того, щоб отримати ip адресу бази даних:
++
+[source,bash]
+----
+docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' db
+----
++
+У терміналі в директорії *edp-ddm-registry-postgres-main* виконати наступні команди, де <IP address> - це IP адреса бази даних, отримана раніше:
++
+[source,bash]
+----
+docker build -t liquibase --no-cache .
+docker run --name liquibase -e "DB_IP=172.17.0.2" -d liquibase
+----
+
+. Завантажити наступний репозиторій:
++
+https://github.com/epam/edp-ddm-data-model
++
+Додати у корінній директорії Dockerfile з наступним кодом:
++
+[source,bash]
+----
+FROM liquibase/liquibase
+USER root
+COPY ./ ./platform-db
+WORKDIR platform-db
+CMD liquibase --contexts="all,pub" --logLevel=info --databaseChangeLogTableName=ddm_db_changelog --databaseChangeLogLockTableName=ddm_db_changelog_lock --liquibaseSchemaName=public --driver=org.postgresql.Driver --changeLogFile=changelog-master-pre-deploy.xml --username=postgres --password=postgres --url=jdbc:postgresql://${DB_IP}:5432/registry --labels=!citus update
+----
++
+image:admin:dbal2/local-liquibase-4.png[]
++
+Виконати наступні команди у терміналі, де <IP address> – це IP адреса бази даних з минулих кроків:
++
+[source,bash]
+----
+docker build -t data-model --no-cache .
+docker run --name data-model -e "DB_IP=172.17.0.2" -d data-model
+----
+
+. Завантажити з nexus платформи *liquibase-ddm-ext.jar*
++
+Він знаходиться в edp-maven-group:
++
+image:admin:dbal2/local-liquibase-5.png[]
+
+. Запустити `extensions` з параметрами запуску:
++
+Для зручності можна помістити jar файли з пункту 1 та *liquibase-ddm-ext* в одну директорію та запустити *extension* з параметрами запуску, в яких необхідно замінити наступне:
++
+`{ext-version}` – версія завантаженого `liqubase-ddm-ext.jar`
++
+`{postrgres-version}` – версія postgresql.jar
++
+`{path-to-changelog}` – шлях до liquibase скриптів, зміни з яких повинні з’явитися в базі даних.
++
+[TIP]
+====
+Якщо у файлах дата моделі використовуються загальні посилання на nexus, наприклад _http://artifactory.control-plane-nexus/nexus/repository/extensions/com/epam/digital/data/platform/dbchangelog/4.5/dbchangelog-4.5.xsd_, з локальної машини не буде до них доступу. Їх необхідно замінити на специфічні посилання для платформи, які можна взяти в адміністратора платформи.
+====
++
+*Приклад команди в терміналі:*
++
+(Windows):
++
+[source,bash]
+----
+java -classpath "liquibase-ddm-ext-{ext-version}.jar;liquibase-core-4.5.0.jar" liquibase.integration.commandline.Main --contexts=pub --logLevel=DEBUG --databaseChangeLogTableName=ddm_db_changelog --databaseChangeLogLockTableName=ddm_db_changelog_lock --liquibaseSchemaName=public --driver=org.postgresql.Driver --classpath=postgresql-{postrgres-version}.jar --changeLogFile={path-to-changelog} --url=jdbc:postgresql://localhost:5432/registry --username=postgres --password=postgres update
+----
++
+(MacOS):
++
+[source,bash]
+----
+java -classpath "liquibase-ddm-ext-{ext-version}.jar:liquibase-core-4.5.0.jar" liquibase.integration.commandline.Main --contexts=pub --logLevel=DEBUG --databaseChangeLogTableName=ddm_db_changelog --databaseChangeLogLockTableName=ddm_db_changelog_lock --liquibaseSchemaName=public --driver=org.postgresql.Driver --classpath=postgresql-{postrgres-version}.jar --changeLogFile=createTables1.xml --url=jdbc:postgresql://localhost:5432/registry --username=postgres --password=postgres update
+----

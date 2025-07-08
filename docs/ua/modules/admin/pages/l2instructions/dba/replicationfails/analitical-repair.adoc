@@ -1,0 +1,39 @@
+= Перестворення реплікації в аналітичну базу даних
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+[WARNING]
+====
+Загальна рекомендація - подивитись причину непрацездатності реплікації, бо процес відновлення, який буде описаний нижче, не гарантує відновлення з усіма видами помилок.
+====
+
+. Виконується на под аналітичної репліки в базі registry.  Щоб приєднавшись до бази даних:
++
+[source,bash]
+----
+psql
+\c registry
+----
+
+. Скрипт для перестворення:
++
+[source,bash]
+----
+ALTER SUBSCRIPTION operational_sub DISABLE;
+select subconninfo from pg_subscription where subname = 'operational_sub'\gset
+SELECT 'TRUNCATE' ||' '||srrelid::regclass ||' '||'CASCADE' FROM pg_subscription_rel\gexec
+DROP SUBSCRIPTION operational_sub;
+SELECT pg_sleep(10);
+CREATE SUBSCRIPTION operational_sub CONNECTION :'subconninfo' PUBLICATION analytical_pub WITH(create_slot=false,slot_name=operational_sub);
+----
+
+. _Опціонально._ Ручні покрокові дії:
++
+1) Зупиняємо subscription: `ALTER SUBSCRIPTION operational_sub DISABLE;`
++
+2) Виконуємо `TRUNCATE` всіх таблиць користувачів, які входять в subscription: `SELECT 'TRUNCATE' ||' '||srrelid::regclass ||' '||'CASCADE' FROM pg_subscription_rel\gexec`
++
+3) Видаляємо subscription: `DROP SUBSCRIPTION operational_sub;` `SELECT pg_sleep(10);` - затримка в 10 сек необхідна, щоб postgres operator встиг створити слот для реплікації на операційному кластері.
++
+4)  Створюємо subscription: `CREATE SUBSCRIPTION operational_sub CONNECTION 'dbname=registry host=operational-primary user=postgres password=<Пароль із secret operational-pguser-postgres> port=5432' PUBLICATION analytical_pub WITH(create_slot=false,slot_name=operational_sub);`
+
+Це видалить всі дані з аналітичної бази даних та зробить синхронізацію з нуля з операційної бази даних.

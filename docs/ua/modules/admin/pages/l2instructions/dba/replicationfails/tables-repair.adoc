@@ -1,0 +1,101 @@
+= Відновлення реплікації таблиць бази даних
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+Якщо виявлена проблема з реплікацією даних в *analytical-instance*, яка може виражатися через помилки по типу:
+
+. Помилок дублікації в лог файлах репліки (под *analytical-instance*):
++
+[source,bash]
+----
+ERROR: duplicate key value violates unique constraint
+Key already exists.
+та ін.
+----
+
+. Помилок worker:
++
+[source,bash]
+----
+LOG: background worker "logical replication worker" (PID 275744) exited with exit code 1
+----
+
+. Заповнення диска (*Storage → PersistentVolumeClaims → analytical-instance*).
+
+Перевірити статус репліки можна на под operational-instance за допомогою наступної команди:
+
+[source,bash]
+----
+psql
+\c registry
+select * from pg_replication_slots;
+----
+
+Має бути один запис з полем *active* зі значенням **true** та заповненим полем active_pid.
+
+Якщо є декілька записів з полями *false*, то це може означати, що репліка не працює як очікується та не всі таблиці з публікації реплікації копіюються.
+
+image:admin:dbal2/tables-repair-1.png[]
+
+Процес з відновлення реплікації таблиць:
+
+. На *analytical-instance* виконати наступні команди, щоб подивитися, які таблиці не реплікуються:
++
+[source,bash]
+----
+psql
+\c registry
+select srrelid::regclass from pg_subscription_rel where srsubstate<>'r';
+----
+
+. Таблиці із п-1 потрібно видалити із публікації на *operational-instance*:
++
+[source,sql]
+----
+alter publication analytical_pub drop table table_name;
+----
+
+. На *analytical-instance* виконати оновлення публікації та зробити `truncate` для очищення таблиць на репліці:
++
+[source,sql]
+----
+alter subscription operational_sub refresh publication;
+TRUNCATE table_name;
+----
++
+Опціонально: У разі якщо спостерігається наступна помилка:
++
+image:admin:dbal2/tables-repair-2.png[]
++
+Видаляти з публікації пов'язану таблицю в *operational-instance* (пункт 2) та повторюємо пункт 3 для цієї таблиці. При появі нових пов'язаних таблиць - повторити ще раз.
+
+. На *operational-instance* додати таблиці із п-1 (та пункту 3 - у разі появи згаданої помилки) до публікації:
++
+[source,sql]
+----
+alter publication analytical_pub add table table_name;
+----
+
+. На *analytical-instance* виконати оновлення публікації:
++
+[source,sql]
+----
+alter subscription operational_sub refresh publication;
+----
+
+. Для перевірки того, що репліка працює правильно, виконати команди на *operational-instance*:
++
+[source,sql]
+----
+select * from pg_replication_slots;
+----
++
+Має бути один запис з полем *active* зі значенням *true* та заповненим полем *active_pid*.
+
+. Перевірка на analytical-instance:
++
+[source,sql]
+----
+select count(*) from pg_subscription_rel where srsubstate<>'r';
+----
++
+Очікуване значення - 0
