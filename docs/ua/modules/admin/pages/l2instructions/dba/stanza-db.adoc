@@ -1,0 +1,101 @@
+= Створення stanza "db" та початкового повного резервного копіювання бази даних
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+== Загальний опис
+
+Якщо початковий повний backup бази даних не створився, через що WAL безперервно росте і швидко заповнює PVC бази даних, pgBackRest вимагає наявності stanza для кожного кластера Postgres. Якщо stanza «db» відсутня, резервні копії та архівація будуть недоступні. Правильне створення stanza й full-backup бази даних розв'язує проблему та перезапускає нормальне вилучення WAL з PVC.
+
+У цій інструкції надано послідовність дій для розв'язання цієї проблеми на прикладі аналітичного інстансу PostgreSQL в реєстрі.
+
+== Виконання
+
+=== Під'єднання до інстансу бази даних реєстру
+
+Під'єднайтесь до аналітичного інстансу бази даних. Зробити це можна двома шляхами:
+
+. Через інтерфейс OKD: Workloads (Project: <registry-name>) → Pods → analytical-instance-<hash>-0 → Terminal
+
+. Через oc-cli в UNIX-подібній OC (необхідний попередній вхід):
++
+[source,bash]
+----
+oc project <registry-namespace> && oc rsh $(oc get pods --no-headers | grep analytical-instance | awk '{print $1}')
+----
+
+=== Перевірка наявності та створення stanza "db"
+
+. Перевірка наявності stanza "db"
++
+В терміналі бази даних виконайте наступну команду:
++
+[source,bash]
+----
+pgbackrest --stanza=db check
+----
++
+Якщо stanza "db" існує - команда завершиться успішно (код 0) без виведення відповіді.
++
+Якщо команда виведе наступну відповідь - необхідно створити stanza "db":
++
+[source,bash]
+----
+ERROR: [055]: unable to load info file '/postgres-backup/<registry-namespace>/analytical/archive/db/archive.info' or '/postgres-backup/<registry-namespace>/analytical/archive/db/archive.info.copy':
+       FileMissingError: unable to open missing file '/postgres-backup/<registry-namespace>/analytical/archive/db/archive.info' for read
+       FileMissingError: unable to open missing file '/postgres-backup/<registry-namespace>/analytical/archive/db/archive.info.copy' for read
+       HINT: archive.info cannot be opened but is required to push/get WAL segments.
+       HINT: is archive_command configured correctly in postgresql.conf?
+       HINT: has a stanza-create been performed?
+       HINT: use --no-archive-check to disable archive checks during backup if you have an alternate archiving scheme.
+----
+
+. Створення stanza "db"
++
+В терміналі бази даних виконайте наступну команду - команда завершиться успішно (код 0) без виведення відповіді:
++
+[source,bash]
+----
+pgbackrest --stanza=db stanza-create
+----
++
+Через кілька хвилин повторіть команду з пункта 1. Якщо з'являється помилка:
++
+[source,bash]
+----
+ERROR: [082]: WAL segment 0000000A00000002000000A3 was not archived before the 60000ms timeout
+       HINT: check the archive_command to ensure that all options are correct (especially --stanza).
+       HINT: check the PostgreSQL server log for errors.
+       HINT: run the 'start' command if the stanza was previously stopped.
+----
++
+Спробуйте виконати наступну команду та зачекайте ще кілька хвилин:
++
+[source,bash]
+----
+pgbackrest --stanza=db start
+----
+
+=== Виконання повного резервного копіювання
+
+Якщо команда з пункту 1 підрозділу 2.2 завершується успішно (код 0) без виведення відповіді, то виконайте наступну команду:
+
+[source,bash]
+----
+pgbackrest --stanza=db --type=full backup
+----
+
+Якщо з'являється наступна помилка - інший процес pgBackRest уже активний; зачекайте та повторіть спробу:
+
+[source,bash]
+----
+ERROR: [050]: unable to acquire lock on file '/tmp/pgbackrest/db-backup.lock': Resource temporarily unavailable
+       HINT: is another pgBackRest process running?
+----
+
+Успішне виконання завершиться (код 0) без виведення відповіді.
+
+=== Перевірка результату
+
+Після успішного завершення переконайтесь, що розмір WAL зменшується у Grafana-панелі PostgreSQL Details → WAL size in MB. Це підтверджує, що архівація працює і PVC більше не переповнюється.
+
+
+
