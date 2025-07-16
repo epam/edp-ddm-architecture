@@ -1,0 +1,23 @@
+= Помилка доступу при налаштуванні зовнішніх систем
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+Якщо виникла помилка "Authentication configuration for external-system with name api-registry-producer not configured" при взаємодії з зовнішньою системою, і в лог файлах под *external-secrets* є наступні помилки:
+
+[source,bash]
+----
+{"level":"error","ts":1679901446.1962597,"logger":"controllers.SecretStore","msg":"unable to validate store","secretstore":"registry/central-vault-secret-store","error":"could not validate provider: invalid vault credentials: Error making API request.\n\nURL: GET http://hashicorp-vault.user-management.svc.cluster.local:8200/v1/auth/token/lookup-self\nCode: 403. Errors:\n\n* permission denied","stacktrace":"github.com/external-secrets/external-secrets/pkg/controllers/secretstore.reconcile\n\t/home/runner/work/external-secrets/external-secrets/pkg/controllers/secretstore/common.go:67\ngithub.com/external-secrets/external-secrets/pkg/controllers/secretstore.(*StoreReconciler).Reconcile\n\t/home/runner/work/external-secrets/external-secrets/pkg/controllers/secretstore/secretstore_controller.go:54\nsigs.k8s.io/controller-runtime/pkg/internal/controller.(*Controller).Reconcile\n\t/home/runner/go/pkg/mod/sigs.k8s.io/controller-runtime@v0.13.0/pkg/internal/controller/controller.go:121\nsigs.k8s.io/controller-runtime/pkg/internal/controller.(*Controller).reconcileHandler\n\t/home/runner/go/pkg/mod/sigs.k8s.io/controller-runtime@v0.13.0/pkg/internal/controller/controller.go:320\nsigs.k8s.io/controller-runtime/pkg/internal/controller.(*Controller).processNextWorkItem\n\t/home/runner/go/pkg/mod/sigs.k8s.io/controller-runtime@v0.13.0/pkg/internal/controller/controller.go:273\nsigs.k8s.io/controller-runtime/pkg/internal/controller.(*Controller).Start.func2.2\n\t/home/runner/go/pkg/mod/sigs.k8s.io/controller-runtime@v0.13.0/pkg/internal/controller/controller.go:234"}
+----
+
+Виконайте наступні дії:
+
+. Перевірте, чи в Vault платформи (проект *user-management*) наявні дані для входу для реєстра, вхід виконується через токен в секреті *vault-root-token*.
+
+. Перевірте, що *vault-root-token* збігатися з secret *central-vault-token* в реєстрі, якщо ні, то змініть значення так, щоб воно було як у *vault-root-token*.
+
+. Перевірте, що в таргет реєстрі також наявний secret *external-systems-secrets*.
+
+. Також в ресурсах *external-systems-external-secrets* (ExternalSecret) і *central-vault-secret-store* (SecretStore) в таргет реєстрі (Openshift → Home → Search) має бути безпомилковий статус:
++
+image:admin:otherl2/external-system-issue.png[]
+
+. Перевірити, чи є доступ, можна через бізнес-процес, в якому використовується зовнішня система та по лог файлам под *bpms* в реєстрі.

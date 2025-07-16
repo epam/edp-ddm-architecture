@@ -1,0 +1,63 @@
+= Налаштування Postman для перевірки інтеграції з зовнішніми системами
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+Для цього необхідно використати наступну колекцію Postman: link:{attachmentsdir}/otherl2/rest-api.postman_collection.json[rest-api.postman_collection.json]
+
+Для відправлення запитів з колекції є *два* шляхи отримання доступу до сервісу bp-webservice-gateway:
+
+. (*ОПТИМАЛЬНИЙ варіант*, не потребує створення route) Зробити port-forward до сервісу bp-webservice-gateway за допомогою oc client та наступної link:https://diia-engine.github.io/diia-engine-documentation/ua/platform/1.9.8/registry-develop/registry-admin/remote_connection.html[інструкції]
++
+.. В такому разі, запити необхідно відправляти на: http://localhost:8080/ws
++
+замість: bp-webservice-gateway-{{YOUR-REGISTER-NAME}}-main.apps.[wildcard]/ws
+
+.. На етапі 7.3 команда має бути наступна:
++
+[source,bash]
+----
+oc port-forward svc/bp-webservice-gateway 8080 -n strimko2test
+----
++
+[TIP]
+====
+Додавати нову конфігурацію в Intellij IDEA не потрібно.
+====
+
+.. Виконати запит з колекції Postman.
+
+. Створити *route* в OKD з наступною конфігурацією:
++
+[source,yaml]
+----
+kind: Route
+apiVersion: route.openshift.io/v1
+metadata:
+  name: bp-webservice-gateway-direct
+  namespace: {{YOUR-REGISTER-NAME}}
+  labels:
+    app: bp-webservice-gateway
+    app.kubernetes.io/managed-by: Helm
+  annotations:
+    haproxy.router.openshift.io/ip_whitelist: 0.0.0.0/0
+spec:
+  host: bp-webservice-gateway-{{YOUR-REGISTER-NAME}}-main.apps.[wildcard]
+  path: /ws
+  to:
+    kind: Service
+    name: bp-webservice-gateway
+    weight: 100
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+  wildcardPolicy: None
+----
+
+Після цього можна буде використовувати запит із колекції Postman.
+
+Можливі проблеми:
+
+Якщо при авторизації консолі до OKD виникає помилка *failed verify certificate* то можливі наступні рішення
+
+. Виконати команду oc logout після чого повторити oc login з новим токеном.
+
+. Виконати команду oc login з атрибутом --insecure-skip-tls-verify: oc login --token=xxxx --server=xxxx --insecure-skip-tls-verify.

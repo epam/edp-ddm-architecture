@@ -1,0 +1,60 @@
+= Видалення великої черги в Jenkins
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+Для видалення великої черги збірок Jenkins, зробіть наступні кроки в *Dashboard → Manage Jenkins*:
+
+. Відключіть створення нових збірок кнопкою *Prepare for Shutdown*:
++
+image:admin:otherl2/jenkins-queue-1.png[]
+
+. Після цього зайдіть до секції *Script Console*:
++
+image:admin:otherl2/jenkins-queue-2.png[]
+
+. Виконайте наступний скрипт:
++
+[source,groovy]
+----
+import java.util.ArrayList
+import hudson.model.*;
+
+// Remove everything which is currently queued
+def q = Jenkins.instance.queue
+for (queued in Jenkins.instance.queue.items) {
+  q.cancel(queued.task)
+}
+
+// stop all the currently running jobs
+for (job in Jenkins.instance.items) {
+  stopJobs(job)
+}
+
+def stopJobs(job) {
+  if (job in com.cloudbees.hudson.plugins.folder.Folder) {
+    for (child in job.items) {
+      stopJobs(child)
+    }
+  } else if (job in org.jenkinsci.plugins.workflow.multibranch.WorkflowMultiBranchProject) {
+    for (child in job.items) {
+      stopJobs(child)
+    }
+  } else if (job in org.jenkinsci.plugins.workflow.job.WorkflowJob) {
+
+    if (job.isBuilding()) {
+      for (build in job.builds) {
+        build.doKill()
+      }
+    }
+  }
+}
+----
+
+. Якщо збірки продовжують створюватися, ще виконайте цей скрипт:
++
+[source,groovy]
+----
+Jenkins.instance.queue.clear()
+----
+
+. Відключіть *Prepare for Shutdown*.
+

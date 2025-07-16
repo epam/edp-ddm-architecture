@@ -1,0 +1,77 @@
+= Відновлення codebase registry-regulations, помилка "cloning template project has been failed"
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+Якщо після cleanup в jenkins і gerrit відсутні директорії registry-regulations, а в codebase registry-regulations наступні помилки:
+
+
+[source,bash]
+----
+cloning template project has been failed: unable to clone repo: fatal:
+destination path
+'/home/codebase-operator/edp/registryname/registry-regulations/templates/registry-regulations'
+already exists and is not an empty directory.
+----
+
+Або:
+
+[source,bash]
+----
+cloning template project has been failed: unable to fetch unshallow repo:
+
+    error: Could not read d47e3f7561bf04620be63d9cc8b19930e881f785
+
+    fatal: Failed to traverse parents of commit
+
+    73f905374243998ac9f90f58fa744f35c41ae247
+
+    error: remote did not send all necessary objects
+
+    : exit status 1
+----
+
+Для виправлення потрібно зробити наступні дії:
+
+. В control-plane gerrit (*control-plane project → Networking → Routes → gerrit*) зробити clone репозиторію *empty-template-registry-regulation*:
++
+image:admin:otherl2/restore-codebase-reg-reg-1.png[]
+
+. Після clone потрібно локально скопіювати remotes всіх гілок, щоб подивитися виконайте команду:
++
+[source,bash]
+----
+git branch -a
+----
++
+image:admin:otherl2/restore-codebase-reg-reg-2.png[]
++
+Після цього зробіть копію remote гілок в іншу за допомогою команди:
++
+[source,bash]
+----
+git switch -c remotes/origin/<remote-branch-name> origin/<remote-branch-name>
+----
+
+. Після цього видаліть цей репозиторій з control-plane gerrit за допомогою Commands → *Delete Project* і перезапустіть под *gerrit*:
++
+image:admin:otherl2/restore-codebase-reg-reg-3.png[]
+
+. Після того, як под gerrit запрацює, ви побачите, що репозиторій empty-template-registry-regulation відновився з останньою гілкою, тепер треба запушити старі (*якщо є така потреба, зазвичай якщо на платформі є реєстри нижчих версій*).
+
+. Створіть в графічному інтерфейсі gerrit гілку з назвою старої гілки, *revision беріть з master гілки*:
++
+image:admin:otherl2/restore-codebase-reg-reg-4.png[]
+
+. Зробіть повторний clone цього репозиторію і перемикніться на гілку, яку ви тільки що створили *(команда git checkout або git switch)*.
+
+.  Видаліть всі файли, окрім *.git*.
+
+. Перенесіть із копії гілки файли в пусту папку, зробіть *git commit* та *git push HEAD:refs/for/<branch-name>*.
+
+. В control-plane gerrit буде МР на цю зміну, його треба буде застосувати.
+
+. Після цього в реєстрі, в якому виникла помилка треба буде перезапустити codebase-operator, після цього подивитися на статус codebase registry-regulations, наявність jenkins папки та gerrit репозиторію, після чого можна запустити cleanup повторно.
+
+
+
+
+
