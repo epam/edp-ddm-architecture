@@ -1,0 +1,49 @@
+= Проблема зі стартом pod dataplatform-jenkins-agent
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+У Jenkins реєстру може спостерігатися проблема, коли поточні pipelines застрягають на етапі "Init", бо dataplatform-jenkins-agent не стартує і Jenkins знаходиться у стані "still waiting".
+
+Приклад помилки:
+
+image:admin:otherl2/dataplatformagent-start-1.png[]
+
+Проблема зумовлена відсутністю конфігурації для агентів за шляхом *"Dashboard → Configure Clouds"*.
+
+image:admin:otherl2/dataplatformagent-start-2.png[]
+
+При наявності даної проблеми треба виконати наступні кроки:
+
+. Очистити чергу в *Jenkins*, яка накопичилась через проблеми з підняттям *dataplatform-jenkins-agent*. З даним процесом можна ознайомитись за наступним xref:admin:l2instructions/other/jenkins-queue.adoc[посиланням].
+
+.  Перейти до OKD UI та у просторі імен, в якому спостерігаються проблеми з агентом, знайти ресурс *"JenkinsScript"* під назвою *"jenkins-config-kubernetes-plugin"*.
++
+image:admin:otherl2/dataplatformagent-start-3.png[]
+
+. Видалити даний ресурс, перед цим зробивши резервну копію в *YAML* форматі.
+
+. У правому верхньому куті натиснути на кнопку імпорту YAML файлу.
++
+image:admin:otherl2/dataplatformagent-start-4.png[]
+
+. У вікні редагування додати наступну конфігурацію, змінивши значення поля *"namespace"* на потрібний.
++
+[source,yaml]
+----
+apiVersion: v2.edp.epam.com/v1
+kind: JenkinsScript
+metadata:
+  name: jenkins-config-kubernetes-plugin
+  namespace: pro-solution
+spec:
+  sourceConfigMapName: jenkins-config-kubernetes-plugin
+----
+
+. Після створення ресурсу треба перезапустити pods *jenkins* та *jenkins-operator* у відповідному просторі імен.
++
+image:admin:otherl2/dataplatformagent-start-5.png[]
+
+. Після перезапуску *Jenkins* под, треба перезапустити под *codebase-operator*.
++
+image:admin:otherl2/dataplatformagent-start-6.png[]
+
+. Перейти в Jenkins реєстру та перевірити працездатність pipelines.

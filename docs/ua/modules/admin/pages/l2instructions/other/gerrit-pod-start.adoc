@@ -1,0 +1,65 @@
+= Проблема зі стартом под Gerrit реєстру (блокування через gerrit.war.lock)
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+У просторі імен реєстру може спостерігатись проблема, коли под *"gerrit"* має статус *CrashLoopBackOff* та в лог файлах присутня помилка *"Cannot lock /var/gerrit/review_site/bin/gerrit.war"*.
+
+Приклад помилки:
+
+image:admin:otherl2/gerrit-pod-start-1.png[]
+
+При наявності даної проблеми треба виконати наступні кроки:
+
+. У реєстрі, де присутня проблема з *gerrit* под, створити тимчасовий под, до якого необхідно під'єднати диск з *gerrit* даними. Після створення тимчасової под треба перейти до її термінала через *OKD UI*.
++
+Шаблон створення тимчасового под:
++
+[source,yaml]
+----
+apiVersion: v1
+kind: Pod
+metadata:
+  name: init-container-pod
+  namespace: version-test
+spec:
+  serviceAccountName: gerrit
+  containers:
+  - name: main-container
+    image: nginx:latest
+    ports:
+    - containerPort: 80
+    volumeMounts:
+      - name: gerrit-data
+        mountPath: /var/gerrit/review_site
+  volumes:
+    - name: gerrit-data
+      persistentVolumeClaim:
+        claimName: gerrit-data
+  initContainers:
+  - name: init-container
+    image: busybox:latest
+    command: ['sh', '-c', 'echo "Init container is running"']
+----
++
+image:admin:otherl2/gerrit-pod-start-2.png[]
+
+. Перевірити наявність файлу *"gerrit.war.lock"* за шляхом */var/gerrit/review_site/bin*.
++
+[source,bash]
+----
+ls -la /var/gerrit/review_site/bin/
+----
++
+image:admin:otherl2/gerrit-pod-start-3.png[]
+
+. Видалити файл *gerrit.war.lock* та перевірити його відсутність.
++
+[source,bash]
+----
+rm -rf /var/gerrit/review_site/bin/gerrit.war.lock
+
+ls -la /var/gerrit/review_site/bin/
+----
++
+image:admin:otherl2/gerrit-pod-start-4.png[]
+
+. Перезапустити под gerrit у просторі імен реєстру.
