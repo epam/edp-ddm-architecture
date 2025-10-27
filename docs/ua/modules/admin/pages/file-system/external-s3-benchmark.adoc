@@ -1,0 +1,188 @@
+= Визначення бенчмарків зовнішнього S3 Storage
+include::platform:ROOT:partial$templates/document-attributes/default-set-ua.adoc[]
+
+Ця інструкція направлена на визначення бенчмарків *зовнішнього S3 storage* за допомогою інструменту *warp*, для аналізу отриманих результатів та порівняння по швидкодії з *Ceph Object Storage*, який використовується в Платформі за замовчуванням.
+
+== Для проведення та визначення бенчмарків зовнішнього S3 storage потрібно виконати наступне:
+
+. Створити *тестовий бакет* (з назвою, наприклад *s3-bench*) у зовнішньому S3 з отриманням *access-key* та *secret-key* для доступу.
+
+. Запустити под з інструментом *warp* у просторі імен default кластеру OKD:
++
+[source,yaml]
+----
+apiVersion: v1
+kind: Pod
+metadata:
+  name: s3-benchmark
+  namespace: default
+spec:
+  containers:
+    - name: benchmarker
+      image: minio/warp:latest
+      command: ["sh", "-c", "sleep 3600"]  # Keep container alive for 1 hour
+      resources:
+        requests:
+          cpu: "1"
+          memory: "1Gi"
+        limits:
+          cpu: "2"
+          memory: "2Gi"
+  tolerations:
+    - key: node.ocs.openshift.io/storage
+      operator: Equal
+      value: 'true'
+      effect: NoSchedule
+----
+
+. З термінала под *s3-benchmark* виконати наступний перелік команд warp:
++
+[NOTE]
+====
+У разі використання на зовнішньому S3 storage самопідписаного SSL сертифікату треба зробити його довірчим.
+
+Для цього треба зробити:
+
+. Завантажити сертифікат в под s3-benchmark за шляхом */usr/local/share/ca-certificates/ca.crt*
+. Встановити інструмент ca-certificates за допомогою команди: *apk add --no-cache ca-certificates*
+. Виконати команду *update-ca-certificates*
+
+_Або використовувати прапор *--insecure* додавши його до переліку прапорів команд warp, що наведені нижче._
+====
++
+Запуск тесту в режимі *PUT*:
++
+[source,bash]
+----
+./warp put \
+  --host=<<url зовнішнього S3>> \
+  --access-key=<<bucket-access-key>> \
+  --secret-key=<<bucket-secret-key>> \
+  --bucket=<<назва тестового бакету>> \
+  --obj.size=4MiB \
+  --concurrent=16 \
+  --duration=40s \
+  --tls \
+  --benchdata=write-test.csv.zst
+----
++
+_приклад для host_: --host=s3.krrt-ncr.loc
++
+Запуск тесту в режимі *GET*:
++
+[source,bash]
+----
+./warp get \
+  --host=<<url зовнішнього S3>> \
+  --access-key=<<bucket-access-key>> \
+  --secret-key=<<bucket-secret-key>> \
+  --bucket=<<назва тестового бакету>> \
+  --obj.size=4MiB \
+  --concurrent=16 \
+  --duration=40s \
+  --tls \
+  --benchdata=write-test.csv.zst
+----
++
+Запуск тесту в режимі *MIXED*:
++
+[source,bash]
+----
+./warp mixed \
+  --host=<<url зовнішнього S3>> \
+  --access-key=<<bucket-access-key>> \
+  --secret-key=<<bucket-secret-key>> \
+  --bucket=<<назва тестового бакету>> \
+  --obj.size=4MiB \
+  --concurrent=16 \
+  --duration=40s \
+  --tls \
+  --benchdata=write-test.csv.zst
+----
++
+[NOTE]
+====
+_Прапор --obj.size (розмір об'єкта) можна змінювати за потреби в меншу або більшу сторону._
+====
++
+Для кожного тесту, в кінці його виконання, буде наведено вивід з даними бенчмарків зовнішнього S3 storage, котрі *треба зберегти* для подальшого аналізу та порівнянь з даними бенчмарків Ceph Object Storage.
+
+== Для проведення та визначення бенчмарків Ceph Object Storage потрібно виконати наступне:
+
+. Створити **тестовий бакет **(з назвою, наприклад *s3-bench*) у Ceph Object Storage Платформи у просторі імен default кластеру OKD:
++
+[source,yaml]
+----
+apiVersion: objectbucket.io/v1alpha1
+kind: ObjectBucketClaim
+metadata:
+  name: s3-bench
+  namespace: default
+spec:
+  additionalConfig:
+    bucketclass: registry-bucket-class
+  generateBucketName: s3-bench
+  storageClassName: registry-bucket
+----
+
+. Отримати *access-key* та *secret-key* для доступу до *тестового бакету* з *secret* s3-bench у просторі імен default кластеру OKD.
+
+. Визначити повну назву тестового бакету з поля _bucketName:_ з ресурсу *obc* створеного тестового бекету у п 2.1. Наприклад: _s3-bench-93eeec16-b21d-457e-a731-6b6ba2c3cd34_
+
+. Використовувати под *s3-benchmark*, запущений у п 1.2, та з його термінала, виконати наступний перелік команд warp:
++
+Запуск тесту в режимі *PUT*:
++
+[source,bash]
+----
+./warp put --host=rook-ceph-rgw-mdtuddm.openshift-storage.svc:80 \
+  --access-key=<<bucket-access-key>> \
+  --secret-key=<<bucket-secret-key>> \
+  --bucket=<<назва тестового бакету>> \
+  --obj.size=4MiB \
+  --concurrent=16 \
+  --duration=40s \
+  --benchdata=write-test.csv.zst
+----
++
+Запуск тесту в режимі *GET*:
++
+[source,bash]
+----
+./warp get --host=rook-ceph-rgw-mdtuddm.openshift-storage.svc:80 \
+  --access-key=<<bucket-access-key>> \
+  --secret-key=<<bucket-secret-key>> \
+  --bucket=<<назва тестового бакету>> \
+  --obj.size=4MiB \
+  --concurrent=16 \
+  --duration=40s \
+  --benchdata=write-test.csv.zst
+----
++
+Запуск тесту в режимі *MIXED*:
++
+[source,bash]
+----
+./warp mixed --host=rook-ceph-rgw-mdtuddm.openshift-storage.svc:80 \
+  --access-key=<<bucket-access-key>> \
+  --secret-key=<<bucket-secret-key>> \
+  --bucket=<<назва тестового бакету>> \
+  --obj.size=4MiB \
+  --concurrent=16 \
+  --duration=40s \
+  --benchdata=write-test.csv.zst
+----
++
+[NOTE]
+====
+_Прапор --obj.size (розмір об'єкта) можна змінювати за потреби в меншу або більшу сторону._
+====
++
+Для кожного тесту, в кінці його виконання, буде наведено вивід з даними бенчмарків Ceph Object Storage, котрі *треба зберегти* для подальшого аналізу і порівнянь з даними бенчмарків зовнішнього S3 storage.
+
+== Рекомендації щодо планування та проведення тестів, зазначених у розділах 1 та 2
+
+. Планувати проведення декілька етапів тестування у різні дні тижня та різний час. Наприклад: у будні у дений (бізнес) час та вечорі (не бізнес час) та суботу/неділю.
+
+. Після отримання результатів проведених тестів, зробити аналіз для прийняття рішення *доцільності* використання *зовнішнього S3 storage* як місце збереження даних в бакетах для реєстрів Платформи.
+
